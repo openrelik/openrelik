@@ -9,6 +9,7 @@
  * - 401 Unauthorized interceptor with a shared token refresh and request retry
  * - An `onUnauthorized` hook for sessions that cannot be refreshed
  * - JSON serialization, native body pass-through and blob responses
+ * - A timeout for servers that never start answering
  * - Every failure rejects with an `ApiError`
  */
 
@@ -28,6 +29,11 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   skipAuthRefresh?: boolean
   /** Do not attach an X-CSRF-Token header (used by endpoints outside the session). */
   skipCsrf?: boolean
+  /**
+   * How long to wait for the server to start answering, in ms; 0 waits forever.
+   * Reading the body is not limited, so slow downloads of large responses still finish.
+   */
+  timeoutMs?: number
 }
 
 const CSRF_HEADER = 'X-CSRF-Token'
@@ -35,6 +41,7 @@ const CSRF_STORAGE_KEY = 'csrfToken'
 /** The server's reply when the X-CSRF-Token header does not match its cookie. */
 const CSRF_REJECTION = 'X-CSRF-Token is invalid'
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
+const DEFAULT_TIMEOUT_MS = 30_000
 
 let refreshPromise: Promise<boolean> | null = null
 /** Bumped on every successful refresh, so a 401 for a request sent before it can just retry. */
@@ -195,7 +202,14 @@ async function send(
   retried = { auth: false, csrf: false },
 ): Promise<Response> {
   // `responseType` is left in `init`; fetch ignores keys it does not know.
-  const { body: rawBody, params, skipAuthRefresh, skipCsrf, ...init } = options
+  const {
+    body: rawBody,
+    params,
+    skipAuthRefresh,
+    skipCsrf,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    ...init
+  } = options
   const method = (options.method || 'GET').toUpperCase()
   const headers = new Headers(options.headers)
 
@@ -215,6 +229,11 @@ async function send(
     body = JSON.stringify(rawBody)
   }
 
+  // The timeout only covers waiting for the response headers; it is cleared once they arrive.
+  const timeout = new AbortController()
+  const timer = timeoutMs > 0 ? setTimeout(() => timeout.abort(), timeoutMs) : undefined
+  const signal = init.signal ? AbortSignal.any([init.signal, timeout.signal]) : timeout.signal
+
   const generation = sessionGeneration
   let response: Response
   try {
@@ -223,9 +242,17 @@ async function send(
       method,
       headers,
       body,
+      signal,
       credentials: 'include',
     })
   } catch (networkError) {
+    if (timeout.signal.aborted && !init.signal?.aborted) {
+      throw new ApiError({
+        status: 0,
+        statusText: 'Timeout',
+        message: `The server did not respond within ${timeoutMs / 1000}s`,
+      })
+    }
     // Let aborts through untouched so callers can tell cancellation from failure.
     if (networkError instanceof DOMException && networkError.name === 'AbortError') {
       throw networkError
@@ -235,6 +262,8 @@ async function send(
       statusText: 'Network Error',
       message: networkError instanceof Error ? networkError.message : 'Network request failed',
     })
+  } finally {
+    clearTimeout(timer)
   }
 
   // 3. 401 Unauthorized: refresh the session once and retry. If another request

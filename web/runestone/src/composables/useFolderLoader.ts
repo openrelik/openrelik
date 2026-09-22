@@ -6,7 +6,7 @@
  * and its subfolders.
  */
 
-import { ref, type Ref } from 'vue'
+import { onScopeDispose, ref, type Ref } from 'vue'
 import { api, ApiError, errorMessage, type Folder, type FolderDetail } from '@/api'
 import { setRootFolders, setSubfolders, upsertItems, type Item } from '@/data/folders'
 
@@ -45,19 +45,22 @@ export interface UseFolderLoaderReturn {
 export function useFolderLoader(): UseFolderLoaderReturn {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  // Only the latest load may touch isLoading/error; navigating away supersedes it.
+  // Only the latest load may touch isLoading/error. Navigating away supersedes
+  // it and cancels its requests, so a slow connection is not kept busy with
+  // folders the user has already left.
   let latest = 0
+  let controller: AbortController | null = null
 
-  async function fetchInto(folderId?: number): Promise<void> {
+  async function fetchInto(folderId: number | undefined, signal: AbortSignal): Promise<void> {
     if (folderId === undefined) {
-      const folders = await api.folders.getRootFolders()
+      const folders = await api.folders.getRootFolders({ signal })
       setRootFolders(folders.map((folder) => mapFolderToItem(folder)))
       return
     }
 
     const [folder, subfolders] = await Promise.all([
-      api.folders.getFolder(folderId),
-      api.folders.getSubfolders(folderId),
+      api.folders.getFolder(folderId, { signal }),
+      api.folders.getSubfolders(folderId, { signal }),
     ])
     upsertItems(mapFolderChain(folder))
     setSubfolders(
@@ -68,11 +71,13 @@ export function useFolderLoader(): UseFolderLoaderReturn {
 
   async function load(folderId?: number): Promise<void> {
     const request = ++latest
+    controller?.abort()
+    controller = new AbortController()
     isLoading.value = true
     error.value = null
 
     try {
-      await fetchInto(folderId)
+      await fetchInto(folderId, controller.signal)
     } catch (err: unknown) {
       if (request !== latest) return
       // Expired session: the client's onUnauthorized handler redirects to login.
@@ -87,6 +92,8 @@ export function useFolderLoader(): UseFolderLoaderReturn {
       if (request === latest) isLoading.value = false
     }
   }
+
+  onScopeDispose(() => controller?.abort())
 
   return {
     isLoading,

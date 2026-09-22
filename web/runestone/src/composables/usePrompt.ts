@@ -1,15 +1,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import {
-  childrenOf,
-  createFolder,
-  descendantsOf,
-  findItem,
-  ITEMS,
-  pathTo,
-  type Item,
-} from '@/data/folders'
+import { useFolderActions } from '@/composables/useFolderActions'
+import { childrenOf, descendantsOf, findItem, ITEMS, pathTo, type Item } from '@/data/folders'
 import { useModalStore } from '@/stores/modals'
 import { matchPath } from '@/utils/match'
 
@@ -68,6 +61,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   const modalStore = useModalStore()
   const route = useRoute()
   const router = useRouter()
+  const { createFolder } = useFolderActions()
 
   if (!trackingInitialized) {
     trackingInitialized = true
@@ -227,14 +221,21 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
 
   watch(results, () => (index.value = 0))
 
+  /** Creates a folder in the current one and opens it; failures show in the explorer.
+   *  The placeholder row shows meanwhile; if the user has moved on by the time
+   *  the server answers, they are not pulled back. */
+  async function mkdir(folderName: string) {
+    const startedAt = route.fullPath
+    const created = await createFolder(cwd.value?.id ?? null, folderName)
+    if (created && route.fullPath === startedAt) router.push(`/folder/${created.id}`)
+  }
+
   function go(result: PromptResult | undefined) {
     if (!result) return
     line.value = ''
     onGo(result)
     if (result.mkdir && result.folderName) {
-      const parentId = cwd.value?.id ?? null
-      const created = createFolder(parentId, result.folderName)
-      router.push(`/folder/${created.id}`)
+      mkdir(result.folderName)
       return
     }
     if (result.home) {
@@ -302,17 +303,15 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
           .replace(/\/+$/, '')
         if (folderName) {
           line.value = ''
-          const parentId = cwd.value?.id ?? null
-          const created = createFolder(parentId, folderName)
           onGo({
-            item: created,
+            item: null,
             path: folderName,
             label: `mkdir ${folderName}/`,
             hits: [],
             mkdir: true,
             folderName,
           })
-          router.push(`/folder/${created.id}`)
+          mkdir(folderName)
           event.preventDefault()
           return true
         }
