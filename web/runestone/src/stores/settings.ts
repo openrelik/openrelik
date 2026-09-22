@@ -3,6 +3,10 @@ import { ref, watch } from 'vue'
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
+/** Folders per page in the top-level list. 40 is the server's own default. */
+export const PAGE_SIZES = [25, 40, 100] as const
+export type PageSize = (typeof PAGE_SIZES)[number]
+
 export interface Settings {
   appearance: {
     theme: ThemeChoice
@@ -13,16 +17,15 @@ export interface Settings {
     chat: boolean
     workflowNames: boolean
   }
-  workflow: {
-    editor: 'new' | 'old'
-    chords: boolean
+  explorer: {
+    pageSize: PageSize
   }
 }
 
 const DEFAULTS: Settings = {
   appearance: { theme: 'system' },
   ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
-  workflow: { editor: 'new', chords: false },
+  explorer: { pageSize: 40 },
 }
 
 const STORAGE_KEY = 'openrelik.settings'
@@ -40,6 +43,10 @@ function readStoredSettings(): Settings {
     }
   } catch {
     // Private mode, quota exceeded, or corrupted JSON: fallback to defaults
+  }
+  // Sent to the server as page_size: only the sizes offered are allowed.
+  if (!PAGE_SIZES.includes(merged.explorer.pageSize)) {
+    merged.explorer.pageSize = DEFAULTS.explorer.pageSize
   }
   return merged
 }

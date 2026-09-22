@@ -17,7 +17,9 @@ This directory houses reusable, stateful Vue composables. They encapsulate keybo
 | [`useHelp`](#usehelp)                           | Reactive state and controls for opening/closing the `HelpDialog` shortcut sheet.                                  |
 | [`useTooltip`](#usetooltip)                     | Singleton tooltip coordinator with warmup/cooldown grouping, auto-placement, shortcut parsing, and edge clamping. |
 | [`useQueryCache`](#usequerycache)               | Shared cache of which server listings are loaded and how fresh they are (stale-while-revalidate).                 |
-| [`useFolderLoader`](#usefolderloader)           | Loads root folders, subfolders and folder paths through the query cache; per-listing load state.                  |
+| [`useFolderLoader`](#usefolderloader)           | Loads top-level pages, subfolders and folder paths through the query cache; per-listing load state.               |
+| [`useRootPager`](#userootpager)                 | Server-side pagination of the top-level list: page in the URL, size from settings, clamping, next-page prefetch.  |
+| [`useFolderSearch`](#usefoldersearch)           | Server-side folder search for the prompt (`/folders/all/?q=`): debounced, cached, cancellable.                    |
 | [`useFolderActions`](#usefolderactions)         | Creates and renames folders on the server, with pending rows, in-flight saves and the last error.                 |
 | [`useDelayedFlag`](#usedelayedflag)             | Loading-indicator timing: shown after 200 ms, then kept at least 300 ms.                                          |
 | [`useNetworkActivity`](#usenetworkactivity)     | App-wide "loading…"/"saving…" from the API client's count of requests in flight.                                  |
@@ -108,3 +110,19 @@ The timing for every loading indicator: on only after the work has taken 200 ms 
 ### `useNetworkActivity`
 
 Subscribes to the API client's in-flight request count and exposes the status bar's `loading…` / `saving…` label. Background requests are not counted.
+
+### `useRootPager`
+
+Pagination of the top-level folder list, which the server pages (`GET /folders/all/`, newest created first, no other order).
+
+- The page is in the URL (`/?page=3`, changed with `router.replace`), so reload and Back keep it; the size is `settings.explorer.pageSize` (25 / 40 / 100), and changing it keeps the first visible folder in view.
+- Each page is its own query-cache entry (`folders:root:s{size}:p{page}`); its folder ids and the total live in `src/data/rootPages.ts`, the folders themselves in `ITEMS`.
+- Past the last page it moves to the last one; once a page has loaded, the next is prefetched in the background (not offline or on constrained connections).
+- New top-level folders are written into page 1 and deleted ones leave every page; other pages refetch when visited.
+
+### `useFolderSearch`
+
+Server-side search behind the prompt, for folders nobody has loaded yet (`GET /folders/all/?q=`, recursive over every folder the operator can reach, matching names).
+
+- Runs only for a search from the top (at the root or `/…`) and for a name, not a path; asks after typing pauses (250 ms) and from 2 characters; a newer term cancels the older request; results are cached like any other query.
+- Results are kept apart from `ITEMS`: the server does not say where a found folder lives. The prompt lists loaded matches first, then server matches marked `server`; opening one loads its real path.

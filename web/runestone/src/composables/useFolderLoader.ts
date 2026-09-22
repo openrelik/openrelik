@@ -5,6 +5,9 @@
  * the root folders, or a folder's subfolders, plus the folder and its
  * ancestors when they are not known yet (a direct link or reload).
  *
+ * The top level is paginated on the server (`GET /folders/all/`): each page
+ * is its own cache entry and its folder ids are kept in `rootPages.ts`.
+ *
  * Built on the query cache: listings seen in the last 30s cost no request,
  * older ones show at once and refresh in the background, and each listing
  * carries its own state so "loading", "empty" and "failed" never mix up.
@@ -13,11 +16,16 @@
 import { onScopeDispose } from 'vue'
 import { api, ApiError, errorMessage, type Folder, type FolderDetail } from '@/api'
 import { ensure, queryState, type QueryState } from '@/composables/useQueryCache'
-import { findItem, setRootFolders, setSubfolders, upsertItems, type Item } from '@/data/folders'
+import { findItem, setSubfolders, upsertItems, upsertListed, type Item } from '@/data/folders'
+import { setRootPage } from '@/data/rootPages'
+import { useSettingsStore } from '@/stores/settings'
 
 /** Query cache keys for folder data. */
 export const folderKeys = {
-  root: 'folders:root',
+  /** Every top-level page of every size: invalidate this when the list shifts. */
+  rootPrefix: 'folders:root:',
+  /** One top-level page. Size first, so `folders:root:s40:` covers one size. */
+  rootPage: (page: number, size: number) => `folders:root:s${size}:p${page}`,
   folder: (id: number) => `folder:${id}`,
   subfolders: (id: number) => `folder:${id}:subfolders`,
   role: (id: number) => `folder:${id}:role`,
@@ -60,10 +68,43 @@ function isChainKnown(folderId: number): boolean {
   return false
 }
 
-async function fetchRoot(signal: AbortSignal): Promise<void> {
-  const folders = await api.folders.getRootFolders({ signal })
-  setRootFolders(folders.map((folder) => mapFolderToItem(folder)))
+/** Where the top-level list is: which page, at which page size. */
+export interface RootPageRef {
+  page: number
+  size: number
 }
+
+async function fetchRootPage(
+  { page, size }: RootPageRef,
+  signal: AbortSignal,
+  background = false,
+): Promise<void> {
+  const result = await api.folders.getAllFolders({ page, pageSize: size }, { signal, background })
+  upsertListed(result.folders.map((folder) => mapFolderToItem(folder)))
+  setRootPage(folderKeys.rootPage(page, size), {
+    ids: result.folders.map((folder) => folder.id),
+    total: result.total_count,
+    page,
+    size,
+  })
+}
+
+/**
+ * Loads a top-level page ahead of time, as a background request. Opening
+ * that page then joins this request instead of starting another. Never rejects.
+ */
+export function prefetchRootPage(ref: RootPageRef, signal: AbortSignal): Promise<void> {
+  return ensure(
+    folderKeys.rootPage(ref.page, ref.size),
+    (fetchSignal) => fetchRootPage(ref, fetchSignal, true),
+    { signal },
+  ).catch(() => {
+    // Retried when the page is opened (failed data counts as stale).
+  })
+}
+
+/** The page size the operator chose (Settings → explorer). */
+const currentPageSize = (): number => useSettingsStore().settings.explorer.pageSize
 
 async function fetchFolder(folderId: number, signal: AbortSignal): Promise<void> {
   upsertItems(mapFolderChain(await api.folders.getFolder(folderId, { signal })))
@@ -98,13 +139,14 @@ export function prefetchSubfolders(folderId: number, signal: AbortSignal): Promi
 
 export interface UseFolderLoaderReturn {
   /**
-   * Makes sure the location is loaded: the root (no id) or a folder. Fresh
-   * data costs nothing; `force` refetches (refresh, retry). Never rejects —
-   * failures land in `listingState` / `folderState`.
+   * Makes sure the location is loaded: a top-level page (no id; page 1 and the
+   * chosen size unless given) or a folder. Fresh data costs nothing; `force`
+   * refetches (refresh, retry). Never rejects — failures land in
+   * `listingState` / `folderState`.
    */
-  load: (folderId?: number, options?: { force?: boolean }) => Promise<void>
-  /** The root list (no id) or a folder's subfolders. */
-  listingState: (folderId?: number) => QueryState
+  load: (folderId?: number, options?: { force?: boolean } & Partial<RootPageRef>) => Promise<void>
+  /** A top-level page (no id) or a folder's subfolders. */
+  listingState: (folderId?: number, root?: Partial<RootPageRef>) => QueryState
   /** A folder's own details; only fetched when not already known from a listing. */
   folderState: (folderId: number) => QueryState
 }
@@ -114,14 +156,24 @@ export function useFolderLoader(): UseFolderLoaderReturn {
   // someone else still needs the result.
   let controller: AbortController | null = null
 
-  async function load(folderId?: number, options: { force?: boolean } = {}): Promise<void> {
+  async function load(
+    folderId?: number,
+    options: { force?: boolean } & Partial<RootPageRef> = {},
+  ): Promise<void> {
     controller?.abort()
     controller = new AbortController()
     const common = { signal: controller.signal, force: options.force }
+    const root = { page: options.page ?? 1, size: options.size ?? currentPageSize() }
 
     const requests =
       folderId === undefined
-        ? [ensure(folderKeys.root, fetchRoot, common)]
+        ? [
+            ensure(
+              folderKeys.rootPage(root.page, root.size),
+              (signal) => fetchRootPage(root, signal),
+              common,
+            ),
+          ]
         : [
             ensure(
               folderKeys.subfolders(folderId),
@@ -154,8 +206,12 @@ export function useFolderLoader(): UseFolderLoaderReturn {
 
   return {
     load,
-    listingState: (folderId?: number) =>
-      queryState(folderId === undefined ? folderKeys.root : folderKeys.subfolders(folderId)),
+    listingState: (folderId?: number, root: Partial<RootPageRef> = {}) =>
+      queryState(
+        folderId === undefined
+          ? folderKeys.rootPage(root.page ?? 1, root.size ?? currentPageSize())
+          : folderKeys.subfolders(folderId),
+      ),
     folderState: (folderId: number) => queryState(folderKeys.folder(folderId)),
   }
 }

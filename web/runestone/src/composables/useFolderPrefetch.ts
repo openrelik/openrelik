@@ -30,7 +30,7 @@ interface NetworkInformation {
   effectiveType?: string
 }
 
-function connectionIsConstrained(): boolean {
+export function connectionIsConstrained(): boolean {
   const connection = (globalThis.navigator as { connection?: NetworkInformation } | undefined)
     ?.connection
   if (!connection) return false

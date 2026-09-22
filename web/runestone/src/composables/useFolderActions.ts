@@ -15,7 +15,8 @@
  */
 
 import { reactive, readonly, ref, type Ref } from 'vue'
-import { api, errorMessage } from '@/api'
+import { api, errorMessage, type FolderRole } from '@/api'
+import { refreshAll } from '@/composables/useAutoRefresh'
 import { confirmAction } from '@/composables/useConfirm'
 import { folderKeys, mapFolderToItem } from '@/composables/useFolderLoader'
 import {
@@ -25,9 +26,9 @@ import {
   forgetRoles,
   roleOf,
 } from '@/composables/useFolderPermissions'
-import type { FolderRole } from '@/api'
-import { forget, markFresh } from '@/composables/useQueryCache'
+import { forget, invalidate, markFresh } from '@/composables/useQueryCache'
 import { findItem, removeTree, upsertItems, type Item } from '@/data/folders'
+import { dropFromRootPages, prependToRootPages } from '@/data/rootPages'
 
 export interface PendingFolder {
   /** Stable key for the placeholder row; not a server id. */
@@ -93,6 +94,13 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
     const folder = await api.folders.createFolder(name, parent)
     const item = mapFolderToItem(folder, folder.parent?.id ?? parent)
     upsertItems([item])
+    if (item.parent === null) {
+      // The newest folder: first on page 1 now; later pages shift by one, so
+      // they refetch when visited.
+      const written = prependToRootPages(item.id)
+      invalidate(folderKeys.rootPrefix)
+      for (const key of written) markFresh(key)
+    }
     // A new folder is empty: opening it needs no request.
     markFresh(folderKeys.subfolders(item.id))
     return item
@@ -138,6 +146,7 @@ async function deleteFolders(ids: number[]): Promise<number[]> {
 
   const deleted: number[] = []
   const failures: { name: string; reason: string }[] = []
+  const removed: number[] = []
   results.forEach((result, index) => {
     const id = targets[index]!
     deletingIds.delete(id)
@@ -149,10 +158,18 @@ async function deleteFolders(ids: number[]): Promise<number[]> {
         gone.flatMap((g) => [folderKeys.folder(g), folderKeys.subfolders(g), folderKeys.role(g)]),
       )
       forgetRoles(gone)
+      removed.push(...gone)
     } else {
       failures.push({ name: names.get(id)!, reason: errorMessage(result.reason, 'request failed') })
     }
   })
+
+  // Listed at the top: pages shrink now, then refill from the server (the
+  // current page right away, the others when visited).
+  if (dropFromRootPages(removed)) {
+    invalidate(folderKeys.rootPrefix)
+    refreshAll()
+  }
 
   if (failures.length === 1 && targets.length === 1) {
     error.value = `Could not delete “${failures[0]!.name}”: ${failures[0]!.reason}`

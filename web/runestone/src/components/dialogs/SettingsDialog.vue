@@ -4,6 +4,7 @@ import { Monitor, Moon, Sun, X } from '@/components/icons'
 import KeyHint from '@/components/base/KeyHint.vue'
 import Switch from '@/components/base/Switch.vue'
 import { settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
+import { PAGE_SIZES } from '@/stores/settings'
 
 /**
  * Settings, as a dialog over whatever page you are on — so changing one never
@@ -117,6 +118,47 @@ const AI_FEATURES = [
 
           <hr class="my-2 border-border" />
 
+          <!-- explorer -->
+          <section aria-labelledby="settings-explorer">
+            <p id="settings-explorer" class="micro-label px-4 pt-2 pb-1">explorer</p>
+
+            <div class="flex items-center gap-3 px-4 py-2.5">
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-ink">Folders per page</p>
+                <p class="text-ink-muted">Top-level list; subfolders always show in full</p>
+              </div>
+              <div
+                class="flex shrink-0 items-center gap-0.5 rounded-(--radius-control) border border-border bg-sunken p-0.5"
+                role="radiogroup"
+                aria-label="Folders per page"
+              >
+                <button
+                  v-for="size in PAGE_SIZES"
+                  :key="size"
+                  type="button"
+                  role="radio"
+                  :aria-checked="settings.explorer.pageSize === size"
+                  v-tooltip="`Show ${size} folders per page`"
+                  class="tabular flex h-6 cursor-pointer items-center rounded-(--radius-check) px-2.5 transition-colors duration-120 ease-(--ease-standard)"
+                  :class="
+                    settings.explorer.pageSize === size
+                      ? 'bg-brand-tint text-brand'
+                      : 'text-ink-muted hover:bg-canvas hover:text-ink-secondary'
+                  "
+                  @click="settings.explorer.pageSize = size"
+                >
+                  {{ size }}
+                </button>
+              </div>
+              <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
+                >explorer.pageSize =
+                <span class="text-brand">{{ settings.explorer.pageSize }}</span></code
+              >
+            </div>
+          </section>
+
+          <hr class="my-2 border-border" />
+
           <!-- ai -->
           <section aria-labelledby="settings-ai">
             <p id="settings-ai" class="micro-label px-4 pt-2 pb-1">ai</p>
@@ -162,68 +204,6 @@ const AI_FEATURES = [
               <code class="tabular shrink-0 text-[11px] text-ink-muted"
                 >ai.{{ feature.key }} =
                 <span class="text-brand">{{ settings.ai[feature.key] }}</span></code
-              >
-            </label>
-          </section>
-
-          <hr class="my-2 border-border" />
-
-          <!-- workflow -->
-          <section aria-labelledby="settings-workflow">
-            <p id="settings-workflow" class="micro-label px-4 pt-2 pb-1">workflow</p>
-
-            <div class="flex items-center gap-3 px-4 py-2.5">
-              <div class="min-w-0 flex-1">
-                <p class="font-medium text-ink">Default editor</p>
-                <p class="text-ink-muted">Which editor opens a workflow</p>
-              </div>
-              <div
-                class="flex shrink-0 items-center gap-0.5 rounded-(--radius-control) border border-border bg-sunken p-0.5"
-                role="radiogroup"
-                aria-label="Default editor"
-              >
-                <button
-                  v-for="editor in ['new', 'old'] as const"
-                  :key="editor"
-                  type="button"
-                  role="radio"
-                  :aria-checked="settings.workflow.editor === editor"
-                  v-tooltip="`Use the ${editor} workflow editor by default`"
-                  class="h-6 cursor-pointer rounded-(--radius-check) px-2.5 transition-colors duration-120 ease-(--ease-standard)"
-                  :class="
-                    settings.workflow.editor === editor
-                      ? 'bg-brand-tint text-brand'
-                      : 'text-ink-muted hover:bg-canvas hover:text-ink-secondary'
-                  "
-                  @click="settings.workflow.editor = editor"
-                >
-                  {{ editor }} editor
-                </button>
-              </div>
-              <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
-                >workflow.editor =
-                <span class="text-brand">"{{ settings.workflow.editor }}"</span></code
-              >
-            </div>
-
-            <label class="flex cursor-pointer items-center gap-3 px-4 py-2 hover:bg-sunken">
-              <input
-                v-model="settings.workflow.chords"
-                type="checkbox"
-                class="accent-brand"
-                v-tooltip="
-                  settings.workflow.chords
-                    ? 'Disable workflow chord creation'
-                    : 'Enable workflow chord creation'
-                "
-              />
-              <span class="min-w-0 flex-1">
-                <span class="block text-ink">Chord creation</span>
-                <span class="block text-ink-muted">Allow creating chords in a workflow</span>
-              </span>
-              <code class="tabular shrink-0 text-[11px] text-ink-muted"
-                >workflow.chords =
-                <span class="text-brand">{{ settings.workflow.chords }}</span></code
               >
             </label>
           </section>

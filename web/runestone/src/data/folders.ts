@@ -1,4 +1,4 @@
-import { computed, reactive } from 'vue'
+import { reactive } from 'vue'
 
 export interface Item {
   id: number
@@ -24,8 +24,6 @@ export interface Item {
  * OpenRelik API.
  */
 export const ITEMS: Item[] = reactive<Item[]>([])
-
-export const FOLDERS = computed<Item[]>(() => ITEMS.filter((item) => item.parent === null))
 
 export const findItem = (id: number): Item | undefined => ITEMS.find((item) => item.id === id)
 
@@ -117,10 +115,14 @@ export function renameItem(id: number, newName: string): boolean {
   return true
 }
 
-/** Replaces the root folders in the reactive items store. */
-export function setRootFolders(folders: Item[]): void {
-  const nonRoot = ITEMS.filter((item) => item.parent !== null)
-  ITEMS.splice(0, ITEMS.length, ...folders, ...nonRoot)
+/**
+ * Adds folders from a list that does not say where they live (the top-level
+ * list): a folder whose parent is already known keeps it, others are placed at
+ * the top (`parent: null`). Which folders are *listed* at the top is tracked
+ * separately, per page (`rootPages.ts`).
+ */
+export function upsertListed(items: Item[]): void {
+  upsertItems(items.map((item) => ({ ...item, parent: findItem(item.id)?.parent ?? item.parent })))
 }
 
 /**
