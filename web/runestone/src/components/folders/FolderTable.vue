@@ -11,6 +11,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
+import type { PendingFolder } from '@/composables/useFolderActions'
 import { getUniqueFolderName, type Item } from '@/data/folders'
 import { runStats, workflowOf } from '@/data/workflows'
 import { formatSize, stamp } from '@/utils/format'
@@ -32,8 +33,16 @@ const props = defineProps<{
   maxBytes: number
   filter: string
   isLoading?: boolean
-  /** Why the rows could not be loaded, shown below whatever rows remain. */
-  loadError?: string | null
+  /** `isLoading` held for a moment, so fast loads never flash a message. */
+  showLoading?: boolean
+  /** Folders being created here; shown as placeholder rows until confirmed. */
+  pendingFolders?: PendingFolder[]
+  /** Folders whose rename is being saved. */
+  savingIds?: ReadonlySet<number>
+  /** Pending work held for a moment, so fast saves never flash an indicator. */
+  showPending?: boolean
+  /** A failure to show below whatever rows remain (loading, create, rename). */
+  error?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -104,6 +113,8 @@ function setRenameInput(el: unknown) {
 }
 
 async function startRename(item: Item) {
+  // One rename at a time per folder: the previous name is still being saved.
+  if (props.savingIds?.has(item.id)) return
   renamingId.value = item.id
   renamingName.value = item.name
   cancellingRename = false
@@ -386,6 +397,46 @@ const typeOf = (item: Item) =>
           <td class="tabular truncate px-2 text-ink-secondary">just now</td>
         </tr>
 
+        <!-- Folders the server has not confirmed yet -->
+        <tr
+          v-for="pending in pendingFolders"
+          :key="pending.key"
+          class="h-7 border-b border-border/60 select-none"
+          aria-busy="true"
+        >
+          <td class="pl-3">
+            <input
+              type="checkbox"
+              disabled
+              tabindex="-1"
+              class="accent-brand align-middle opacity-30"
+              :aria-label="`${pending.name} is being created`"
+            />
+          </td>
+          <td class="px-2">
+            <div class="flex min-w-0 items-center gap-2">
+              <Folder
+                :size="13"
+                :stroke-width="1.5"
+                class="shrink-0 fill-brand-tint text-brand"
+                aria-hidden="true"
+              />
+              <span class="truncate text-ink-secondary">{{ pending.name }}/</span>
+            </div>
+          </td>
+          <td class="px-2 text-right">
+            <span class="select-none text-ink-muted">—</span>
+          </td>
+          <td class="truncate px-2 text-ink-muted">
+            <span v-if="showPending" class="inline-flex items-center gap-1.5 text-brand">
+              <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+              creating…
+            </span>
+            <template v-else>inode/directory</template>
+          </td>
+          <td class="tabular truncate px-2 text-ink-secondary">just now</td>
+        </tr>
+
         <tr
           v-for="(row, index) in rows"
           :key="row.id"
@@ -484,17 +535,34 @@ const typeOf = (item: Item) =>
               >
             </div>
           </td>
-          <td class="truncate px-2 text-ink-muted">{{ typeOf(row) }}</td>
+          <td class="truncate px-2 text-ink-muted">
+            <span
+              v-if="showPending && savingIds?.has(row.id)"
+              class="inline-flex items-center gap-1.5 text-brand"
+            >
+              <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+              saving…
+            </span>
+            <template v-else>{{ typeOf(row) }}</template>
+          </td>
           <td class="tabular truncate px-2 text-ink-secondary">{{ stamp(row.modified) }}</td>
         </tr>
       </tbody>
     </table>
 
-    <p v-if="isLoading && !rows.length" class="px-3 py-6 text-ink-muted">Loading folders...</p>
-    <p v-else-if="loadError" role="alert" class="px-3 py-6 text-danger">
-      Could not load folders: {{ loadError }}
+    <!-- The line keeps its height while hidden, so the message appearing moves nothing. -->
+    <p
+      v-if="isLoading && !rows.length && !pendingFolders?.length"
+      class="px-3 py-6 text-ink-muted"
+      aria-busy="true"
+    >
+      <span :class="{ invisible: !showLoading }">Loading folders…</span>
     </p>
-    <p v-else-if="!rows.length && !isCreating" class="px-3 py-6 text-ink-muted">
+    <p v-else-if="error" role="alert" class="px-3 py-6 text-danger">{{ error }}</p>
+    <p
+      v-else-if="!rows.length && !isCreating && !pendingFolders?.length"
+      class="px-3 py-6 text-ink-muted"
+    >
       <template v-if="filter">Nothing here matches “{{ filter }}”.</template>
       <template v-else-if="atRoot">No folders yet. Create one with New folder.</template>
       <template v-else>Empty folder. Drop files here or use Upload.</template>

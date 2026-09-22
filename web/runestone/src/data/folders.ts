@@ -95,23 +95,6 @@ export function descendantsOf(id: number): Item[] {
   )
 }
 
-/** Creates and appends a new folder to the reactive items store. */
-export function createFolder(parent: number | null, name: string): Item {
-  const nextId = Math.max(0, ...ITEMS.map((item) => item.id)) + 1
-  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
-  const item: Item = {
-    id: nextId,
-    parent,
-    kind: 'folder',
-    name,
-    owner: 'jbn',
-    created: now,
-    modified: now,
-  }
-  ITEMS.push(item)
-  return item
-}
-
 /** Generates a unique folder name within a directory, auto-incrementing if collisions exist. */
 export function getUniqueFolderName(baseName: string, existingNames: string[]): string {
   const set = new Set(existingNames.map((n) => n.toLowerCase()))

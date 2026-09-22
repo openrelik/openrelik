@@ -10,18 +10,12 @@ import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
 import { lastRun, openRun, startRun, undoRun } from '@/composables/useRun'
-import {
-  childrenOf,
-  createFolder,
-  findItem,
-  FOLDERS,
-  pathTo,
-  renameItem,
-  type Item,
-} from '@/data/folders'
+import { childrenOf, findItem, FOLDERS, pathTo, renameItem, type Item } from '@/data/folders'
 import type { Worker } from '@/data/workers'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
+import { useDelayedFlag } from '@/composables/useDelayedFlag'
+import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
 import { allTasks, workflowOf, type Task } from '@/data/workflows'
 import { useModalStore } from '@/stores/modals'
@@ -52,15 +46,30 @@ const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
   atRoot.value ? { key: 'modified', dir: -1 } : { key: 'name', dir: 1 }
 const sort = ref(defaultSort())
 const { isLoading, error: loadError, load } = useFolderLoader()
+const {
+  error: actionError,
+  clearError,
+  pendingIn,
+  savingIds,
+  createFolder,
+  renameFolder,
+} = useFolderActions()
+
+const tableError = computed(
+  () => actionError.value ?? (loadError.value && `Could not load folders: ${loadError.value}`),
+)
 
 watch(atRoot, () => {
   sort.value = defaultSort()
 })
 
+const pendingHere = computed(() => pendingIn(atRoot.value ? null : (folder.value?.id ?? null)))
+
 // Load whatever the route points at: the root, or a folder with its subfolders.
 watch(
   () => props.id,
   (id) => {
+    clearError()
     if (id === undefined) load()
     else if (/^\d+$/.test(id)) load(Number(id))
   },
@@ -89,6 +98,12 @@ const rows = computed(() => {
     .filter((item) => !needle || item.name.toLowerCase().includes(needle))
     .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1) || by[key](a, b) * dir)
 })
+
+// Indicators wait a moment before showing, so fast responses never flash one.
+const showLoading = useDelayedFlag(() => isLoading.value)
+const showPending = useDelayedFlag(() => pendingHere.value.length > 0 || savingIds.size > 0)
+// Refreshing a folder that is already on screen: the listing stays, the status bar says so.
+const showRefreshing = useDelayedFlag(() => isLoading.value && rows.value.length > 0)
 
 const maxBytes = computed(() => Math.max(1, ...rows.value.map(bytesOf)))
 const totals = computed(() => ({
@@ -220,15 +235,13 @@ function startCreateFolder() {
   table.value?.startCreateFolder()
 }
 
-function handleCreateFolder(name: string) {
+async function handleCreateFolder(name: string) {
   const parentId = atRoot.value ? null : (folder.value?.id ?? null)
-  const created = createFolder(parentId, name)
-  nextTick(() => {
-    const idx = rows.value.findIndex((r) => r.id === created.id)
-    if (idx >= 0) {
-      cursor.value = idx
-    }
-  })
+  const created = await createFolder(parentId, name)
+  if (!created) return
+  await nextTick()
+  const idx = rows.value.findIndex((r) => r.id === created.id)
+  if (idx >= 0) cursor.value = idx
 }
 
 function startRenameCurrent() {
@@ -246,7 +259,9 @@ function startRenameItem(id: number) {
 }
 
 function handleRename({ id, name }: { id: number; name: string }) {
-  renameItem(id, name)
+  // Files are not loaded from the server yet, so they are still renamed locally.
+  if (findItem(id)?.kind === 'folder') renameFolder(id, name)
+  else renameItem(id, name)
 }
 
 // --- keyboard navigation ---
@@ -393,7 +408,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         :max-bytes="maxBytes"
         :filter="filter"
         :is-loading="isLoading"
-        :load-error="loadError"
+        :show-loading="showLoading"
+        :pending-folders="pendingHere"
+        :saving-ids="savingIds"
+        :show-pending="showPending"
+        :error="tableError"
         @sort="sortBy"
         @toggle-all="toggleAll"
         @toggle="toggle"
@@ -439,6 +458,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- status bar -->
     <FolderStatusBar
+      :refreshing="showRefreshing"
       :rows-count="rows.length"
       :dirs-count="totals.dirs"
       :files-count="totals.files"

@@ -20,6 +20,8 @@ defineProps<{
   selectedCount: number
   selectedBytes: number
   atRoot: boolean
+  /** The listing on screen is being reloaded from the server. */
+  refreshing?: boolean
 }>()
 
 defineEmits<{
@@ -63,6 +65,12 @@ defineEmits<{
 
     <span v-if="selectedCount" class="tabular text-brand">
       {{ selectedCount }} selected · {{ formatSize(selectedBytes) }}
+    </span>
+
+    <!-- Last in the row, so appearing never moves the items before it. -->
+    <span v-if="refreshing" class="flex items-center gap-1.5 text-ink-muted" aria-live="polite">
+      <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+      loading…
     </span>
 
     <template #hints>
