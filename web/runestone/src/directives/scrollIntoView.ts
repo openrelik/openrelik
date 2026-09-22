@@ -1,0 +1,65 @@
+import { nextTick, type Directive } from 'vue'
+
+export interface ScrollIntoViewOptions {
+  active?: boolean
+  block?: ScrollLogicalPosition
+  inline?: ScrollLogicalPosition
+  behavior?: ScrollBehavior
+}
+
+export type ScrollIntoViewInput = boolean | ScrollIntoViewOptions
+
+function parseActive(val: unknown): boolean {
+  if (typeof val === 'object' && val !== null) {
+    return !!(val as ScrollIntoViewOptions).active
+  }
+  return !!val
+}
+
+function parseOptions(
+  val: unknown,
+  modifiers: Record<string, boolean | undefined>,
+): { block: ScrollLogicalPosition; inline: ScrollLogicalPosition; behavior: ScrollBehavior } {
+  const isObj = typeof val === 'object' && val !== null
+  const opts = isObj ? (val as ScrollIntoViewOptions) : {}
+  return {
+    block: opts.block ?? (modifiers.center ? 'center' : 'nearest'),
+    inline: opts.inline ?? 'nearest',
+    behavior: opts.behavior ?? (modifiers.smooth ? 'smooth' : 'auto'),
+  }
+}
+
+/**
+ * v-scroll-into-view directive:
+ * Automatically scrolls an element into its container's visible area when active.
+ *
+ * Modifiers:
+ *   .center - Centers the element vertically in the viewport
+ *   .smooth - Enables smooth scrolling animation
+ *
+ * Usage:
+ *   <tr v-scroll-into-view="index === cursor">
+ *   <li v-scroll-into-view.center="isSelected">
+ */
+export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewInput> = {
+  mounted(el, binding) {
+    if (!parseActive(binding.value)) return
+
+    const { block, inline, behavior } = parseOptions(binding.value, binding.modifiers)
+    nextTick(() => {
+      el.scrollIntoView({ block, inline, behavior })
+    })
+  },
+
+  updated(el, binding) {
+    const active = parseActive(binding.value)
+    const wasActive = parseActive(binding.oldValue)
+
+    if (active && !wasActive) {
+      const { block, inline, behavior } = parseOptions(binding.value, binding.modifiers)
+      nextTick(() => {
+        el.scrollIntoView({ block, inline, behavior })
+      })
+    }
+  },
+}

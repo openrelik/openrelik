@@ -1,0 +1,502 @@
+<script setup lang="ts">
+import {
+  ArrowDown,
+  ArrowUp,
+  CornerLeftUp,
+  File,
+  Folder,
+  Workflow as WorkflowIcon,
+} from '@/components/icons'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
+
+import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
+import { getUniqueFolderName, type Item } from '@/data/folders'
+import { runStats, workflowOf } from '@/data/workflows'
+import { formatSize, stamp } from '@/utils/format'
+
+export type SortKey = 'name' | 'size' | 'type' | 'modified'
+
+const props = defineProps<{
+  rows: Item[]
+  sort: { key: SortKey; dir: 1 | -1 }
+  cursor: number
+  selected: Set<number>
+  allSelected: boolean
+  atRoot: boolean
+  hasTask: boolean
+  produced: Set<number>
+  tracing: boolean
+  parentPath: string
+  parentName: string
+  maxBytes: number
+  filter: string
+  isLoading?: boolean
+  /** Why the rows could not be loaded, shown below whatever rows remain. */
+  loadError?: string | null
+}>()
+
+const emit = defineEmits<{
+  sort: [key: SortKey]
+  toggleAll: []
+  toggle: [id: number]
+  rowClick: [event: MouseEvent, index: number]
+  open: [item: Item]
+  pick: [index: number]
+  goUp: []
+  createFolder: [name: string]
+  rename: [item: { id: number; name: string }]
+}>()
+
+// --- Inline New Folder Creation (Finder style) ---
+const isCreating = ref(false)
+const newFolderName = ref('')
+const newFolderInput = ref<HTMLInputElement | null>(null)
+let cancelling = false
+
+const defaultBaseName = computed(() => (props.atRoot ? 'Untitled case' : 'Untitled folder'))
+
+async function startCreateFolder() {
+  isCreating.value = true
+  cancelling = false
+  const existingNames = props.rows.map((r) => r.name)
+  newFolderName.value = getUniqueFolderName(defaultBaseName.value, existingNames)
+  await nextTick()
+  newFolderInput.value?.focus()
+  newFolderInput.value?.select()
+}
+
+function commitNewFolder() {
+  if (cancelling) {
+    cancelling = false
+    return
+  }
+  if (!isCreating.value) return
+  const name = newFolderName.value.trim() || defaultBaseName.value
+  isCreating.value = false
+  emit('createFolder', name)
+}
+
+function cancelNewFolder() {
+  cancelling = true
+  isCreating.value = false
+}
+
+function onNewFolderKeydown(event: KeyboardEvent) {
+  event.stopPropagation()
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commitNewFolder()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelNewFolder()
+  }
+}
+
+// --- Inline Renaming (Finder style) ---
+const renamingId = ref<number | null>(null)
+const renamingName = ref('')
+const renameInput = ref<HTMLInputElement | null>(null)
+let cancellingRename = false
+
+function setRenameInput(el: unknown) {
+  if (el) renameInput.value = el as HTMLInputElement
+}
+
+async function startRename(item: Item) {
+  renamingId.value = item.id
+  renamingName.value = item.name
+  cancellingRename = false
+  await nextTick()
+  const input = renameInput.value
+  if (!input) return
+  input.focus()
+  // Smart extension selection: for files, select only base name before extension
+  if (item.kind === 'file' && item.name.includes('.')) {
+    const lastDot = item.name.lastIndexOf('.')
+    if (lastDot > 0) {
+      input.setSelectionRange(0, lastDot)
+      return
+    }
+  }
+  input.select()
+}
+
+function commitRename() {
+  if (cancellingRename) {
+    cancellingRename = false
+    return
+  }
+  if (renamingId.value === null) return
+  const id = renamingId.value
+  const targetItem = props.rows.find((r) => r.id === id)
+  const trimmed = renamingName.value.trim()
+  renamingId.value = null
+  if (trimmed && targetItem && trimmed !== targetItem.name) {
+    emit('rename', { id, name: trimmed })
+  }
+}
+
+function cancelRename() {
+  cancellingRename = true
+  renameInput.value?.blur()
+  renamingId.value = null
+  renamingName.value = ''
+}
+
+function onRenameKeydown(event: KeyboardEvent) {
+  event.stopPropagation()
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commitRename()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelRename()
+  }
+}
+
+// --- Long-Press on Release Detection (Finder style) ---
+const LONG_PRESS_THRESHOLD_MS = 400
+let pointerDownTime = 0
+let pointerDownPos = { x: 0, y: 0 }
+let wasDragged = false
+
+function onLabelPointerDown(event: PointerEvent, row: Item, index: number) {
+  pointerDownTime = 0
+  wasDragged = false
+
+  // Only consider long-press if this row is already selected
+  const isAlreadySelected =
+    props.cursor === index || (props.selected.has(row.id) && props.selected.size === 1)
+  if (!isAlreadySelected) return
+
+  pointerDownTime = Date.now()
+  pointerDownPos = { x: event.clientX, y: event.clientY }
+}
+
+function onLabelPointerMove(event: PointerEvent) {
+  if (!pointerDownTime) return
+  const dx = Math.abs(event.clientX - pointerDownPos.x)
+  const dy = Math.abs(event.clientY - pointerDownPos.y)
+  if (dx > 4 || dy > 4) {
+    wasDragged = true
+    pointerDownTime = 0
+  }
+}
+
+function onLabelPointerUp(event: PointerEvent, row: Item) {
+  if (pointerDownTime > 0 && !wasDragged) {
+    const elapsed = Date.now() - pointerDownTime
+    pointerDownTime = 0
+
+    // User held down and now released: activate rename if held >= 500ms
+    if (elapsed >= LONG_PRESS_THRESHOLD_MS) {
+      event.preventDefault()
+      event.stopPropagation()
+      startRename(row)
+      return
+    }
+  }
+  pointerDownTime = 0
+  wasDragged = false
+}
+
+function onLabelPointerCancel() {
+  pointerDownTime = 0
+  wasDragged = false
+}
+
+function onRowDblClick(row: Item) {
+  pointerDownTime = 0
+  wasDragged = false
+  emit('open', row)
+}
+
+function onWindowPointerDown(event: PointerEvent) {
+  if (renamingId.value === null) return
+  const input = renameInput.value
+  if (input && !input.contains(event.target as Node)) {
+    commitRename()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('pointerdown', onWindowPointerDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pointerdown', onWindowPointerDown)
+})
+
+defineExpose({
+  startCreateFolder,
+  isCreating,
+  startRename,
+  cancelRename,
+  commitRename,
+  renamingId,
+})
+
+const UP = -1
+
+const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
+  { key: 'name', label: 'name' },
+  { key: 'size', label: 'size', align: 'right' },
+  { key: 'type', label: 'type' },
+  { key: 'modified', label: 'modified (utc)' },
+]
+
+const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
+const typeOf = (item: Item) =>
+  item.mime ?? (workflowOf(item.id) ? 'openrelik/workflow' : 'inode/directory')
+</script>
+
+<template>
+  <div class="min-w-0 flex-1 overflow-auto">
+    <slot name="workflow" />
+
+    <table class="w-full min-w-2xl table-fixed border-collapse text-left">
+      <colgroup>
+        <col class="w-8" />
+        <col />
+        <col class="w-44" />
+        <col class="w-44" />
+        <col class="w-40" />
+      </colgroup>
+      <thead class="sticky top-0 z-[1] bg-surface">
+        <tr class="h-7 shadow-[inset_0_-1px_0_var(--color-border)]">
+          <th class="pl-3">
+            <input
+              type="checkbox"
+              class="accent-brand align-middle"
+              aria-label="Select all"
+              v-tooltip="allSelected ? 'Deselect all rows (x)' : 'Select all rows (x)'"
+              :checked="allSelected"
+              :disabled="!rows.length"
+              @change="emit('toggleAll')"
+            />
+          </th>
+          <th
+            v-for="column in COLUMNS"
+            :key="column.key"
+            class="px-2 font-normal"
+            :class="{ 'text-right': column.align === 'right' }"
+            :aria-sort="
+              sort.key === column.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined
+            "
+          >
+            <button
+              type="button"
+              class="micro-label inline-flex cursor-pointer items-center gap-1 hover:text-ink"
+              :class="{ 'text-ink-secondary': sort.key === column.key }"
+              v-tooltip="
+                sort.key === column.key
+                  ? sort.dir === 1
+                    ? `Sorted by ${column.label} ascending (click to invert)`
+                    : `Sorted by ${column.label} descending (click to invert)`
+                  : `Sort by ${column.label}`
+              "
+              @click="emit('sort', column.key)"
+            >
+              {{ column.label }}
+              <component
+                :is="sort.dir === 1 ? ArrowUp : ArrowDown"
+                v-if="sort.key === column.key"
+                :size="10"
+                :stroke-width="2"
+              />
+            </button>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-if="!atRoot"
+          :data-row="UP"
+          v-scroll-into-view="cursor === UP && !hasTask"
+          class="h-7 cursor-default border-b border-border/60 select-none"
+          :class="[
+            cursor === UP && !hasTask
+              ? 'bg-sunken shadow-[inset_2px_0_0_var(--color-brand)]'
+              : 'hover:bg-sunken',
+            tracing ? 'opacity-40' : '',
+          ]"
+          @click="emit('pick', UP)"
+          @dblclick="emit('goUp')"
+        >
+          <td class="pl-3" />
+          <td class="px-2">
+            <div class="flex min-w-0 items-center gap-2">
+              <CornerLeftUp
+                :size="13"
+                :stroke-width="1.5"
+                class="shrink-0 text-ink-muted"
+                aria-hidden="true"
+              />
+              <RouterLink
+                :to="parentPath"
+                class="text-brand hover:underline"
+                :aria-label="`Up to ${parentName}`"
+                v-tooltip="`Navigate up to ${parentName}`"
+                @click.stop
+                >..</RouterLink
+              >
+              <span class="truncate text-[11px] text-ink-muted" v-overflow-tooltip>{{
+                parentName
+              }}</span>
+            </div>
+          </td>
+          <td colspan="3" />
+        </tr>
+
+        <!-- Inline New Folder Row (Finder style) -->
+        <tr v-if="isCreating" class="h-7 border-b border-border/60 bg-brand-selected select-none">
+          <td class="pl-3">
+            <input
+              type="checkbox"
+              disabled
+              tabindex="-1"
+              class="accent-brand align-middle opacity-30"
+            />
+          </td>
+          <td class="px-2">
+            <div class="flex min-w-0 w-full items-center gap-2">
+              <Folder
+                :size="13"
+                :stroke-width="1.5"
+                class="shrink-0 fill-brand-tint text-brand"
+                aria-hidden="true"
+              />
+              <input
+                ref="newFolderInput"
+                v-model="newFolderName"
+                type="text"
+                spellcheck="false"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 text-[12px] font-medium text-ink shadow-sm outline-none"
+                aria-label="New folder name"
+                @keydown="onNewFolderKeydown"
+                @blur="commitNewFolder"
+              />
+            </div>
+          </td>
+          <td class="px-2 text-right">
+            <span class="select-none text-ink-muted">—</span>
+          </td>
+          <td class="truncate px-2 text-ink-muted">inode/directory</td>
+          <td class="tabular truncate px-2 text-ink-secondary">just now</td>
+        </tr>
+
+        <tr
+          v-for="(row, index) in rows"
+          :key="row.id"
+          :data-row="index"
+          v-scroll-into-view="index === cursor && !hasTask"
+          class="h-7 cursor-default border-b border-border/60 select-none"
+          :class="[
+            selected.has(row.id) ? 'bg-brand-selected' : 'hover:bg-sunken',
+            tracing
+              ? produced.has(row.id)
+                ? 'bg-brand-tint/50 shadow-[inset_2px_0_0_var(--color-brand)]'
+                : 'opacity-40'
+              : '',
+            index === cursor && !hasTask ? 'shadow-[inset_2px_0_0_var(--color-brand)]' : '',
+            index === cursor && !hasTask && !selected.has(row.id) ? 'bg-sunken' : '',
+          ]"
+          :data-output="produced.has(row.id) || undefined"
+          :aria-selected="selected.has(row.id)"
+          @click="emit('rowClick', $event, index)"
+          @dblclick="onRowDblClick(row)"
+        >
+          <td class="pl-3">
+            <input
+              type="checkbox"
+              class="accent-brand align-middle"
+              :aria-label="`Select ${row.name}`"
+              v-tooltip="selected.has(row.id) ? `Deselect ${row.name}` : `Select ${row.name}`"
+              :checked="selected.has(row.id)"
+              @change="emit('toggle', row.id)"
+            />
+          </td>
+          <td class="px-2">
+            <div class="flex min-w-0 w-full items-center gap-2">
+              <component
+                :is="row.kind === 'file' ? File : workflowOf(row.id) ? WorkflowIcon : Folder"
+                :size="13"
+                :stroke-width="1.5"
+                class="shrink-0"
+                :class="row.kind === 'folder' ? 'fill-brand-tint text-brand' : 'text-ink-muted'"
+                aria-hidden="true"
+              />
+              <input
+                v-if="renamingId === row.id"
+                :ref="setRenameInput"
+                v-model="renamingName"
+                type="text"
+                spellcheck="false"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 text-[12px] font-medium text-ink shadow-sm outline-none"
+                :aria-label="`Rename ${row.name}`"
+                @click.stop
+                @dblclick.stop
+                @keydown="onRenameKeydown"
+                @blur="commitRename"
+              />
+              <span
+                v-else
+                class="truncate text-ink cursor-text select-none"
+                v-overflow-tooltip
+                @pointerdown="onLabelPointerDown($event, row, index)"
+                @pointermove="onLabelPointerMove"
+                @pointerup="onLabelPointerUp($event, row)"
+                @pointercancel="onLabelPointerCancel"
+              >
+                {{ row.name }}{{ row.kind === 'folder' ? '/' : '' }}
+              </span>
+              <span
+                v-if="renamingId !== row.id && produced.has(row.id)"
+                class="badge shrink-0 border-brand/40 bg-brand-tint text-brand"
+                v-tooltip="'Produced by workflow task'"
+                >output</span
+              >
+              <TaskStatusBadge
+                v-if="renamingId !== row.id && workflowOf(row.id)"
+                :status="runStats(workflowOf(row.id)!).state"
+                class="shrink-0"
+              />
+            </div>
+          </td>
+          <td class="px-2">
+            <div class="flex items-center justify-end gap-2">
+              <template v-if="row.kind === 'file'">
+                <span class="tabular text-ink-secondary">{{ formatSize(bytesOf(row)) }}</span>
+                <span class="h-1 w-12 shrink-0 bg-border" aria-hidden="true">
+                  <span
+                    class="block h-full bg-ink-muted/60"
+                    :style="{ width: `${Math.max(2, (bytesOf(row) / maxBytes) * 100)}%` }"
+                  />
+                </span>
+              </template>
+              <span
+                v-else
+                class="select-none text-ink-muted"
+                v-tooltip="'Folder size not calculated'"
+                >—</span
+              >
+            </div>
+          </td>
+          <td class="truncate px-2 text-ink-muted">{{ typeOf(row) }}</td>
+          <td class="tabular truncate px-2 text-ink-secondary">{{ stamp(row.modified) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p v-if="isLoading && !rows.length" class="px-3 py-6 text-ink-muted">Loading folders...</p>
+    <p v-else-if="loadError" role="alert" class="px-3 py-6 text-danger">
+      Could not load folders: {{ loadError }}
+    </p>
+    <p v-else-if="!rows.length && !isCreating" class="px-3 py-6 text-ink-muted">
+      <template v-if="filter">Nothing here matches “{{ filter }}”.</template>
+      <template v-else-if="atRoot">No folders yet. Create one with New folder.</template>
+      <template v-else>Empty folder. Drop files here or use Upload.</template>
+    </p>
+  </div>
+</template>

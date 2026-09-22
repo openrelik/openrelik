@@ -1,0 +1,257 @@
+/* Console design system — Tailwind v4 entry stylesheet */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  /* Typography — one face. There is no sans/mono split any more, so both names
+     resolve to the same family and every utility already written still works. */
+  --font-sans: 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Neutrals */
+  --color-canvas: #0e0e12;
+  --color-surface: #16161c;
+  --color-sunken: #1b1b22;
+  --color-border: #26262f;
+  --color-border-strong: #33333f;
+  --color-ink: #e6e6ec;
+  --color-ink-secondary: #a6a6b4;
+  --color-ink-muted: #818293;
+
+  /* Accents. Every one sits at OKLCH lightness 0.82, so none shouts louder than
+     another and the hue alone tells them apart. Each clears 10:1 on --surface.
+     The tints are the same hues dropped to lightness 0.27, for badge fills. */
+  --color-brand: #a9c7ee;
+  --color-brand-strong: #a9c7ee;
+  --color-brand-stronger: #c6dbf5;
+  --color-brand-tint: #0e2745;
+  --color-brand-tint-hover: #16375f;
+  --color-brand-selected: #131e2c;
+
+  --color-success: #6fdea2;
+  --color-success-ink: #6fdea2;
+  --color-success-tint: #102d1e;
+  --color-warning: #edbb65;
+  --color-warning-tint: #31240d;
+  --color-danger: #efb3b0;
+  --color-danger-ink: #efb3b0;
+  --color-danger-tint: #451214;
+  --color-idle: #878899;
+  --color-idle-tint: #22222b;
+
+  /* Chart bands: three hues at OKLCH lightness 0.56, chroma 0.11. Far below
+     the accents above, and deliberately — a band is a field of colour, not a
+     mark, and at accent weight three of them fight the data. Dropping the
+     lightness is also what makes three hues possible at all: up at 0.82 sRGB
+     has too little chroma left to separate them (worst pair 4.8 under
+     simulated protanopia, against a floor of 8), and down here the same three
+     measure 7.7 and 15.5. Each is the band's *border*; the fill is the same
+     token at 25%, which lands around #202e42 on --surface. */
+  --color-series-1: #3d78b2;
+  --color-series-2: #29885e;
+  --color-series-3: #9d671c;
+
+  /* Shape. Near-square: a console draws boxes, not cards. */
+  --radius-sheet: 4px;
+  --radius-card: 4px;
+  --radius-control: 3px;
+  --radius-check: 2px;
+
+  /* Motion & elevation */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-float: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+
+/* ---------------------------------------------------------------------------
+   Light mode.
+
+   **One block, not two.** The obvious shape is a `prefers-color-scheme` media
+   query *and* an attribute rule, which means writing every token twice and
+   keeping the two copies in step forever. Instead a four-line script in
+   `index.html` resolves the preference before the first paint and always leaves
+   an explicit `data-theme` on `<html>`, so the whole of CSS has one rule to
+   read, and keeps it in step with the OS afterwards.
+
+   **Unlayered on purpose.** `@theme` compiles into `@layer theme`, and an
+   unlayered rule beats a layered one whatever the specificity — which is also
+   why `color-scheme` can be overridden here despite `@layer base` setting it on
+   `html`.
+
+   Every value is the dark token's hue at a mirrored OKLCH lightness, computed
+   rather than picked, and measured against the light surface. §2 of
+   `docs/design-system.md` carries both columns and the one promise that had to
+   change: 10:1 is unreachable for an accent on a white ground without going
+   near-black — `#5a3b00` for warning — so the accents sit at one shared
+   lightness that clears **7:1, AAA**, which is the same rule at a stated
+   different number.
+   --------------------------------------------------------------------------- */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Neutrals. The dark ramp's distances from `--surface`, reflected: what was
+     lighter than the panel is now darker than it. */
+  --color-canvas: #f2f2f5;
+  --color-surface: #ffffff;
+  --color-sunken: #f7f7fc;
+  --color-border: #e7e7ed;
+  --color-border-strong: #d5d6dd;
+  /* Solved for the ratios §2 documents rather than mirrored by eye: 14.49 and
+     7.46 against the panel, against the dark theme's 14.49 and 7.49.
+     `--ink-muted` paints the column labels on the sunken table header, and is
+     solved to clear 4.5 there (4.55; 4.86 on the panel). The light instruction
+     is the dark one reflected: do not *lighten* it. */
+  --color-ink: #29292d;
+  --color-ink-secondary: #545460;
+  --color-ink-muted: #707081;
+
+  /* Accents, all at OKLCH lightness 0.449 — the lightest value at which every
+     hue still clears 7:1, so no hue shouts louder than another and the hue
+     alone tells them apart. Measured on the panel: brand 7.60, success 6.99,
+     warning 7.56, danger 8.20. Each tint holds ~6 of its own accent. */
+  --color-brand: #0052a7;
+  --color-brand-strong: #0052a7;
+  --color-brand-stronger: #003b7f;
+  --color-brand-tint: #d7ebff;
+  --color-brand-tint-hover: #c3dfff;
+  --color-brand-selected: #e4f2ff;
+
+  --color-success: #00673c;
+  --color-success-ink: #00673c;
+  --color-success-tint: #d1f3de;
+  --color-warning: #724d00;
+  --color-warning-tint: #f9e6c8;
+  --color-danger: #9d1426;
+  --color-danger-ink: #9d1426;
+  --color-danger-tint: #ffe0de;
+  --color-idle: #6a6a7a;
+  --color-idle-tint: #ececf1;
+
+  /* The chart bands do not change, and that is a finding rather than an
+     omission. At OKLCH lightness 0.56 they measure 4.64, 4.40 and 4.78 on the
+     white panel against 3.88, 4.10 and 3.77 on the dark one — so the whole §2
+     argument for these three hues, including the protanopia separation they
+     were chosen for, carries across untouched. */
+
+  /* A shadow is the absence of light. On a white ground the dark theme's half
+     black reads as soot. */
+  --shadow-float: 0 8px 24px rgb(20 20 30 / 0.12);
+}
+
+@layer base {
+  html {
+    @apply bg-canvas text-ink font-mono antialiased;
+    /* Native controls follow: the date picker, the select arrow and the
+       scrollbars all render dark instead of punching white holes in the page.
+       Light mode overrides this above; dark stays the value written here
+       because `@theme` holds the dark palette, so a page with no `data-theme`
+       at all is still a coherent page. */
+    color-scheme: dark;
+  }
+
+  body {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Visible, on-brand focus everywhere */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Figures must not jitter. In a fixed-width face they already line up, but
+     the lining forms still differ from the proportional ones in some faces. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Section and column labels. Lower case: uppercase in a fixed-width face
+     shouts, and the tracking alone is enough to set a label apart. */
+  .micro-label {
+    @apply text-ink-muted font-medium;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    line-height: 1.3;
+  }
+
+  /* The title in a panel's top strip, and of a drawer or a dialog. One step
+     above body, bold and capitalised, so a card announces itself before its first row —
+     the 12px label it used to share with every column header did not. The
+     colour is the default; a tone (brand, danger) overrides it. */
+  .card-title {
+    @apply text-ink;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  /* Sentence case, set here rather than in thirty strings: a title is written
+     the way it reads in a sentence ("accounts", "one category over time") and
+     the style capitalises it, so a new card cannot forget to. */
+  .card-title::first-letter {
+    text-transform: uppercase;
+  }
+
+  /* The panel that holds page content.
+
+     Positioned, so it is the containing block for anything absolutely
+     positioned inside it. Without that, a `.sr-only` label in a table header
+     resolves against the document instead, escapes the shell's overflow:hidden,
+     and adds its own offset to the page's scroll height — which showed up as
+     240px of empty space below the Review page. */
+  .sheet {
+    @apply relative bg-surface border border-border;
+    border-radius: var(--radius-sheet);
+  }
+
+  /* Bordered box inside a panel */
+  .card {
+    @apply bg-surface border border-border;
+    border-radius: var(--radius-card);
+    padding: 14px;
+  }
+
+  /* Inset well (code, raw output) */
+  .well {
+    @apply bg-sunken;
+    border-radius: var(--radius-card);
+    padding: 12px;
+  }
+
+  /* A native input or select, dressed. Reach for this only where a §11 primitive
+     cannot go — an id a test addresses, an <optgroup> a flat option list cannot
+     express. Everywhere else, compose the primitive. */
+  .field {
+    @apply h-8 border border-border-strong bg-surface px-2 text-ink;
+    border-radius: var(--radius-control);
+  }
+
+  /* A label stacked over its control, so a bar of them is the height of one
+     control plus its label however many there are. */
+  .labelled {
+    @apply flex flex-col gap-1;
+  }
+
+  /* Every piece of state in this system: a bordered rectangle on its own tint.
+     Pair with a tone — .badge.bg-success-tint.text-success.border-success/40. */
+  .badge {
+    @apply inline-flex items-center gap-1.5 border font-medium;
+    border-radius: var(--radius-check);
+    padding: 2px 6px;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
