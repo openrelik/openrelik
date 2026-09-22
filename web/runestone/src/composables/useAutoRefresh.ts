@@ -7,8 +7,9 @@
  * only stale or failed data is requested: switching tabs back and forth
  * within the freshness window costs nothing.
  *
- * `refreshAll({ force: true })` refetches everything on screen, for a
- * global "retry" (the status bar's connection notice).
+ * `refreshAll()` refreshes what is stale on screen right away (e.g. after
+ * invalidating a listing); `refreshAll({ force: true })` refetches everything
+ * on screen, for a global "retry" (the status bar's connection notice).
  */
 
 import { onScopeDispose } from 'vue'
@@ -23,16 +24,18 @@ const COALESCE_MS = 1000
 
 /** Runs every registered refresh. */
 export function refreshAll(options: { force: boolean } = { force: false }): void {
-  const now = Date.now()
-  if (!options.force && now - lastRun < COALESCE_MS) return
-  lastRun = now
   for (const refresh of refreshers) refresh(options)
 }
 
 function listen(): void {
   if (listening) return
   listening = true
-  const onReturn = () => refreshAll()
+  const onReturn = () => {
+    const now = Date.now()
+    if (now - lastRun < COALESCE_MS) return
+    lastRun = now
+    refreshAll()
+  }
   globalThis.addEventListener?.('focus', onReturn)
   globalThis.addEventListener?.('online', onReturn)
   globalThis.document?.addEventListener('visibilitychange', () => {

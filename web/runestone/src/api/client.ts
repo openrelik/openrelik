@@ -36,14 +36,18 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
    * Reading the body is not limited, so slow downloads of large responses still finish.
    */
   timeoutMs?: number
-  /** Prefetches and other work the user did not ask for: not counted as activity. */
+  /** Prefetches and other work the user did not ask for: counted as `background` activity. */
   background?: boolean
 }
 
-/** Requests in flight that the user is waiting for, split by what they do. */
+/** Requests in flight, split by what they do. */
 export interface Activity {
+  /** Reads the user is waiting for. */
   loading: number
+  /** Writes the user is waiting for. */
   saving: number
+  /** Prefetches: work ahead of the user, nobody is waiting for it. */
+  background: number
 }
 
 const CSRF_HEADER = 'X-CSRF-Token'
@@ -58,7 +62,7 @@ let refreshPromise: Promise<boolean> | null = null
 let sessionGeneration = 0
 let csrfPromise: Promise<string | null> | null = null
 let unauthorizedHandler: (() => void) | null = null
-const activity: Activity = { loading: 0, saving: 0 }
+const activity: Activity = { loading: 0, saving: 0, background: 0 }
 const activityListeners = new Set<(activity: Activity) => void>()
 
 /**
@@ -344,13 +348,16 @@ async function send(
  * The core fetch request engine.
  */
 export async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const kind = SAFE_METHODS.has((options.method || 'GET').toUpperCase()) ? 'loading' : 'saving'
-  const tracked = !options.background
-  if (tracked) trackActivity(kind, 1)
+  const kind: keyof Activity = options.background
+    ? 'background'
+    : SAFE_METHODS.has((options.method || 'GET').toUpperCase())
+      ? 'loading'
+      : 'saving'
+  trackActivity(kind, 1)
   try {
     return await receive<T>(endpoint, options)
   } finally {
-    if (tracked) trackActivity(kind, -1)
+    trackActivity(kind, -1)
   }
 }
 

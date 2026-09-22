@@ -19,7 +19,6 @@ defineProps<{
   producedCount: number
   selectedCount: number
   selectedBytes: number
-  atRoot: boolean
 }>()
 
 defineEmits<{
@@ -65,15 +64,8 @@ defineEmits<{
       {{ selectedCount }} selected · {{ formatSize(selectedBytes) }}
     </span>
 
+    <!-- The full shortcut list lives in help; the bar only points to it. -->
     <template #hints>
-      <KeyHint keys="↑↓" label="move" />
-      <KeyHint keys="⏎" label="open" />
-      <KeyHint keys="space" label="select" />
-      <KeyHint keys="n" label="new folder" />
-      <KeyHint keys="⇧R" label="refresh" />
-      <KeyHint keys="⇧↑↓" label="range" />
-      <KeyHint v-if="!atRoot" keys="/" label="filter" />
-      <KeyHint keys="g" label="prompt" />
       <KeyHint keys="?" label="help" />
     </template>
   </StatusBar>

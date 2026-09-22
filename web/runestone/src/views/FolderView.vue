@@ -18,6 +18,7 @@ import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
+import { useFolderPrefetch } from '@/composables/useFolderPrefetch'
 import { allTasks, workflowOf, type Task } from '@/data/workflows'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
@@ -51,6 +52,7 @@ const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
   atRoot.value ? { key: 'modified', dir: -1 } : { key: 'name', dir: 1 }
 const sort = ref(defaultSort())
 const { load, listingState, folderState } = useFolderLoader()
+const prefetch = useFolderPrefetch()
 const {
   error: actionError,
   clearError,
@@ -83,6 +85,9 @@ watch(
   () => {
     clearError()
     if (atRoot.value || folderId.value !== undefined) load(folderId.value)
+    // After load(): a prefetch of the folder being opened is already joined by
+    // the load, so cancelling only drops the ones for folders left behind.
+    prefetch.cancel()
   },
   { immediate: true },
 )
@@ -167,6 +172,12 @@ const focused = computed(() => {
 const workflow = computed(() => (folder.value ? workflowOf(folder.value.id) : undefined))
 const task = ref<Task | null>(null)
 watch(cursor, () => (task.value = null))
+
+/** A folder row under the cursor or mouse is likely opened next: load its subfolders ahead. */
+function prefetchRow(item: Item | null | undefined) {
+  prefetch.schedule(item?.kind === 'folder' ? item.id : null)
+}
+watch(() => rows.value[cursor.value], prefetchRow)
 
 const produced = computed(() => new Set(task.value?.outputs ?? []))
 const tracing = computed(() => produced.value.size > 0)
@@ -443,6 +454,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         @create-folder="handleCreateFolder"
         @rename="handleRename"
         @retry="refresh"
+        @hover="prefetchRow"
       >
         <template #workflow>
           <WorkflowPanel
@@ -491,7 +503,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :produced-count="produced.size"
       :selected-count="selected.size"
       :selected-bytes="selectedBytes"
-      :at-root="atRoot"
       @undo="undoRun"
     />
   </section>
