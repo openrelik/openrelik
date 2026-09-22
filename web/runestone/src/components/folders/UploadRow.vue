@@ -2,8 +2,10 @@
 import { computed } from 'vue'
 
 import Button from '@/components/base/Button.vue'
+import UserAvatar from '@/components/base/UserAvatar.vue'
 import { File, X } from '@/components/icons'
 import { sentBytes, uploadPercent, type Upload } from '@/composables/useUploadQueue'
+import { useAuthStore } from '@/stores/auth'
 import { formatSize } from '@/utils/format'
 
 /**
@@ -20,6 +22,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ cancel: []; retry: []; dismiss: [] }>()
+
+const auth = useAuthStore()
+/** The file will belong to whoever is uploading it: the same square, before and after. */
+const owner = computed(() => auth.user)
 
 const percent = computed(() => uploadPercent(props.upload))
 const failed = computed(() => props.upload.status === 'failed')
@@ -70,6 +76,15 @@ const failed = computed(() => props.upload.status === 'failed')
         </template>
       </span>
       <template v-else>{{ upload.file.type || 'file:generic' }}</template>
+    </td>
+
+    <td class="px-2">
+      <UserAvatar
+        v-if="owner"
+        :name="owner.display_name || owner.username"
+        :username="owner.username"
+        :src="owner.profile_picture_url ?? undefined"
+      />
     </td>
 
     <td class="truncate px-2">

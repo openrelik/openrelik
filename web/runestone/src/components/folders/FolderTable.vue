@@ -12,6 +12,7 @@ import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import LoadState from '@/components/base/LoadState.vue'
+import UserAvatar from '@/components/base/UserAvatar.vue'
 import UploadRow from '@/components/folders/UploadRow.vue'
 import type { PendingFolder } from '@/composables/useFolderActions'
 import type { Upload } from '@/composables/useUploadQueue'
@@ -21,7 +22,7 @@ import { getUniqueFolderName, type Item } from '@/data/folders'
 import { runStats, workflowOf } from '@/data/workflows'
 import { count, formatSize, stamp } from '@/utils/format'
 
-export type SortKey = 'name' | 'size' | 'type' | 'modified'
+export type SortKey = 'name' | 'size' | 'type' | 'owner' | 'modified'
 
 const props = defineProps<{
   rows: Item[]
@@ -282,6 +283,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
   { key: 'name', label: 'name' },
   { key: 'size', label: 'size', align: 'right' },
   { key: 'type', label: 'type' },
+  { key: 'owner', label: 'owner' },
   { key: 'modified', label: 'modified (utc)' },
 ]
 </script>
@@ -294,12 +296,13 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
   >
     <slot name="workflow" />
 
-    <table class="w-full min-w-2xl table-fixed border-collapse text-left">
+    <table class="w-full min-w-3xl table-fixed border-collapse text-left">
       <colgroup>
         <col class="w-8" />
         <col />
         <col class="w-44" />
         <col class="w-44" />
+        <col class="w-20" />
         <col class="w-40" />
       </colgroup>
       <thead class="sticky top-0 z-[1] bg-surface">
@@ -399,7 +402,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               }}</span>
             </div>
           </td>
-          <td colspan="3" />
+          <td colspan="4" />
         </tr>
 
         <!-- Inline New Folder Row (Finder style) -->
@@ -436,6 +439,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
             <span class="select-none text-ink-muted">—</span>
           </td>
           <td class="truncate px-2 text-ink-muted">inode/directory</td>
+          <td class="px-2" />
           <td class="tabular truncate px-2 text-ink-secondary">just now</td>
         </tr>
 
@@ -453,7 +457,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
 
         <tr v-if="hiddenUploads" class="h-7 border-b border-border/60 select-none">
           <td class="pl-3" />
-          <td class="px-2 text-ink-muted" colspan="4">
+          <td class="px-2 text-ink-muted" colspan="5">
             and {{ count(hiddenUploads, 'more file') }} uploading —
             <button
               type="button"
@@ -502,6 +506,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
             </span>
             <template v-else>inode/directory</template>
           </td>
+          <td class="px-2" />
           <td class="tabular truncate px-2 text-ink-secondary">just now</td>
         </tr>
 
@@ -615,6 +620,9 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               {{ deletingIds?.has(row.id) ? 'deleting…' : 'saving…' }}
             </span>
             <template v-else>{{ typeOf(row) }}</template>
+          </td>
+          <td class="px-2">
+            <UserAvatar :name="row.owner" :username="row.ownerUsername" :src="row.ownerAvatar" />
           </td>
           <td class="tabular truncate px-2 text-ink-secondary">{{ stamp(row.modified) }}</td>
         </tr>
