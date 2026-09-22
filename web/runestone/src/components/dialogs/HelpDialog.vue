@@ -41,7 +41,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
   },
   {
     title: 'prompt',
-    note: 'Focused when you arrive. Typing searches below the current folder.',
+    note: 'Focused when you arrive. Typing searches below the current folder; from the top it also searches the server.',
     shortcuts: [
       { keys: ['/…'], does: 'Search from the top instead' },
       { keys: ['../…'], does: 'Search from the folder above' },
@@ -61,6 +61,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     shortcuts: [
       { keys: ['↑', '↓'], does: 'Move (also j k)' },
       { keys: ['home', 'end'], does: 'First, last' },
+      { keys: ['pgup', 'pgdn'], does: 'Previous, next page (top level)' },
       { keys: ['⏎', '→'], does: 'Open folder or file (also l)' },
       { keys: ['..'], does: 'First row: ⏎ on it goes up one folder' },
       { keys: ['space'], does: 'Select' },

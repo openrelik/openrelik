@@ -8,8 +8,10 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, errorMessage, readSession, removeSession, writeSession, type User } from '@/api'
 import { forgetRoles } from '@/composables/useFolderPermissions'
+import { clearFolderSearch } from '@/composables/useFolderSearch'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { clearItems } from '@/data/folders'
+import { clearRootPages } from '@/data/rootPages'
 
 const STORAGE_USER_KEY = 'openrelik.auth.user'
 
@@ -41,6 +43,8 @@ export const useAuthStore = defineStore('auth', () => {
       // The next operator must not see this one's folders, even for a moment.
       clearQueryCache()
       clearItems()
+      clearRootPages()
+      clearFolderSearch()
       forgetRoles()
     }
   }

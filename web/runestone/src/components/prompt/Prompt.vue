@@ -10,8 +10,19 @@ import { usePrompt } from '@/composables/usePrompt'
  * else has the keyboard — which focuses the path bar's prompt where there is one,
  * and opens this where there is not.
  */
-const { promptOpen, close, line, index, query, cwdPath, scopePath, results, go, handleKey } =
-  usePrompt(() => close())
+const {
+  promptOpen,
+  close,
+  line,
+  index,
+  query,
+  cwdPath,
+  scopePath,
+  results,
+  serverSearch,
+  go,
+  handleKey,
+} = usePrompt(() => close())
 
 watch(promptOpen, (open) => {
   if (!open) return
@@ -64,6 +75,7 @@ function onInputKey(event: KeyboardEvent) {
           :query="query"
           :cwd-path="cwdPath"
           :scope-path="scopePath"
+          :server-search="serverSearch"
           @go="go"
           @hover="index = $event"
         />

@@ -6,7 +6,9 @@ import { RouterLink, useRoute } from 'vue-router'
 import PromptResults from '@/components/prompt/PromptResults.vue'
 import { registerPrompt, usePrompt } from '@/composables/usePrompt'
 import { childrenOf, subfoldersOf, type Item } from '@/data/folders'
+import { rootListedItems } from '@/data/rootPages'
 import { workflowOf } from '@/data/workflows'
+import { useSettingsStore } from '@/stores/settings'
 
 /**
  * Where you are, as a shell prompt: `/CLI Test Folder/evidence $ ▌`.
@@ -29,7 +31,7 @@ const route = useRoute()
 
 const input = ref<HTMLInputElement | null>(null)
 const focused = ref(false)
-const { line, index, query, cwdPath, scopePath, results, go, handleKey } = usePrompt()
+const { line, index, query, cwdPath, scopePath, results, serverSearch, go, handleKey } = usePrompt()
 
 /**
  * The prompt is focused by default, so it must not take the listing's keyboard
@@ -111,7 +113,15 @@ const separators = computed(() => {
   ]
 })
 
-const entries = computed(() => (openAt.value === null ? [] : subfoldersOf(folderOf(openAt.value))))
+const settingsStore = useSettingsStore()
+/** Folders behind a separator; for the root, the top-level pages loaded so far. */
+const entries = computed(() => {
+  if (openAt.value === null) return []
+  const parent = folderOf(openAt.value)
+  return parent === null
+    ? rootListedItems(settingsStore.settings.explorer.pageSize)
+    : subfoldersOf(parent)
+})
 /** The entry that is on the current path, if any. */
 const onPath = computed(() => (openAt.value === null ? undefined : props.path[openAt.value + 1]))
 
@@ -283,6 +293,7 @@ function onBarClick(event: MouseEvent) {
       :query="query"
       :cwd-path="cwdPath"
       :scope-path="scopePath"
+      :server-search="serverSearch"
       @go="go"
       @hover="index = $event"
     />

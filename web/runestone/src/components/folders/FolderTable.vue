@@ -23,6 +23,8 @@ export type SortKey = 'name' | 'size' | 'type' | 'modified'
 const props = defineProps<{
   rows: Item[]
   sort: { key: SortKey; dir: 1 | -1 }
+  /** False for the paginated top level: rows keep the server's order (newest created first). */
+  sortable?: boolean
   cursor: number
   selected: Set<number>
   allSelected: boolean
@@ -303,10 +305,24 @@ const typeOf = (item: Item) =>
             class="px-2 font-normal"
             :class="{ 'text-right': column.align === 'right' }"
             :aria-sort="
-              sort.key === column.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined
+              sortable && sort.key === column.key
+                ? sort.dir === 1
+                  ? 'ascending'
+                  : 'descending'
+                : undefined
             "
           >
+            <!-- Paginated by the server, which only orders by creation: plain labels. -->
+            <span
+              v-if="!sortable"
+              class="micro-label"
+              v-tooltip="
+                column.key === 'modified' ? 'Newest created first, across pages' : undefined
+              "
+              >{{ column.label }}</span
+            >
             <button
+              v-else
               type="button"
               class="micro-label inline-flex cursor-pointer items-center gap-1 hover:text-ink"
               :class="{ 'text-ink-secondary': sort.key === column.key }"

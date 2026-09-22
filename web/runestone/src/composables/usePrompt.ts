@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { refreshAll } from '@/composables/useAutoRefresh'
 import { useFolderActions } from '@/composables/useFolderActions'
+import { useFolderSearch } from '@/composables/useFolderSearch'
 import { folderKeys } from '@/composables/useFolderLoader'
 import { invalidate } from '@/composables/useQueryCache'
 import {
@@ -14,7 +15,9 @@ import {
   subfoldersOf,
   type Item,
 } from '@/data/folders'
+import { rootListedItems } from '@/data/rootPages'
 import { useModalStore } from '@/stores/modals'
+import { useSettingsStore } from '@/stores/settings'
 import { matchPath } from '@/utils/match'
 
 export interface PromptResult {
@@ -37,6 +40,8 @@ export interface PromptResult {
   folderName?: string
   /** `rm`: delete `item`, a folder in the current one (after confirmation). */
   rm?: boolean
+  /** Found by the server search, not among the loaded folders: its path is unknown. */
+  remote?: boolean
 }
 
 /** Paths are shown and matched from the root of the whole instance. */
@@ -75,6 +80,9 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   const route = useRoute()
   const router = useRouter()
   const { createFolder, confirmDeleteFolders } = useFolderActions()
+  const settingsStore = useSettingsStore()
+  /** The top level is paginated: listing it means the pages loaded so far. */
+  const pageSize = () => settingsStore.settings.explorer.pageSize
 
   if (!trackingInitialized) {
     trackingInitialized = true
@@ -132,6 +140,28 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     const base = resolved.value.base
     return base ? pathOf(base).replace(/\/$/, '') : '/'
   })
+
+  /** The line is a command or a jump, not a search. */
+  const isCommand = computed(() => {
+    const trimmed = line.value.trim().toLowerCase()
+    return (
+      /^(mkdir|rm)(\s|$)/.test(trimmed) ||
+      ['cd', 'cd ~', 'cd -', 'cd-'].includes(trimmed) ||
+      ['-', '~', '..', '.'].includes(query.value)
+    )
+  })
+
+  /**
+   * What to ask the server for: only a search from the top (at the root, or
+   * `/…`), since the server cannot search inside one folder, and only a name
+   * (it matches names, not paths).
+   */
+  const serverTerm = computed(() => {
+    const { base, rest } = resolved.value
+    if (isCommand.value || base || !rest || rest.includes('/')) return null
+    return rest
+  })
+  const serverSearch = useFolderSearch(() => serverTerm.value)
 
   const results = computed<PromptResult[]>(() => {
     const raw = line.value
@@ -205,7 +235,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
         .replace(/^["']|["']$/g, '')
         .replace(/\/+$/, '')
       const offset = 'rm '.length
-      return subfoldersOf(cwd.value?.id ?? null)
+      return (cwd.value ? subfoldersOf(cwd.value.id) : rootListedItems(pageSize()))
         .map((item) => ({ item, match: matchPath(target, item.name) }))
         .filter((entry) => entry.match !== null)
         .sort(
@@ -225,7 +255,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     }
 
     if (!q) {
-      const here = cwd.value ? childrenOf(cwd.value.id) : ITEMS.filter((i) => i.parent === null)
+      const here = cwd.value ? childrenOf(cwd.value.id) : rootListedItems(pageSize())
       const up: PromptResult[] = cwd.value
         ? [{ item: null, path: '..', label: '..', hits: [], up: true }]
         : []
@@ -238,9 +268,11 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     if (q === '.') return [{ item: null, path: '.', label: '.', hits: [0], here: true }]
 
     const { base, rest, prefix } = resolved.value
+    // Loaded folders first: they know their path. From the top, the server
+    // search adds the folders nobody has loaded yet.
     const scope = base ? descendantsOf(base.id) : ITEMS
     const basePath = base ? pathOf(base) : '/'
-    return scope
+    const local = scope
       .map((item) => {
         const relative = pathOf(item).slice(basePath.length)
         const match = rest ? matchPath(rest, relative) : { score: -relative.length, hits: [] }
@@ -256,7 +288,22 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
       })
       .filter((result) => result !== null)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 50)
+
+    const seen = new Set(local.map((result) => result.item.id))
+    const needle = rest.toLowerCase()
+    const remote: PromptResult[] = serverTerm.value
+      ? serverSearch.items.value
+          .filter((item) => !seen.has(item.id) && item.name.toLowerCase().includes(needle))
+          .map((item) => ({
+            item,
+            // Tab completes to the name: searching it again finds the folder.
+            path: prefix + item.name,
+            label: prefix + item.name + '/',
+            hits: (matchPath(rest, item.name)?.hits ?? []).map((h) => h + prefix.length),
+            remote: true,
+          }))
+      : []
+    return [...local, ...remote].slice(0, 50)
   })
 
   watch(results, () => (index.value = 0))
@@ -269,7 +316,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     const parent = cwd.value?.id ?? null
     const created = await createFolder(parent, folderName)
     if (!created) return
-    invalidate(parent === null ? folderKeys.root : folderKeys.subfolders(parent))
+    invalidate(parent === null ? folderKeys.rootPrefix : folderKeys.subfolders(parent))
     refreshAll()
   }
 
@@ -411,6 +458,16 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     cwdPath,
     scopePath,
     results,
+    /** The server search behind a top-level search; null when none runs. */
+    serverSearch: computed(() =>
+      serverTerm.value === null
+        ? null
+        : {
+            searching: serverSearch.searching.value,
+            error: serverSearch.error.value,
+            total: serverSearch.total.value,
+          },
+    ),
     go,
     handleKey,
   }

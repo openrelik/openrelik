@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import FolderPager from '@/components/folders/FolderPager.vue'
 import FolderStatusBar from '@/components/folders/FolderStatusBar.vue'
 import FolderTable, { type SortKey } from '@/components/folders/FolderTable.vue'
 import FolderToolbar from '@/components/folders/FolderToolbar.vue'
@@ -10,7 +11,8 @@ import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
 import { lastRun, openRun, startRun, undoRun } from '@/composables/useRun'
-import { childrenOf, findItem, FOLDERS, pathTo, renameItem, type Item } from '@/data/folders'
+import { childrenOf, findItem, pathTo, renameItem, type Item } from '@/data/folders'
+import { rootPageItems, rootPageOf } from '@/data/rootPages'
 import type { Worker } from '@/data/workers'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
@@ -20,6 +22,7 @@ import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
 import { useFolderPermissions } from '@/composables/useFolderPermissions'
 import { useFolderPrefetch } from '@/composables/useFolderPrefetch'
+import { useRootPager } from '@/composables/useRootPager'
 import { allTasks, workflowOf, type Task } from '@/data/workflows'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
@@ -54,6 +57,9 @@ const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
 const sort = ref(defaultSort())
 const { load, listingState, folderState } = useFolderLoader()
 const prefetch = useFolderPrefetch()
+/** The top level is paginated on the server; the page is in the URL. */
+const pager = useRootPager(() => atRoot.value)
+const rootRef = computed(() => ({ page: pager.page.value, size: pager.size.value }))
 const {
   error: actionError,
   clearError,
@@ -66,8 +72,10 @@ const {
   renameFolder,
 } = useFolderActions()
 
-/** Load state of what the table lists: the root folders or this folder's subfolders. */
-const listing = computed(() => listingState(folderId.value))
+/** Load state of what the table lists: a top-level page or this folder's subfolders. */
+const listing = computed(() =>
+  atRoot.value ? listingState(undefined, rootRef.value) : listingState(folderId.value),
+)
 /** Either request answered "no such folder" (or the id is malformed). */
 const notFound = computed(() => {
   if (atRoot.value || folder.value) return false
@@ -81,14 +89,23 @@ watch(atRoot, () => {
   sort.value = defaultSort()
 })
 
-const pendingHere = computed(() => pendingIn(folderId.value ?? null))
+// New folders land first on page 1, so their placeholders only show there.
+const pendingHere = computed(() =>
+  atRoot.value && pager.page.value > 1 ? [] : pendingIn(folderId.value ?? null),
+)
+
+/** Loads what is on screen: a top-level page, or a folder and its subfolders. */
+function loadHere(force = false) {
+  if (atRoot.value) load(undefined, { ...rootRef.value, force })
+  else if (folderId.value !== undefined) load(folderId.value, { force })
+}
 
 // Load whatever the route points at. Recently seen locations cost no request.
 watch(
-  () => props.id,
+  () => (atRoot.value ? pager.key.value : `folder:${props.id}`),
   () => {
     clearError()
-    if (atRoot.value || folderId.value !== undefined) load(folderId.value)
+    loadHere()
     // After load(): a prefetch of the folder being opened is already joined by
     // the load, so cancelling only drops the ones for folders left behind.
     prefetch.cancel()
@@ -98,22 +115,26 @@ watch(
 
 /** Refetch what is on screen, fresh or not (Shift+R, Retry). */
 function refresh() {
-  if (atRoot.value || folderId.value !== undefined) load(folderId.value, { force: true })
+  loadHere(true)
 }
 
 // Coming back to the tab or the network: refresh what is stale or failed.
-useAutoRefresh(({ force }) => {
-  if (atRoot.value || folderId.value !== undefined) load(folderId.value, { force })
-})
+useAutoRefresh(({ force }) => loadHere(force))
 
 const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
 const typeOf = (item: Item) =>
   item.mime ?? (workflowOf(item.id) ? 'openrelik/workflow' : 'inode/directory')
 
-// Derived rows, using reactive FOLDERS.value at root
+// Rows: the current top-level page in the server's order (newest created
+// first; it cannot be re-sorted across pages), or a folder's contents sorted here.
 const rows = computed(() => {
   if (!atRoot.value && !folder.value) return []
   const needle = filter.value.trim().toLowerCase()
+  if (atRoot.value) {
+    return rootPageItems(pager.key.value).filter(
+      (item) => !needle || item.name.toLowerCase().includes(needle),
+    )
+  }
   const { key, dir } = sort.value
   const by: Record<SortKey, (a: Item, b: Item) => number> = {
     name: (a, b) => a.name.localeCompare(b.name),
@@ -124,7 +145,7 @@ const rows = computed(() => {
     type: (a, b) => typeOf(a).localeCompare(typeOf(b)),
     modified: (a, b) => a.modified.localeCompare(b.modified),
   }
-  return (atRoot.value ? FOLDERS.value : childrenOf(folder.value!.id))
+  return childrenOf(folder.value!.id)
     .filter((item) => !needle || item.name.toLowerCase().includes(needle))
     .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1) || by[key](a, b) * dir)
 })
@@ -220,16 +241,16 @@ function onRowClick(event: MouseEvent, index: number) {
   else pick(index)
 }
 
-watch(
-  () => props.id,
-  (_, previous) => {
-    clearSelection()
-    filter.value = ''
-    task.value = null
-    const from = rows.value.findIndex((row) => String(row.id) === previous)
-    cursor.value = Math.max(0, from)
-  },
-)
+// A new location — another folder, or another top-level page: selection,
+// filter and task belong to the old one. Coming back up, the cursor lands on
+// the folder just left.
+watch([() => props.id, () => (atRoot.value ? pager.page.value : 0)], (_, [previous]) => {
+  clearSelection()
+  filter.value = ''
+  task.value = null
+  const from = rows.value.findIndex((row) => String(row.id) === previous)
+  cursor.value = Math.max(0, from)
+})
 
 const focus = rows.value.findIndex((row) => String(row.id) === route.query.focus)
 if (focus >= 0) cursor.value = focus
@@ -264,7 +285,10 @@ const runNotice = computed(() =>
 const UP = -1
 const parentPath = computed(() => {
   const parent = folder.value?.parent
-  return parent === null || parent === undefined ? '/' : `/folder/${parent}`
+  if (parent !== null && parent !== undefined) return `/folder/${parent}`
+  // Up from a top-level folder: back to the page that lists it.
+  const page = folder.value ? rootPageOf(folder.value.id, pager.size.value) : undefined
+  return page && page > 1 ? `/?page=${page}` : '/'
 })
 const parentName = computed(() => {
   const parent = folder.value?.parent
@@ -282,7 +306,12 @@ function open(item: Item | undefined) {
   )
 }
 
-function startCreateFolder() {
+async function startCreateFolder() {
+  // A new top-level folder is the newest: create it on page 1, where it will stay.
+  if (atRoot.value && pager.page.value > 1) {
+    await pager.goTo(1)
+    await nextTick()
+  }
   filter.value = ''
   table.value?.startCreateFolder()
 }
@@ -366,6 +395,8 @@ const KEYS: Record<string, () => void> = {
   },
   F2: startRenameCurrent,
   e: startRenameCurrent,
+  PageDown: () => atRoot.value && pager.next(),
+  PageUp: () => atRoot.value && pager.prev(),
   Delete: deleteCurrent,
   R: refresh,
   Escape: () => {
@@ -472,50 +503,67 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- panes -->
     <div class="flex min-h-0 flex-1">
-      <FolderTable
-        ref="table"
-        :rows="rows"
-        :sort="sort"
-        :cursor="cursor"
-        :selected="selected"
-        :all-selected="allSelected"
-        :at-root="atRoot"
-        :has-task="!!task"
-        :produced="produced"
-        :tracing="tracing"
-        :parent-path="parentPath"
-        :parent-name="parentName"
-        :max-bytes="maxBytes"
-        :filter="filter"
-        :listing="listing"
-        :pending-folders="pendingHere"
-        :saving-ids="savingIds"
-        :deleting-ids="deletingIds"
-        :may-rename="mayRename"
-        :show-pending="showPending"
-        :action-error="actionError"
-        @sort="sortBy"
-        @toggle-all="toggleAll"
-        @toggle="toggle"
-        @row-click="onRowClick"
-        @open="open"
-        @pick="pick"
-        @go-up="goUp"
-        @create-folder="handleCreateFolder"
-        @rename="handleRename"
-        @retry="refresh"
-        @hover="prefetchRow"
-      >
-        <template #workflow>
-          <WorkflowPanel
-            v-if="workflow"
-            :workflow="workflow"
-            :selected-id="task?.id ?? null"
-            :producer-id="producer?.id ?? null"
-            @select="task = $event"
-          />
-        </template>
-      </FolderTable>
+      <!-- The list, with the page controls under it at the paginated top level. -->
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <FolderTable
+          ref="table"
+          class="min-h-0"
+          :rows="rows"
+          :sort="sort"
+          :sortable="!atRoot"
+          :cursor="cursor"
+          :selected="selected"
+          :all-selected="allSelected"
+          :at-root="atRoot"
+          :has-task="!!task"
+          :produced="produced"
+          :tracing="tracing"
+          :parent-path="parentPath"
+          :parent-name="parentName"
+          :max-bytes="maxBytes"
+          :filter="filter"
+          :listing="listing"
+          :pending-folders="pendingHere"
+          :saving-ids="savingIds"
+          :deleting-ids="deletingIds"
+          :may-rename="mayRename"
+          :show-pending="showPending"
+          :action-error="actionError"
+          @sort="sortBy"
+          @toggle-all="toggleAll"
+          @toggle="toggle"
+          @row-click="onRowClick"
+          @open="open"
+          @pick="pick"
+          @go-up="goUp"
+          @create-folder="handleCreateFolder"
+          @rename="handleRename"
+          @retry="refresh"
+          @hover="prefetchRow"
+        >
+          <template #workflow>
+            <WorkflowPanel
+              v-if="workflow"
+              :workflow="workflow"
+              :selected-id="task?.id ?? null"
+              :producer-id="producer?.id ?? null"
+              @select="task = $event"
+            />
+          </template>
+        </FolderTable>
+        <FolderPager
+          v-if="atRoot"
+          :page="pager.page.value"
+          :last-page="pager.lastPage.value"
+          :from="pager.from.value"
+          :to="pager.to.value"
+          :total="pager.total.value"
+          :has-prev="pager.hasPrev.value"
+          :has-next="pager.hasNext.value"
+          @prev="pager.prev"
+          @next="pager.next"
+        />
+      </div>
 
       <TaskInspector
         v-if="task"

@@ -29,6 +29,15 @@ export interface Folder {
   folder_count?: number
 }
 
+/** One page of the top-level folder list (GET /folders/all/), newest created first. */
+export interface FolderPage {
+  folders: Folder[]
+  page: number
+  page_size: number
+  /** All folders in the list, across pages. */
+  total_count: number
+}
+
 /** The operator's role on a folder, inherited from the nearest folder that sets one. */
 export type FolderRole = 'Owner' | 'Editor' | 'Viewer' | 'No Access'
 

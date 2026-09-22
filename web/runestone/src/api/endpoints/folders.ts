@@ -3,17 +3,29 @@
  */
 
 import { httpClient, type RequestOptions } from '../client'
+import type { Folder, FolderDetail, FolderPage, FolderRole } from '../types'
 
 /** Per-call options that endpoints pass through: cancellation, and background for prefetches. */
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
-import type { Folder, FolderDetail, FolderRole } from '../types'
 
 export const foldersApi = {
   /**
-   * Retrieves root folders owned by or accessible to the current user.
+   * One page of the top-level list: the user's own root folders plus folders
+   * shared with them, newest created first (the server has no other order).
+   * `page` starts at 1; the server does not validate it, so never send less.
+   *
+   * With `q` it searches instead: every folder the user can reach, at any
+   * depth, whose name contains `q` (case-insensitive), still newest first.
+   * Like the list, results carry no parent id.
    */
-  getRootFolders(options?: CallOptions): Promise<Folder[]> {
-    return httpClient.get<Folder[]>('/folders/', options)
+  getAllFolders(
+    { page, pageSize, q }: { page: number; pageSize: number; q?: string },
+    options?: CallOptions,
+  ): Promise<FolderPage> {
+    return httpClient.get<FolderPage>('/folders/all/', {
+      ...options,
+      params: { page: Math.max(1, Math.floor(page)), page_size: pageSize, q: q || undefined },
+    })
   },
 
   /**

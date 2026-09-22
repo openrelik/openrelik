@@ -19,6 +19,8 @@ defineProps<{
   cwdPath: string
   /** Where a search runs from, for the header. */
   scopePath: string
+  /** The server search behind a top-level search, if one runs. */
+  serverSearch?: { searching: boolean; error: string | null; total: number | null } | null
 }>()
 const emit = defineEmits<{ go: [result: PromptResult]; hover: [index: number] }>()
 
@@ -40,6 +42,21 @@ const meta = (item: Item) => {
         {{ count(results.length, 'match', 'matches') }}{{ results.length === 50 ? '+' : '' }} in
         {{ scopePath }}
       </template>
+      <!-- The server search, quietly: loaded matches are already listed. -->
+      <span
+        v-if="serverSearch?.searching"
+        class="ml-2 inline-flex items-center gap-1.5"
+        aria-live="polite"
+      >
+        <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+        searching server…
+      </span>
+      <span v-else-if="serverSearch?.error" class="ml-2 text-warning">
+        · server search failed: {{ serverSearch.error }}
+      </span>
+      <span v-else-if="serverSearch?.total" class="tabular ml-2">
+        · {{ count(serverSearch.total, 'folder') }} on the server
+      </span>
     </p>
 
     <ul id="prompt-results" class="min-h-0 flex-1 overflow-y-auto pb-1" role="listbox">
@@ -110,7 +127,13 @@ const meta = (item: Item) => {
         >
           new folder
         </span>
-        <span v-if="result.item" class="tabular shrink-0 text-ink-muted">{{
+        <span
+          v-if="result.remote"
+          class="shrink-0 text-[11px] text-ink-muted"
+          v-tooltip="'Found by the server search; not opened yet in this session'"
+          >server</span
+        >
+        <span v-else-if="result.item" class="tabular shrink-0 text-ink-muted">{{
           meta(result.item)
         }}</span>
         <span v-if="result.item?.mime" class="w-40 shrink-0 truncate text-ink-muted">{{
@@ -120,6 +143,9 @@ const meta = (item: Item) => {
       </li>
       <li v-if="!results.length && query.match(/^rm(\s|$)/i)" class="px-3 py-2 text-ink-muted">
         no folder matching "{{ query.replace(/^rm\s*/i, '') }}" in {{ cwdPath }}
+      </li>
+      <li v-else-if="!results.length && serverSearch?.searching" class="px-3 py-2 text-ink-muted">
+        no loaded folder matches "{{ query }}" — asking the server…
       </li>
       <li v-else-if="!results.length" class="px-3 py-2 text-ink-muted">
         no match for "{{ query }}" in {{ scopePath }}
