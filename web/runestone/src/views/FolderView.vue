@@ -11,6 +11,7 @@ import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
 import { lastRun, openRun, startRun, undoRun } from '@/composables/useRun'
+import { bytesOf, typeOf } from '@/data/files'
 import { childrenOf, findItem, pathTo, renameItem, type Item } from '@/data/folders'
 import { rootPageItems, rootPageOf } from '@/data/rootPages'
 import type { Worker } from '@/data/workers'
@@ -20,10 +21,14 @@ import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
-import { useFolderPermissions } from '@/composables/useFolderPermissions'
+import { canDeleteItem, useFolderPermissions } from '@/composables/useFolderPermissions'
 import { useFolderPrefetch } from '@/composables/useFolderPrefetch'
+import { useDropZone } from '@/composables/useDropZone'
+import { useUploadPanel } from '@/composables/useUploadPanel'
+import { useUploadQueue } from '@/composables/useUploadQueue'
 import { useRootPager } from '@/composables/useRootPager'
 import { allTasks, workflowOf, type Task } from '@/data/workflows'
+import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
 
@@ -59,6 +64,8 @@ const { load, listingState, folderState } = useFolderLoader()
 const prefetch = useFolderPrefetch()
 /** The top level is paginated on the server; the page is in the URL. */
 const pager = useRootPager(() => atRoot.value)
+const uploads = useUploadQueue()
+const uploadPanel = useUploadPanel()
 const rootRef = computed(() => ({ page: pager.page.value, size: pager.size.value }))
 const {
   error: actionError,
@@ -66,7 +73,7 @@ const {
   pendingIn,
   savingIds,
   deletingIds,
-  confirmDeleteFolders,
+  confirmDeleteItems,
   mayRename,
   createFolder,
   renameFolder,
@@ -94,6 +101,43 @@ const pendingHere = computed(() =>
   atRoot.value && pager.page.value > 1 ? [] : pendingIn(folderId.value ?? null),
 )
 
+/** Files on their way into the folder on screen, shown above its rows. */
+const uploadsHere = computed(() =>
+  folderId.value === undefined ? [] : uploads.uploadsIn(folderId.value),
+)
+/** Why a drop was (partly) refused; cleared by the next drop or navigation. */
+const dropRefusal = ref<string | null>(null)
+
+/** Queues files for this folder; at the root there is no folder to put them in. */
+function uploadFiles(files: File[]) {
+  if (folderId.value === undefined) {
+    dropRefusal.value = 'Files are uploaded into a case folder — open one first.'
+    return
+  }
+  uploads.enqueue(folderId.value, files)
+}
+
+/** The Upload button and `u`: a fresh pick clears what the last drop said. */
+function pickedFiles(files: File[]) {
+  dropRefusal.value = null
+  uploadFiles(files)
+}
+
+/**
+ * Dropped folders are recreated here and their files uploaded into them, so a
+ * case folder can be dropped whole — at the top level too, where only loose
+ * files have nowhere to go.
+ */
+const { isOver: isDropTarget, handlers: dropHandlers } = useDropZone(({ entries, files }) => {
+  dropRefusal.value = null
+  if (entries.length) {
+    uploads.enqueueDrop(folderId.value ?? null, entries)
+    return
+  }
+  // A browser that hands out no entries: plain files only.
+  if (files.length) uploadFiles(files)
+})
+
 /** Loads what is on screen: a top-level page, or a folder and its subfolders. */
 function loadHere(force = false) {
   if (atRoot.value) load(undefined, { ...rootRef.value, force })
@@ -105,6 +149,7 @@ watch(
   () => (atRoot.value ? pager.key.value : `folder:${props.id}`),
   () => {
     clearError()
+    dropRefusal.value = null
     loadHere()
     // After load(): a prefetch of the folder being opened is already joined by
     // the load, so cancelling only drops the ones for folders left behind.
@@ -120,10 +165,6 @@ function refresh() {
 
 // Coming back to the tab or the network: refresh what is stale or failed.
 useAutoRefresh(({ force }) => loadHere(force))
-
-const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
-const typeOf = (item: Item) =>
-  item.mime ?? (workflowOf(item.id) ? 'openrelik/workflow' : 'inode/directory')
 
 // Rows: the current top-level page in the server's order (newest created
 // first; it cannot be re-sorted across pages), or a folder's contents sorted here.
@@ -153,7 +194,11 @@ const rows = computed(() => {
 // In-row "creating…"/"saving…" wait a moment, so fast saves never flash one.
 // Loading and refreshing are shown by LoadState and the app-wide status bar.
 const showPending = useDelayedFlag(
-  () => pendingHere.value.length > 0 || savingIds.size > 0 || deletingIds.size > 0,
+  () =>
+    pendingHere.value.length > 0 ||
+    savingIds.size > 0 ||
+    deletingIds.size > 0 ||
+    uploadsHere.value.length > 0,
 )
 
 const maxBytes = computed(() => Math.max(1, ...rows.value.map(bytesOf)))
@@ -197,15 +242,31 @@ const focused = computed(() => {
 
 /**
  * What Delete would act on: the selection when several items are selected,
- * otherwise the item in the inspector. Only folders can be deleted, so any
- * file in it means nothing can.
+ * otherwise the item in the inspector.
  */
-const deleteTargets = computed<number[]>(() => {
+const deleteTargets = computed<Item[]>(() => {
   const items = selectedItems.value.length > 1 ? selectedItems.value : [focused.value]
-  return items.every((item) => item?.kind === 'folder') ? items.map((item) => item!.id) : []
+  return items.filter((item): item is Item => !!item)
 })
-// Loads the operator's role on those folders; Delete shows only for owners.
-const { canDeleteAll } = useFolderPermissions(() => deleteTargets.value)
+/** A folder is judged by its own role, a file by the folder it is in. */
+const deleteRoleIds = computed(() => [
+  ...new Set(
+    deleteTargets.value
+      .map((item) => (item.kind === 'folder' ? item.id : item.parent))
+      .filter((id): id is number => id !== null),
+  ),
+])
+// Keeps those roles loaded; Delete stays hidden until they are known.
+useFolderPermissions(() => deleteRoleIds.value)
+const viewerName = computed(() => {
+  const viewer = useAuthStore().user
+  return viewer?.display_name || viewer?.username
+})
+const canDeleteAll = computed(
+  () =>
+    deleteTargets.value.length > 0 &&
+    deleteTargets.value.every((item) => canDeleteItem(item, viewerName.value)),
+)
 // Rename acts on the folder in the inspector; it shows for owners and editors.
 const { canRenameAll: canRenameFocused } = useFolderPermissions(() =>
   focused.value?.kind === 'folder' ? [focused.value.id] : [],
@@ -338,7 +399,7 @@ function startRenameCurrent() {
 async function deleteItems(items: Item[]) {
   const current = folder.value
   const upTo = parentPath.value
-  const deleted = await confirmDeleteFolders(items)
+  const deleted = await confirmDeleteItems(items)
   if (!deleted.length) return
 
   selected.value = new Set([...selected.value].filter((id) => !deleted.includes(id)))
@@ -395,9 +456,13 @@ const KEYS: Record<string, () => void> = {
   },
   F2: startRenameCurrent,
   e: startRenameCurrent,
+  u: () => toolbar?.value?.pickFiles(),
   PageDown: () => atRoot.value && pager.next(),
   PageUp: () => atRoot.value && pager.prev(),
   Delete: deleteCurrent,
+  // Backspace deletes too: no browser navigates back on it any more, and the
+  // confirmation catches a stray press.
+  Backspace: deleteCurrent,
   R: refresh,
   Escape: () => {
     if (table.value?.renamingId) {
@@ -499,6 +564,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :at-root="atRoot"
       :selected-files="selectedFiles"
       @new-folder="startCreateFolder"
+      @upload-files="pickedFiles"
     />
 
     <!-- panes -->
@@ -528,7 +594,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :deleting-ids="deletingIds"
           :may-rename="mayRename"
           :show-pending="showPending"
-          :action-error="actionError"
+          :action-error="actionError ?? uploads.error.value ?? dropRefusal"
+          :uploads="uploadsHere"
+          :is-drop-target="isDropTarget"
+          v-on="dropHandlers"
           @sort="sortBy"
           @toggle-all="toggleAll"
           @toggle="toggle"
@@ -540,6 +609,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           @rename="handleRename"
           @retry="refresh"
           @hover="prefetchRow"
+          @show-queue="uploadPanel.open()"
+          @cancel-upload="uploads.cancel"
+          @retry-upload="uploads.retry"
+          @dismiss-upload="uploads.dismiss"
         >
           <template #workflow>
             <WorkflowPanel

@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import BrandLink from '@/components/layout/BrandLink.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import SettingsTrigger from '@/components/layout/SettingsTrigger.vue'
-import { LogOut, User as UserIcon } from '@/components/icons'
+import { LogOut, Upload, User as UserIcon } from '@/components/icons'
 import { refreshAll } from '@/composables/useAutoRefresh'
 import { useConnection } from '@/composables/useConnection'
 import { useNetworkActivity } from '@/composables/useNetworkActivity'
+import { useUploadPanel } from '@/composables/useUploadPanel'
+import { useUploadQueue } from '@/composables/useUploadQueue'
+import { helpOpen } from '@/composables/useHelp'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const { state: network } = useNetworkActivity()
+const uploads = useUploadQueue()
+const uploadPanel = useUploadPanel()
 
 const NETWORK_TOOLTIP = {
   idle: 'Nothing loading',
@@ -48,8 +52,11 @@ const { status: connection } = useConnection()
       </span>
       <!-- Always shown. Fixed width, so changing state moves nothing. Not a live
            region: announcing every idle/fetching change would be noise. -->
+      <!-- The dot alone: a steady state needs no words, and hovering says
+           which one it is. -->
       <span
-        class="flex w-[11ch] items-center gap-1.5 text-ink-muted"
+        class="flex items-center"
+        :aria-label="`Network: ${network}`"
         v-tooltip="NETWORK_TOOLTIP[network]"
       >
         <span
@@ -57,17 +64,45 @@ const { status: connection } = useConnection()
           :class="network === 'idle' ? 'bg-success' : 'animate-pulse bg-warning'"
           aria-hidden="true"
         />
-        {{ network }}
       </span>
-      <span class="flex items-center gap-3 max-md:hidden">
-        <slot name="hints">
-          <KeyHint keys="g" label="prompt" />
-          <KeyHint keys="?" label="help" />
-        </slot>
+      <span v-if="$slots.hints" class="flex items-center gap-3 max-md:hidden">
+        <slot name="hints" />
       </span>
+
+      <!-- Always here, so the queue is somewhere to go back to, not a notice
+           that disappears. Uploads follow the operator between folders. -->
+      <button
+        type="button"
+        class="flex cursor-pointer items-center gap-1.5 rounded-(--radius-check) px-1 hover:bg-surface hover:text-ink"
+        :class="uploads.activeCount.value ? 'text-brand' : 'text-ink-muted'"
+        :aria-label="
+          uploads.activeCount.value
+            ? `Upload queue, ${uploads.activeCount.value} active`
+            : 'Upload queue'
+        "
+        aria-live="off"
+        data-click-outside-ignore
+        v-tooltip="uploadPanel.isOpen.value ? 'Minimize the upload queue' : 'Show the upload queue'"
+        @click="uploadPanel.toggle()"
+      >
+        <Upload :size="11" :stroke-width="1.5" aria-hidden="true" />
+        <span v-if="uploads.activeCount.value" class="tabular"
+          >{{ uploads.activeCount.value }} active</span
+        >
+      </button>
     </span>
 
-    <SettingsTrigger :class="{ '-mr-3': !authStore.isAuthenticated }" />
+    <SettingsTrigger />
+
+    <button
+      type="button"
+      class="cursor-pointer rounded-(--radius-check) px-1 text-ink-muted hover:bg-surface hover:text-ink"
+      :class="{ '-mr-3': !authStore.isAuthenticated }"
+      v-tooltip="'Keyboard shortcuts (?)'"
+      @click="helpOpen = true"
+    >
+      help
+    </button>
 
     <!-- Authenticated operator indicator and sign out trigger at far right corner -->
     <div

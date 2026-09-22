@@ -3,7 +3,7 @@
  */
 
 import { httpClient, type RequestOptions } from '../client'
-import type { Folder, FolderDetail, FolderPage, FolderRole } from '../types'
+import type { Folder, FolderDetail, FolderFile, FolderPage, FolderRole } from '../types'
 
 /** Per-call options that endpoints pass through: cancellation, and background for prefetches. */
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
@@ -41,6 +41,14 @@ export const foldersApi = {
    */
   getSubfolders(folderId: number, options?: CallOptions): Promise<Folder[]> {
     return httpClient.get<Folder[]>(`/folders/${folderId}/folders/`, options)
+  },
+
+  /**
+   * Retrieves the files directly inside a folder. Not paginated, newest first.
+   * Deleted files are included, so callers filter them out.
+   */
+  getFolderFiles(folderId: number, options?: CallOptions): Promise<FolderFile[]> {
+    return httpClient.get<FolderFile[]>(`/folders/${folderId}/files/`, options)
   },
 
   /**

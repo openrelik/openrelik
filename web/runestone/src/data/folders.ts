@@ -12,6 +12,8 @@ export interface Item {
   /** Bytes. Files only. */
   size?: number
   mime?: string
+  /** OpenRelik's own classification of a file, e.g. "file:generic". */
+  dataType?: string
   hashes?: {
     md5: string
     sha1: string
@@ -149,6 +151,13 @@ export function upsertItems(items: Item[]): void {
     if (index === -1) ITEMS.push(item)
     else ITEMS[index] = item
   }
+}
+
+/** Replaces the files directly inside `parent`, leaving its folders in place. */
+export function setFiles(parent: number, files: Item[]): void {
+  const kept = ITEMS.filter((item) => item.parent !== parent || item.kind !== 'file')
+  ITEMS.splice(0, ITEMS.length, ...kept)
+  upsertItems(files)
 }
 
 /** Replaces the folders directly inside `parent`, leaving its files in place. */

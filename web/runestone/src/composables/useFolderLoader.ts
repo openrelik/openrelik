@@ -14,9 +14,16 @@
  */
 
 import { onScopeDispose } from 'vue'
-import { api, ApiError, errorMessage, type Folder, type FolderDetail } from '@/api'
+import { api, ApiError, errorMessage, type Folder, type FolderDetail, type FolderFile } from '@/api'
 import { ensure, queryState, type QueryState } from '@/composables/useQueryCache'
-import { findItem, setSubfolders, upsertItems, upsertListed, type Item } from '@/data/folders'
+import {
+  findItem,
+  setFiles,
+  setSubfolders,
+  upsertItems,
+  upsertListed,
+  type Item,
+} from '@/data/folders'
 import { setRootPage } from '@/data/rootPages'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -28,6 +35,7 @@ export const folderKeys = {
   rootPage: (page: number, size: number) => `folders:root:s${size}:p${page}`,
   folder: (id: number) => `folder:${id}`,
   subfolders: (id: number) => `folder:${id}:subfolders`,
+  files: (id: number) => `folder:${id}:files`,
   role: (id: number) => `folder:${id}:role`,
 }
 
@@ -44,6 +52,22 @@ export function mapFolderToItem(folder: Folder, parent: number | null = null): I
     owner: folder.user?.display_name || folder.user?.username || 'user',
     created: folder.created_at ?? folder.updated_at ?? new Date().toISOString(),
     modified: folder.updated_at ?? folder.created_at ?? new Date().toISOString(),
+  }
+}
+
+/** Maps a listed file into a UI Item. The listing says which folder it is in. */
+export function mapFileToItem(file: FolderFile, parent: number): Item {
+  return {
+    id: file.id,
+    parent,
+    kind: 'file',
+    name: file.display_name || `File ${file.id}`,
+    owner: file.user?.display_name || file.user?.username || 'user',
+    created: file.created_at ?? file.updated_at ?? new Date().toISOString(),
+    modified: file.updated_at ?? file.created_at ?? new Date().toISOString(),
+    size: file.filesize ?? 0,
+    mime: file.magic_mime ?? undefined,
+    dataType: file.data_type,
   }
 }
 
@@ -122,19 +146,64 @@ async function fetchSubfolders(
   )
 }
 
+async function fetchFiles(
+  folderId: number,
+  signal: AbortSignal,
+  background = false,
+): Promise<void> {
+  const files = await api.folders.getFolderFiles(folderId, { signal, background })
+  // The listing includes deleted files; the explorer must not.
+  setFiles(
+    folderId,
+    files.filter((file) => !file.is_deleted).map((file) => mapFileToItem(file, folderId)),
+  )
+}
+
 /**
- * Loads a folder's subfolders ahead of time, as a background request (not
- * shown as activity). If the user then opens the folder, the view joins this
- * request instead of starting another. Never rejects.
+ * Loads what a folder holds — subfolders and files — ahead of time, as
+ * background requests (not shown as activity). If the user then opens the
+ * folder, the view joins these instead of starting its own. Never rejects.
  */
-export function prefetchSubfolders(folderId: number, signal: AbortSignal): Promise<void> {
-  return ensure(
-    folderKeys.subfolders(folderId),
-    (fetchSignal) => fetchSubfolders(folderId, fetchSignal, true),
-    { signal },
-  ).catch(() => {
+export function prefetchFolderContents(folderId: number, signal: AbortSignal): Promise<void> {
+  const swallow = () => {
     // A failed prefetch is retried when the folder is opened (failed data counts as stale).
-  })
+  }
+  return Promise.all([
+    ensure(
+      folderKeys.subfolders(folderId),
+      (fetchSignal) => fetchSubfolders(folderId, fetchSignal, true),
+      { signal },
+    ).catch(swallow),
+    ensure(folderKeys.files(folderId), (fetchSignal) => fetchFiles(folderId, fetchSignal, true), {
+      signal,
+    }).catch(swallow),
+  ]).then(swallow)
+}
+
+/**
+ * A folder's listing is its subfolders and its files together: it is only
+ * loaded when both are, and it fails when either does. Without this, a folder
+ * with no subfolders would claim to be empty while its files were still
+ * loading. The folder's own answer comes first, so a 404 still reads as
+ * "no such folder".
+ */
+function combined(subfolders: QueryState, files: QueryState): QueryState {
+  const status: QueryState['status'] =
+    subfolders.status === 'error' || files.status === 'error'
+      ? 'error'
+      : subfolders.status === 'success' && files.status === 'success'
+        ? 'success'
+        : subfolders.status === 'idle' && files.status === 'idle'
+          ? 'idle'
+          : 'loading'
+
+  return {
+    status,
+    isFetching: subfolders.isFetching || files.isFetching,
+    error: subfolders.error ?? files.error,
+    errorStatus: subfolders.errorStatus ?? files.errorStatus,
+    fetchedAt: Math.min(subfolders.fetchedAt, files.fetchedAt),
+  }
 }
 
 export interface UseFolderLoaderReturn {
@@ -180,6 +249,7 @@ export function useFolderLoader(): UseFolderLoaderReturn {
               (signal) => fetchSubfolders(folderId, signal),
               common,
             ),
+            ensure(folderKeys.files(folderId), (signal) => fetchFiles(folderId, signal), common),
             // Clicking into a folder already put it and its parents in the store.
             ...(options.force || !isChainKnown(folderId)
               ? [
@@ -207,11 +277,12 @@ export function useFolderLoader(): UseFolderLoaderReturn {
   return {
     load,
     listingState: (folderId?: number, root: Partial<RootPageRef> = {}) =>
-      queryState(
-        folderId === undefined
-          ? folderKeys.rootPage(root.page ?? 1, root.size ?? currentPageSize())
-          : folderKeys.subfolders(folderId),
-      ),
+      folderId === undefined
+        ? queryState(folderKeys.rootPage(root.page ?? 1, root.size ?? currentPageSize()))
+        : combined(
+            queryState(folderKeys.subfolders(folderId)),
+            queryState(folderKeys.files(folderId)),
+          ),
     folderState: (folderId: number) => queryState(folderKeys.folder(folderId)),
   }
 }

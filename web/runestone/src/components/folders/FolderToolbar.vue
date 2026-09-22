@@ -18,6 +18,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   newFolder: []
+  /** Files the operator picked for upload. */
+  uploadFiles: [files: File[]]
 }>()
 
 const currentFolder = computed(() => props.crumbs.at(-1))
@@ -25,14 +27,29 @@ const currentFolder = computed(() => props.crumbs.at(-1))
 const filter = defineModel<string>('filter', { default: '' })
 
 const filterInput = ref<HTMLInputElement | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 function focusFilter() {
   filterInput.value?.focus()
 }
 
+/** Opens the operating system's file picker (the Upload button, and `u`). */
+function pickFiles() {
+  fileInput.value?.click()
+}
+
+function onFilesPicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = [...(input.files ?? [])]
+  // Cleared, so picking the same file again still counts as a change.
+  input.value = ''
+  if (files.length) emit('uploadFiles', files)
+}
+
 defineExpose({
   focusFilter,
   filterInput,
+  pickFiles,
 })
 </script>
 
@@ -98,11 +115,21 @@ defineExpose({
         <Button
           :variant="selectedFiles && selectedFiles.length > 0 ? 'secondary' : 'primary'"
           size="row"
-          :tooltip="`Upload files to ${currentFolder?.name ?? 'folder'}`"
+          :tooltip="`Upload files to ${currentFolder?.name ?? 'folder'} (u)`"
+          @click="pickFiles"
         >
           <template #icon><Upload :size="13" :stroke-width="1.5" /></template>
           Upload
         </Button>
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          class="hidden"
+          tabindex="-1"
+          aria-hidden="true"
+          @change="onFilesPicked"
+        />
       </template>
     </div>
   </div>

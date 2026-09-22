@@ -20,7 +20,7 @@ import { refreshAll } from '@/composables/useAutoRefresh'
 import { confirmAction } from '@/composables/useConfirm'
 import { folderKeys, mapFolderToItem } from '@/composables/useFolderLoader'
 import {
-  canDelete,
+  canDeleteItem,
   canRename,
   ensureRole,
   forgetRoles,
@@ -29,6 +29,8 @@ import {
 import { forget, invalidate, markFresh } from '@/composables/useQueryCache'
 import { findItem, removeTree, upsertItems, type Item } from '@/data/folders'
 import { dropFromRootPages, prependToRootPages } from '@/data/rootPages'
+import { useAuthStore } from '@/stores/auth'
+import { count } from '@/utils/format'
 
 export interface PendingFolder {
   /** Stable key for the placeholder row; not a server id. */
@@ -55,20 +57,20 @@ export interface UseFolderActionsReturn {
   createFolder: (parent: number | null, name: string) => Promise<Item | null>
   /** Renames right away and reverts if the server refuses. Resolves to success. */
   renameFolder: (id: number, name: string) => Promise<boolean>
-  /** Ids of folders whose deletion is still in flight. */
+  /** Ids of items whose deletion is still in flight. */
   deletingIds: ReadonlySet<number>
   /**
-   * Deletes folders (in parallel) with everything below them. Each one leaves
-   * the store once the server confirms; failures stay and are reported.
-   * Resolves to the ids that were deleted.
+   * Deletes folders (with everything below them) and files, in parallel. Each
+   * one leaves the store once the server confirms; failures stay and are
+   * reported. Resolves to the ids that were deleted.
    */
-  deleteFolders: (ids: number[]) => Promise<number[]>
+  deleteItems: (ids: number[]) => Promise<number[]>
   /**
    * Asks for confirmation, then deletes. The one entry point for deleting from
    * the UI (inspector, Delete key, prompt `rm`). Resolves to the ids deleted;
    * none when cancelled.
    */
-  confirmDeleteFolders: (items: Item[]) => Promise<number[]>
+  confirmDeleteItems: (items: Item[]) => Promise<number[]>
   /**
    * Whether the operator may rename `item` (Owner or Editor). Checked before a
    * rename starts, so nobody types a new name the server would refuse; the
@@ -101,8 +103,9 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
       invalidate(folderKeys.rootPrefix)
       for (const key of written) markFresh(key)
     }
-    // A new folder is empty: opening it needs no request.
+    // A new folder is empty: opening it needs no request, for either listing.
     markFresh(folderKeys.subfolders(item.id))
+    markFresh(folderKeys.files(item.id))
     return item
   } catch (err: unknown) {
     error.value = `Could not create “${name}”: ${errorMessage(err, 'request failed')}`
@@ -135,32 +138,46 @@ async function renameFolder(id: number, name: string): Promise<boolean> {
   }
 }
 
-async function deleteFolders(ids: number[]): Promise<number[]> {
-  const targets = ids.filter((id) => findItem(id)?.kind === 'folder' && !deletingIds.has(id))
+async function deleteItems(ids: number[]): Promise<number[]> {
+  const targets = ids
+    .map((id) => findItem(id))
+    .filter((item): item is Item => !!item && !deletingIds.has(item.id))
   if (!targets.length) return []
   clearError()
-  const names = new Map(targets.map((id) => [id, findItem(id)!.name]))
-  for (const id of targets) deletingIds.add(id)
+  for (const item of targets) deletingIds.add(item.id)
 
-  const results = await Promise.allSettled(targets.map((id) => api.folders.deleteFolder(id)))
+  const results = await Promise.allSettled(
+    targets.map((item) =>
+      item.kind === 'folder' ? api.folders.deleteFolder(item.id) : api.files.deleteFile(item.id),
+    ),
+  )
 
   const deleted: number[] = []
   const failures: { name: string; reason: string }[] = []
   const removed: number[] = []
   results.forEach((result, index) => {
-    const id = targets[index]!
-    deletingIds.delete(id)
+    const item = targets[index]!
+    deletingIds.delete(item.id)
     if (result.status === 'fulfilled') {
-      deleted.push(id)
-      // Gone on the server: drop it, everything below it, their cached data and roles.
-      const gone = removeTree(id)
+      deleted.push(item.id)
+      // Gone on the server: drop it, everything below it, their cached data and
+      // roles. A file takes nothing else with it.
+      const gone = removeTree(item.id)
       forget(
-        gone.flatMap((g) => [folderKeys.folder(g), folderKeys.subfolders(g), folderKeys.role(g)]),
+        gone.flatMap((g) => [
+          folderKeys.folder(g),
+          folderKeys.subfolders(g),
+          folderKeys.files(g),
+          folderKeys.role(g),
+        ]),
       )
       forgetRoles(gone)
       removed.push(...gone)
     } else {
-      failures.push({ name: names.get(id)!, reason: errorMessage(result.reason, 'request failed') })
+      failures.push({
+        name: item.name,
+        reason: errorMessage(result.reason, 'request failed'),
+      })
     }
   })
 
@@ -174,16 +191,11 @@ async function deleteFolders(ids: number[]): Promise<number[]> {
   if (failures.length === 1 && targets.length === 1) {
     error.value = `Could not delete “${failures[0]!.name}”: ${failures[0]!.reason}`
   } else if (failures.length) {
-    error.value = `Could not delete ${failures.length} of ${targets.length} folders: ${failures[0]!.reason}`
+    error.value = `Could not delete ${failures.length} of ${targets.length} items: ${failures[0]!.reason}`
   }
   return deleted
 }
 
-/**
- * Checks the operator's role on each folder (only the folders themselves:
- * rights on a folder cover everything inside it). Reports why not through
- * `error`. Roles come from the cache, so a check usually costs nothing.
- */
 async function permitted(
   folders: Item[],
   allows: (role: FolderRole | null | undefined) => boolean,
@@ -208,30 +220,57 @@ async function mayRename(item: Item): Promise<boolean> {
   return permitted([item], canRename, () => `Only an owner or editor can rename “${item.name}”.`)
 }
 
-async function confirmDeleteFolders(items: Item[]): Promise<number[]> {
-  const folders = items.filter((item) => item.kind === 'folder' && !deletingIds.has(item.id))
-  if (!folders.length) return []
+async function confirmDeleteItems(items: Item[]): Promise<number[]> {
+  const targets = items.filter((item) => !deletingIds.has(item.id))
+  if (!targets.length) return []
   clearError()
 
-  // Only owners may delete. Every entry point (button, Delete key, rm) passes
-  // here, so check before asking rather than let the server refuse after.
-  const allowed = await permitted(folders, canDelete, (denied) =>
-    denied.length === 1
-      ? `Only an owner can delete “${denied[0]!.name}”.`
-      : `Only an owner can delete ${denied.length} of the selected folders.`,
-  )
-  if (!allowed) return []
+  // Checked before asking, so nobody confirms something the server refuses.
+  // Roles are per folder: a file's rights come from the folder it is in, or
+  // from having uploaded it.
+  const folders = targets.filter((item) => item.kind === 'folder')
+  const fileParents = targets
+    .filter((item) => item.kind === 'file' && item.parent !== null)
+    .map((item) => findItem(item.parent!))
+    .filter((item): item is Item => !!item)
 
-  const single = folders.length === 1 ? folders[0]! : null
+  try {
+    await Promise.all([...folders, ...fileParents].map((item) => ensureRole(item.id)))
+  } catch (err: unknown) {
+    error.value = `Could not check permissions: ${errorMessage(err, 'request failed')}`
+    return []
+  }
+
+  const viewer = useAuthStore().user
+  const viewerName = viewer?.display_name || viewer?.username
+
+  const denied = targets.filter((item) => !canDeleteItem(item, viewerName))
+  if (denied.length) {
+    error.value =
+      denied.length === 1
+        ? denied[0]!.kind === 'folder'
+          ? `Only an owner can delete “${denied[0]!.name}”.`
+          : `Only an owner of “${denied[0]!.name}” or of its folder can delete it.`
+        : `Only an owner can delete ${denied.length} of the selected items.`
+    return []
+  }
+
+  const single = targets.length === 1 ? targets[0]! : null
+  const title = single ? `Delete “${single.name}”?` : `Delete ${count(targets.length, 'item')}?`
+  const message = single
+    ? single.kind === 'folder'
+      ? 'The folder is deleted with everything inside — subfolders, files and workflows. This cannot be undone.'
+      : 'The file is deleted. This cannot be undone.'
+    : `${folders.length ? 'Folders are deleted with everything inside. ' : ''}This cannot be undone.`
 
   const confirmed = await confirmAction({
-    title: single ? `Delete “${single.name}”?` : `Delete ${folders.length} folders?`,
-    message: `${single ? 'The folder is' : 'They are'} deleted with everything inside — subfolders, files and workflows. This cannot be undone.`,
-    items: single ? undefined : folders.map((item) => item.name),
+    title,
+    message,
+    items: single ? undefined : targets.map((item) => item.name),
     confirmLabel: 'Delete',
     danger: true,
   })
-  return confirmed ? deleteFolders(folders.map((item) => item.id)) : []
+  return confirmed ? deleteItems(targets.map((item) => item.id)) : []
 }
 
 export function useFolderActions(): UseFolderActionsReturn {
@@ -243,8 +282,8 @@ export function useFolderActions(): UseFolderActionsReturn {
     createFolder,
     renameFolder,
     deletingIds,
-    deleteFolders,
-    confirmDeleteFolders,
+    deleteItems,
+    confirmDeleteItems,
     mayRename,
   }
 }

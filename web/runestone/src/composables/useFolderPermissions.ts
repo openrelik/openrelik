@@ -14,6 +14,7 @@
 import { computed, onScopeDispose, reactive, watch, type ComputedRef } from 'vue'
 import { api, type FolderRole } from '@/api'
 import { folderKeys } from '@/composables/useFolderLoader'
+import type { Item } from '@/data/folders'
 import { ensure } from '@/composables/useQueryCache'
 
 /** Roles rarely change; five minutes keeps navigation free of role requests. */
@@ -35,6 +36,22 @@ export function canDelete(role: FolderRole | null | undefined): boolean {
 /** Renaming a folder takes Owner or Editor on the server. */
 export function canRename(role: FolderRole | null | undefined): boolean {
   return role === 'Owner' || role === 'Editor'
+}
+
+/** Uploading into a folder takes Owner or Editor, the same as renaming. */
+export function canUpload(role: FolderRole | null | undefined): boolean {
+  return canRename(role)
+}
+
+/**
+ * Whether the operator may delete an item. A folder takes Owner on itself. A
+ * file takes Owner on the file, which the server grants through the folder it
+ * is in — and to whoever uploaded it, who becomes its owner.
+ */
+export function canDeleteItem(item: Item, viewer?: string | null): boolean {
+  if (item.kind === 'folder') return canDelete(roleOf(item.id))
+  if (item.parent !== null && canDelete(roleOf(item.parent))) return true
+  return !!viewer && item.owner === viewer
 }
 
 /** The known role on a folder, or undefined while it has not been loaded. */

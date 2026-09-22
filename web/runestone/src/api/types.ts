@@ -38,6 +38,34 @@ export interface FolderPage {
   total_count: number
 }
 
+/** A file as listed inside a folder (GET /folders/{id}/files/). */
+export interface FolderFile {
+  id: number
+  display_name: string
+  filesize?: number
+  /** OpenRelik's own classification, e.g. "file:generic". */
+  data_type?: string
+  magic_mime?: string | null
+  user?: User
+  created_at?: string
+  updated_at?: string
+  /** The listing does not filter these out; the client must. */
+  is_deleted?: boolean
+}
+
+/**
+ * The file the upload answers with once the last chunk lands. It is the raw
+ * record: no `user`, and hashes are still empty (the server fills them in the
+ * background).
+ */
+export interface UploadedFile extends FolderFile {
+  filename?: string
+  extension?: string
+  magic_text?: string | null
+  user_id?: number
+  folder_id?: number
+}
+
 /** The operator's role on a folder, inherited from the nearest folder that sets one. */
 export type FolderRole = 'Owner' | 'Editor' | 'Viewer' | 'No Access'
 

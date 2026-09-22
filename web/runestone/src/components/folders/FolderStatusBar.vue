@@ -2,7 +2,6 @@
 import { RouterLink } from 'vue-router'
 
 import StatusBar from '@/components/layout/StatusBar.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import type { Task } from '@/data/workflows'
 import { count, formatSize } from '@/utils/format'
 
@@ -63,10 +62,5 @@ defineEmits<{
     <span v-if="selectedCount" class="tabular text-brand">
       {{ selectedCount }} selected · {{ formatSize(selectedBytes) }}
     </span>
-
-    <!-- The full shortcut list lives in help; the bar only points to it. -->
-    <template #hints>
-      <KeyHint keys="?" label="help" />
-    </template>
   </StatusBar>
 </template>

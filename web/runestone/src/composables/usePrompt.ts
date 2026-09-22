@@ -79,7 +79,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   const modalStore = useModalStore()
   const route = useRoute()
   const router = useRouter()
-  const { createFolder, confirmDeleteFolders } = useFolderActions()
+  const { createFolder, confirmDeleteItems } = useFolderActions()
   const settingsStore = useSettingsStore()
   /** The top level is paginated: listing it means the pages loaded so far. */
   const pageSize = () => settingsStore.settings.explorer.pageSize
@@ -330,7 +330,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     }
     if (result.rm) {
       // Like the Delete key: confirm, then delete; the listing updates itself.
-      if (result.item) confirmDeleteFolders([result.item])
+      if (result.item) confirmDeleteItems([result.item])
       return
     }
     if (result.home) {
