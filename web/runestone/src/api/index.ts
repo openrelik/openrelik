@@ -5,12 +5,14 @@
  */
 
 import { authApi } from './endpoints/auth'
+import { filesApi } from './endpoints/files'
 import { foldersApi } from './endpoints/folders'
 import { httpClient } from './client'
 import { apiConfig } from './config'
 
 export const api = {
   auth: authApi,
+  files: filesApi,
   folders: foldersApi,
   http: httpClient,
   config: apiConfig,

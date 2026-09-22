@@ -12,11 +12,14 @@ import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import LoadState from '@/components/base/LoadState.vue'
+import UploadRow from '@/components/folders/UploadRow.vue'
 import type { PendingFolder } from '@/composables/useFolderActions'
+import type { Upload } from '@/composables/useUploadQueue'
 import type { QueryState } from '@/composables/useQueryCache'
+import { bytesOf, typeOf } from '@/data/files'
 import { getUniqueFolderName, type Item } from '@/data/folders'
 import { runStats, workflowOf } from '@/data/workflows'
-import { formatSize, stamp } from '@/utils/format'
+import { count, formatSize, stamp } from '@/utils/format'
 
 export type SortKey = 'name' | 'size' | 'type' | 'modified'
 
@@ -40,6 +43,10 @@ const props = defineProps<{
   listing: QueryState
   /** Folders being created here; shown as placeholder rows until confirmed. */
   pendingFolders?: PendingFolder[]
+  /** Files on their way into this folder; shown above the rows with progress. */
+  uploads?: Upload[]
+  /** A file drag is over the listing. */
+  isDropTarget?: boolean
   /** Folders whose rename is being saved. */
   savingIds?: ReadonlySet<number>
   /** Asked before a rename starts (any way it starts); false keeps the name as it is. */
@@ -65,7 +72,16 @@ const emit = defineEmits<{
   retry: []
   /** The row under the mouse (null when it leaves), for prefetching. */
   hover: [item: Item | null]
+  showQueue: []
+  cancelUpload: [key: string]
+  retryUpload: [key: string]
+  dismissUpload: [key: string]
 }>()
+
+/** A drop can be thousands of files; the listing stays a listing. */
+const MAX_UPLOAD_ROWS = 50
+const shownUploads = computed(() => (props.uploads ?? []).slice(0, MAX_UPLOAD_ROWS))
+const hiddenUploads = computed(() => Math.max(0, (props.uploads?.length ?? 0) - MAX_UPLOAD_ROWS))
 
 // --- Inline New Folder Creation (Finder style) ---
 const isCreating = ref(false)
@@ -268,14 +284,14 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
   { key: 'type', label: 'type' },
   { key: 'modified', label: 'modified (utc)' },
 ]
-
-const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
-const typeOf = (item: Item) =>
-  item.mime ?? (workflowOf(item.id) ? 'openrelik/workflow' : 'inode/directory')
 </script>
 
 <template>
-  <div class="min-w-0 flex-1 overflow-auto">
+  <!-- The inset ring marks a file drag without changing the layout. -->
+  <div
+    class="min-w-0 flex-1 overflow-auto"
+    :class="{ 'ring-1 ring-brand ring-inset': isDropTarget }"
+  >
     <slot name="workflow" />
 
     <table class="w-full min-w-2xl table-fixed border-collapse text-left">
@@ -421,6 +437,32 @@ const typeOf = (item: Item) =>
           </td>
           <td class="truncate px-2 text-ink-muted">inode/directory</td>
           <td class="tabular truncate px-2 text-ink-secondary">just now</td>
+        </tr>
+
+        <!-- Files on their way to the server. A large drop is thousands of
+             rows, so the listing shows the first few and counts the rest. -->
+        <UploadRow
+          v-for="upload in shownUploads"
+          :key="upload.key"
+          :upload="upload"
+          :show-pending="showPending"
+          @cancel="emit('cancelUpload', upload.key)"
+          @retry="emit('retryUpload', upload.key)"
+          @dismiss="emit('dismissUpload', upload.key)"
+        />
+
+        <tr v-if="hiddenUploads" class="h-7 border-b border-border/60 select-none">
+          <td class="pl-3" />
+          <td class="px-2 text-ink-muted" colspan="4">
+            and {{ count(hiddenUploads, 'more file') }} uploading —
+            <button
+              type="button"
+              class="cursor-pointer underline hover:text-ink"
+              @click="emit('showQueue')"
+            >
+              show the queue
+            </button>
+          </td>
         </tr>
 
         <!-- Folders the server has not confirmed yet -->
@@ -583,8 +625,8 @@ const typeOf = (item: Item) =>
 
     <LoadState
       :state="listing"
-      noun="folders"
-      :has-content="rows.length > 0 || isCreating || !!pendingFolders?.length"
+      :noun="atRoot ? 'folders' : 'contents'"
+      :has-content="rows.length > 0 || isCreating || !!pendingFolders?.length || !!uploads?.length"
       @retry="emit('retry')"
     >
       <template #empty>

@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import { api, errorMessage, readSession, removeSession, writeSession, type User } from '@/api'
 import { forgetRoles } from '@/composables/useFolderPermissions'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
+import { clearUploads } from '@/composables/useUploadQueue'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { clearItems } from '@/data/folders'
 import { clearRootPages } from '@/data/rootPages'
@@ -46,6 +47,8 @@ export const useAuthStore = defineStore('auth', () => {
       clearRootPages()
       clearFolderSearch()
       forgetRoles()
+      // Bytes must not keep flowing on a session that just ended.
+      clearUploads()
     }
   }
 

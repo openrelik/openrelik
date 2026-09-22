@@ -277,11 +277,11 @@ function openWorkflow() {
           variant="danger"
           size="row"
           class="justify-center"
-          :tooltip="`Delete ${count(multiFolders.length, 'folder')} (del)`"
-          @click="emit('delete', multiFolders)"
+          :tooltip="`Delete ${count(multiItems.length, 'item')} (del)`"
+          @click="emit('delete', multiItems)"
         >
           <template #icon><Trash2 :size="13" :stroke-width="1.5" /></template>
-          {{ multiFolders.length > 1 ? `Delete (${multiFolders.length})` : 'Delete' }}
+          {{ multiItems.length > 1 ? `Delete (${multiItems.length})` : 'Delete' }}
         </Button>
       </div>
     </div>

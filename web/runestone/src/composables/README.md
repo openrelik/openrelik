@@ -20,6 +20,8 @@ This directory houses reusable, stateful Vue composables. They encapsulate keybo
 | [`useFolderLoader`](#usefolderloader)           | Loads top-level pages, subfolders and folder paths through the query cache; per-listing load state.               |
 | [`useRootPager`](#userootpager)                 | Server-side pagination of the top-level list: page in the URL, size from settings, clamping, next-page prefetch.  |
 | [`useFolderSearch`](#usefoldersearch)           | Server-side folder search for the prompt (`/folders/all/?q=`): debounced, cached, cancellable.                    |
+| [`useUploadQueue`](#useuploadqueue)             | Chunked uploads: 3 files at a time, sequential chunks, retries, cancel, in-session resume.                        |
+| [`useDropZone`](#usedropzone)                   | Files and folders dropped on an element, without the usual drag-and-drop traps.                                   |
 | [`useFolderActions`](#usefolderactions)         | Creates and renames folders on the server, with pending rows, in-flight saves and the last error.                 |
 | [`useDelayedFlag`](#usedelayedflag)             | Loading-indicator timing: shown after 200 ms, then kept at least 300 ms.                                          |
 | [`useNetworkActivity`](#usenetworkactivity)     | App-wide "loading…"/"saving…" from the API client's count of requests in flight.                                  |
@@ -126,3 +128,20 @@ Server-side search behind the prompt, for folders nobody has loaded yet (`GET /f
 
 - Runs only for a search from the top (at the root or `/…`) and for a name, not a path; asks after typing pauses (250 ms) and from 2 characters; a newer term cancels the older request; results are cached like any other query.
 - Results are kept apart from `ITEMS`: the server does not say where a found folder lives. The prompt lists loaded matches first, then server matches marked `server`; opening one loads its real path.
+
+### `useUploadQueue`
+
+Uploads files into a folder in chunks (`POST /files/upload`), module-scoped so an upload survives navigating away.
+
+- Three files at a time, **chunks of one file strictly one after another**: the server records a chunk as soon as its first bytes land, so two chunks of the same upload in flight can make it assemble a half-written one. One file, 2 MB chunks, on constrained connections.
+- Refuses empty files (the server can never complete one) and checks the role (`canUpload`, Owner or Editor) before sending anything.
+- Retries a chunk the server could not store (503) with backoff, and waits for the connection when there is none; 429 means the server threw the upload away, so a retry starts over with a new id.
+- Progress is byte-level (`upload()` in `src/api/client.ts`, the one XHR path) and only reaches 100 % when the server confirms the file.
+- Resume is in-session only: there is no way to ask the server which chunks it holds.
+- `enqueueDrop()` takes what a drop carries: it recreates dropped folder trees (outermost first, so each knows its parent) and queues every file into the folder it came from.
+
+### `useDropZone`
+
+Files and folders dropped on an element: counts `dragenter`/`dragleave` instead of toggling (they fire per child), ignores drags that carry no files, and reports the drop even where dropping is not allowed so the caller can explain why. It hands over the dropped **entries**, taken while the drag data still exists, so folders can be walked.
+
+A dropped folder is recreated on the server by `useUploadQueue.enqueueDrop()` and its files are uploaded into it — at the top level too, where only loose files have nowhere to go. Everything in the folder comes along, hidden files included. A drop of more than 500 files is cut short, and says so.

@@ -174,8 +174,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <KeyHint keys="w" label="workflow" />
         <KeyHint keys="j k" label="next / prev file" />
         <KeyHint keys="esc" label="back to folder" />
-        <KeyHint keys="g" label="prompt" />
-        <KeyHint keys="?" label="help" />
       </template>
     </StatusBar>
   </section>

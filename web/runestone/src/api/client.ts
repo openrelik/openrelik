@@ -10,6 +10,7 @@
  * - An `onUnauthorized` hook for sessions that cannot be refreshed
  * - JSON serialization, native body pass-through and blob responses
  * - A timeout for servers that never start answering
+ * - Chunked uploads with byte-level progress (`upload()`, the one XHR path)
  * - A count of requests in flight, for one app-wide activity indicator
  * - Whether the server is reachable, from how the latest requests went
  * - Every failure rejects with an `ApiError`
@@ -224,8 +225,8 @@ function isBodyInit(body: unknown): body is BodyInit {
   )
 }
 
-async function toApiError(response: Response): Promise<ApiError> {
-  const text = await response.text().catch(() => '')
+/** Shared by both paths, so a fetch failure and an upload failure read alike. */
+function apiErrorFrom(status: number, statusText: string, text: string): ApiError {
   let data: unknown = text || null
   try {
     data = JSON.parse(text)
@@ -235,12 +236,40 @@ async function toApiError(response: Response): Promise<ApiError> {
 
   const detail = extractDetail(data)
   return new ApiError({
-    status: response.status,
-    statusText: response.statusText,
-    message: detail || `Request failed with status ${response.status}`,
+    status,
+    statusText,
+    message: detail || `Request failed with status ${status}`,
     detail,
     data,
   })
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  return apiErrorFrom(response.status, response.statusText, await response.text().catch(() => ''))
+}
+
+/** The failure for a request that never reached the server. */
+function networkFailure(): ApiError {
+  setReachable(false)
+  // The browser's own text ("Failed to fetch", "Load failed") says nothing useful.
+  const offline = globalThis.navigator?.onLine === false
+  return new ApiError({
+    status: 0,
+    statusText: 'Network Error',
+    message: offline ? 'You are offline' : 'Could not reach the server',
+  })
+}
+
+/**
+ * Whether a 401 is worth retrying: another request refreshed the session after
+ * this one was sent, or this one refreshes it now. Shared by both paths so the
+ * session rules cannot drift apart.
+ */
+async function recoverSession(generation: number, alreadyRetried: boolean): Promise<boolean> {
+  if (alreadyRetried) return false
+  if (generation !== sessionGeneration || (await refreshSession())) return true
+  unauthorizedHandler?.()
+  return false
 }
 
 /**
@@ -309,26 +338,19 @@ async function send(
     if (networkError instanceof DOMException && networkError.name === 'AbortError') {
       throw networkError
     }
-    setReachable(false)
-    // The browser's own text ("Failed to fetch", "Load failed") says nothing useful.
-    const offline = globalThis.navigator?.onLine === false
-    throw new ApiError({
-      status: 0,
-      statusText: 'Network Error',
-      message: offline ? 'You are offline' : 'Could not reach the server',
-    })
+    throw networkFailure()
   } finally {
     clearTimeout(timer)
   }
   setReachable(true)
 
-  // 3. 401 Unauthorized: refresh the session once and retry. If another request
-  //    already refreshed it after this one was sent, retry without refreshing again.
-  if (response.status === 401 && !skipAuthRefresh && !retried.auth) {
-    if (generation !== sessionGeneration || (await refreshSession())) {
-      return send(endpoint, options, { ...retried, auth: true })
-    }
-    unauthorizedHandler?.()
+  // 3. 401 Unauthorized: refresh the session once and retry.
+  if (
+    response.status === 401 &&
+    !skipAuthRefresh &&
+    (await recoverSession(generation, retried.auth))
+  ) {
+    return send(endpoint, options, { ...retried, auth: true })
   }
 
   // 4. Stale CSRF token: fetch a fresh one once and retry
@@ -376,6 +398,145 @@ async function receive<T>(endpoint: string, options: RequestOptions): Promise<T>
   return (/[/+]json\b/.test(contentType) ? JSON.parse(text) : text) as T
 }
 
+/** How long an upload may make no progress at all before it is given up on. */
+const DEFAULT_STALL_MS = 60_000
+
+export interface UploadOptions {
+  /** The multipart body. Kept whole, so a retry can send it again. */
+  body: FormData
+  params?: QueryParams
+  signal?: AbortSignal
+  /** Bytes of *this attempt* sent so far; starts again at 0 when a retry does. */
+  onProgress?: (loaded: number, total: number) => void
+  /** Give up after this long without progress (0 waits forever). */
+  stallMs?: number
+  skipCsrf?: boolean
+}
+
+/**
+ * POSTs a body with byte-level progress, the one place XMLHttpRequest is used:
+ * fetch cannot report upload progress. It shares everything else with
+ * `request()` — CSRF header and its one retry, the shared session refresh,
+ * `ApiError` failures, reachability and the activity count — through the same
+ * helpers, so uploads behave like every other write.
+ *
+ * There is no response-header timeout here (`request()` has one): an upload is
+ * slow by nature. Instead it is given up on only when it stops moving.
+ */
+export function upload<T>(endpoint: string, options: UploadOptions): Promise<T> {
+  // Counted once for the whole call, retries included.
+  trackActivity('saving', 1)
+  return sendUpload<T>(endpoint, options).finally(() => trackActivity('saving', -1))
+}
+
+interface UploadAnswer {
+  status: number
+  statusText: string
+  text: string
+  contentType: string
+}
+
+async function sendUpload<T>(
+  endpoint: string,
+  options: UploadOptions,
+  retried = { auth: false, csrf: false },
+): Promise<T> {
+  const { body, params, signal, onProgress, stallMs = DEFAULT_STALL_MS, skipCsrf } = options
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+
+  const csrfToken = skipCsrf ? null : await getCsrfToken()
+  const generation = sessionGeneration
+
+  const answer = await new Promise<UploadAnswer>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', resolveUrl(endpoint, params))
+    xhr.withCredentials = true
+    if (csrfToken) xhr.setRequestHeader(CSRF_HEADER, csrfToken)
+    // Content-Type is left to the browser: it carries the multipart boundary.
+
+    let stallTimer: ReturnType<typeof setTimeout> | undefined
+    let stalled = false
+    let total = 0
+    const armStall = () => {
+      if (!stallMs) return
+      clearTimeout(stallTimer)
+      stallTimer = setTimeout(() => {
+        stalled = true
+        xhr.abort()
+      }, stallMs)
+    }
+    const abortUpload = () => xhr.abort()
+    const settle = () => {
+      clearTimeout(stallTimer)
+      // One upload adds a listener per chunk to the same signal: let it go.
+      signal?.removeEventListener('abort', abortUpload)
+    }
+
+    xhr.upload.addEventListener('progress', (event) => {
+      armStall()
+      if (!event.lengthComputable) return
+      total = event.total
+      onProgress?.(event.loaded, event.total)
+    })
+    xhr.addEventListener('load', () => {
+      settle()
+      // The last progress event can arrive before the final bytes are flushed.
+      if (total) onProgress?.(total, total)
+      resolve({
+        status: xhr.status,
+        statusText: xhr.statusText,
+        text: xhr.responseText,
+        contentType: xhr.getResponseHeader('Content-Type') ?? '',
+      })
+    })
+    xhr.addEventListener('error', () => {
+      settle()
+      reject(networkFailure())
+    })
+    xhr.addEventListener('abort', () => {
+      settle()
+      if (!stalled) {
+        reject(new DOMException('Aborted', 'AbortError'))
+        return
+      }
+      setReachable(false)
+      reject(
+        new ApiError({
+          status: 0,
+          statusText: 'Stalled',
+          message: `The upload stopped making progress for ${stallMs / 1000}s`,
+        }),
+      )
+    })
+
+    signal?.addEventListener('abort', abortUpload, { once: true })
+    armStall()
+    xhr.send(body)
+  })
+
+  setReachable(true)
+
+  if (answer.status === 401 && (await recoverSession(generation, retried.auth))) {
+    return sendUpload<T>(endpoint, options, { ...retried, auth: true })
+  }
+
+  if (answer.status === 400 && csrfToken && !retried.csrf) {
+    const failure = apiErrorFrom(answer.status, answer.statusText, answer.text)
+    if (failure.detail === CSRF_REJECTION) {
+      clearCsrfToken()
+      return sendUpload<T>(endpoint, options, { ...retried, csrf: true })
+    }
+  }
+
+  if (answer.status < 200 || answer.status >= 300) {
+    throw apiErrorFrom(answer.status, answer.statusText, answer.text)
+  }
+
+  // Intermediate chunks answer with an empty body; the last one carries the file.
+  if (!answer.text) return undefined as T
+  return (/[/+]json\b/.test(answer.contentType) ? JSON.parse(answer.text) : answer.text) as T
+}
+
 /**
  * Typed convenience methods.
  */
@@ -407,6 +568,7 @@ export const httpClient = {
   delete<T>(endpoint: string, options?: Omit<RequestOptions, 'method'>): Promise<T> {
     return request<T>(endpoint, { ...options, method: 'DELETE' })
   },
+  upload,
   /** Downloads a binary blob; shares the refresh and error handling of every other call. */
   downloadBlob(endpoint: string, params?: QueryParams): Promise<Blob> {
     return request<Blob>(endpoint, { method: 'GET', params, responseType: 'blob' })

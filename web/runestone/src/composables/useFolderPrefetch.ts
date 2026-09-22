@@ -1,8 +1,8 @@
 /**
  * Folder Prefetch Composable
  *
- * Loads the subfolders of the folder the user is about to open, so opening
- * it feels instant. A folder is a candidate once the keyboard cursor or the
+ * Loads what the folder the user is about to open holds (subfolders and
+ * files), so opening it feels instant. A folder is a candidate once the keyboard cursor or the
  * mouse has rested on it for a moment; passing over rows does nothing.
  *
  * Prefetching must never slow down what the user actually asked for:
@@ -18,7 +18,7 @@
 
 import { onScopeDispose } from 'vue'
 import { useConnection } from '@/composables/useConnection'
-import { prefetchSubfolders } from '@/composables/useFolderLoader'
+import { prefetchFolderContents } from '@/composables/useFolderLoader'
 
 /** How long the cursor or mouse must rest on a folder before it is prefetched. */
 export const PREFETCH_DELAY_MS = 150
@@ -63,7 +63,7 @@ export function useFolderPrefetch(): UseFolderPrefetchReturn {
 
     const controller = new AbortController()
     running.set(folderId, controller)
-    prefetchSubfolders(folderId, controller.signal).finally(() => {
+    prefetchFolderContents(folderId, controller.signal).finally(() => {
       if (running.get(folderId) === controller) running.delete(folderId)
       if (waiting !== null && running.size < MAX_CONCURRENT) {
         const next = waiting

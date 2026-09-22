@@ -1,4 +1,5 @@
 import type { Item } from '@/data/folders'
+import { workflowOf } from '@/data/workflows'
 
 /**
  * File metadata and content helper utilities.
@@ -22,6 +23,19 @@ export function hashesOf(item: Item): Hashes {
 }
 
 export const exactSize = (item: Item) => item.size ?? 0
+
+/** Bytes an item contributes to a listing's total: folders count for nothing. */
+export const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
+
+/** What the type column shows: the file's own type, or what the item is. */
+export const typeOf = (item: Item) =>
+  item.mime ??
+  item.dataType ??
+  (item.kind === 'file'
+    ? 'file:generic'
+    : workflowOf(item.id)
+      ? 'openrelik/workflow'
+      : 'inode/directory')
 
 const MAGIC: Record<string, string> = {
   'text/plain': 'ASCII text',
