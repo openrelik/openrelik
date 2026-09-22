@@ -1,5 +1,14 @@
-/** "2026-04-29T15:00:50Z" → "2026-04-29 15:00:50". Kept in UTC, as the source is. */
-export const stamp = (iso: string) => iso.replace('T', ' ').replace('Z', '')
+/**
+ * "2026-04-29T15:00:50.123456Z" → "2026-04-29 15:00:50". Kept in UTC, as the
+ * source is, and cut to whole seconds: the server's microseconds are noise in
+ * a listing, and they used to overflow the column.
+ */
+export const stamp = (iso: string) =>
+  iso
+    .replace('T', ' ')
+    .replace(/\.\d+/, '')
+    .replace(/(Z|[+-]\d{2}:\d{2})$/, '')
+    .trim()
 
 const UNITS = ['B', 'kB', 'MB', 'GB', 'TB']
 
