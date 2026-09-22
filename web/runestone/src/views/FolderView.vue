@@ -480,6 +480,12 @@ KEYS.j = KEYS.ArrowDown!
 KEYS.k = KEYS.ArrowUp!
 KEYS.l = KEYS.Enter!
 
+/** Blurs the path prompt if it still has the caret (it is focused on arrival). */
+function leavePrompt() {
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement && 'prompt' in focused.dataset) focused.blur()
+}
+
 function onKey(event: KeyboardEvent) {
   // If a modal dialog is currently open, let it handle its own input
   if (modalStore.hasActiveModal) return
@@ -527,6 +533,9 @@ function onKey(event: KeyboardEvent) {
       End: last,
     }
     if (event.key in target) {
+      // Selecting belongs to the listing: the prompt steps aside, so what is
+      // typed next is a shortcut rather than text in a prompt nobody is using.
+      leavePrompt()
       extendTo(target[event.key]!)
       event.preventDefault()
       return
