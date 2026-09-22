@@ -18,7 +18,11 @@ import { workflowOf } from '@/data/workflows'
  * keeps the prompt focused with an empty line, so you can keep walking the way
  * you would with `cd`.
  */
-const props = defineProps<{ path: Item[] }>()
+const props = defineProps<{
+  path: Item[]
+  /** The path is not known yet (a folder opened by link is loading). */
+  pending?: boolean
+}>()
 const route = useRoute()
 
 // --- the prompt -----------------------------------------------------------------
@@ -169,6 +173,13 @@ function onBarClick(event: MouseEvent) {
       >
         <HardDrive :size="13" :stroke-width="1.5" />
       </RouterLink>
+      <span
+        v-if="pending && !path.length"
+        class="text-ink-muted"
+        aria-label="Loading folder path"
+        v-tooltip="'Loading folder path'"
+        >…</span
+      >
 
       <template v-for="at in separators" :key="at">
         <span
