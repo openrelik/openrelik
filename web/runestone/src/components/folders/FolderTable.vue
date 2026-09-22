@@ -40,6 +40,10 @@ const props = defineProps<{
   pendingFolders?: PendingFolder[]
   /** Folders whose rename is being saved. */
   savingIds?: ReadonlySet<number>
+  /** Asked before a rename starts (any way it starts); false keeps the name as it is. */
+  mayRename?: (item: Item) => Promise<boolean>
+  /** Folders whose deletion is in flight: dimmed until the server confirms. */
+  deletingIds?: ReadonlySet<number>
   /** Pending work held for a moment, so fast saves never flash an indicator. */
   showPending?: boolean
   /** Why the last create or rename failed. */
@@ -119,6 +123,8 @@ function setRenameInput(el: unknown) {
 async function startRename(item: Item) {
   // One rename at a time per folder: the previous name is still being saved.
   if (props.savingIds?.has(item.id)) return
+  // No rights, no input: nobody should type a name the server would refuse.
+  if (props.mayRename && !(await props.mayRename(item))) return
   renamingId.value = item.id
   renamingName.value = item.name
   cancellingRename = false
@@ -456,7 +462,9 @@ const typeOf = (item: Item) =>
               : '',
             index === cursor && !hasTask ? 'shadow-[inset_2px_0_0_var(--color-brand)]' : '',
             index === cursor && !hasTask && !selected.has(row.id) ? 'bg-sunken' : '',
+            deletingIds?.has(row.id) ? 'pointer-events-none opacity-50' : '',
           ]"
+          :aria-busy="deletingIds?.has(row.id) || undefined"
           :data-output="produced.has(row.id) || undefined"
           :aria-selected="selected.has(row.id)"
           @click="emit('rowClick', $event, index)"
@@ -542,11 +550,11 @@ const typeOf = (item: Item) =>
           </td>
           <td class="truncate px-2 text-ink-muted">
             <span
-              v-if="showPending && savingIds?.has(row.id)"
+              v-if="showPending && (savingIds?.has(row.id) || deletingIds?.has(row.id))"
               class="inline-flex items-center gap-1.5 text-brand"
             >
               <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
-              saving…
+              {{ deletingIds?.has(row.id) ? 'deleting…' : 'saving…' }}
             </span>
             <template v-else>{{ typeOf(row) }}</template>
           </td>

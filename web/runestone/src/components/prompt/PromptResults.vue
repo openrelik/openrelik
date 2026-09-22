@@ -32,6 +32,7 @@ const meta = (item: Item) => {
   <div class="flex min-h-0 flex-col text-[12px]" @pointerdown.prevent>
     <p class="shrink-0 px-3 pt-2 pb-1 text-ink-muted">
       <template v-if="results[0]?.mkdir">mkdir: create folder</template>
+      <template v-else-if="query.match(/^rm(\s|$)/i)">rm: delete folder in {{ cwdPath }}</template>
       <template v-else-if="results[0]?.home">cd: home</template>
       <template v-else-if="results[0]?.prev">cd: previous directory</template>
       <template v-else-if="!query">contents of {{ cwdPath }}</template>
@@ -55,15 +56,17 @@ const meta = (item: Item) => {
         v-tooltip="
           result.mkdir
             ? result.folderName
-              ? `Create and open folder '${result.folderName}' (⏎)`
+              ? `Create folder '${result.folderName}' (⏎)`
               : 'Enter a folder name'
-            : result.up ||
-                result.here ||
-                result.home ||
-                result.prev ||
-                result.item?.kind === 'folder'
-              ? `Navigate to folder ${result.label} (⏎)`
-              : `Open file ${result.label} (⏎)`
+            : result.rm
+              ? `Delete folder '${result.item?.name}' (⏎)`
+              : result.up ||
+                  result.here ||
+                  result.home ||
+                  result.prev ||
+                  result.item?.kind === 'folder'
+                ? `Navigate to folder ${result.label} (⏎)`
+                : `Open file ${result.label} (⏎)`
         "
         @pointermove="emit('hover', i)"
         @click="emit('go', result)"
@@ -82,14 +85,16 @@ const meta = (item: Item) => {
         <span
           class="min-w-0 flex-1 truncate"
           :class="
-            result.mkdir ||
-            result.up ||
-            result.here ||
-            result.home ||
-            result.prev ||
-            result.item?.kind === 'folder'
-              ? 'text-brand'
-              : 'text-ink'
+            result.rm
+              ? 'text-danger'
+              : result.mkdir ||
+                  result.up ||
+                  result.here ||
+                  result.home ||
+                  result.prev ||
+                  result.item?.kind === 'folder'
+                ? 'text-brand'
+                : 'text-ink'
           "
         >
           <span
@@ -113,7 +118,10 @@ const meta = (item: Item) => {
         }}</span>
         <span v-else-if="result.item" class="w-40 shrink-0" />
       </li>
-      <li v-if="!results.length" class="px-3 py-2 text-ink-muted">
+      <li v-if="!results.length && query.match(/^rm(\s|$)/i)" class="px-3 py-2 text-ink-muted">
+        no folder matching "{{ query.replace(/^rm\s*/i, '') }}" in {{ cwdPath }}
+      </li>
+      <li v-else-if="!results.length" class="px-3 py-2 text-ink-muted">
         no match for "{{ query }}" in {{ scopePath }}
         <template v-if="!query.startsWith('/') && scopePath !== '/'">
           — try <span class="text-ink">/{{ query.replace(/^(\.\.\/)+/, '') }}</span> to search

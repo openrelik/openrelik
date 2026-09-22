@@ -29,6 +29,9 @@ export interface Folder {
   folder_count?: number
 }
 
+/** The operator's role on a folder, inherited from the nearest folder that sets one. */
+export type FolderRole = 'Owner' | 'Editor' | 'Viewer' | 'No Access'
+
 /** A single folder with its full ancestor chain, from GET /folders/{id}. */
 export interface FolderDetail extends Folder {
   uuid: string

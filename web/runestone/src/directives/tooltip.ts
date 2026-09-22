@@ -1,5 +1,10 @@
 import type { Directive } from 'vue'
-import { hideTooltip, showTooltip, type TooltipInput } from '@/composables/useTooltip'
+import {
+  hideTooltip,
+  showTooltip,
+  updateTooltip,
+  type TooltipInput,
+} from '@/composables/useTooltip'
 
 interface TooltipElement extends HTMLElement {
   _tooltipValue?: TooltipInput
@@ -55,6 +60,8 @@ export const vTooltip: Directive<TooltipElement, TooltipInput | undefined> = {
     el._tooltipValue = binding.value
     if (!binding.value) {
       hideTooltip(el)
+    } else if (binding.value !== binding.oldValue) {
+      updateTooltip(el, binding.value)
     }
   },
 

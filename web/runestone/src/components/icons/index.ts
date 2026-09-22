@@ -58,6 +58,7 @@ export {
   Square,
   Sun,
   Trash2,
+  TriangleAlert,
   Upload,
   User,
   UserPlus,

@@ -5,7 +5,15 @@ import { refreshAll } from '@/composables/useAutoRefresh'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { folderKeys } from '@/composables/useFolderLoader'
 import { invalidate } from '@/composables/useQueryCache'
-import { childrenOf, descendantsOf, findItem, ITEMS, pathTo, type Item } from '@/data/folders'
+import {
+  childrenOf,
+  descendantsOf,
+  findItem,
+  ITEMS,
+  pathTo,
+  subfoldersOf,
+  type Item,
+} from '@/data/folders'
 import { useModalStore } from '@/stores/modals'
 import { matchPath } from '@/utils/match'
 
@@ -27,6 +35,8 @@ export interface PromptResult {
   /** `mkdir`: create new folder. */
   mkdir?: boolean
   folderName?: string
+  /** `rm`: delete `item`, a folder in the current one (after confirmation). */
+  rm?: boolean
 }
 
 /** Paths are shown and matched from the root of the whole instance. */
@@ -64,7 +74,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   const modalStore = useModalStore()
   const route = useRoute()
   const router = useRouter()
-  const { createFolder } = useFolderActions()
+  const { createFolder, confirmDeleteFolders } = useFolderActions()
 
   if (!trackingInitialized) {
     trackingInitialized = true
@@ -187,6 +197,33 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
       ]
     }
 
+    // 4. "rm" command: pick a folder in the current one
+    if (/^rm(\s|$)/.test(trimmed)) {
+      const target = raw
+        .replace(/^\s*rm\s*/i, '')
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .replace(/\/+$/, '')
+      const offset = 'rm '.length
+      return subfoldersOf(cwd.value?.id ?? null)
+        .map((item) => ({ item, match: matchPath(target, item.name) }))
+        .filter((entry) => entry.match !== null)
+        .sort(
+          (a, b) =>
+            // An exact name always wins, so ⏎ deletes what was typed.
+            Number(b.item.name.toLowerCase() === target.toLowerCase()) -
+              Number(a.item.name.toLowerCase() === target.toLowerCase()) ||
+            b.match!.score - a.match!.score,
+        )
+        .map(({ item, match }) => ({
+          item,
+          path: `rm ${item.name}`,
+          label: `rm ${item.name}/`,
+          hits: match!.hits.map((hit) => hit + offset),
+          rm: true,
+        }))
+    }
+
     if (!q) {
       const here = cwd.value ? childrenOf(cwd.value.id) : ITEMS.filter((i) => i.parent === null)
       const up: PromptResult[] = cwd.value
@@ -244,6 +281,11 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
       mkdir(result.folderName)
       return
     }
+    if (result.rm) {
+      // Like the Delete key: confirm, then delete; the listing updates itself.
+      if (result.item) confirmDeleteFolders([result.item])
+      return
+    }
     if (result.home) {
       if (route.path !== '/') router.push('/')
       return
@@ -284,6 +326,8 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
         line.value = 'cd -'
       } else if (result.mkdir && result.folderName) {
         line.value = `mkdir ${result.folderName}`
+      } else if (result.rm && result.item) {
+        line.value = `rm ${result.item.name}`
       } else {
         line.value = result.path
       }

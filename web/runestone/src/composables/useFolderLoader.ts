@@ -20,6 +20,7 @@ export const folderKeys = {
   root: 'folders:root',
   folder: (id: number) => `folder:${id}`,
   subfolders: (id: number) => `folder:${id}:subfolders`,
+  role: (id: number) => `folder:${id}:role`,
 }
 
 /**

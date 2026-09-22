@@ -123,6 +123,18 @@ export function setRootFolders(folders: Item[]): void {
   ITEMS.splice(0, ITEMS.length, ...folders, ...nonRoot)
 }
 
+/**
+ * Removes a folder and everything below it from the reactive items store.
+ * Returns the ids removed, the folder itself first.
+ */
+export function removeTree(id: number): number[] {
+  const ids = [id, ...descendantsOf(id).map((item) => item.id)]
+  const gone = new Set(ids)
+  const kept = ITEMS.filter((item) => !gone.has(item.id))
+  ITEMS.splice(0, ITEMS.length, ...kept)
+  return ids
+}
+
 /** Empties the reactive items store (sign-out). */
 export function clearItems(): void {
   ITEMS.splice(0, ITEMS.length)

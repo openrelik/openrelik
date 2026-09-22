@@ -6,7 +6,7 @@ import { httpClient, type RequestOptions } from '../client'
 
 /** Per-call options that endpoints pass through: cancellation, and background for prefetches. */
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
-import type { Folder, FolderDetail } from '../types'
+import type { Folder, FolderDetail, FolderRole } from '../types'
 
 export const foldersApi = {
   /**
@@ -32,6 +32,18 @@ export const foldersApi = {
   },
 
   /**
+   * The current user's role on a folder (own or inherited), or null when none applies.
+   */
+  async getMyFolderRole(folderId: number, options?: CallOptions): Promise<FolderRole | null> {
+    // The server answers with the role record, or `false` when no role applies.
+    const grant = await httpClient.get<{ role: FolderRole } | false>(
+      `/folders/${folderId}/roles/me`,
+      options,
+    )
+    return grant ? grant.role : null
+  },
+
+  /**
    * Creates a folder at the top level, or inside `parentId` when given.
    */
   createFolder(displayName: string, parentId: number | null = null): Promise<FolderDetail> {
@@ -49,5 +61,13 @@ export const foldersApi = {
    */
   renameFolder(folderId: number, displayName: string): Promise<FolderDetail> {
     return httpClient.patch<FolderDetail>(`/folders/${folderId}`, { display_name: displayName })
+  },
+
+  /**
+   * Deletes a folder with everything in it (subfolders, files, workflows).
+   * Owners only; the server soft-deletes, so it is not reversible from the UI.
+   */
+  deleteFolder(folderId: number): Promise<void> {
+    return httpClient.delete<void>(`/folders/${folderId}`)
   },
 }
