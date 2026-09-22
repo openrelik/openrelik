@@ -18,6 +18,7 @@ A design specification and architectural reference for high-density, professiona
 - [§10. Floating Surfaces: Dialogs, Sheets, and Tooltips](#10-floating-surfaces-dialogs-sheets-and-tooltips)
 - [§11. Keyboard Ergonomics & Interaction Patterns](#11-keyboard-ergonomics--interaction-patterns)
 - [§12. Motion, Transitions & Accessibility](#12-motion-transitions--accessibility)
+- [§13. Loading, Pending & Network States](#13-loading-pending--network-states)
 
 ---
 
@@ -551,3 +552,57 @@ For users with vestibular motion sensitivities, animations and transitions are g
 2. **Semantic Elements**: Use native `<button>`, `<input>`, `<dialog>`, and `<table role="table">` primitives.
 3. **ARIA States**: Modals declare `role="dialog"` and `aria-modal="true"`; rows declare `aria-selected="true/false"`; switches declare `role="switch"` and `aria-checked="true/false"`.
 4. **Accessible Descriptions**: Icon-only buttons declare explicit `aria-label` attributes alongside visual tooltips.
+
+---
+
+## §13. Loading, Pending & Network States
+
+A console is used on hotel Wi-Fi, over VPNs and on congested links, not only on a fast office network. It must feel instant when the network is fast and stay calm and honest when it is slow. Every view shows waiting the same way, so an operator learns it once and trusts it everywhere.
+
+### The Five Rules
+1. **Never wait for data already seen.** Cached data renders at once; a refresh happens behind it and never blanks the screen.
+2. **One place per kind of waiting.** Data that is not there yet waits *where it will appear*; work on data already on screen is shown *in the status bar*; a pending change is shown *on its row*.
+3. **No flashing.** Every indicator appears only after the work has taken **200 ms**, and once visible stays at least **300 ms**. On a fast connection nothing flickers; on a slow one the operator sees at once that something is happening. Use `useDelayedFlag` — never hand-rolled timers.
+4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows.
+5. **No layout shift.** Space for a loading line is reserved before its text appears; indicators have fixed widths; placeholders have the height of the row they stand in for.
+
+### The Situations
+
+| Situation | What the operator sees | Where |
+| :--- | :--- | :--- |
+| Data never loaded, request in flight | `Loading {noun}…` (muted), after 200 ms | In place of the rows, via `<LoadState>` |
+| Refreshing data already on screen | The rows stay; the network indicator turns to `fetching` | Status bar |
+| First load failed | `Could not load {noun}: {reason}` (danger) + **Retry** | In place of the rows, via `<LoadState>` |
+| Refresh failed, data still shown | `Could not refresh — showing saved data ({reason})` (warning) + ghost **Retry** | Under the rows, via `<LoadState>` |
+| Loaded and empty | The view's empty message ("Empty folder…") | In place of the rows, via `<LoadState>` |
+| Creating an item | A placeholder row with the typed name, then the real row; `creating…` after 200 ms | The row itself |
+| Saving a change (rename) | The new value at once; `saving…` after 200 ms; the old value back on failure | The row itself |
+| A change failed | `Could not {verb} "{name}": {reason}` (danger) | Under the rows |
+| Browser offline | `offline — showing saved data` (warning) | Status bar |
+| Server unreachable | `server unreachable — showing saved data · retry` (warning) | Status bar |
+| Path of a folder not loaded yet | `…` after the root icon | Path bar |
+
+"Empty" and "not loaded yet" must never look alike: which message shows is decided by the data's own load state (`idle` / `loading` / `success` / `error`), never by a view-wide flag.
+
+### The Network Indicator
+The status bar always shows one network indicator, right-aligned before the help hint, at a fixed width (`w-[11ch]`) so changing state moves nothing:
+
+| State | Dot | Label | Meaning |
+| :--- | :--- | :--- | :--- |
+| `idle` | `bg-success`, still | `idle` | Nothing in flight |
+| `fetching` | `bg-warning`, pulsing | `fetching` | Loads or saves the operator is waiting for |
+| `prefetch` | `bg-warning`, pulsing | `prefetch` | Only background requests loading data ahead of the operator |
+
+`fetching` wins over `prefetch`. The indicator follows the same 200 ms / 300 ms timing, is not an ARIA live region (announcing every change would be noise), and explains itself in a tooltip. It is fed by the API client's count of requests in flight, so views never wire it themselves.
+
+### The Pulsing Dot
+The one animated waiting mark in the system:
+```html
+<span class="size-1.5 shrink-0 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+```
+`bg-brand` next to row text (`creating…`, `saving…`); `bg-warning` in the network indicator; `bg-success` and no pulse for `idle`. Reduced motion (§12) stills it.
+
+### Wording
+- Lowercase, ending in an ellipsis character: `loading…`, `creating…`, `saving…` — `Loading {noun}…` at the start of a line.
+- Errors name the thing and the reason, never the browser's text: "Could not reach the server", not "Failed to fetch".
+- Stale data is labelled as such: "showing saved data".
