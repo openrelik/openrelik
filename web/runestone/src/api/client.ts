@@ -10,6 +10,8 @@
  * - An `onUnauthorized` hook for sessions that cannot be refreshed
  * - JSON serialization, native body pass-through and blob responses
  * - A timeout for servers that never start answering
+ * - A count of requests in flight, for one app-wide activity indicator
+ * - Whether the server is reachable, from how the latest requests went
  * - Every failure rejects with an `ApiError`
  */
 
@@ -34,6 +36,14 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
    * Reading the body is not limited, so slow downloads of large responses still finish.
    */
   timeoutMs?: number
+  /** Prefetches and other work the user did not ask for: not counted as activity. */
+  background?: boolean
+}
+
+/** Requests in flight that the user is waiting for, split by what they do. */
+export interface Activity {
+  loading: number
+  saving: number
 }
 
 const CSRF_HEADER = 'X-CSRF-Token'
@@ -48,6 +58,43 @@ let refreshPromise: Promise<boolean> | null = null
 let sessionGeneration = 0
 let csrfPromise: Promise<string | null> | null = null
 let unauthorizedHandler: (() => void) | null = null
+const activity: Activity = { loading: 0, saving: 0 }
+const activityListeners = new Set<(activity: Activity) => void>()
+
+/**
+ * Subscribes to the number of requests in flight. Called at once with the
+ * current count and on every change. Returns the unsubscribe function.
+ */
+export function onActivity(listener: (activity: Activity) => void): () => void {
+  activityListeners.add(listener)
+  listener({ ...activity })
+  return () => activityListeners.delete(listener)
+}
+
+let reachable = true
+const reachabilityListeners = new Set<(reachable: boolean) => void>()
+
+/**
+ * Subscribes to whether the server answered the latest request (any HTTP
+ * response counts) or could not be reached (network error, timeout).
+ * Called at once with the current value. Returns the unsubscribe function.
+ */
+export function onReachability(listener: (reachable: boolean) => void): () => void {
+  reachabilityListeners.add(listener)
+  listener(reachable)
+  return () => reachabilityListeners.delete(listener)
+}
+
+function setReachable(next: boolean): void {
+  if (next === reachable) return
+  reachable = next
+  for (const listener of reachabilityListeners) listener(reachable)
+}
+
+function trackActivity(kind: keyof Activity, delta: 1 | -1): void {
+  activity[kind] += delta
+  for (const listener of activityListeners) listener({ ...activity })
+}
 
 /**
  * Registers the callback run when a request fails with 401 and the session
@@ -201,7 +248,7 @@ async function send(
   options: RequestOptions,
   retried = { auth: false, csrf: false },
 ): Promise<Response> {
-  // `responseType` is left in `init`; fetch ignores keys it does not know.
+  // `responseType` and `background` are left in `init`; fetch ignores keys it does not know.
   const {
     body: rawBody,
     params,
@@ -247,6 +294,7 @@ async function send(
     })
   } catch (networkError) {
     if (timeout.signal.aborted && !init.signal?.aborted) {
+      setReachable(false)
       throw new ApiError({
         status: 0,
         statusText: 'Timeout',
@@ -257,14 +305,18 @@ async function send(
     if (networkError instanceof DOMException && networkError.name === 'AbortError') {
       throw networkError
     }
+    setReachable(false)
+    // The browser's own text ("Failed to fetch", "Load failed") says nothing useful.
+    const offline = globalThis.navigator?.onLine === false
     throw new ApiError({
       status: 0,
       statusText: 'Network Error',
-      message: networkError instanceof Error ? networkError.message : 'Network request failed',
+      message: offline ? 'You are offline' : 'Could not reach the server',
     })
   } finally {
     clearTimeout(timer)
   }
+  setReachable(true)
 
   // 3. 401 Unauthorized: refresh the session once and retry. If another request
   //    already refreshed it after this one was sent, retry without refreshing again.
@@ -292,6 +344,18 @@ async function send(
  * The core fetch request engine.
  */
 export async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const kind = SAFE_METHODS.has((options.method || 'GET').toUpperCase()) ? 'loading' : 'saving'
+  const tracked = !options.background
+  if (tracked) trackActivity(kind, 1)
+  try {
+    return await receive<T>(endpoint, options)
+  } finally {
+    if (tracked) trackActivity(kind, -1)
+  }
+}
+
+/** Sends the request and parses the response body; activity is counted by the caller. */
+async function receive<T>(endpoint: string, options: RequestOptions): Promise<T> {
   const response = await send(endpoint, options)
 
   if (options.responseType === 'blob') {

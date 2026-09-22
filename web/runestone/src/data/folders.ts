@@ -123,6 +123,11 @@ export function setRootFolders(folders: Item[]): void {
   ITEMS.splice(0, ITEMS.length, ...folders, ...nonRoot)
 }
 
+/** Empties the reactive items store (sign-out). */
+export function clearItems(): void {
+  ITEMS.splice(0, ITEMS.length)
+}
+
 /** Adds items to the reactive items store, replacing any with the same id. */
 export function upsertItems(items: Item[]): void {
   for (const item of items) {

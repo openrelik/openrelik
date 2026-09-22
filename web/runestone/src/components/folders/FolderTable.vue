@@ -11,7 +11,9 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
+import LoadState from '@/components/base/LoadState.vue'
 import type { PendingFolder } from '@/composables/useFolderActions'
+import type { QueryState } from '@/composables/useQueryCache'
 import { getUniqueFolderName, type Item } from '@/data/folders'
 import { runStats, workflowOf } from '@/data/workflows'
 import { formatSize, stamp } from '@/utils/format'
@@ -32,17 +34,16 @@ const props = defineProps<{
   parentName: string
   maxBytes: number
   filter: string
-  isLoading?: boolean
-  /** `isLoading` held for a moment, so fast loads never flash a message. */
-  showLoading?: boolean
+  /** Load state of this listing: drives loading, failure and empty messages. */
+  listing: QueryState
   /** Folders being created here; shown as placeholder rows until confirmed. */
   pendingFolders?: PendingFolder[]
   /** Folders whose rename is being saved. */
   savingIds?: ReadonlySet<number>
   /** Pending work held for a moment, so fast saves never flash an indicator. */
   showPending?: boolean
-  /** A failure to show below whatever rows remain (loading, create, rename). */
-  error?: string | null
+  /** Why the last create or rename failed. */
+  actionError?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -55,6 +56,7 @@ const emit = defineEmits<{
   goUp: []
   createFolder: [name: string]
   rename: [item: { id: number; name: string }]
+  retry: []
 }>()
 
 // --- Inline New Folder Creation (Finder style) ---
@@ -494,7 +496,6 @@ const typeOf = (item: Item) =>
               <span
                 v-else
                 class="truncate text-ink select-none"
-                :class="{ 'cursor-pointer': row.kind === 'folder' }"
                 v-overflow-tooltip
                 @pointerdown="onLabelPointerDown($event, row, index)"
                 @pointermove="onLabelPointerMove"
@@ -550,22 +551,19 @@ const typeOf = (item: Item) =>
       </tbody>
     </table>
 
-    <!-- The line keeps its height while hidden, so the message appearing moves nothing. -->
-    <p
-      v-if="isLoading && !rows.length && !pendingFolders?.length"
-      class="px-3 py-6 text-ink-muted"
-      aria-busy="true"
+    <p v-if="actionError" role="alert" class="px-3 py-2 text-danger">{{ actionError }}</p>
+
+    <LoadState
+      :state="listing"
+      noun="folders"
+      :has-content="rows.length > 0 || isCreating || !!pendingFolders?.length"
+      @retry="emit('retry')"
     >
-      <span :class="{ invisible: !showLoading }">Loading folders…</span>
-    </p>
-    <p v-else-if="error" role="alert" class="px-3 py-6 text-danger">{{ error }}</p>
-    <p
-      v-else-if="!rows.length && !isCreating && !pendingFolders?.length"
-      class="px-3 py-6 text-ink-muted"
-    >
-      <template v-if="filter">Nothing here matches “{{ filter }}”.</template>
-      <template v-else-if="atRoot">No folders yet. Create one with New folder.</template>
-      <template v-else>Empty folder. Drop files here or use Upload.</template>
-    </p>
+      <template #empty>
+        <template v-if="filter">Nothing here matches “{{ filter }}”.</template>
+        <template v-else-if="atRoot">No folders yet. Create one with New folder.</template>
+        <template v-else>Empty folder. Drop files here or use Upload.</template>
+      </template>
+    </LoadState>
   </div>
 </template>

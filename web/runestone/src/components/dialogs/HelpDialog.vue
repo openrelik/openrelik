@@ -66,6 +66,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['⌘A'], does: 'Select all' },
       { keys: ['⌘⏎', 'r'], does: 'Run a worker on the highlighted or selected files' },
       { keys: ['/'], does: 'Filter this folder' },
+      { keys: ['⇧R'], does: 'Refresh this folder from the server' },
       { keys: ['s'], does: 'Share this folder' },
       { keys: ['F2', 'e'], does: 'Rename highlighted folder or file' },
       { keys: ['esc'], does: 'Clear the selection, or close a task' },

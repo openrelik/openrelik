@@ -20,5 +20,5 @@ export default api
 export * from './types'
 export { apiConfig } from './config'
 export { ApiError, errorMessage } from './errors'
-export { onUnauthorized } from './client'
+export { onActivity, onReachability, onUnauthorized, type Activity } from './client'
 export { readSession, removeSession, writeSession } from './session'

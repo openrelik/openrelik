@@ -10,6 +10,8 @@ import type { Item } from '@/data/folders'
 
 const props = defineProps<{
   crumbs: Item[]
+  /** The current folder is not loaded yet: the path shows a placeholder. */
+  pathPending?: boolean
   atRoot: boolean
   selectedFiles?: Item[]
 }>()
@@ -36,7 +38,7 @@ defineExpose({
 
 <template>
   <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-2 pl-3">
-    <PathBar :path="crumbs" />
+    <PathBar :path="crumbs" :pending="pathPending" />
 
     <!-- No filter at the root: the case list is found through the prompt. -->
     <div v-if="!atRoot" class="relative w-52 shrink-0">

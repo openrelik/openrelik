@@ -14,6 +14,7 @@ import { childrenOf, findItem, FOLDERS, pathTo, renameItem, type Item } from '@/
 import type { Worker } from '@/data/workers'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
@@ -31,6 +32,10 @@ const router = useRouter()
 const modalStore = useModalStore()
 
 const atRoot = computed(() => props.id === undefined)
+/** The folder id from the route, or undefined at the root or for a malformed id. */
+const folderId = computed(() =>
+  props.id !== undefined && /^\d+$/.test(props.id) ? Number(props.id) : undefined,
+)
 const folder = computed(() => {
   if (atRoot.value) return undefined
   const item = findItem(Number(props.id))
@@ -45,7 +50,7 @@ const table = ref<InstanceType<typeof FolderTable> | null>(null)
 const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
   atRoot.value ? { key: 'modified', dir: -1 } : { key: 'name', dir: 1 }
 const sort = ref(defaultSort())
-const { isLoading, error: loadError, load } = useFolderLoader()
+const { load, listingState, folderState } = useFolderLoader()
 const {
   error: actionError,
   clearError,
@@ -55,26 +60,42 @@ const {
   renameFolder,
 } = useFolderActions()
 
-const tableError = computed(
-  () => actionError.value ?? (loadError.value && `Could not load folders: ${loadError.value}`),
-)
+/** Load state of what the table lists: the root folders or this folder's subfolders. */
+const listing = computed(() => listingState(folderId.value))
+/** Either request answered "no such folder" (or the id is malformed). */
+const notFound = computed(() => {
+  if (atRoot.value || folder.value) return false
+  if (folderId.value === undefined) return true
+  return [folderState(folderId.value), listing.value].some((state) => state.errorStatus === 404)
+})
+/** The folder itself is still unknown (direct link): the path shows a placeholder. */
+const pathPending = computed(() => !atRoot.value && !folder.value && !notFound.value)
 
 watch(atRoot, () => {
   sort.value = defaultSort()
 })
 
-const pendingHere = computed(() => pendingIn(atRoot.value ? null : (folder.value?.id ?? null)))
+const pendingHere = computed(() => pendingIn(folderId.value ?? null))
 
-// Load whatever the route points at: the root, or a folder with its subfolders.
+// Load whatever the route points at. Recently seen locations cost no request.
 watch(
   () => props.id,
-  (id) => {
+  () => {
     clearError()
-    if (id === undefined) load()
-    else if (/^\d+$/.test(id)) load(Number(id))
+    if (atRoot.value || folderId.value !== undefined) load(folderId.value)
   },
   { immediate: true },
 )
+
+/** Refetch what is on screen, fresh or not (Shift+R, Retry). */
+function refresh() {
+  if (atRoot.value || folderId.value !== undefined) load(folderId.value, { force: true })
+}
+
+// Coming back to the tab or the network: refresh what is stale or failed.
+useAutoRefresh(({ force }) => {
+  if (atRoot.value || folderId.value !== undefined) load(folderId.value, { force })
+})
 
 const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
 const typeOf = (item: Item) =>
@@ -99,11 +120,9 @@ const rows = computed(() => {
     .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1) || by[key](a, b) * dir)
 })
 
-// Indicators wait a moment before showing, so fast responses never flash one.
-const showLoading = useDelayedFlag(() => isLoading.value)
+// In-row "creating…"/"saving…" wait a moment, so fast saves never flash one.
+// Loading and refreshing are shown by LoadState and the app-wide status bar.
 const showPending = useDelayedFlag(() => pendingHere.value.length > 0 || savingIds.size > 0)
-// Refreshing a folder that is already on screen: the listing stays, the status bar says so.
-const showRefreshing = useDelayedFlag(() => isLoading.value && rows.value.length > 0)
 
 const maxBytes = computed(() => Math.max(1, ...rows.value.map(bytesOf)))
 const totals = computed(() => ({
@@ -293,6 +312,7 @@ const KEYS: Record<string, () => void> = {
   },
   F2: startRenameCurrent,
   e: startRenameCurrent,
+  R: refresh,
   Escape: () => {
     if (table.value?.renamingId) {
       table.value.cancelRename()
@@ -372,7 +392,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div v-if="!atRoot && !folder && !isLoading" class="h-full bg-surface px-4 py-6 text-ink-muted">
+  <div v-if="notFound" class="h-full bg-surface px-4 py-6 text-ink-muted">
     No folder {{ id }}. <RouterLink to="/" class="text-brand hover:underline">Back home</RouterLink>
   </div>
 
@@ -385,6 +405,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       ref="toolbar"
       v-model:filter="filter"
       :crumbs="crumbs"
+      :path-pending="pathPending"
       :at-root="atRoot"
       :selected-files="selectedFiles"
       @new-folder="startCreateFolder"
@@ -407,12 +428,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         :parent-name="parentName"
         :max-bytes="maxBytes"
         :filter="filter"
-        :is-loading="isLoading"
-        :show-loading="showLoading"
+        :listing="listing"
         :pending-folders="pendingHere"
         :saving-ids="savingIds"
         :show-pending="showPending"
-        :error="tableError"
+        :action-error="actionError"
         @sort="sortBy"
         @toggle-all="toggleAll"
         @toggle="toggle"
@@ -422,6 +442,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         @go-up="goUp"
         @create-folder="handleCreateFolder"
         @rename="handleRename"
+        @retry="refresh"
       >
         <template #workflow>
           <WorkflowPanel
@@ -458,7 +479,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- status bar -->
     <FolderStatusBar
-      :refreshing="showRefreshing"
       :rows-count="rows.length"
       :dirs-count="totals.dirs"
       :files-count="totals.files"

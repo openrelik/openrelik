@@ -20,8 +20,6 @@ defineProps<{
   selectedCount: number
   selectedBytes: number
   atRoot: boolean
-  /** The listing on screen is being reloaded from the server. */
-  refreshing?: boolean
 }>()
 
 defineEmits<{
@@ -67,17 +65,12 @@ defineEmits<{
       {{ selectedCount }} selected · {{ formatSize(selectedBytes) }}
     </span>
 
-    <!-- Last in the row, so appearing never moves the items before it. -->
-    <span v-if="refreshing" class="flex items-center gap-1.5 text-ink-muted" aria-live="polite">
-      <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
-      loading…
-    </span>
-
     <template #hints>
       <KeyHint keys="↑↓" label="move" />
       <KeyHint keys="⏎" label="open" />
       <KeyHint keys="space" label="select" />
       <KeyHint keys="n" label="new folder" />
+      <KeyHint keys="⇧R" label="refresh" />
       <KeyHint keys="⇧↑↓" label="range" />
       <KeyHint v-if="!atRoot" keys="/" label="filter" />
       <KeyHint keys="g" label="prompt" />

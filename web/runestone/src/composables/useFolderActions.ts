@@ -14,7 +14,8 @@
 
 import { reactive, readonly, ref, type Ref } from 'vue'
 import { api, errorMessage } from '@/api'
-import { mapFolderToItem } from '@/composables/useFolderLoader'
+import { folderKeys, mapFolderToItem } from '@/composables/useFolderLoader'
+import { markFresh } from '@/composables/useQueryCache'
 import { findItem, upsertItems, type Item } from '@/data/folders'
 
 export interface PendingFolder {
@@ -60,6 +61,8 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
     const folder = await api.folders.createFolder(name, parent)
     const item = mapFolderToItem(folder, folder.parent?.id ?? parent)
     upsertItems([item])
+    // A new folder is empty: opening it needs no request.
+    markFresh(folderKeys.subfolders(item.id))
     return item
   } catch (err: unknown) {
     error.value = `Could not create “${name}”: ${errorMessage(err, 'request failed')}`
