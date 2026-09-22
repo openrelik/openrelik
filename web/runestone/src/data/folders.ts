@@ -6,7 +6,12 @@ export interface Item {
   parent: number | null
   kind: 'folder' | 'file'
   name: string
+  /** The owner's display name, as the inspector and the tooltip show it. */
   owner: string
+  /** The login the server knows the owner by. */
+  ownerUsername?: string
+  /** The owner's profile picture, when the server has one for them. */
+  ownerAvatar?: string
   created?: string
   modified: string
   /** Bytes. Files only. */

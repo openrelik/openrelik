@@ -50,6 +50,8 @@ export function mapFolderToItem(folder: Folder, parent: number | null = null): I
     kind: 'folder',
     name: folder.display_name || folder.name || `Folder ${folder.id}`,
     owner: folder.user?.display_name || folder.user?.username || 'user',
+    ownerUsername: folder.user?.username,
+    ownerAvatar: folder.user?.profile_picture_url || undefined,
     created: folder.created_at ?? folder.updated_at ?? new Date().toISOString(),
     modified: folder.updated_at ?? folder.created_at ?? new Date().toISOString(),
   }
@@ -63,6 +65,8 @@ export function mapFileToItem(file: FolderFile, parent: number): Item {
     kind: 'file',
     name: file.display_name || `File ${file.id}`,
     owner: file.user?.display_name || file.user?.username || 'user',
+    ownerUsername: file.user?.username,
+    ownerAvatar: file.user?.profile_picture_url || undefined,
     created: file.created_at ?? file.updated_at ?? new Date().toISOString(),
     modified: file.updated_at ?? file.created_at ?? new Date().toISOString(),
     size: file.filesize ?? 0,

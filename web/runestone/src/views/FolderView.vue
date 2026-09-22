@@ -184,6 +184,7 @@ const rows = computed(() => {
         ? bytesOf(a) - bytesOf(b)
         : a.name.localeCompare(b.name),
     type: (a, b) => typeOf(a).localeCompare(typeOf(b)),
+    owner: (a, b) => a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name),
     modified: (a, b) => a.modified.localeCompare(b.modified),
   }
   return childrenOf(folder.value!.id)

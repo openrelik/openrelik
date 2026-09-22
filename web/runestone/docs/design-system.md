@@ -452,6 +452,7 @@ Data tables are the core workhorse of the technical console.
    - `Shift + Click` or `Shift + Arrow` performs continuous range selection.
    - `Space` toggles the active row's checkbox.
    - `⌘A` / `^A` toggles select-all across all visible rows.
+6. **Owner Avatars (`UserAvatar`)**: Ownership is a mark, not a name. An 18px disc in a fixed-width column carries the owner's profile picture, or the first letter of their display name on `bg-sunken` when the server has none (and when the picture fails to load). The avatar is the **one round element** in a system of near-square geometry (§4): it stands for a person rather than a control, and roundness is what says so at 18px. It is also **monochrome**: hue in this console means status, and an owner is not a status. The username rides on `v-tooltip`, with the same text in `aria-label`, so the column stays one glyph wide and never pushes the timestamp around.
 
 ---
 
