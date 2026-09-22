@@ -13,6 +13,7 @@ export interface User {
   created_at?: string
 }
 
+/** A folder as listed (root folders, subfolders). The server does not include the parent. */
 export interface Folder {
   id: number
   display_name: string
@@ -26,4 +27,12 @@ export interface Folder {
   selectable?: boolean
   file_count?: number
   folder_count?: number
+}
+
+/** A single folder with its full ancestor chain, from GET /folders/{id}. */
+export interface FolderDetail extends Folder {
+  uuid: string
+  description?: string
+  parent: FolderDetail | null
+  storage_provider?: string | null
 }

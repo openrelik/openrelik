@@ -442,7 +442,8 @@ const typeOf = (item: Item) =>
               />
               <span
                 v-else
-                class="truncate text-ink cursor-text select-none"
+                class="truncate text-ink select-none"
+                :class="{ 'cursor-pointer': row.kind === 'folder' }"
                 v-overflow-tooltip
                 @pointerdown="onLabelPointerDown($event, row, index)"
                 @pointermove="onLabelPointerMove"
