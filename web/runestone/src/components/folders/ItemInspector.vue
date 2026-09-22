@@ -31,6 +31,10 @@ const props = defineProps<{
   producer?: string
   selectedFiles?: Item[]
   selectedItems?: Item[]
+  /** The operator may delete what Delete would act on (owner of every folder in it). */
+  canDelete?: boolean
+  /** The operator may rename the item shown (owner or editor of the folder). */
+  canRename?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +44,8 @@ const emit = defineEmits<{
   clearSelection: []
   toggleItem: [id: number]
   rename: [id: number]
+  /** Delete these items (the view asks for confirmation first). */
+  delete: [items: Item[]]
 }>()
 
 const isMulti = computed(() => {
@@ -267,13 +273,15 @@ function openWorkflow() {
           Clear selection
         </Button>
         <Button
+          v-if="canDelete"
           variant="danger"
           size="row"
           class="justify-center"
-          :tooltip="`Delete ${multiItems.length} selected items`"
+          :tooltip="`Delete ${count(multiFolders.length, 'folder')} (del)`"
+          @click="emit('delete', multiFolders)"
         >
           <template #icon><Trash2 :size="13" :stroke-width="1.5" /></template>
-          {{ multiItems.length > 1 ? `Delete (${multiItems.length})` : 'Delete' }}
+          {{ multiFolders.length > 1 ? `Delete (${multiFolders.length})` : 'Delete' }}
         </Button>
       </div>
     </div>
@@ -291,6 +299,7 @@ function openWorkflow() {
         />
         <p class="min-w-0 flex-1 font-semibold break-all text-ink">{{ item.name }}</p>
         <button
+          v-if="canRename"
           type="button"
           class="shrink-0 cursor-pointer rounded p-1 text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
           :aria-label="`Rename ${item.name}`"
@@ -397,6 +406,7 @@ function openWorkflow() {
           Download
         </Button>
         <Button
+          v-if="canRename"
           size="row"
           class="justify-center"
           :tooltip="`Rename ${item.name} (F2)`"
@@ -405,7 +415,14 @@ function openWorkflow() {
           <template #icon><Pencil :size="13" :stroke-width="1.5" /></template>
           Rename
         </Button>
-        <Button variant="danger" size="row" class="justify-center" :tooltip="`Delete ${item.name}`">
+        <Button
+          v-if="canDelete"
+          variant="danger"
+          size="row"
+          class="justify-center"
+          :tooltip="`Delete ${item.name} (del)`"
+          @click="emit('delete', [item])"
+        >
           <template #icon><Trash2 :size="13" :stroke-width="1.5" /></template>
           Delete
         </Button>

@@ -7,6 +7,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, errorMessage, readSession, removeSession, writeSession, type User } from '@/api'
+import { forgetRoles } from '@/composables/useFolderPermissions'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { clearItems } from '@/data/folders'
 
@@ -40,6 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
       // The next operator must not see this one's folders, even for a moment.
       clearQueryCache()
       clearItems()
+      forgetRoles()
     }
   }
 

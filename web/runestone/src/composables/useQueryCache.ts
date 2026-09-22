@@ -214,6 +214,14 @@ export function invalidate(keyOrPrefix: string): void {
   }
 }
 
+/** Forgets keys (and aborts their requests), e.g. for data deleted on the server. */
+export function forget(keys: string[]): void {
+  for (const key of keys) {
+    entries.get(key)?.controller?.abort()
+    entries.delete(key)
+  }
+}
+
 /** Forgets everything and aborts requests in flight (sign-out). */
 export function clearQueryCache(): void {
   for (const entry of entries.values()) entry.controller?.abort()

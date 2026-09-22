@@ -18,6 +18,7 @@ import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
+import { useFolderPermissions } from '@/composables/useFolderPermissions'
 import { useFolderPrefetch } from '@/composables/useFolderPrefetch'
 import { allTasks, workflowOf, type Task } from '@/data/workflows'
 import { useModalStore } from '@/stores/modals'
@@ -58,6 +59,9 @@ const {
   clearError,
   pendingIn,
   savingIds,
+  deletingIds,
+  confirmDeleteFolders,
+  mayRename,
   createFolder,
   renameFolder,
 } = useFolderActions()
@@ -127,7 +131,9 @@ const rows = computed(() => {
 
 // In-row "creating…"/"saving…" wait a moment, so fast saves never flash one.
 // Loading and refreshing are shown by LoadState and the app-wide status bar.
-const showPending = useDelayedFlag(() => pendingHere.value.length > 0 || savingIds.size > 0)
+const showPending = useDelayedFlag(
+  () => pendingHere.value.length > 0 || savingIds.size > 0 || deletingIds.size > 0,
+)
 
 const maxBytes = computed(() => Math.max(1, ...rows.value.map(bytesOf)))
 const totals = computed(() => ({
@@ -167,6 +173,22 @@ const focused = computed(() => {
   }
   return rows.value[cursor.value] ?? folder.value
 })
+
+/**
+ * What Delete would act on: the selection when several items are selected,
+ * otherwise the item in the inspector. Only folders can be deleted, so any
+ * file in it means nothing can.
+ */
+const deleteTargets = computed<number[]>(() => {
+  const items = selectedItems.value.length > 1 ? selectedItems.value : [focused.value]
+  return items.every((item) => item?.kind === 'folder') ? items.map((item) => item!.id) : []
+})
+// Loads the operator's role on those folders; Delete shows only for owners.
+const { canDeleteAll } = useFolderPermissions(() => deleteTargets.value)
+// Rename acts on the folder in the inspector; it shows for owners and editors.
+const { canRenameAll: canRenameFocused } = useFolderPermissions(() =>
+  focused.value?.kind === 'folder' ? [focused.value.id] : [],
+)
 
 // --- workflow & tasks ---
 const workflow = computed(() => (folder.value ? workflowOf(folder.value.id) : undefined))
@@ -279,6 +301,27 @@ function startRenameCurrent() {
   if (item) table.value?.startRename(item)
 }
 
+/**
+ * Asks for confirmation, then deletes folders with everything in them. Rows
+ * stay dimmed until the server confirms. If the folder on screen is deleted,
+ * the view moves up to its parent. Stale selections are dropped.
+ */
+async function deleteItems(items: Item[]) {
+  const current = folder.value
+  const upTo = parentPath.value
+  const deleted = await confirmDeleteFolders(items)
+  if (!deleted.length) return
+
+  selected.value = new Set([...selected.value].filter((id) => !deleted.includes(id)))
+  if (current && deleted.includes(current.id)) router.push(upTo)
+}
+
+/** Delete / ⌘⌫: the selection, or the highlighted row. */
+function deleteCurrent() {
+  const row = rows.value[cursor.value]
+  deleteItems(selectedItems.value.length ? selectedItems.value : row ? [row] : [])
+}
+
 function startRenameItem(id: number) {
   const item = findItem(id)
   if (item) {
@@ -323,6 +366,7 @@ const KEYS: Record<string, () => void> = {
   },
   F2: startRenameCurrent,
   e: startRenameCurrent,
+  Delete: deleteCurrent,
   R: refresh,
   Escape: () => {
     if (table.value?.renamingId) {
@@ -364,6 +408,10 @@ function onKey(event: KeyboardEvent) {
   if (event.metaKey || event.ctrlKey) {
     if (event.key === 'a') {
       toggleAll()
+      event.preventDefault()
+    } else if (event.key === 'Backspace') {
+      // ⌘⌫, the Finder shortcut: Mac keyboards have no Delete key.
+      deleteCurrent()
       event.preventDefault()
     } else if (event.key === 'Enter') {
       runPicker()
@@ -442,6 +490,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         :listing="listing"
         :pending-folders="pendingHere"
         :saving-ids="savingIds"
+        :deleting-ids="deletingIds"
+        :may-rename="mayRename"
         :show-pending="showPending"
         :action-error="actionError"
         @sort="sortBy"
@@ -479,6 +529,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         :producer="producer?.name"
         :selected-files="selectedFiles"
         :selected-items="selectedItems"
+        :can-delete="canDeleteAll"
+        :can-rename="canRenameFocused"
         class="w-64 shrink-0 border-l border-border max-xl:hidden"
         @open="open(findItem($event))"
         @run="runQuick"
@@ -486,6 +538,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         @clear-selection="clearSelection"
         @toggle-item="toggle"
         @rename="startRenameItem"
+        @delete="deleteItems"
       />
     </div>
 

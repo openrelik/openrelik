@@ -99,6 +99,19 @@ export function showTooltip(target: HTMLElement, input: TooltipInput) {
 }
 
 /**
+ * Updates the text of the tooltip showing for `target`, if any: a label that
+ * changes under the pointer (a status that moves on, a button whose item
+ * changed) must not keep saying the old thing.
+ */
+export function updateTooltip(target: HTMLElement, input: TooltipInput) {
+  if (currentTarget !== target || !state.visible) return
+  const { text, keys } = parseTooltip(input)
+  if (!text) return
+  state.text = text
+  state.keys = keys
+}
+
+/**
  * Instantly displays an unprompted feedback tooltip (e.g. "Copied!")
  * without warm-up delay, and automatically dismisses after `duration` ms.
  */
