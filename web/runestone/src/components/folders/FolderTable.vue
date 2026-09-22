@@ -57,6 +57,8 @@ const emit = defineEmits<{
   createFolder: [name: string]
   rename: [item: { id: number; name: string }]
   retry: []
+  /** The row under the mouse (null when it leaves), for prefetching. */
+  hover: [item: Item | null]
 }>()
 
 // --- Inline New Folder Creation (Finder style) ---
@@ -459,6 +461,8 @@ const typeOf = (item: Item) =>
           :aria-selected="selected.has(row.id)"
           @click="emit('rowClick', $event, index)"
           @dblclick="onRowDblClick(row)"
+          @pointerenter="emit('hover', row)"
+          @pointerleave="emit('hover', null)"
         >
           <td class="pl-3">
             <input

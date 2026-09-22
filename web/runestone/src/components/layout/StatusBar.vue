@@ -9,7 +9,13 @@ import { useNetworkActivity } from '@/composables/useNetworkActivity'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
-const { label: activity } = useNetworkActivity()
+const { state: network } = useNetworkActivity()
+
+const NETWORK_TOOLTIP = {
+  idle: 'Nothing loading',
+  fetching: 'Talking to the server',
+  prefetch: 'Loading folders ahead of time, so opening them is instant',
+} as const
 const { status: connection } = useConnection()
 </script>
 
@@ -40,9 +46,18 @@ const { status: connection } = useConnection()
           retry
         </button>
       </span>
-      <span v-if="activity" class="flex items-center gap-1.5 text-ink-muted" aria-live="polite">
-        <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
-        {{ activity }}
+      <!-- Always shown. Fixed width, so changing state moves nothing. Not a live
+           region: announcing every idle/fetching change would be noise. -->
+      <span
+        class="flex w-[11ch] items-center gap-1.5 text-ink-muted"
+        v-tooltip="NETWORK_TOOLTIP[network]"
+      >
+        <span
+          class="size-1.5 shrink-0 rounded-full"
+          :class="network === 'idle' ? 'bg-success' : 'animate-pulse bg-warning'"
+          aria-hidden="true"
+        />
+        {{ network }}
       </span>
       <span class="flex items-center gap-3 max-md:hidden">
         <slot name="hints">

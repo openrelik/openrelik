@@ -68,12 +68,31 @@ async function fetchFolder(folderId: number, signal: AbortSignal): Promise<void>
   upsertItems(mapFolderChain(await api.folders.getFolder(folderId, { signal })))
 }
 
-async function fetchSubfolders(folderId: number, signal: AbortSignal): Promise<void> {
-  const subfolders = await api.folders.getSubfolders(folderId, { signal })
+async function fetchSubfolders(
+  folderId: number,
+  signal: AbortSignal,
+  background = false,
+): Promise<void> {
+  const subfolders = await api.folders.getSubfolders(folderId, { signal, background })
   setSubfolders(
     folderId,
     subfolders.map((subfolder) => mapFolderToItem(subfolder, folderId)),
   )
+}
+
+/**
+ * Loads a folder's subfolders ahead of time, as a background request (not
+ * shown as activity). If the user then opens the folder, the view joins this
+ * request instead of starting another. Never rejects.
+ */
+export function prefetchSubfolders(folderId: number, signal: AbortSignal): Promise<void> {
+  return ensure(
+    folderKeys.subfolders(folderId),
+    (fetchSignal) => fetchSubfolders(folderId, fetchSignal, true),
+    { signal },
+  ).catch(() => {
+    // A failed prefetch is retried when the folder is opened (failed data counts as stale).
+  })
 }
 
 export interface UseFolderLoaderReturn {

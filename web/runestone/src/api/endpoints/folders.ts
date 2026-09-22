@@ -4,8 +4,8 @@
 
 import { httpClient, type RequestOptions } from '../client'
 
-/** Per-call options that endpoints pass through, such as an AbortSignal. */
-type CallOptions = Pick<RequestOptions, 'signal'>
+/** Per-call options that endpoints pass through: cancellation, and background for prefetches. */
+type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 import type { Folder, FolderDetail } from '../types'
 
 export const foldersApi = {

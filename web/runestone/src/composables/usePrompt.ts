@@ -1,7 +1,10 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { refreshAll } from '@/composables/useAutoRefresh'
 import { useFolderActions } from '@/composables/useFolderActions'
+import { folderKeys } from '@/composables/useFolderLoader'
+import { invalidate } from '@/composables/useQueryCache'
 import { childrenOf, descendantsOf, findItem, ITEMS, pathTo, type Item } from '@/data/folders'
 import { useModalStore } from '@/stores/modals'
 import { matchPath } from '@/utils/match'
@@ -221,13 +224,16 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
 
   watch(results, () => (index.value = 0))
 
-  /** Creates a folder in the current one and opens it; failures show in the explorer.
-   *  The placeholder row shows meanwhile; if the user has moved on by the time
-   *  the server answers, they are not pulled back. */
+  /** Creates a folder in the current one and stays put, like a shell's mkdir.
+   *  The placeholder row shows meanwhile and the new folder takes its place;
+   *  then the listing is re-read so it matches the server. Failures show in
+   *  the explorer. */
   async function mkdir(folderName: string) {
-    const startedAt = route.fullPath
-    const created = await createFolder(cwd.value?.id ?? null, folderName)
-    if (created && route.fullPath === startedAt) router.push(`/folder/${created.id}`)
+    const parent = cwd.value?.id ?? null
+    const created = await createFolder(parent, folderName)
+    if (!created) return
+    invalidate(parent === null ? folderKeys.root : folderKeys.subfolders(parent))
+    refreshAll()
   }
 
   function go(result: PromptResult | undefined) {
