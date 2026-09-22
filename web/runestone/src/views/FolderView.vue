@@ -22,7 +22,7 @@ import {
 import type { Worker } from '@/data/workers'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
-import { useRootFolders } from '@/composables/useRootFolders'
+import { useFolderLoader } from '@/composables/useFolderLoader'
 import { allTasks, workflowOf, type Task } from '@/data/workflows'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
@@ -51,14 +51,21 @@ const table = ref<InstanceType<typeof FolderTable> | null>(null)
 const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
   atRoot.value ? { key: 'modified', dir: -1 } : { key: 'name', dir: 1 }
 const sort = ref(defaultSort())
-const { isLoading: isLoadingRoot, error: rootError, fetchRootFolders } = useRootFolders()
+const { isLoading, error: loadError, load } = useFolderLoader()
 
-watch(atRoot, (isRoot) => {
+watch(atRoot, () => {
   sort.value = defaultSort()
-  if (isRoot) {
-    fetchRootFolders()
-  }
 })
+
+// Load whatever the route points at: the root, or a folder with its subfolders.
+watch(
+  () => props.id,
+  (id) => {
+    if (id === undefined) load()
+    else if (/^\d+$/.test(id)) load(Number(id))
+  },
+  { immediate: true },
+)
 
 const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
 const typeOf = (item: Item) =>
@@ -345,15 +352,12 @@ function onKey(event: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
-  if (atRoot.value) {
-    fetchRootFolders()
-  }
 })
 onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div v-if="!atRoot && !folder" class="h-full bg-surface px-4 py-6 text-ink-muted">
+  <div v-if="!atRoot && !folder && !isLoading" class="h-full bg-surface px-4 py-6 text-ink-muted">
     No folder {{ id }}. <RouterLink to="/" class="text-brand hover:underline">Back home</RouterLink>
   </div>
 
@@ -388,8 +392,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         :parent-name="parentName"
         :max-bytes="maxBytes"
         :filter="filter"
-        :is-loading="isLoadingRoot"
-        :load-error="atRoot ? rootError : null"
+        :is-loading="isLoading"
+        :load-error="loadError"
         @sort="sortBy"
         @toggle-all="toggleAll"
         @toggle="toggle"

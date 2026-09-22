@@ -139,3 +139,19 @@ export function setRootFolders(folders: Item[]): void {
   const nonRoot = ITEMS.filter((item) => item.parent !== null)
   ITEMS.splice(0, ITEMS.length, ...folders, ...nonRoot)
 }
+
+/** Adds items to the reactive items store, replacing any with the same id. */
+export function upsertItems(items: Item[]): void {
+  for (const item of items) {
+    const index = ITEMS.findIndex((existing) => existing.id === item.id)
+    if (index === -1) ITEMS.push(item)
+    else ITEMS[index] = item
+  }
+}
+
+/** Replaces the folders directly inside `parent`, leaving its files in place. */
+export function setSubfolders(parent: number, folders: Item[]): void {
+  const kept = ITEMS.filter((item) => item.parent !== parent || item.kind !== 'folder')
+  ITEMS.splice(0, ITEMS.length, ...kept)
+  upsertItems(folders)
+}
