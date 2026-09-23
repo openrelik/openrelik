@@ -23,6 +23,8 @@ export {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Circle,
   CornerLeftUp,
   Download,

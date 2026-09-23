@@ -29,7 +29,8 @@ const props = defineProps<{
   editable?: boolean
 }>()
 const emit = defineEmits<{
-  select: [task: Task]
+  /** A task, or null to clear the selection (a click outside the task rows). */
+  select: [task: Task | null]
   /** Add a worker: after a task or the inputs, beside a task, or after all of a group. */
   add: [at: AddAt]
   /** Remove this task, and the tasks after it, from the draft. */
@@ -103,6 +104,12 @@ function flatten(groups: TaskGroup[], guides: boolean[]): Row[] {
 /** Tasks without a +: members of a group a join waits for. */
 const blocked = computed(() => unchainable(props.workflow))
 
+/** A click outside the task rows, and not on a control, clears the selection. */
+function clickOutside(event: MouseEvent) {
+  if (event.target instanceof Element && event.target.closest('[data-task], button, a')) return
+  if (props.selectedId) emit('select', null)
+}
+
 const rows = computed(() => flatten(props.workflow.groups, []))
 
 /** How many tasks run on a task's output, across its groups. */
@@ -138,7 +145,7 @@ const inputs = computed(() =>
 </script>
 
 <template>
-  <div ref="root" class="overflow-x-auto py-1">
+  <div ref="root" class="overflow-x-auto py-1" @click="clickOutside">
     <table class="w-full min-w-3xl table-fixed border-collapse text-left">
       <colgroup>
         <col />
