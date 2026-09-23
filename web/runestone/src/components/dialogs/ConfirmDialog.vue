@@ -10,9 +10,15 @@ import { useModalStore } from '@/stores/modals'
  *
  * Opened through `confirmAction()`. The confirm button has focus, so ⏎
  * confirms and Tab reaches Cancel; Esc (the global modal handler) and a
- * click outside cancel.
+ * click outside cancel. With a text field (`askForText()`) the field has
+ * focus instead, ⏎ in it confirms, and an empty one cannot be confirmed.
  */
-const { isOpen, request, accept, cancel } = useConfirm()
+const { isOpen, request, accept, cancel, text } = useConfirm()
+const blank = computed(() => !!request.value?.field && !text.value.trim())
+
+function submit() {
+  if (!blank.value) accept()
+}
 const modalStore = useModalStore()
 
 /** The dialog lists this many names; the rest are counted. */
@@ -72,6 +78,17 @@ watch(
 
         <div class="flex flex-col gap-3 p-5">
           <p id="confirm-message" class="text-ink-secondary">{{ request.message }}</p>
+          <label v-if="request.field" class="flex flex-col gap-1">
+            <span class="micro-label">{{ request.field.label }}</span>
+            <input
+              v-model="text"
+              v-autofocus.select
+              type="text"
+              spellcheck="false"
+              class="field h-8"
+              @keydown.enter.prevent="submit"
+            />
+          </label>
           <ul v-if="listed.length" class="well flex flex-col gap-1 px-3 py-2">
             <li v-for="name in listed" :key="name" class="truncate text-ink">{{ name }}</li>
             <li v-if="unlisted" class="text-ink-muted">and {{ unlisted }} more</li>
@@ -79,7 +96,20 @@ watch(
         </div>
 
         <div class="flex h-12 shrink-0 items-center gap-2 border-t border-border bg-sunken px-5">
-          <Button v-autofocus :variant="request.danger ? 'danger' : 'secondary'" @click="accept">
+          <Button
+            v-if="request.field"
+            :variant="request.danger ? 'danger' : 'secondary'"
+            :disabled="blank"
+            @click="submit"
+          >
+            {{ request.confirmLabel }}
+          </Button>
+          <Button
+            v-else
+            v-autofocus
+            :variant="request.danger ? 'danger' : 'secondary'"
+            @click="accept"
+          >
             {{ request.confirmLabel }}
           </Button>
           <Button variant="ghost" @click="cancel">Cancel</Button>

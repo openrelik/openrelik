@@ -293,9 +293,7 @@ function openWorkflow() {
         <KeyValueRow label="kind" :value="item.kind" />
         <KeyValueRow
           label="type"
-          :value="
-            item.mime ?? (item.workflowId !== undefined ? 'openrelik/workflow' : 'inode/directory')
-          "
+          :value="item.mime ?? (item.workflowId !== undefined ? 'workflow' : 'inode/directory')"
         />
         <KeyValueRow v-if="item.kind === 'file'" label="size">
           <span class="tabular">{{ formatSize(bytes) }}</span>

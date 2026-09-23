@@ -159,6 +159,17 @@ export interface WorkflowTaskRecord {
 }
 
 /** A workflow with its spec and task records (every workflow endpoint answers with this). */
+/** A saved workflow shape, to start new workflows from; task uuids are placeholders. */
+export interface WorkflowTemplateRecord {
+  id: number
+  display_name: string
+  description?: string | null
+  spec_json: string
+  user_id: number
+  /** The creator; only the creator may delete a template. */
+  user?: { id: number; display_name: string; username: string } | null
+}
+
 export interface WorkflowRecord {
   id: number
   display_name: string

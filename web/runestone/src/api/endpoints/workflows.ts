@@ -6,22 +6,40 @@
  */
 
 import { httpClient, type RequestOptions } from '../client'
-import type { WorkflowRecord, WorkflowSpec } from '../types'
+import type { WorkflowRecord, WorkflowSpec, WorkflowTemplateRecord } from '../types'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 
 export const workflowsApi = {
   /**
-   * Creates an empty workflow over `fileIds`. The server makes a new
-   * "Untitled workflow" folder inside `parentId` for it and answers with the
-   * workflow; `folder.id` is the new folder.
+   * Creates a workflow over `fileIds`: empty, or from a template (its workers
+   * and options, with new task uuids). The server makes a new folder inside
+   * `parentId` for it, named "Untitled workflow" or after the template, and
+   * answers with the workflow; `folder.id` is the new folder.
    */
-  create(parentId: number, fileIds: number[]): Promise<WorkflowRecord> {
+  create(parentId: number, fileIds: number[], templateId?: number): Promise<WorkflowRecord> {
     return httpClient.post<WorkflowRecord>(`/folders/${parentId}/workflows/`, {
       folder_id: parentId,
       file_ids: fileIds,
-      template_id: null,
+      template_id: templateId ?? null,
     })
+  },
+
+  /** Renames a template. Anyone may. */
+  renameTemplate(templateId: number, displayName: string): Promise<WorkflowTemplateRecord> {
+    return httpClient.patch<WorkflowTemplateRecord>(`/workflows/templates/${templateId}`, {
+      display_name: displayName,
+    })
+  },
+
+  /** Deletes a template; workflows made from it are kept. Only its creator may. */
+  deleteTemplate(templateId: number): Promise<void> {
+    return httpClient.delete<void>(`/workflows/templates/${templateId}`)
+  },
+
+  /** Every saved template, with its spec and creator. */
+  listTemplates(options?: CallOptions): Promise<WorkflowTemplateRecord[]> {
+    return httpClient.get<WorkflowTemplateRecord[]>('/workflows/templates/', options)
   },
 
   /** A workflow with its spec and the tasks the server has run for it. */
@@ -40,6 +58,22 @@ export const workflowsApi = {
   rename(folderId: number, workflowId: number, displayName: string): Promise<WorkflowRecord> {
     return httpClient.patch<WorkflowRecord>(`/folders/${folderId}/workflows/${workflowId}`, {
       display_name: displayName,
+    })
+  },
+
+  /**
+   * Copies the workflow: the same inputs and spec (with new task uuids), not
+   * run, in a new "Copy of …" folder next to this workflow's folder.
+   */
+  copy(folderId: number, workflowId: number): Promise<WorkflowRecord> {
+    return httpClient.post<WorkflowRecord>(`/folders/${folderId}/workflows/${workflowId}/copy/`, {})
+  },
+
+  /** Saves the workflow's spec as a template named `displayName`, for any workflow to start from. */
+  createTemplate(workflowId: number, displayName: string): Promise<WorkflowTemplateRecord> {
+    return httpClient.post<WorkflowTemplateRecord>('/workflows/templates/', {
+      display_name: displayName,
+      workflow_id: workflowId,
     })
   },
 

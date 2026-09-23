@@ -988,7 +988,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 // One background per state, never two: a base bg-surface would
                 // fight these on stylesheet order and win.
                 node.task.id === selectedId || isPicked(node.task.id)
-                  ? 'border-brand bg-brand-selected shadow-(--shadow-float)'
+                  ? 'border-brand bg-brand-selected'
                   : node.task.id === producerId
                     ? 'border-brand bg-brand-tint ring-2 ring-brand/40'
                     : 'border-border-strong bg-surface hover:bg-sunken',
@@ -1080,7 +1080,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                   RAIL[statusOf(node)],
                   // One background per state, as on task nodes.
                   holds(node.stack, selectedId)
-                    ? 'border-brand bg-brand-selected shadow-(--shadow-float)'
+                    ? 'border-brand bg-brand-selected'
                     : holds(node.stack, producerId)
                       ? 'border-brand bg-brand-tint ring-2 ring-brand/40'
                       : 'border-border-strong bg-surface hover:bg-sunken',
@@ -1200,7 +1200,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
           <!-- tasks picked with ⌘/⇧-click: split them into a group of their own -->
           <div
             v-if="splitOffer"
-            class="absolute z-10 flex items-center gap-2 rounded-(--radius-card) border border-border-strong bg-surface px-2 py-1.5 text-[11px] whitespace-nowrap shadow-(--shadow-float)"
+            class="absolute z-10 flex items-center gap-2 rounded-(--radius-card) border border-border-strong bg-surface px-2 py-1.5 text-[11px] whitespace-nowrap"
             :style="{ left: `${splitOffer.left}px`, top: `${splitOffer.top}px` }"
             role="group"
             aria-label="Picked tasks"
@@ -1226,7 +1226,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
           <!-- groups picked with ⌘/⇧-click on their boxes: merge them into one -->
           <div
             v-if="mergeOffer"
-            class="absolute z-10 flex w-max max-w-[40rem] items-center gap-2 rounded-(--radius-card) border px-2 py-1.5 text-[11px] shadow-(--shadow-float)"
+            class="absolute z-10 flex w-max max-w-[40rem] items-center gap-2 rounded-(--radius-card) border px-2 py-1.5 text-[11px]"
             :class="
               mergeOffer.problem
                 ? 'border-danger/60 bg-danger-tint text-danger'
@@ -1309,7 +1309,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
 
     <!-- zoom -->
     <div
-      class="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-surface p-0.5 shadow-(--shadow-float)"
+      class="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-surface p-0.5"
       role="group"
       aria-label="Zoom"
     >

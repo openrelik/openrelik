@@ -10,7 +10,6 @@ import {
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import UserAvatar from '@/components/base/UserAvatar.vue'
 import UploadRow from '@/components/folders/UploadRow.vue'
@@ -280,6 +279,35 @@ defineExpose({
 })
 
 const UP = -1
+
+type WorkflowState = ReturnType<typeof runStats>['state']
+/** A workflow folder's state, or undefined until its workflow is loaded. */
+const workflowState = (folderId: number): WorkflowState | undefined => {
+  const workflow = workflowOf(folderId)
+  return workflow && runStats(workflow).state
+}
+/**
+ * A workflow folder's icon says how its workflow is doing, instead of a badge:
+ * grey a draft, blue while it runs (queued too; pulsing once a task runs),
+ * green done, red failed.
+ */
+const WORKFLOW_TONE: Record<WorkflowState | 'unknown', string> = {
+  // A stroke colour alone is too thin to tell apart at this size: a state that
+  // ran also fills the icon with its tint; a draft stays an outline.
+  unknown: 'text-ink-muted/60',
+  draft: 'text-ink-muted/60',
+  pending: 'fill-brand/25 text-brand',
+  running: 'fill-brand/25 text-brand motion-safe:animate-pulse',
+  success: 'fill-success/25 text-success',
+  failed: 'fill-danger/25 text-danger',
+}
+const WORKFLOW_SAYS: Record<WorkflowState, string> = {
+  draft: 'draft',
+  pending: 'queued',
+  running: 'running',
+  success: 'done',
+  failed: 'failed',
+}
 
 const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
   { key: 'name', label: 'name' },
@@ -554,10 +582,26 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
                   row.kind === 'file' ? File : row.workflowId !== undefined ? WorkflowIcon : Folder
                 "
                 :size="13"
-                :stroke-width="1.5"
+                :stroke-width="row.workflowId !== undefined ? 2 : 1.5"
                 class="shrink-0"
-                :class="row.kind === 'folder' ? 'fill-brand-tint text-brand' : 'text-ink-muted'"
-                aria-hidden="true"
+                :class="
+                  row.workflowId !== undefined
+                    ? WORKFLOW_TONE[workflowState(row.id) ?? 'unknown']
+                    : row.kind === 'folder'
+                      ? 'fill-brand-tint text-brand'
+                      : 'text-ink-muted'
+                "
+                :aria-label="
+                  row.workflowId !== undefined
+                    ? `Workflow${workflowState(row.id) ? ', ' + WORKFLOW_SAYS[workflowState(row.id)!] : ''}`
+                    : undefined
+                "
+                :aria-hidden="row.workflowId === undefined"
+                v-tooltip="
+                  row.workflowId !== undefined && workflowState(row.id)
+                    ? `Workflow: ${WORKFLOW_SAYS[workflowState(row.id)!]}`
+                    : ''
+                "
               />
               <input
                 v-if="renamingId === row.id"
@@ -589,11 +633,6 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
                 v-tooltip="'Produced by workflow task'"
                 >output</span
               >
-              <TaskStatusBadge
-                v-if="renamingId !== row.id && workflowOf(row.id)"
-                :status="runStats(workflowOf(row.id)!).state"
-                class="shrink-0"
-              />
             </div>
           </td>
           <td class="px-2">

@@ -3,10 +3,12 @@ import {
   ChevronDown,
   ChevronsDownUp,
   ChevronsUpDown,
+  Copy,
   Expand,
   ListTree,
   Network,
   Play,
+  Save,
   Shrink,
   Trash2,
 } from '@/components/icons'
@@ -29,6 +31,8 @@ import {
   mergeGroups,
   retrySave,
   runWorkflow,
+  copyWorkflow,
+  saveAsTemplate,
   workflowActivity,
 } from '@/composables/useWorkflow'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
@@ -67,6 +71,8 @@ const emit = defineEmits<{
   select: [task: Task | null]
   /** Discard the draft: delete its folder (the view asks, and moves up). */
   discard: []
+  /** A copy was made, in the folder with this id: open it. */
+  copied: [folderId: number]
 }>()
 const modalStore = useModalStore()
 
@@ -124,6 +130,28 @@ const activity = computed(() => workflowActivity(props.workflow.id))
 const editable = computed(() => props.workflow.draft && !activity.value.running)
 const showSaving = useDelayedFlag(() => activity.value.saving)
 const showRunning = useDelayedFlag(() => activity.value.running)
+
+const copying = ref(false)
+const showCopying = useDelayedFlag(() => copying.value)
+/** Copies the workflow into a new draft to remix; the view opens it. */
+async function copy() {
+  if (copying.value) return
+  copying.value = true
+  const made = await copyWorkflow(props.workflow.folderId).finally(() => (copying.value = false))
+  if (made) emit('copied', made.folderId)
+}
+
+/** What was just saved as a template, said for a few seconds. */
+const savedTemplate = ref<string | null>(null)
+let savedTimer: ReturnType<typeof setTimeout> | undefined
+async function saveTemplate() {
+  const name = await saveAsTemplate(props.workflow.folderId)
+  if (!name) return
+  savedTemplate.value = name
+  clearTimeout(savedTimer)
+  savedTimer = setTimeout(() => (savedTemplate.value = null), 4000)
+}
+onUnmounted(() => clearTimeout(savedTimer))
 
 // Run checks the tasks against the workers online, so a draft keeps the registry loaded.
 const { available } = useWorkers()
@@ -249,6 +277,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         <span class="truncate text-ink-secondary">{{ edit.label }}</span>
         <Button variant="ghost" size="row" tooltip="Undo (⌘Z)" @click="edit.undo()">Undo</Button>
       </span>
+      <span v-if="savedTemplate" class="min-w-0 truncate text-ink-secondary" aria-live="polite"
+        >Saved as template “{{ savedTemplate }}”</span
+      >
       <span
         v-if="activity.error"
         role="alert"
@@ -329,6 +360,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           >
             <template #icon><Play :size="11" :stroke-width="2" /></template>
             {{ showRunning ? 'Starting…' : 'Run workflow' }}
+          </Button>
+        </template>
+        <!-- after a run: take it further as a new draft, or keep its shape -->
+        <template v-else>
+          <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+          <Button
+            size="row"
+            :tooltip="`Save ${workflow.name} as a template, to start new workflows from`"
+            @click="saveTemplate"
+          >
+            <template #icon><Save :size="11" :stroke-width="2" /></template>
+            Save as template
+          </Button>
+          <Button
+            size="row"
+            :disabled="copying"
+            :tooltip="`Copy ${workflow.name} into a new draft, on the same input files, to change and run again`"
+            @click="copy"
+          >
+            <template #icon><Copy :size="11" :stroke-width="2" /></template>
+            {{ showCopying ? 'Copying…' : 'Copy workflow' }}
           </Button>
         </template>
       </div>

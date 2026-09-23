@@ -33,7 +33,7 @@ export const typeOf = (item: Item) =>
   (item.kind === 'file'
     ? 'file:generic'
     : item.workflowId !== undefined
-      ? 'openrelik/workflow'
+      ? 'workflow'
       : 'inode/directory')
 
 const MAGIC: Record<string, string> = {

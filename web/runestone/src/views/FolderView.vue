@@ -28,8 +28,15 @@ import { useUploadPanel } from '@/composables/useUploadPanel'
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import { useRootPager } from '@/composables/useRootPager'
 import { useWorkflowLoader } from '@/composables/useWorkflowLoader'
-import { discardWorkflow, type AddAt } from '@/composables/useWorkflow'
-import { everyTask, findTask } from '@/data/workflows'
+import {
+  discardWorkflow,
+  followWorkflow,
+  loadWorkflow as ensureWorkflow,
+  renameWorkflow,
+  untitledWorkflow,
+  type AddAt,
+} from '@/composables/useWorkflow'
+import { everyTask, findTask, isActive, workflowOf } from '@/data/workflows'
 import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
@@ -159,18 +166,20 @@ const { isOver: isDropTarget, handlers: dropHandlers } = useDropZone(({ entries,
 })
 
 /** Loads what is on screen: a top-level page, or a folder and its subfolders. */
-function loadHere(force = false) {
-  if (atRoot.value) load(undefined, { ...rootRef.value, force })
-  else if (folderId.value !== undefined) load(folderId.value, { force })
+function loadHere(options: { force?: boolean; revalidate?: boolean } = {}) {
+  if (atRoot.value) load(undefined, { ...rootRef.value, ...options })
+  else if (folderId.value !== undefined) load(folderId.value, options)
 }
 
-// Load whatever the route points at. Recently seen locations cost no request.
+// Load whatever the route points at. What was seen before shows at once, and
+// the listing is always fetched again behind it: files land in folders
+// without the app knowing (a task's outputs, another user's upload).
 watch(
   () => (atRoot.value ? pager.key.value : `folder:${props.id}`),
   () => {
     clearError()
     dropRefusal.value = null
-    loadHere()
+    loadHere({ revalidate: true })
     // After load(): a prefetch of the folder being opened is already joined by
     // the load, so cancelling only drops the ones for folders left behind.
     prefetch.cancel()
@@ -180,12 +189,12 @@ watch(
 
 /** Refetch what is on screen, fresh or not (Shift+R, Retry). */
 function refresh() {
-  loadHere(true)
+  loadHere({ force: true })
   loadWorkflow(true)
 }
 
 // Coming back to the tab or the network: refresh what is stale or failed.
-useAutoRefresh(({ force }) => loadHere(force))
+useAutoRefresh(({ force }) => loadHere({ force }))
 
 // Rows: the current top-level page in the server's order (newest created
 // first; it cannot be re-sorted across pages), or a folder's contents sorted here.
@@ -320,6 +329,42 @@ function prefetchRow(item: Item | null | undefined) {
   prefetch.schedule(item?.kind === 'folder' ? item.id : null)
 }
 watch(() => rows.value[cursor.value], prefetchRow)
+
+/**
+ * A workflow folder's icon in the listing shows how its workflow is doing,
+ * so the listed workflows are loaded behind the listing (fresh ones cost no
+ * request), and running ones are followed until they finish. Leaving the
+ * folder cancels what is still loading.
+ */
+let listedWorkflows: AbortController | undefined
+watch(
+  [
+    folderId,
+    () =>
+      rows.value
+        .filter((row) => row.workflowId !== undefined)
+        .map((row) => row.id)
+        .join(),
+  ],
+  ([here], [before]) => {
+    if (here !== before || !listedWorkflows) {
+      listedWorkflows?.abort()
+      listedWorkflows = new AbortController()
+    }
+    const { signal } = listedWorkflows
+    for (const row of rows.value) {
+      if (row.workflowId === undefined) continue
+      ensureWorkflow(row.id, row.workflowId, { signal, background: true })
+        .then(() => {
+          const workflow = workflowOf(row.id)
+          if (workflow && isActive(workflow)) followWorkflow(row.id)
+        })
+        .catch(() => {})
+    }
+  },
+  { immediate: true },
+)
+onUnmounted(() => listedWorkflows?.abort())
 
 const produced = computed(() => new Set(task.value?.outputs ?? []))
 const tracing = computed(() => produced.value.size > 0)
@@ -462,8 +507,13 @@ function startRenameItem(id: number) {
 
 function handleRename({ id, name }: { id: number; name: string }) {
   // Files are not loaded from the server yet, so they are still renamed locally.
-  if (findItem(id)?.kind === 'folder') renameFolder(id, name)
-  else renameItem(id, name)
+  if (findItem(id)?.kind !== 'folder') return renameItem(id, name)
+  // A workflow still named by default takes its folder's new name. The folder
+  // goes first: its new name shows at once, so the workflow's rename does not
+  // take it for an untitled folder and rename it again.
+  const untitled = untitledWorkflow(id)
+  renameFolder(id, name)
+  if (untitled) renameWorkflow(id, name)
 }
 
 // --- keyboard navigation ---
@@ -515,6 +565,8 @@ const KEYS: Record<string, () => void> = {
     }
   },
 }
+/** Keys that move the cursor through the listing. */
+const MOVES = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End'])
 KEYS.j = KEYS.ArrowDown!
 KEYS.k = KEYS.ArrowUp!
 KEYS.l = KEYS.Enter!
@@ -583,6 +635,9 @@ function onKey(event: KeyboardEvent) {
 
   const action = KEYS[event.key]
   if (!action) return
+  // Moving the cursor means working in the listing: the prompt steps aside,
+  // as it does for selecting, so the next key is a shortcut, not text.
+  if (MOVES.has(event.key)) leavePrompt()
   dropAnchor()
   action()
   event.preventDefault()
@@ -672,6 +727,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               :producer-id="producer?.id ?? null"
               @select="taskId = $event?.id ?? null"
               @discard="discard"
+              @copied="router.push(`/folder/${$event}`)"
             />
             <LoadState
               v-else-if="folder?.workflowId !== undefined"

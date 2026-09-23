@@ -7,6 +7,7 @@ import {
   type AddAt,
   createWorkflow,
   followWorkflow,
+  renameWorkflow,
   runWorkflow,
   workflowActivity,
 } from '@/composables/useWorkflow'
@@ -69,6 +70,10 @@ export const useRunStore = defineStore('run', () => {
         files.map((file) => file.id),
       )
       addTask(workflow.folderId, { after: null }, worker, config)
+      // Named for what it does, "Strings on report.pdf", rather than
+      // "Untitled workflow"; its folder, still untitled, takes the name too.
+      // Before the run, so the run's answer carries the name.
+      await renameWorkflow(workflow.folderId, `${worker.name} on ${target.label}`)
       if (!(await runWorkflow(workflow.folderId))) {
         // The draft stays, in its folder, to be run from there.
         const why = workflowActivity(workflow.id).error ?? 'Could not run'

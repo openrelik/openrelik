@@ -28,7 +28,7 @@ Operators use this console over VPNs, hotel Wi-Fi and congested links. The previ
 
 Rules:
 - **Never make the user wait for data they have already seen.** Render cached data at once and refresh behind it (stale-while-revalidate).
-- **Never fetch what is still fresh.** Every server read goes through the query cache (`src/composables/useQueryCache.ts`, `ensure(key, fetcher)`): fresh keys (30 s) cost no request, concurrent callers share one request. Do not call the API directly from views or components for reads.
+- **Never fetch what is still fresh.** Every server read goes through the query cache (`src/composables/useQueryCache.ts`, `ensure(key, fetcher)`): fresh keys (30 s) cost no request, concurrent callers share one request. Do not call the API directly from views or components for reads. **One exception:** entering a folder (or a top-level page) always refetches its listing behind the cached rows (`load(id, { revalidate: true })`), because files land in folders without the app knowing — task outputs, other users' uploads. Only the listing: the folder's own details and its parents keep the 30 s rule.
 - **Every piece of data has its own load state** (`idle` / `loading` / `success` / `error`). "Empty" and "not loaded yet" must never be decided by a view-wide `isLoading` flag.
 - **Write mutations into the cache instead of refetching.** Upsert the server's response into the store; `markFresh()` what is known without asking (a new folder is empty); `invalidate()` only when the server is the only source of truth.
 - **Spend the network on what the user is doing now.** Run independent requests in parallel (no waterfalls), skip requests whose data is already known (e.g. no `GET /folders/{id}` when the path is loaded), pass an `AbortSignal` and cancel work the user has left behind, and mark prefetches `background: true`.
@@ -40,7 +40,7 @@ Recipe for a new endpoint (e.g. files in a folder):
 2. Give the data a cache key (see `folderKeys` in `useFolderLoader.ts`) and a fetcher that writes into the normalized store.
 3. Load it with `ensure()` from the view's loader; register the view's refresh with `useAutoRefresh`.
 4. Render its state with `<LoadState>`; show pending mutations on their rows.
-5. Verify request counts and behaviour on Chrome DevTools → Network → **Slow 4G** and **Offline**: revisiting a view within 30 s must cost zero requests.
+5. Verify request counts and behaviour on Chrome DevTools → Network → **Slow 4G** and **Offline**: revisiting a view within 30 s must cost zero requests, apart from the one listing refetch on entering a folder.
 
 ---
 
@@ -203,7 +203,7 @@ When adding or modifying interactive features, ensure:
 - [ ] **Button Constraints**: Are you using one of the 5 allowed variants and 2 allowed heights from `Button.vue`?
 - [ ] **Tooltips & Accessibility**: Do icon buttons declare `aria-label` and `v-tooltip`?
 - [ ] **No EventBus**: Uses Pinia, module composables, or view orchestration for decoupled communication—no event emitters or mitt.
-- [ ] **Slow Connections**: Do reads go through the query cache? Does revisiting a view within 30 s cost zero requests? Are independent requests parallel, and is abandoned work cancelled?
+- [ ] **Slow Connections**: Do reads go through the query cache? Does revisiting a view within 30 s cost zero requests (apart from a folder's listing, refetched on entry)? Are independent requests parallel, and is abandoned work cancelled?
 - [ ] **Consistent Loaders**: Do listings use `<LoadState>`, pending changes show on their rows, and indicators go through `useDelayedFlag` (§13 of the design system)? Tried on DevTools **Slow 4G** and **Offline**?
 
 ---

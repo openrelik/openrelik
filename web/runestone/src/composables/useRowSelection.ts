@@ -48,14 +48,35 @@ export function useRowSelection<T extends Identifiable>(
     selected.value = allSelected.value ? new Set() : new Set(rows.value.map((row) => row.id))
   }
 
+  /**
+   * Where a new Shift range starts. On an unselected row: there. On a
+   * selected one, the run of selected rows around the cursor is taken as the
+   * range so far, anchored at its far end — so moving back over it deselects
+   * row by row, and moving away extends it, as in Finder.
+   */
+  function startRange() {
+    const list = rows.value
+    const at = Math.max(0, cursor.value)
+    const isSelected = (i: number) => !!list[i] && selected.value.has(list[i]!.id)
+    base = new Set(selected.value)
+    if (!isSelected(at)) {
+      anchor = at
+      return
+    }
+    let start = at
+    let end = at
+    while (isSelected(start - 1)) start--
+    while (isSelected(end + 1)) end++
+    anchor = at - start >= end - at ? start : end
+    list.slice(start, end + 1).forEach((row) => base.delete(row.id))
+  }
+
   function extendTo(index: number) {
     if (!rows.value.length) return
-    if (anchor === null) {
-      anchor = Math.max(0, cursor.value)
-      base = new Set(selected.value)
-    }
+    if (anchor === null) startRange()
     cursor.value = Math.min(rows.value.length - 1, Math.max(0, index))
-    const [from, to] = anchor < cursor.value ? [anchor, cursor.value] : [cursor.value, anchor]
+    const start = anchor ?? cursor.value
+    const [from, to] = start < cursor.value ? [start, cursor.value] : [cursor.value, start]
     const next = new Set(base)
     rows.value.slice(from, to + 1).forEach((row) => next.add(row.id))
     selected.value = next

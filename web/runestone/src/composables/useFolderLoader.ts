@@ -215,10 +215,14 @@ export interface UseFolderLoaderReturn {
   /**
    * Makes sure the location is loaded: a top-level page (no id; page 1 and the
    * chosen size unless given) or a folder. Fresh data costs nothing; `force`
-   * refetches (refresh, retry). Never rejects — failures land in
-   * `listingState` / `folderState`.
+   * refetches everything (refresh, retry); `revalidate` refetches only the
+   * listing — the rows — while what is cached stays on screen (entering a
+   * location). Never rejects — failures land in `listingState` / `folderState`.
    */
-  load: (folderId?: number, options?: { force?: boolean } & Partial<RootPageRef>) => Promise<void>
+  load: (
+    folderId?: number,
+    options?: { force?: boolean; revalidate?: boolean } & Partial<RootPageRef>,
+  ) => Promise<void>
   /** A top-level page (no id) or a folder's subfolders. */
   listingState: (folderId?: number, root?: Partial<RootPageRef>) => QueryState
   /** A folder's own details; only fetched when not already known from a listing. */
@@ -232,11 +236,11 @@ export function useFolderLoader(): UseFolderLoaderReturn {
 
   async function load(
     folderId?: number,
-    options: { force?: boolean } & Partial<RootPageRef> = {},
+    options: { force?: boolean; revalidate?: boolean } & Partial<RootPageRef> = {},
   ): Promise<void> {
     controller?.abort()
     controller = new AbortController()
-    const common = { signal: controller.signal, force: options.force }
+    const common = { signal: controller.signal, force: options.force || options.revalidate }
     const root = { page: options.page ?? 1, size: options.size ?? currentPageSize() }
 
     const requests =
@@ -258,11 +262,10 @@ export function useFolderLoader(): UseFolderLoaderReturn {
             // Clicking into a folder already put it and its parents in the store.
             ...(options.force || !isChainKnown(folderId)
               ? [
-                  ensure(
-                    folderKeys.folder(folderId),
-                    (signal) => fetchFolder(folderId, signal),
-                    common,
-                  ),
+                  ensure(folderKeys.folder(folderId), (signal) => fetchFolder(folderId, signal), {
+                    signal: controller.signal,
+                    force: options.force,
+                  }),
                 ]
               : []),
           ]

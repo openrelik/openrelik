@@ -13,6 +13,8 @@
  * - Running sends the spec with fresh task uuids and adopts the spec the
  *   server answers with, whose uuids its task records carry.
  * - Discarding a draft deletes its folder, which takes the workflow with it.
+ * - A workflow that has run can be copied (a new draft over the same inputs,
+ *   in a folder of its own) or saved as a template.
  *
  * State is module-scoped, so a save keeps going when the user moves on.
  */
@@ -21,16 +23,19 @@ import { computed, reactive, shallowRef, type Ref } from 'vue'
 
 import { api, errorMessage, type WorkflowRecord } from '@/api'
 import { folderKeys, mapFolderToItem } from '@/composables/useFolderLoader'
-import { confirmAction } from '@/composables/useConfirm'
+import { askForText, confirmAction } from '@/composables/useConfirm'
 import { useFolderActions } from '@/composables/useFolderActions'
-import { ensure, forget, markFresh } from '@/composables/useQueryCache'
-import { upsertItems } from '@/data/folders'
+import { addTemplate } from '@/composables/useWorkflowTemplates'
+import { refreshAll } from '@/composables/useAutoRefresh'
+import { ensure, forget, invalidate, markFresh } from '@/composables/useQueryCache'
+import { findItem, upsertItems } from '@/data/folders'
 import type { Worker } from '@/data/workers'
 import {
   allTasks,
   canChainAfter,
   canJoin,
   everyGroup,
+  everyTask,
   findTask,
   forgetWorkflow,
   groupOf,
@@ -118,7 +123,26 @@ async function fetchWorkflow(
   // A run started or ended meanwhile: this answer may predate it (a refresh
   // on focus while the run was in flight) and would put the draft back.
   if (workflowActivity(workflowId).running || (runs.get(workflowId) ?? 0) !== runsBefore) return
-  upsertWorkflow(mapWorkflow(record))
+  const workflow = mapWorkflow(record)
+  listNewOutputs(workflowOf(folderId), workflow)
+  upsertWorkflow(workflow)
+}
+
+/**
+ * Tasks write their outputs into the workflow's folder, behind the app's back:
+ * the folder's file listing was known — as empty, when the workflow was made
+ * — and would stay "fresh" without them. When the workflow names outputs the
+ * store has not seen, the listing is stale: on screen it refreshes now,
+ * elsewhere on the next visit.
+ */
+function listNewOutputs(before: Workflow | undefined, after: Workflow): void {
+  // A workflow seen for the first time left no stale listing behind.
+  if (!before) return
+  const known = new Set(everyTask(before).flatMap((task) => task.outputs))
+  const fresh = everyTask(after).some((task) => task.outputs.some((id) => !known.has(id)))
+  if (!fresh) return
+  invalidate(folderKeys.files(after.folderId))
+  refreshAll()
 }
 
 /**
@@ -138,11 +162,24 @@ export function loadWorkflow(
 }
 
 /**
- * Creates an empty workflow over `fileIds`, in a new folder inside
- * `parentId`. Resolves with the workflow; rejects with the server's error.
+ * Creates a workflow over `fileIds` — empty, or from a template — in a new
+ * folder inside `parentId`. Resolves with the workflow; rejects with the
+ * server's error.
  */
-export async function createWorkflow(parentId: number, fileIds: number[]): Promise<Workflow> {
-  const record = await api.workflows.create(parentId, fileIds)
+export async function createWorkflow(
+  parentId: number,
+  fileIds: number[],
+  templateId?: number,
+): Promise<Workflow> {
+  return adopt(await api.workflows.create(parentId, fileIds, templateId), parentId)
+}
+
+/**
+ * Takes in a workflow the server just made, in a new folder inside
+ * `parentId`: the folder and the workflow go into the stores, and both are
+ * known to be fresh, so opening the folder costs no request.
+ */
+function adopt(record: WorkflowRecord, parentId: number): Workflow {
   const workflow = mapWorkflow(record)
   upsertItems([
     mapFolderToItem(
@@ -164,9 +201,21 @@ export async function createWorkflow(parentId: number, fileIds: number[]): Promi
   return workflow
 }
 
+/** The name the server gives a new workflow, and its folder. */
+const UNTITLED_WORKFLOW = 'Untitled workflow'
+/** A folder still named by default: the server's, or a new folder's here. */
+const untitledFolder = (name: string | undefined) =>
+  name === UNTITLED_WORKFLOW || name === 'Untitled folder'
+
+/** A workflow still named by default: renaming its folder names it too. */
+export const untitledWorkflow = (folderId: number): boolean =>
+  workflowOf(folderId)?.name === UNTITLED_WORKFLOW
+
 /**
  * Renames the workflow: the new name shows at once and goes back if the
- * server refuses it. Its folder keeps its own name.
+ * server refuses it. The folder takes the name too while it follows the
+ * workflow: still named by default, or named as the workflow was. One the
+ * user named otherwise keeps its own.
  */
 export async function renameWorkflow(folderId: number, name: string): Promise<boolean> {
   const workflow = workflowOf(folderId)
@@ -175,6 +224,10 @@ export async function renameWorkflow(folderId: number, name: string): Promise<bo
   const before = workflow.name
   workflow.name = trimmed
   activityFor(workflow.id).error = null
+  const folderName = findItem(folderId)?.name
+  if (untitledFolder(folderName) || folderName === before) {
+    useFolderActions().renameFolder(folderId, trimmed)
+  }
   try {
     await api.workflows.rename(folderId, workflow.id, trimmed)
     return true
@@ -629,6 +682,54 @@ export async function runWorkflow(folderId: number): Promise<boolean> {
     return false
   } finally {
     state.running = false
+  }
+}
+
+// --- copy, template ---
+
+/**
+ * Copies a workflow to remix it: a new draft over the same inputs, with the
+ * same tasks and options, in a "Copy of …" folder next to this one.
+ * Resolves with the copy; null on failure, why in `workflowActivity().error`.
+ */
+export async function copyWorkflow(folderId: number): Promise<Workflow | null> {
+  const workflow = workflowOf(folderId)
+  const parentId = findItem(folderId)?.parent
+  if (!workflow || parentId === null || parentId === undefined) return null
+  const state = activityFor(workflow.id)
+  state.error = null
+  try {
+    return adopt(await api.workflows.copy(folderId, workflow.id), parentId)
+  } catch (err: unknown) {
+    state.error = `Could not copy: ${errorMessage(err, 'request failed')}`
+    return null
+  }
+}
+
+/**
+ * Saves the workflow as a template, under a name the user picks (the
+ * workflow's own to start with). Resolves with the name saved under; null
+ * when cancelled or refused, why in `workflowActivity().error`.
+ */
+export async function saveAsTemplate(folderId: number): Promise<string | null> {
+  const workflow = workflowOf(folderId)
+  if (!workflow) return null
+  const name = await askForText({
+    title: 'Save as template',
+    message:
+      'New workflows can start from it: the same workers and options, on their own input files.',
+    field: { label: 'template name', value: workflow.name },
+    confirmLabel: 'Save template',
+  })
+  if (!name) return null
+  const state = activityFor(workflow.id)
+  state.error = null
+  try {
+    addTemplate(await api.workflows.createTemplate(workflow.id, name))
+    return name
+  } catch (err: unknown) {
+    state.error = `Could not save the template: ${errorMessage(err, 'request failed')}`
+    return null
   }
 }
 
