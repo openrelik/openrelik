@@ -127,9 +127,15 @@ export const useItemsStore = defineStore('items', () => {
     }
   }
 
-  /** Replaces the files directly inside `parent`, leaving its folders in place. */
+  /**
+   * Replaces the files directly inside `parent`, leaving its folders in place.
+   * Files still listed are merged, not replaced, so their loaded details stay.
+   */
   function setFiles(parent: number, files: Item[]): void {
-    items.value = items.value.filter((item) => item.parent !== parent || item.kind !== 'file')
+    const listed = new Set(files.map((file) => file.id))
+    items.value = items.value.filter(
+      (item) => item.parent !== parent || item.kind !== 'file' || listed.has(item.id),
+    )
     upsertItems(files)
   }
 
