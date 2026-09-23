@@ -6,6 +6,7 @@ import { RouterLink } from 'vue-router'
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import Button from '@/components/base/Button.vue'
 import KeyValueRow from '@/components/base/KeyValueRow.vue'
+import { anchorOf, type Anchor } from '@/composables/useRun'
 import { removeTask, setTaskOption, type AddAt } from '@/composables/useWorkflow'
 import { findItem } from '@/data/folders'
 import { workerShortName } from '@/data/workers'
@@ -27,7 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   /** Add a worker: after this task, beside it, or after all of its group. */
-  add: [at: AddAt]
+  add: [at: AddAt, anchor?: Anchor]
 }>()
 
 /** What runs on its output: how many tasks, in how many groups. */
@@ -199,7 +200,7 @@ function remove() {
           size="row"
           class="justify-center"
           :tooltip="`Add worker after ${task.name} (a)`"
-          @click="emit('add', { after: task.id })"
+          @click="emit('add', { after: task.id }, anchorOf($event))"
         >
           <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
           Add worker after
@@ -209,7 +210,7 @@ function remove() {
           size="row"
           class="justify-center"
           :tooltip="`Add a worker to ${task.name}'s group: it runs in parallel, on the same input`"
-          @click="emit('add', { beside: task.id })"
+          @click="emit('add', { beside: task.id }, anchorOf($event))"
         >
           <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
           Add worker beside
@@ -219,7 +220,7 @@ function remove() {
           size="row"
           class="justify-center"
           :tooltip="`Add a worker that runs once all ${group.tasks.length} tasks in this group have finished, on all their outputs`"
-          @click="emit('add', { join: group.id })"
+          @click="emit('add', { join: group.id }, anchorOf($event))"
         >
           <template #icon><Merge :size="13" :stroke-width="1.5" /></template>
           Add worker after all {{ group.tasks.length }}

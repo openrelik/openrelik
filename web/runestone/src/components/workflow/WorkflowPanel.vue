@@ -22,7 +22,7 @@ import Button from '@/components/base/Button.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useRemembered } from '@/composables/useRemembered'
-import { openAddToWorkflow } from '@/composables/useRun'
+import { openAddToWorkflow, type Anchor } from '@/composables/useRun'
 import {
   lastEdit,
   type AddAt,
@@ -165,8 +165,8 @@ const blocker = computed(() =>
 )
 
 /** Add a worker (see `AddAt`): by default in a new group after the selected task, or on the inputs. */
-function add(at: AddAt = { after: props.selectedId }) {
-  if (editable.value) openAddToWorkflow(props.workflow, at)
+function add(at: AddAt = { after: props.selectedId }, anchor?: Anchor) {
+  if (editable.value) openAddToWorkflow(props.workflow, at, anchor)
 }
 
 /** Splits picked tasks out of their group into one of their own; undo is offered in the header. */

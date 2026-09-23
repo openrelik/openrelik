@@ -21,7 +21,8 @@ import { getUniqueFolderName, type Item } from '@/data/folders'
 import { runStats, workflowOf } from '@/data/workflows'
 import { count, formatSize, stamp } from '@/utils/format'
 
-export type SortKey = 'name' | 'size' | 'type' | 'owner' | 'modified'
+/** `created` has no column: it is a folder's default order, newest first. */
+export type SortKey = 'name' | 'size' | 'type' | 'owner' | 'modified' | 'created'
 
 const props = defineProps<{
   rows: Item[]
@@ -627,12 +628,6 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               >
                 {{ row.name }}{{ row.kind === 'folder' ? '/' : '' }}
               </span>
-              <span
-                v-if="renamingId !== row.id && produced.has(row.id)"
-                class="badge shrink-0 border-brand/40 bg-brand-tint text-brand"
-                v-tooltip="'Produced by workflow task'"
-                >output</span
-              >
             </div>
           </td>
           <td class="px-2">

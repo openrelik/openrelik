@@ -6,6 +6,7 @@ import { RouterLink } from 'vue-router'
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import { findItem } from '@/data/folders'
 import { missingOptions } from '@/data/workers'
+import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
 import { canJoin, unchainable, type Task, type TaskGroup, type Workflow } from '@/data/workflows'
 import { formatDuration, formatSize } from '@/utils/format'
@@ -33,7 +34,7 @@ const emit = defineEmits<{
   /** A task, or null to clear the selection (a click outside the task rows). */
   select: [task: Task | null]
   /** Add a worker: after a task or the inputs, beside a task, or after all of a group. */
-  add: [at: AddAt]
+  add: [at: AddAt, anchor?: Anchor]
   /** Remove this task, and the tasks after it, from the draft. */
   remove: [taskId: string]
 }>()
@@ -111,7 +112,7 @@ const blocked = computed(() => unchainable(props.workflow))
 /** A click outside the task rows, and not on a control, clears the selection. */
 function clickOutside(event: MouseEvent) {
   if (event.target instanceof Element && event.target.closest('[data-task], button, a')) return
-  if (props.selectedId) emit('select', null)
+  if (props.selectedId || props.producerId) emit('select', null)
 }
 
 const rows = computed(() => flatten(props.workflow.groups, []))
@@ -176,7 +177,7 @@ const inputs = computed(() =>
                 :class="ADD_AFTER"
                 aria-label="Add worker on the inputs"
                 v-tooltip="'Add worker on the inputs'"
-                @click="emit('add', { after: null })"
+                @click="emit('add', { after: null }, anchorOf($event))"
               >
                 <Plus :size="11" :stroke-width="2" />
               </button>
@@ -226,7 +227,7 @@ const inputs = computed(() =>
                     v-tooltip="
                       `Add a worker that runs once all ${row.count} tasks in this group have finished, on all their outputs`
                     "
-                    @click="emit('add', { join: row.groupId })"
+                    @click="emit('add', { join: row.groupId }, anchorOf($event))"
                   >
                     <Merge :size="11" :stroke-width="1.5" class="shrink-0" />
                     after all {{ row.count }}
@@ -305,7 +306,7 @@ const inputs = computed(() =>
                     v-tooltip="
                       `Add worker after ${row.task.name}${row.task.groups.length ? ', in a new group' : ''}`
                     "
-                    @click.stop="emit('add', { after: row.task.id })"
+                    @click.stop="emit('add', { after: row.task.id }, anchorOf($event))"
                   >
                     <Plus :size="11" :stroke-width="2" />
                   </button>
@@ -315,7 +316,7 @@ const inputs = computed(() =>
                     :class="ADD_AFTER"
                     :aria-label="`Add worker beside ${row.task.name}`"
                     v-tooltip="`Add worker beside ${row.task.name}: in parallel, on the same input`"
-                    @click.stop="emit('add', { beside: row.task.id })"
+                    @click.stop="emit('add', { beside: row.task.id }, anchorOf($event))"
                   >
                     <ListPlus :size="11" :stroke-width="2" />
                   </button>

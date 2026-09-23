@@ -17,6 +17,14 @@ import type { WorkerOption } from '@/data/workers'
 
 export type TaskStatus = 'success' | 'running' | 'pending' | 'failed'
 
+/** What a status is called on screen: a pending task is waiting in the queue. */
+export const STATUS_LABEL: Record<TaskStatus, string> = {
+  success: 'success',
+  running: 'running',
+  pending: 'queued',
+  failed: 'failed',
+}
+
 export interface Task {
   /** The spec uuid: 32 hex digits, also the server's task record uuid after a run. */
   id: string

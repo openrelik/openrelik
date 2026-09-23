@@ -4,10 +4,18 @@ import type { Worker } from '@/data/workers'
 import type { AddAt } from '@/composables/useWorkflow'
 import { canChainAfter, canJoin, everyGroup, findTask, type Workflow } from '@/data/workflows'
 import { useModalStore } from '@/stores/modals'
-import { useRunStore, type RunTarget } from '@/stores/run'
+import { useRunStore, type Anchor, type RunTarget } from '@/stores/run'
 import { count } from '@/utils/format'
 
-export type { RunTarget }
+export type { Anchor, RunTarget }
+
+/** The box of the control an event came from, to anchor a popover to it. */
+export function anchorOf(event: Event): Anchor | undefined {
+  const target = event.currentTarget
+  if (!(target instanceof Element)) return undefined
+  const { top, bottom, left, right } = target.getBoundingClientRect()
+  return { top, bottom, left, right }
+}
 
 export const runTarget = computed({
   get: () => useRunStore().runTarget,
@@ -32,10 +40,11 @@ export function openRun(files: Item[], folderId: number) {
 }
 
 /**
- * Opens the picker to add a worker to a draft, at `at` (see `AddAt`). Does
+ * Opens the picker to add a worker to a draft, at `at` (see `AddAt`): beside
+ * the + it came from when there is one (`anchor`), else as a dialog. Does
  * nothing where no worker may go (`canJoin`, `canChainAfter`).
  */
-export function openAddToWorkflow(workflow: Workflow, at: AddAt) {
+export function openAddToWorkflow(workflow: Workflow, at: AddAt, anchor?: Anchor) {
   const { inputs } = workflow
   let label: string
   if ('after' in at) {
@@ -55,7 +64,7 @@ export function openAddToWorkflow(workflow: Workflow, at: AddAt) {
     if (!group || !canJoin(group)) return
     label = count(group.tasks.length, 'task')
   }
-  useRunStore().open({ label, files: [], folderId: workflow.folderId, add: at })
+  useRunStore().open({ label, files: [], folderId: workflow.folderId, add: at, anchor })
   useModalStore().openModal('run')
 }
 

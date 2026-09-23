@@ -21,12 +21,14 @@ import KeyHint from '@/components/base/KeyHint.vue'
 import { findItem } from '@/data/folders'
 import { missingOptions } from '@/data/workers'
 import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
+import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
 import {
   canJoin,
   everyGroup,
   groupOf,
   mergeProblem,
+  STATUS_LABEL,
   unchainable,
   type Task,
   type TaskGroup,
@@ -84,7 +86,7 @@ const emit = defineEmits<{
   /** A task, or null to clear the selection (a click on empty canvas). */
   select: [task: Task | null]
   /** Add a worker: after a task or the inputs, beside a task, or after all of a group. */
-  add: [at: AddAt]
+  add: [at: AddAt, anchor?: Anchor]
   /** Remove this task, and the tasks after it, from the draft. */
   remove: [taskId: string]
   /** Move these tasks out of their group into a new one; `join`: then add a worker after them. */
@@ -382,7 +384,7 @@ const layout = computed(() => {
 function clickCanvas(event: MouseEvent) {
   if (event.target instanceof Element && event.target.closest('button, a, input')) return
   letGo()
-  if (props.selectedId) emit('select', null)
+  if (props.selectedId || props.producerId) emit('select', null)
 }
 
 // --- picking tasks (to split) and groups (to merge) ---------------------------
@@ -1041,7 +1043,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 >{{ needs(node.task) }}</span
               >
               <span v-else-if="!workflow.draft" class="tabular truncate text-[11px] text-ink-muted">
-                {{ node.task.status }}
+                {{ STATUS_LABEL[node.task.status] }}
                 <template v-if="node.task.duration !== undefined">
                   · {{ formatDuration(node.task.duration) }}</template
                 >
@@ -1164,7 +1166,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               v-tooltip="
                 `Add worker after ${node.task?.name ?? 'the inputs'}${node.groups.length ? ', in a new group' : ''}`
               "
-              @click.stop="emit('add', { after: node.task?.id ?? null })"
+              @click.stop="emit('add', { after: node.task?.id ?? null }, anchorOf($event))"
             >
               <Plus :size="11" :stroke-width="2" />
             </button>
@@ -1276,7 +1278,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               v-tooltip="`Add worker beside ${beside.after.name}: in parallel, on the same input`"
               @pointerenter="hovered = beside.after.id"
               @pointerleave="hovered = null"
-              @click.stop="emit('add', { beside: beside.after.id })"
+              @click.stop="emit('add', { beside: beside.after.id }, anchorOf($event))"
             >
               <Plus :size="11" :stroke-width="2" />
             </button>
@@ -1298,7 +1300,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
             v-tooltip="
               `Add a worker that runs once all ${ghost.count} tasks in this group have finished, on all their outputs`
             "
-            @click.stop="emit('add', { join: ghost.groupId })"
+            @click.stop="emit('add', { join: ghost.groupId }, anchorOf($event))"
           >
             <Plus :size="13" :stroke-width="1.5" class="shrink-0" />
             after all {{ ghost.count }}

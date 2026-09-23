@@ -6,7 +6,7 @@ import KeyHint from '@/components/base/KeyHint.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import { runTarget, startRun } from '@/composables/useRun'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
-import { missingOptions, workerShortName, type Worker } from '@/data/workers'
+import { missingOptions, type Worker } from '@/data/workers'
 
 /**
  * Pick a worker. Two uses, one list:
@@ -19,6 +19,10 @@ import { missingOptions, workerShortName, type Worker } from '@/data/workers'
  * The list is the workers online now, from the server's registry. Type to
  * narrow. Enter picks with the defaults; Tab opens the worker's options first.
  * A worker with a required option opens them on Enter.
+ *
+ * Opened from a + in a draft (the target has an `anchor`), it pops out
+ * beside that +, on the side with room, instead of as a dialog in the middle
+ * of the screen; without one (the `a` key, a quick run on files) it is a dialog.
  */
 const query = ref('')
 const index = ref(0)
@@ -65,6 +69,41 @@ watch(runTarget, (target) => {
 })
 
 const close = () => (runTarget.value = null)
+
+/** Room kept to the screen's edge, and between the + and the popover. */
+const EDGE = 8
+const GAP = 6
+const POPOVER_W = 416
+const POPOVER_MAX_H = 400
+/**
+ * Where the popover goes: to the right of its +, or to the left when the
+ * right has no room; level with it, running down — or up from it, when the
+ * + is in the lower half of the screen.
+ */
+const popover = computed(() => {
+  const anchor = runTarget.value?.anchor
+  if (!anchor) return null
+  const { innerWidth: vw, innerHeight: vh } = window
+  const width = Math.min(POPOVER_W, vw - 2 * EDGE)
+  const right = anchor.right + GAP
+  const left = right + width <= vw - EDGE ? right : Math.max(EDGE, anchor.left - GAP - width)
+  const middle = (anchor.top + anchor.bottom) / 2
+  // The header's middle level with the +'s.
+  const top = Math.max(EDGE, middle - 20)
+  return middle < vh / 2
+    ? {
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+        maxHeight: `${Math.min(POPOVER_MAX_H, vh - top - EDGE)}px`,
+      }
+    : {
+        left: `${left}px`,
+        bottom: `${Math.max(EDGE, vh - middle - 20)}px`,
+        width: `${width}px`,
+        maxHeight: `${Math.min(POPOVER_MAX_H, middle + 20 - EDGE)}px`,
+      }
+})
 
 const needsInput = (worker: Worker) => worker.options.some((o) => o.required && !o.default)
 
@@ -120,18 +159,33 @@ function onOptionsKey(event: KeyboardEvent) {
 <template>
   <Teleport to="body">
     <div v-if="runTarget" class="fixed inset-0 z-50">
-      <div class="absolute inset-0 bg-ink/20" aria-hidden="true" @pointerdown="close" />
+      <!-- a popover leaves the page as it is; a dialog dims it -->
       <div
-        class="sheet absolute top-[14vh] left-1/2 flex max-h-[70vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float)"
+        class="absolute inset-0"
+        :class="{ 'bg-ink/20': !popover }"
+        aria-hidden="true"
+        @pointerdown="close"
+      />
+      <div
+        class="sheet absolute flex flex-col overflow-hidden text-[12px]"
+        :class="
+          popover
+            ? 'shadow-(--shadow-popover)'
+            : 'top-[14vh] left-1/2 max-h-[70vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 shadow-(--shadow-float)'
+        "
+        :style="popover ?? undefined"
         role="dialog"
         aria-modal="true"
         :aria-label="adding ? 'Add a worker' : 'Run a worker'"
         v-trap-focus
       >
         <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken px-3">
-          <span class="shrink-0 text-ink-muted">{{ placing.header }}</span>
-          <span class="truncate font-medium text-ink">{{ runTarget.label }}</span>
-          <span class="shrink-0 text-ink-muted">—</span>
+          <!-- beside its +, where it goes needs no saying: the filter gets the room -->
+          <template v-if="!popover">
+            <span class="shrink-0 text-ink-muted">{{ placing.header }}</span>
+            <span class="truncate font-medium text-ink">{{ runTarget.label }}</span>
+            <span class="shrink-0 text-ink-muted">—</span>
+          </template>
           <input
             v-autofocus="!configuring"
             v-model="query"
@@ -142,7 +196,7 @@ function onOptionsKey(event: KeyboardEvent) {
             :disabled="!!configuring"
             v-tooltip="'Filter available workers'"
             class="min-w-0 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
-            placeholder="type a worker…"
+            placeholder="find a worker…"
             @keydown="onListKey"
           />
         </div>
@@ -169,7 +223,7 @@ function onOptionsKey(event: KeyboardEvent) {
               role="option"
               :aria-selected="i === index"
               class="flex h-7 cursor-pointer items-center gap-3 px-3"
-              :class="i === index ? 'bg-brand-selected' : 'hover:bg-sunken'"
+              :class="i === index ? 'bg-sunken' : 'hover:bg-sunken'"
               v-tooltip="
                 needsInput(worker)
                   ? `Configure ${worker.name} options (⏎)`
@@ -178,10 +232,6 @@ function onOptionsKey(event: KeyboardEvent) {
               @pointermove="index = i"
               @click="choose(worker)"
             >
-              <span class="w-2 shrink-0 text-brand">{{ i === index ? '›' : '' }}</span>
-              <span class="w-32 shrink-0 truncate text-ink-muted">{{
-                workerShortName(worker.queue)
-              }}</span>
               <span class="min-w-0 flex-1 truncate text-ink">{{ worker.name }}</span>
               <Settings2
                 v-if="worker.options.length"
@@ -260,10 +310,10 @@ function onOptionsKey(event: KeyboardEvent) {
             <KeyHint keys="⏎" :label="verb.toLowerCase()" />
             <KeyHint keys="tab" label="options" />
             <KeyHint keys="↑↓" label="select" />
-            <span class="ml-auto">{{
+            <span v-if="!popover" class="ml-auto">{{
               adding ? placing.footer : `one task over ${runTarget.label}, in a new folder`
             }}</span>
-            <KeyHint keys="esc" label="cancel" />
+            <KeyHint keys="esc" label="cancel" :class="{ 'ml-auto': popover }" />
           </template>
           <template v-else>
             <KeyHint

@@ -11,7 +11,7 @@ import LoadState from '@/components/base/LoadState.vue'
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
-import { lastRun, openAddToWorkflow, openRun, runError } from '@/composables/useRun'
+import { lastRun, openAddToWorkflow, openRun, runError, type Anchor } from '@/composables/useRun'
 import { bytesOf, typeOf } from '@/data/files'
 import { childrenOf, findItem, pathTo, renameItem, type Item } from '@/data/folders'
 import { rootPageItems, rootPageOf } from '@/data/rootPages'
@@ -36,7 +36,7 @@ import {
   untitledWorkflow,
   type AddAt,
 } from '@/composables/useWorkflow'
-import { everyTask, findTask, isActive, workflowOf } from '@/data/workflows'
+import { everyTask, findTask, isActive, workflowOf, type Task } from '@/data/workflows'
 import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
@@ -66,8 +66,9 @@ const filter = ref('')
 const toolbar = ref<InstanceType<typeof FolderToolbar> | null>(null)
 const table = ref<InstanceType<typeof FolderTable> | null>(null)
 
+/** Newest first, so what was just made (a folder, a workflow, an upload) is on top. */
 const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
-  atRoot.value ? { key: 'modified', dir: -1 } : { key: 'name', dir: 1 }
+  atRoot.value ? { key: 'modified', dir: -1 } : { key: 'created', dir: -1 }
 const sort = ref(defaultSort())
 const { load, listingState, folderState } = useFolderLoader()
 const prefetch = useFolderPrefetch()
@@ -216,6 +217,9 @@ const rows = computed(() => {
     type: (a, b) => typeOf(a).localeCompare(typeOf(b)),
     owner: (a, b) => a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name),
     modified: (a, b) => a.modified.localeCompare(b.modified),
+    created: (a, b) =>
+      (a.created ?? a.modified).localeCompare(b.created ?? b.modified) ||
+      a.name.localeCompare(b.name),
   }
   return childrenOf(folder.value!.id)
     .filter((item) => !needle || item.name.toLowerCase().includes(needle))
@@ -311,7 +315,10 @@ const taskId = ref<string | null>(null)
 const task = computed(() =>
   workflow.value && taskId.value ? (findTask(workflow.value, taskId.value) ?? null) : null,
 )
-watch(cursor, () => (taskId.value = null))
+watch(cursor, () => {
+  taskId.value = null
+  producerDismissed.value = false
+})
 
 /**
  * A workflow folder holds what its tasks produce, so an empty one does not
@@ -375,6 +382,22 @@ const producer = computed(() => {
   return everyTask(workflow.value).find((t) => t.outputs.includes(row.id))
 })
 
+/**
+ * The producer lit in the workflow chart. A click on the chart's empty space
+ * puts it out, like a selection, until the cursor moves to another row; the
+ * inspector and status bar still say which task made the file.
+ */
+const producerDismissed = ref(false)
+const litProducerId = computed(() =>
+  producerDismissed.value ? null : (producer.value?.id ?? null),
+)
+
+/** A task picked in the chart, or none: a click on empty space also puts out the lit producer. */
+function selectTask(picked: Task | null) {
+  taskId.value = picked?.id ?? null
+  if (!picked) producerDismissed.value = true
+}
+
 function pick(index: number) {
   rawPick(index)
   taskId.value = null
@@ -399,6 +422,29 @@ watch([() => props.id, () => (atRoot.value ? pager.page.value : 0)], (_, [previo
 const focus = rows.value.findIndex((row) => String(row.id) === route.query.focus)
 if (focus >= 0) cursor.value = focus
 
+/**
+ * A workflow folder opens with the cursor on "..", not on its first file:
+ * a file under the cursor lights the task that made it, and a chart that
+ * greets you with one task glowing reads as a selection nobody made. Once
+ * per visit, and not over a cursor placed on purpose (a `focus` link, or the
+ * subfolder just left).
+ */
+/** The cursor on the ".." row, back up to the parent. */
+const UP = -1
+const isWorkflowFolder = computed(() => folder.value?.workflowId !== undefined)
+let cursorPlacedIn: string | undefined
+watch(
+  [() => props.id, isWorkflowFolder],
+  ([id, workflowFolder]) => {
+    if (!workflowFolder || cursorPlacedIn === id) return
+    cursorPlacedIn = id
+    if (route.query.focus) return
+    const row = rows.value[cursor.value]
+    if (!row || row.kind === 'file') cursor.value = UP
+  },
+  { immediate: true },
+)
+
 // --- runs ---
 const runFiles = () => {
   const chosen = rows.value.filter((row) => row.kind === 'file' && selected.value.has(row.id))
@@ -411,8 +457,8 @@ function runPicker() {
 }
 
 /** The inspector's add buttons: the picker, for this folder's draft. */
-function openAdd(at: AddAt) {
-  if (workflow.value) openAddToWorkflow(workflow.value, at)
+function openAdd(at: AddAt, anchor?: Anchor) {
+  if (workflow.value) openAddToWorkflow(workflow.value, at, anchor)
 }
 
 const runNotice = computed(() =>
@@ -420,7 +466,6 @@ const runNotice = computed(() =>
 )
 
 // --- navigation ---
-const UP = -1
 const parentPath = computed(() => {
   const parent = folder.value?.parent
   if (parent !== null && parent !== undefined) return `/folder/${parent}`
@@ -724,8 +769,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               v-if="workflow"
               :workflow="workflow"
               :selected-id="taskId"
-              :producer-id="producer?.id ?? null"
-              @select="taskId = $event?.id ?? null"
+              :producer-id="litProducerId"
+              @select="selectTask"
               @discard="discard"
               @copied="router.push(`/folder/${$event}`)"
             />

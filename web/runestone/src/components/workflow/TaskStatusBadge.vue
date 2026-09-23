@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Check, Circle, Pencil, X } from '@/components/icons'
 
-import type { TaskStatus } from '@/data/workflows'
+import { STATUS_LABEL, type TaskStatus } from '@/data/workflows'
 
 /** A task's status, or `draft` for a workflow that has not run (its tasks are not queued). */
 defineProps<{ status: TaskStatus | 'draft' }>()
@@ -23,6 +23,6 @@ const TONE: Record<TaskStatus | 'draft', string> = {
     <X v-else-if="status === 'failed'" :size="11" :stroke-width="2" />
     <Pencil v-else-if="status === 'draft'" :size="10" :stroke-width="2" />
     <Circle v-else :size="9" :stroke-width="2" />
-    {{ status }}
+    {{ status === 'draft' ? 'draft' : STATUS_LABEL[status] }}
   </span>
 </template>

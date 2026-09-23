@@ -61,6 +61,8 @@
   /* Motion & elevation */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --shadow-float: 0 8px 24px rgb(0 0 0 / 0.5);
+  /* A popover beside the control it came from: lifted slightly, not floating. */
+  --shadow-popover: 0 2px 8px rgb(0 0 0 / 0.35);
 }
 
 /* ---------------------------------------------------------------------------
@@ -136,6 +138,7 @@
   /* A shadow is the absence of light. On a white ground the dark theme's half
      black reads as soot. */
   --shadow-float: 0 8px 24px rgb(20 20 30 / 0.12);
+  --shadow-popover: 0 2px 8px rgb(20 20 30 / 0.08);
 }
 
 @layer base {

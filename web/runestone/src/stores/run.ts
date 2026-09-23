@@ -24,6 +24,16 @@ export interface RunTarget {
   folderId: number
   /** Adding to a draft: where the worker goes. */
   add?: AddAt
+  /** The + it was opened from, on screen: the picker pops out beside it. */
+  anchor?: Anchor
+}
+
+/** Where on screen a popover is anchored (a button's box, in viewport pixels). */
+export interface Anchor {
+  top: number
+  bottom: number
+  left: number
+  right: number
 }
 
 export interface LastRunInfo {
