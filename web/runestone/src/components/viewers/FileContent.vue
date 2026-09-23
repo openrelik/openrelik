@@ -33,6 +33,12 @@ import { previewOf, tableKindOf } from '@/utils/preview'
  * can still be read as a table.
  */
 const props = defineProps<{ file: Item }>()
+const emit = defineEmits<{
+  /** The view on screen, for the page's side panel to offer its tab. */
+  view: [view: 'table' | 'text' | 'hex' | undefined]
+  /** The table's row selection, for the side panel to follow. */
+  rowSelected: [selected: boolean]
+}>()
 
 const settings = useSettingsStore()
 const system = useSystemConfig()
@@ -71,6 +77,7 @@ const view = computed<View | undefined>(() =>
   chosen.value && views.value.includes(chosen.value) ? chosen.value : views.value[0],
 )
 const showHex = computed(() => view.value === 'hex')
+watch(view, (now) => emit('view', now), { immediate: true })
 
 /**
  * The file whose table has been opened: the table stays mounted (hidden)
@@ -103,7 +110,10 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-    <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
+    <div
+      class="flex h-7 shrink-0 items-center gap-3 border-b border-border pl-3 text-ink-muted"
+      :class="$slots.end ? 'pr-1' : 'pr-3'"
+    >
       <span class="micro-label">content</span>
       <!-- text or hex: a segmented pick, like the workflow's views -->
       <div
@@ -135,14 +145,18 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
           · too large for a text preview (over {{ formatSize(preview.limit) }})</template
         >
       </span>
-      <label
-        v-if="preview.kind === 'text' && view === 'text' && canRender"
-        class="ml-auto flex cursor-pointer items-center gap-1.5"
-        v-tooltip="'Show the HTML rendered, in the sandbox, rather than its source'"
-      >
-        <input v-model="rendered" type="checkbox" class="size-3.5 accent-brand" />
-        render HTML
-      </label>
+      <div class="ml-auto flex shrink-0 items-center gap-3">
+        <label
+          v-if="preview.kind === 'text' && view === 'text' && canRender"
+          class="flex cursor-pointer items-center gap-1.5"
+          v-tooltip="'Show the HTML rendered, in the sandbox, rather than its source'"
+        >
+          <input v-model="rendered" type="checkbox" class="size-3.5 accent-brand" />
+          render HTML
+        </label>
+        <!-- the page's own controls for this bar's right end (the details' toggle) -->
+        <slot name="end" />
+      </div>
     </div>
 
     <TableViewer
@@ -151,6 +165,7 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       :file-id="file.id"
       :size="file.size ?? 0"
       :kind="tableKind"
+      @row-selected="emit('rowSelected', $event)"
     />
     <HexViewer v-if="showHex" :file-id="file.id" :size="file.size ?? 0" />
 

@@ -90,8 +90,8 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
   {
     title: 'file',
     shortcuts: [
-      { keys: ['←', '→'], does: 'Previous, next file in the folder (also j k)' },
       { keys: ['d'], does: 'Download the file' },
+      { keys: ['i'], does: 'Show or hide the side panel (Details, Inspector)' },
       { keys: ['w'], does: 'Create a workflow on the file' },
       { keys: ['esc', 'cd .'], does: 'Back to the folder' },
     ],
@@ -102,7 +102,8 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['↑', '↓'], does: 'Move through rows; the row shows in full on the right' },
       { keys: ['/'], does: 'Filter rows: text in any cell, or column:value' },
       { keys: ['⌘C'], does: 'Copy the row (tab-separated, or the JSON line)' },
-      { keys: ['esc'], does: 'Clear the row selection' },
+      { keys: ['f'], does: 'Full screen, and back (esc)' },
+      { keys: ['esc'], does: 'Clear the row selection, then leave full screen' },
     ],
   },
   {

@@ -30,10 +30,7 @@ const fields = computed(() =>
 </script>
 
 <template>
-  <aside
-    class="w-[26rem] shrink-0 overflow-y-auto border-l border-border max-xl:hidden"
-    aria-label="Row details"
-  >
+  <div aria-label="Row details">
     <p class="micro-label flex h-7 items-center border-b border-border px-3">
       row <span class="tabular ml-1 normal-case">{{ number.toLocaleString('en-US') }}</span>
     </p>
@@ -59,5 +56,5 @@ const fields = computed(() =>
         </dd>
       </div>
     </dl>
-  </aside>
+  </div>
 </template>

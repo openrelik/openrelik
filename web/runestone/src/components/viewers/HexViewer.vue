@@ -534,17 +534,20 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
       </div>
     </div>
 
-    <HexInspector
-      v-model:little-endian="littleEndian"
-      :cursor="cursor"
-      :selection-start="selectionStart"
-      :selection-length="selectionEnd - selectionStart + 1"
-      :width="width"
-      :readings="cursorReadings"
-      :decodings="selectionDecodings"
-      :decoded-limit="DECODE_MAX"
-      :last="last"
-      @jump="jump"
-    />
+    <!-- shown in the file page's side panel, under "bytes" -->
+    <Teleport defer to="#file-side-bytes">
+      <HexInspector
+        v-model:little-endian="littleEndian"
+        :cursor="cursor"
+        :selection-start="selectionStart"
+        :selection-length="selectionEnd - selectionStart + 1"
+        :width="width"
+        :readings="cursorReadings"
+        :decodings="selectionDecodings"
+        :decoded-limit="DECODE_MAX"
+        :last="last"
+        @jump="jump"
+      />
+    </Teleport>
   </div>
 </template>

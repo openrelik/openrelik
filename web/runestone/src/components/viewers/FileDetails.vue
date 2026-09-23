@@ -36,11 +36,7 @@ const details = computed(() => [
 </script>
 
 <template>
-  <aside
-    class="w-80 shrink-0 overflow-y-auto border-l border-border max-xl:hidden"
-    aria-label="File details"
-  >
-    <p class="micro-label flex h-7 items-center border-b border-border px-3">details</p>
+  <div aria-label="File details">
     <dl class="divide-y divide-border px-3">
       <KeyValueRow label="size" stacked>
         <span class="tabular">{{ formatSize(bytes) }}</span>
@@ -55,5 +51,5 @@ const details = computed(() => [
         stacked
       />
     </dl>
-  </aside>
+  </div>
 </template>

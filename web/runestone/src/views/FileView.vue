@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Download, Workflow } from '@/components/icons'
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { Download, PanelRightOpen, Workflow } from '@/components/icons'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
-import FileDetails from '@/components/viewers/FileDetails.vue'
+import FileSidePanel, { type SideTab } from '@/components/viewers/FileSidePanel.vue'
 import PathBar from '@/components/layout/PathBar.vue'
 import FileContent from '@/components/viewers/FileContent.vue'
 import Button from '@/components/base/Button.vue'
 import { downloadFile } from '@/composables/useDownload'
 import { useFileDetails } from '@/composables/useFileDetails'
 import { useFolderLoader } from '@/composables/useFolderLoader'
+import { useRemembered } from '@/composables/useRemembered'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import StatusBar from '@/components/layout/StatusBar.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
 import { exactSize } from '@/data/files'
-import { childrenOf, findItem, pathTo } from '@/data/folders'
+import { findItem, pathTo } from '@/data/folders'
 import { formatSize } from '@/utils/format'
 import { isTyping } from '@/utils/keyboard'
 import { useModalStore } from '@/stores/modals'
@@ -49,29 +50,54 @@ const loading = computed(() => {
   return status === 'idle' || status === 'loading'
 })
 
+/** The details panel, shown or hidden (`i`): remembered, for every file. */
+const showDetails = useRemembered('openrelik.file.details', true)
+
+/**
+ * The side panel's tab. It follows the work — Inspector when hex opens or a
+ * table row is selected, Details otherwise — until a tab is clicked; that
+ * choice holds until the view changes.
+ */
+const contentView = ref<'table' | 'text' | 'hex' | undefined>(undefined)
+const inspector = computed(() =>
+  contentView.value === 'hex' ? 'bytes' : contentView.value === 'table' ? 'row' : null,
+)
+const chosenTab = ref<SideTab>('details')
+const pinned = ref(false)
+/** Whether the table has a row selected: coming back to it shows that row. */
+const rowSelected = ref(false)
+const sideTab = computed<SideTab>({
+  get: () => (inspector.value ? chosenTab.value : 'details'),
+  set: (tab) => {
+    chosenTab.value = tab
+    pinned.value = true
+  },
+})
+function onView(view: typeof contentView.value) {
+  contentView.value = view
+  pinned.value = false
+  chosenTab.value =
+    view === 'hex' || (view === 'table' && rowSelected.value) ? 'inspector' : 'details'
+}
+// Another file: nothing selected in it yet.
+watch(
+  () => file.value?.id,
+  () => (rowSelected.value = false),
+)
+function onRowSelected(selected: boolean) {
+  rowSelected.value = selected
+  if (pinned.value) return
+  chosenTab.value = selected ? 'inspector' : 'details'
+}
+
 // Hashes and magic are not in the listing: loaded for the file on screen.
 useFileDetails(() => file.value?.id)
 
 /** The file's real parent, whatever the URL claims. */
 const folderId = computed(() => file.value?.parent ?? Number(props.folderId))
 
-/** Files beside this one, in name order: what j and k step through. */
-const siblings = computed(() =>
-  childrenOf(folderId.value)
-    .filter((item) => item.kind === 'file')
-    .sort((a, b) => a.name.localeCompare(b.name)),
-)
-const position = computed(() => siblings.value.findIndex((item) => item.id === file.value?.id))
-const previous = computed(() => siblings.value[position.value - 1])
-const next = computed(() => siblings.value[position.value + 1])
-
 const bytes = computed(() => (file.value ? exactSize(file.value) : 0))
 
-const fileUrl = (id: number) => `/folder/${folderId.value}/file/${id}`
-
-function go(item: { id: number } | undefined) {
-  if (item) router.push(fileUrl(item.id))
-}
 /** Back to the listing, with this file under the cursor. */
 function back() {
   router.push({ path: `/folder/${folderId.value}`, query: { focus: String(file.value?.id) } })
@@ -85,12 +111,9 @@ function openWorkflow() {
 const modalStore = useModalStore()
 
 const KEYS: Record<string, () => void> = {
-  j: () => go(next.value),
-  k: () => go(previous.value),
-  ArrowRight: () => go(next.value),
-  ArrowLeft: () => go(previous.value),
   w: openWorkflow,
   d: () => file.value && downloadFile(file.value.id, file.value.name),
+  i: () => (showDetails.value = !showDetails.value),
   Escape: back,
 }
 
@@ -119,35 +142,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     v-else
     class="explorer flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[12px]"
   >
-    <!-- toolbar: path · prev/next · actions -->
+    <!-- toolbar: path · actions -->
     <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-2 pl-3">
       <PathBar :path="pathTo(file.id)" />
-
-      <div class="flex shrink-0 items-center">
-        <button
-          type="button"
-          class="flex size-7 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-secondary hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40"
-          :disabled="!previous"
-          aria-label="Previous file"
-          v-tooltip="previous ? `${previous.name} (k)` : undefined"
-          @click="go(previous)"
-        >
-          <ChevronLeft :size="14" :stroke-width="1.5" />
-        </button>
-        <span class="tabular px-1 text-ink-muted">{{ position + 1 }}/{{ siblings.length }}</span>
-        <button
-          type="button"
-          class="flex size-7 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-secondary hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40"
-          :disabled="!next"
-          aria-label="Next file"
-          v-tooltip="next ? `${next.name} (j)` : undefined"
-          @click="go(next)"
-        >
-          <ChevronRight :size="14" :stroke-width="1.5" />
-        </button>
-      </div>
-
-      <span class="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 
       <div class="flex shrink-0 items-center gap-1.5">
         <Button
@@ -173,9 +170,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- panes -->
     <div class="flex min-h-0 flex-1">
-      <FileContent :file="file" />
+      <FileContent :file="file" @view="onView" @row-selected="onRowSelected">
+        <!-- the details closed: opened again from the spot the panel's own button had -->
+        <template v-if="!showDetails" #end>
+          <button
+            type="button"
+            class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink max-xl:hidden"
+            aria-label="Show details"
+            v-tooltip="'Show details (i)'"
+            @click="showDetails = true"
+          >
+            <PanelRightOpen :size="13" :stroke-width="1.5" />
+          </button>
+        </template>
+      </FileContent>
 
-      <FileDetails :file="file" />
+      <!-- always mounted (hidden when closed): the viewers send their panels into it -->
+      <FileSidePanel
+        v-show="showDetails"
+        v-model="sideTab"
+        :file="file"
+        :inspector="inspector"
+        @close="showDetails = false"
+      />
     </div>
 
     <!-- status bar -->
@@ -184,7 +201,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <template #hints>
         <KeyHint keys="w" label="workflow" />
         <KeyHint keys="d" label="download" />
-        <KeyHint keys="j k" label="next / prev file" />
+        <KeyHint keys="i" label="side panel" />
         <KeyHint keys="esc" label="back to folder" />
       </template>
     </StatusBar>

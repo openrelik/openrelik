@@ -37,12 +37,9 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
 </script>
 
 <template>
-  <aside
-    class="w-[26rem] shrink-0 overflow-y-auto border-l border-border max-xl:hidden"
-    aria-label="Byte inspector"
-  >
+  <div aria-label="Byte inspector">
     <div class="flex h-7 items-center border-b border-border px-3">
-      <p class="micro-label">inspector</p>
+      <p class="micro-label">byte order</p>
       <!-- byte order: a segmented pick of two -->
       <div
         class="ml-auto flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
@@ -137,5 +134,5 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
         copyable
       />
     </dl>
-  </aside>
+  </div>
 </template>

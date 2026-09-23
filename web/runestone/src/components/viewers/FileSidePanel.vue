@@ -1,0 +1,77 @@
+<script setup lang="ts">
+import { PanelRightClose } from '@/components/icons'
+import FileDetails from '@/components/viewers/FileDetails.vue'
+import type { Item } from '@/data/folders'
+
+/**
+ * The file page's one side panel, in two tabs: Details (the file) and
+ * Inspector — what the viewer on screen has to show beside it: the bytes
+ * under the hex cursor, or the row selected in a table.
+ *
+ * The viewers keep their own state and send their panel here through a
+ * Teleport to `#file-side-bytes` / `#file-side-row`; this panel only decides
+ * where on screen they are. It stays mounted while hidden, so those targets
+ * are always there for the viewers to reach.
+ */
+export type SideTab = 'details' | 'inspector'
+
+defineProps<{
+  file: Item
+  /** What the inspector shows, for the viewer on screen; none (text) means no inspector tab. */
+  inspector: 'bytes' | 'row' | null
+}>()
+const tab = defineModel<SideTab>({ required: true })
+defineEmits<{ close: [] }>()
+</script>
+
+<template>
+  <aside
+    class="flex w-[26rem] shrink-0 flex-col border-l border-border max-xl:hidden"
+    aria-label="Side panel"
+  >
+    <div class="flex h-7 shrink-0 items-stretch border-b border-border pr-1 pl-1">
+      <!-- tabs: the file's details, and the inspector of the viewer on screen -->
+      <div class="flex items-stretch" role="tablist" aria-label="Side panel">
+        <button
+          v-for="option in (inspector ? ['details', 'inspector'] : ['details']) as SideTab[]"
+          :key="option"
+          type="button"
+          role="tab"
+          class="-mb-px flex cursor-pointer items-center border-b-2 px-2 transition-colors duration-120"
+          :class="
+            tab === option
+              ? 'border-brand text-ink'
+              : 'border-transparent text-ink-muted hover:text-ink-secondary'
+          "
+          :aria-selected="tab === option"
+          v-tooltip="
+            option === 'details'
+              ? 'The file: size, hashes, type'
+              : inspector === 'bytes'
+                ? 'The bytes under the cursor, read as numbers, times and text'
+                : 'The selected row in full'
+          "
+          @click="tab = option"
+        >
+          {{ option === 'details' ? 'Details' : 'Inspector' }}
+        </button>
+      </div>
+      <button
+        type="button"
+        class="ml-auto flex size-5 cursor-pointer items-center justify-center self-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink"
+        aria-label="Hide details"
+        v-tooltip="'Hide the panel (i)'"
+        @click="$emit('close')"
+      >
+        <PanelRightClose :size="13" :stroke-width="1.5" />
+      </button>
+    </div>
+
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <FileDetails v-show="tab === 'details'" :file="file" />
+      <!-- where the viewers put their inspectors; always here, shown for the view on screen -->
+      <div v-show="tab === 'inspector' && inspector === 'bytes'" id="file-side-bytes" />
+      <div v-show="tab === 'inspector' && inspector === 'row'" id="file-side-row" />
+    </div>
+  </aside>
+</template>

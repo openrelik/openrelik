@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Maximize, Minimize } from '@/components/icons'
 
 import TableDetail from '@/components/viewers/TableDetail.vue'
 import Button from '@/components/base/Button.vue'
@@ -22,8 +23,15 @@ import { compareKeys, sortKey } from '@/utils/table'
  * (click a column) cover the rows read so far. ↑↓ move through rows and the
  * detail panel shows the row in full; ⌘C copies it. Values are only ever
  * shown as text.
+ *
+ * Full screen (the button, or `f` in the table) moves the same table over
+ * the whole window — nothing is read again or reset; Esc brings it back.
  */
 const props = defineProps<{ fileId: number; size: number; kind: TableKind }>()
+const emit = defineEmits<{
+  /** A row was selected, or the selection cleared: the side panel follows. */
+  rowSelected: [selected: boolean]
+}>()
 
 const ROW_H = 24
 const OVERSCAN = 10
@@ -185,6 +193,10 @@ const cursor = ref<number | null>(null)
 const selectedIndex = computed(() => (cursor.value === null ? undefined : view.value[cursor.value]))
 watch([filter, sort], () => (cursor.value = null))
 watch(
+  () => selectedIndex.value !== undefined,
+  (selected) => emit('rowSelected', selected),
+)
+watch(
   () => props.fileId,
   () => {
     cursor.value = null
@@ -226,6 +238,32 @@ async function copyRow() {
   }
 }
 
+// --- full screen: the same table, moved over the window ---
+
+const fullscreen = ref(false)
+function toggleFullscreen() {
+  fullscreen.value = !fullscreen.value
+  // Keep the keys working where the table now is.
+  requestAnimationFrame(() => scroller.value?.focus({ preventScroll: true }))
+}
+
+/**
+ * While full screen, Esc belongs to the table: it clears the row, then
+ * leaves full screen — never the file page behind it. Caught before the page
+ * sees it; the filter's own Esc (clear the filter) is left alone.
+ */
+function onFullscreenKey(event: KeyboardEvent) {
+  if (!fullscreen.value || event.key !== 'Escape') return
+  if (event.target === filterInput.value) return
+  if (cursor.value !== null) cursor.value = null
+  else fullscreen.value = false
+  event.preventDefault()
+  // Immediate: the file page listens on the window too, for Esc = back.
+  event.stopImmediatePropagation()
+}
+onMounted(() => window.addEventListener('keydown', onFullscreenKey, { capture: true }))
+onUnmounted(() => window.removeEventListener('keydown', onFullscreenKey, { capture: true }))
+
 function onKey(event: KeyboardEvent) {
   const page = Math.max(1, Math.floor(viewHeight.value / ROW_H) - 1)
   const at = cursor.value ?? -1
@@ -241,6 +279,7 @@ function onKey(event: KeyboardEvent) {
   if (moves[event.key] && !mod) moveTo(moves[event.key]!())
   else if (mod && event.key.toLowerCase() === 'c') copyRow()
   else if (!mod && event.key === '/') filterInput.value?.focus()
+  else if (!mod && event.key === 'f') toggleFullscreen()
   else if (event.key === 'Escape' && cursor.value !== null) cursor.value = null
   else return
   event.preventDefault()
@@ -279,178 +318,216 @@ async function loadAll() {
 </script>
 
 <template>
+  <!-- The place in the page; full screen moves what is inside to the body, state and all. -->
   <div class="flex min-h-0 min-w-0 flex-1">
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <!-- status, filter -->
-      <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
-        <span class="tabular truncate">
-          {{ rowsLabel }} · {{ columns.length }} columns
-          <template v-if="kind !== 'jsonl'">
-            · {{ table.delimiter.value === '\t' ? 'tab' : `"${table.delimiter.value}"` }}-separated
-          </template>
-        </span>
-        <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{
-          notice
-        }}</span>
-        <span v-else-if="table.error.value" class="truncate text-danger" role="alert">{{
-          table.error.value
-        }}</span>
-        <span v-else-if="showReading" class="flex items-center gap-2 truncate">
-          <span class="tabular"
-            >reading… {{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }}</span
-          >
-          <button
-            type="button"
-            class="cursor-pointer text-brand hover:underline"
-            v-tooltip="'Stop reading; the rows read so far stay'"
-            @click="table.stop()"
-          >
-            stop
-          </button>
-        </span>
-        <span v-else-if="table.capped.value" class="flex min-w-0 items-center gap-2">
-          <span class="tabular truncate"
-            >{{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }} read</span
-          >
-          <!-- two choices: a step, or the rest -->
-          <Button
-            size="row"
-            :tooltip="`Read the next ${moreLabel}`"
-            class="shrink-0"
-            @click="table.loadMore()"
-          >
-            Load {{ moreLabel }} more
-          </Button>
-          <Button
-            size="row"
-            :tooltip="`Read the rest: ${formatSize(remaining)}, parsed and kept in this page`"
-            class="shrink-0"
-            @click="loadAll"
-          >
-            Load full file
-          </Button>
-        </span>
-        <span v-if="sortedPartly" class="shrink-0 text-warning">sorted: rows read so far</span>
-        <input
-          ref="filterInput"
-          v-model="filterText"
-          type="text"
-          spellcheck="false"
-          autocomplete="off"
-          placeholder="filter rows (/)"
-          aria-label="Filter rows: text, or column:value"
-          class="field ml-auto h-5 w-52 shrink-0 text-[11px]"
-          v-tooltip="'Text in any cell, or column:value'"
-          @keydown.esc.stop="((filterText = ''), scroller?.focus())"
-          @keydown.enter.prevent="scroller?.focus()"
-        />
-      </div>
-
-      <!-- the table: only the rows in view exist -->
+    <Teleport to="body" :disabled="!fullscreen">
       <div
-        ref="scroller"
-        tabindex="0"
-        class="tabular relative min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
-        role="grid"
-        :aria-rowcount="view.length"
-        aria-label="File rows"
-        @scroll="onScroll"
-        @keydown="onKey"
+        :class="
+          fullscreen
+            ? 'fixed inset-0 z-40 flex bg-surface text-[12px]'
+            : 'flex min-h-0 min-w-0 flex-1'
+        "
+        :role="fullscreen ? 'dialog' : undefined"
+        :aria-label="fullscreen ? 'Table, full screen' : undefined"
       >
-        <div :style="{ width: `${totalWidth}px` }">
-          <!-- header -->
-          <div class="sticky top-0 z-10 flex h-6 border-b border-border bg-sunken text-[11px]">
-            <span
-              class="sticky left-0 z-10 shrink-0 border-r border-border bg-sunken px-2 text-right text-ink-muted"
-              :style="{ width: `${NUMBER_W * CH + 16}px` }"
-              >#</span
-            >
-            <span
-              v-for="(name, index) in columns"
-              :key="index"
-              class="relative flex shrink-0 cursor-pointer items-center gap-1 border-r border-border/60 px-2 font-medium text-ink-secondary select-none hover:text-ink"
-              :class="{ 'justify-end': types[index] === 'number' }"
-              :style="{ width: `${widths[index]}px` }"
-              role="columnheader"
-              :aria-sort="
-                sort?.column === index ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'
-              "
-              v-tooltip="`${name}: sort (${types[index]})`"
-              @click="sortBy(index)"
-            >
-              <span class="truncate">{{ name }}</span>
-              <span v-if="sort?.column === index" class="shrink-0 text-brand">{{
-                sort.dir === 1 ? '↑' : '↓'
-              }}</span>
-              <!-- drag to resize -->
-              <span
-                class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize"
-                aria-hidden="true"
-                @click.stop
-                @pointerdown.stop="startResize($event, index)"
-                @pointermove="onResize"
-                @pointerup="endResize"
-              />
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+          <!-- status, filter -->
+          <div
+            class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted"
+          >
+            <span class="tabular truncate">
+              {{ rowsLabel }} · {{ columns.length }} columns
+              <template v-if="kind !== 'jsonl'">
+                ·
+                {{
+                  table.delimiter.value === '\t' ? 'tab' : `"${table.delimiter.value}"`
+                }}-separated
+              </template>
             </span>
+            <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{
+              notice
+            }}</span>
+            <span v-else-if="table.error.value" class="truncate text-danger" role="alert">{{
+              table.error.value
+            }}</span>
+            <span v-else-if="showReading" class="flex items-center gap-2 truncate">
+              <span class="tabular"
+                >reading… {{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }}</span
+              >
+              <button
+                type="button"
+                class="cursor-pointer text-brand hover:underline"
+                v-tooltip="'Stop reading; the rows read so far stay'"
+                @click="table.stop()"
+              >
+                stop
+              </button>
+            </span>
+            <span v-else-if="table.capped.value" class="flex min-w-0 items-center gap-2">
+              <span class="tabular truncate"
+                >{{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }} read</span
+              >
+              <!-- two choices: a step, or the rest -->
+              <Button
+                size="row"
+                :tooltip="`Read the next ${moreLabel}`"
+                class="shrink-0"
+                @click="table.loadMore()"
+              >
+                Load {{ moreLabel }} more
+              </Button>
+              <Button
+                size="row"
+                :tooltip="`Read the rest: ${formatSize(remaining)}, parsed and kept in this page`"
+                class="shrink-0"
+                @click="loadAll"
+              >
+                Load full file
+              </Button>
+            </span>
+            <span v-if="sortedPartly" class="shrink-0 text-warning">sorted: rows read so far</span>
+            <input
+              ref="filterInput"
+              v-model="filterText"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="filter rows (/)"
+              aria-label="Filter rows: text, or column:value"
+              class="field ml-auto h-5 w-52 shrink-0 text-[11px]"
+              v-tooltip="'Text in any cell, or column:value'"
+              @keydown.esc.stop="((filterText = ''), scroller?.focus())"
+              @keydown.enter.prevent="scroller?.focus()"
+            />
+            <button
+              type="button"
+              class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+              :aria-label="fullscreen ? 'Exit full screen' : 'Full screen'"
+              v-tooltip="fullscreen ? 'Exit full screen (esc)' : 'Full screen (f)'"
+              @click="toggleFullscreen"
+            >
+              <component :is="fullscreen ? Minimize : Maximize" :size="13" :stroke-width="1.5" />
+            </button>
           </div>
 
-          <!-- body: a spacer as tall as every row, the rows in view placed in it -->
-          <div class="relative" :style="{ height: `${view.length * ROW_H}px` }">
-            <div
-              v-for="line in visible"
-              :key="line.index"
-              class="absolute inset-x-0 flex cursor-default border-b border-border/40"
-              :class="
-                line.position === cursor
-                  ? 'bg-brand-selected'
-                  : rows[line.index]?.error
-                    ? 'bg-danger-tint/40 hover:bg-sunken'
-                    : 'hover:bg-sunken'
-              "
-              :style="{ top: `${line.position * ROW_H}px`, height: `${ROW_H}px` }"
-              @click="((cursor = line.position), scroller?.focus({ preventScroll: true }))"
-            >
-              <span
-                class="sticky left-0 shrink-0 border-r border-border bg-inherit px-2 text-right leading-6 text-ink-muted"
-                :class="line.position === cursor ? 'bg-brand-selected' : 'bg-surface'"
-                :style="{ width: `${NUMBER_W * CH + 16}px` }"
-                >{{ (line.index + 1).toLocaleString('en-US') }}</span
-              >
-              <span
-                v-for="(name, index) in columns"
-                :key="index"
-                class="shrink-0 truncate border-r border-border/40 px-2 leading-6"
-                :class="[
-                  types[index] === 'number' || types[index] === 'date' ? 'text-right' : '',
-                  rows[line.index]?.error && index === 0 ? 'text-danger' : 'text-ink',
-                ]"
-                :style="{ width: `${widths[index]}px` }"
-                >{{ cellText(line.cells[index] ?? '') }}</span
-              >
+          <!-- the table: only the rows in view exist -->
+          <div
+            ref="scroller"
+            tabindex="0"
+            class="tabular relative min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
+            role="grid"
+            :aria-rowcount="view.length"
+            aria-label="File rows"
+            @scroll="onScroll"
+            @keydown="onKey"
+          >
+            <div :style="{ width: `${totalWidth}px` }">
+              <!-- header -->
+              <div class="sticky top-0 z-10 flex h-6 border-b border-border bg-sunken text-[11px]">
+                <span
+                  class="sticky left-0 z-10 shrink-0 border-r border-border bg-sunken px-2 text-right text-ink-muted"
+                  :style="{ width: `${NUMBER_W * CH + 16}px` }"
+                  >#</span
+                >
+                <span
+                  v-for="(name, index) in columns"
+                  :key="index"
+                  class="relative flex shrink-0 cursor-pointer items-center gap-1 border-r border-border/60 px-2 font-medium text-ink-secondary select-none hover:text-ink"
+                  :class="{ 'justify-end': types[index] === 'number' }"
+                  :style="{ width: `${widths[index]}px` }"
+                  role="columnheader"
+                  :aria-sort="
+                    sort?.column === index ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'
+                  "
+                  v-tooltip="`${name}: sort (${types[index]})`"
+                  @click="sortBy(index)"
+                >
+                  <span class="truncate">{{ name }}</span>
+                  <span v-if="sort?.column === index" class="shrink-0 text-brand">{{
+                    sort.dir === 1 ? '↑' : '↓'
+                  }}</span>
+                  <!-- drag to resize -->
+                  <span
+                    class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize"
+                    aria-hidden="true"
+                    @click.stop
+                    @pointerdown.stop="startResize($event, index)"
+                    @pointermove="onResize"
+                    @pointerup="endResize"
+                  />
+                </span>
+              </div>
+
+              <!-- body: a spacer as tall as every row, the rows in view placed in it -->
+              <div class="relative" :style="{ height: `${view.length * ROW_H}px` }">
+                <div
+                  v-for="line in visible"
+                  :key="line.index"
+                  class="absolute inset-x-0 flex cursor-default border-b border-border/40"
+                  :class="
+                    line.position === cursor
+                      ? 'bg-brand-selected'
+                      : rows[line.index]?.error
+                        ? 'bg-danger-tint/40 hover:bg-sunken'
+                        : 'hover:bg-sunken'
+                  "
+                  :style="{ top: `${line.position * ROW_H}px`, height: `${ROW_H}px` }"
+                  @click="((cursor = line.position), scroller?.focus({ preventScroll: true }))"
+                >
+                  <span
+                    class="sticky left-0 shrink-0 border-r border-border bg-inherit px-2 text-right leading-6 text-ink-muted"
+                    :class="line.position === cursor ? 'bg-brand-selected' : 'bg-surface'"
+                    :style="{ width: `${NUMBER_W * CH + 16}px` }"
+                    >{{ (line.index + 1).toLocaleString('en-US') }}</span
+                  >
+                  <span
+                    v-for="(name, index) in columns"
+                    :key="index"
+                    class="shrink-0 truncate border-r border-border/40 px-2 leading-6"
+                    :class="[
+                      types[index] === 'number' || types[index] === 'date' ? 'text-right' : '',
+                      rows[line.index]?.error && index === 0 ? 'text-danger' : 'text-ink',
+                    ]"
+                    :style="{ width: `${widths[index]}px` }"
+                    >{{ cellText(line.cells[index] ?? '') }}</span
+                  >
+                </div>
+              </div>
+              <p v-if="!view.length && !table.reading.value" class="px-3 py-6 text-ink-muted">
+                {{ filter ? 'No rows match the filter.' : 'No rows.' }}
+              </p>
             </div>
           </div>
-          <p v-if="!view.length && !table.reading.value" class="px-3 py-6 text-ink-muted">
-            {{ filter ? 'No rows match the filter.' : 'No rows.' }}
-          </p>
+
+          <div
+            class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
+          >
+            <KeyHint keys="↑↓" label="rows" />
+            <KeyHint keys="/" label="filter" />
+            <KeyHint keys="⌘C" label="copy row" />
+            <KeyHint keys="f" label="full screen" />
+            <span>click a column to sort</span>
+          </div>
         </div>
-      </div>
 
-      <div
-        class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
-      >
-        <KeyHint keys="↑↓" label="rows" />
-        <KeyHint keys="/" label="filter" />
-        <KeyHint keys="⌘C" label="copy row" />
-        <span>click a column to sort</span>
+        <!-- The selected row: in the file page's side panel, under "row"; full
+             screen covers that panel, so there it stays beside the table. -->
+        <Teleport defer to="#file-side-row" :disabled="fullscreen">
+          <div
+            v-if="!fullscreen || selectedIndex !== undefined"
+            :class="{ 'w-[26rem] shrink-0 overflow-y-auto border-l border-border': fullscreen }"
+          >
+            <TableDetail
+              v-if="selectedIndex !== undefined && rows[selectedIndex]"
+              :row="rows[selectedIndex]!"
+              :number="selectedIndex + 1"
+              :columns="columns"
+              :cells="table.cellsOf(rows[selectedIndex]!)"
+            />
+            <p v-else class="px-3 py-3 text-ink-muted">Select a row to see it in full.</p>
+          </div>
+        </Teleport>
       </div>
-    </div>
-
-    <TableDetail
-      v-if="selectedIndex !== undefined && rows[selectedIndex]"
-      :row="rows[selectedIndex]!"
-      :number="selectedIndex + 1"
-      :columns="columns"
-      :cells="table.cellsOf(rows[selectedIndex]!)"
-    />
+    </Teleport>
   </div>
 </template>
