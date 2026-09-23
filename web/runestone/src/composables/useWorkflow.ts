@@ -31,9 +31,11 @@ import {
   findTask,
   groupOf,
   isActive,
+  mergeProblem,
   upsertWorkflow,
   workflowOf,
   type Task,
+  type TaskGroup,
   type Workflow,
 } from '@/data/workflows'
 import { count } from '@/utils/format'
@@ -249,27 +251,57 @@ export function addTask(
   return task
 }
 
-/** The last removal from a draft, while it can still be undone. */
-export interface Removal {
+/** A recent edit to a draft (a removal, a split), while it can still be undone. */
+export interface Edit {
   folderId: number
-  /** "Strings", or "Strings and 3 after it". */
+  /** What was done: "removed Strings and 3 after it", "split 2 tasks into a new group". */
   label: string
   undo: () => void
+  /** Whether undo can still revert it; later edits can make it moot. */
+  undoable: () => boolean
 }
 
-/** How long after the last removal the recent ones can still be undone. */
+/** How long after the last edit the recent ones can still be undone. */
 const UNDO_MS = 10_000
 /**
- * Recent removals, oldest first: after a node is removed the next slides
- * under the pointer, so two quick clicks remove two.
+ * Recent edits, oldest first: after a node is removed the next slides under
+ * the pointer, so two quick clicks remove two.
  */
-const removals = shallowRef<Removal[]>([])
-let removalTimer: ReturnType<typeof setTimeout> | undefined
+const edits = shallowRef<Edit[]>([])
+let editTimer: ReturnType<typeof setTimeout> | undefined
 
-/** The removal that undo puts back next, if any; reactive. */
-export const lastRemoval: Readonly<Ref<Removal | null>> = computed(
-  () => removals.value.at(-1) ?? null,
+/** The edit that undo reverts next, if any; reactive. */
+export const lastEdit: Readonly<Ref<Edit | null>> = computed(
+  () => [...edits.value].reverse().find((edit) => edit.undoable()) ?? null,
 )
+
+/** Keeps an edit undoable for a while. */
+function record(
+  folderId: number,
+  label: string,
+  revert: () => void,
+  undoable: () => boolean = () => true,
+): Edit {
+  const edit: Edit = {
+    folderId,
+    label,
+    undoable,
+    undo: () => {
+      edits.value = edits.value.filter((entry) => entry !== edit)
+      revert()
+    },
+  }
+  edits.value = [...edits.value, edit]
+  clearTimeout(editTimer)
+  editTimer = setTimeout(dismissEdits, UNDO_MS)
+  return edit
+}
+
+/** Forgets the edits that could be undone. */
+export function dismissEdits(): void {
+  clearTimeout(editTimer)
+  edits.value = []
+}
 
 /** Where a removed task was, to put it back. */
 interface Place {
@@ -289,7 +321,7 @@ interface Place {
  * group's only task. Returns the removal, which `undo()` puts back where it
  * was for a while.
  */
-export function removeTask(folderId: number, taskId: string): Removal | null {
+export function removeTask(folderId: number, taskId: string): Edit | null {
   const workflow = editable(folderId)
   const placed = workflow && groupOf(workflow, taskId)
   if (!workflow || !placed) return null
@@ -320,24 +352,8 @@ export function removeTask(folderId: number, taskId: string): Removal | null {
   scheduleSave(workflow)
 
   const after = allTasks(task.groups).length
-  const done: Removal = {
-    folderId,
-    label: after ? `${task.name} and ${count(after, 'task')} after it` : task.name,
-    undo: () => {
-      removals.value = removals.value.filter((entry) => entry !== done)
-      restore(folderId, place, task)
-    },
-  }
-  removals.value = [...removals.value, done]
-  clearTimeout(removalTimer)
-  removalTimer = setTimeout(dismissRemovals, UNDO_MS)
-  return done
-}
-
-/** Forgets the removals that could be undone. */
-export function dismissRemovals(): void {
-  clearTimeout(removalTimer)
-  removals.value = []
+  const what = after ? `${task.name} and ${count(after, 'task')} after it` : task.name
+  return record(folderId, `removed ${what}`, () => restore(folderId, place, task))
 }
 
 /**
@@ -362,6 +378,156 @@ function restore(folderId: number, place: Place, task: Task): void {
     const unjoined = place.unjoinedId ? group.tasks.findIndex((t) => t.id === place.unjoinedId) : -1
     if (unjoined !== -1 && !group.join) group.join = group.tasks.splice(unjoined, 1)[0]
     group.tasks.splice(Math.min(place.at, group.tasks.length), 0, task)
+  }
+  scheduleSave(workflow)
+}
+
+/**
+ * Moves some of a group's tasks into a new group of their own, next to it:
+ * above it when they were the group's top tasks, below it otherwise. They still run on the same input as before, and the new group can have
+ * a join of its own — how a chord is made from part of a group. Takes some,
+ * not all, of one group's tasks. Returns the new group; undo puts them back.
+ */
+export function splitGroup(folderId: number, taskIds: string[]): TaskGroup | null {
+  const workflow = editable(folderId)
+  const placed = workflow && taskIds[0] ? groupOf(workflow, taskIds[0]) : undefined
+  if (!workflow || !placed) return null
+  const { group, parent } = placed
+  const picked = group.tasks.filter((task) => taskIds.includes(task.id))
+  if (picked.length !== new Set(taskIds).size || picked.length >= group.tasks.length) return null
+
+  const owner = parent ?? workflow
+  // Where each went from, to put them back in order.
+  const from = picked.map((task) => [task.id, group.tasks.indexOf(task)] as const)
+  const split: TaskGroup = { id: hexId(), tasks: picked }
+  // Tasks taken off the top of the group become a group above it, so nothing
+  // jumps; any other pick (the bottom, or scattered tasks) goes below.
+  const fromTop = from.every(([, index], n) => index === n)
+  const at = owner.groups.indexOf(group) + (fromTop ? 0 : 1)
+  group.tasks = group.tasks.filter((task) => !picked.includes(task))
+  owner.groups.splice(at, 0, split)
+  scheduleSave(workflow)
+
+  const splitOf = () => {
+    const current = workflowOf(folderId)
+    const owner = current && (parent ? findTask(current, parent.id) : current)
+    return owner?.groups.find((g) => g.id === split.id)
+  }
+  record(
+    folderId,
+    `split ${count(picked.length, 'task')} into a new group`,
+    () => unsplit(folderId, parent?.id ?? null, group.id, split.id, from),
+    // Not once the new group has a join of its own: that is what it was for.
+    () => {
+      const current = splitOf()
+      return !!current && !current.join
+    },
+  )
+  return owner.groups.find((g) => g.id === split.id) ?? null
+}
+
+/**
+ * Undoes a split: the tasks go back to their group, where they were. Tasks
+ * added to the new group since stay in it; it is left alone once it has a
+ * join of its own.
+ */
+function unsplit(
+  folderId: number,
+  parentId: string | null,
+  groupId: string,
+  splitId: string,
+  from: (readonly [string, number])[],
+): void {
+  const workflow = editable(folderId)
+  const owner = workflow && (parentId === null ? workflow : findTask(workflow, parentId))
+  const group = owner?.groups.find((g) => g.id === groupId)
+  const split = owner?.groups.find((g) => g.id === splitId)
+  if (!workflow || !owner || !group || !split || split.join) return
+  for (const [id, index] of [...from].sort((a, b) => a[1] - b[1])) {
+    const at = split.tasks.findIndex((task) => task.id === id)
+    if (at === -1) continue
+    group.tasks.splice(Math.min(index, group.tasks.length), 0, split.tasks.splice(at, 1)[0]!)
+  }
+  if (!split.tasks.length) owner.groups.splice(owner.groups.indexOf(split), 1)
+  scheduleSave(workflow)
+}
+
+/** A group merged into another, as it was: to take it back out. */
+interface Merged {
+  id: string
+  /** Where it sat among its parent's groups. */
+  index: number
+  taskIds: string[]
+  joinId?: string
+}
+
+/**
+ * Merges sibling groups into the upper one: the others' tasks follow its
+ * own, in order, and the groups in between stay where they are. A join, if
+ * one of them has it, stays and now waits for them all — refused where that
+ * is not allowed (`mergeProblem`). Returns the merged group; undo takes the
+ * others back out.
+ */
+export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | null {
+  const workflow = editable(folderId)
+  if (!workflow) return null
+  const placed = everyGroup(workflow).filter(({ group }) => groupIds.includes(group.id))
+  const parent = placed[0]?.parent ?? null
+  if (placed.length !== new Set(groupIds).size || placed.some((p) => p.parent !== parent))
+    return null
+  if (mergeProblem(placed.map(({ group }) => group))) return null
+
+  const owner = parent ?? workflow
+  const [target, ...others] = placed
+    .map(({ group }) => group)
+    .sort((a, b) => owner.groups.indexOf(a) - owner.groups.indexOf(b))
+  const merged: Merged[] = others.map((group) => ({
+    id: group.id,
+    index: owner.groups.indexOf(group),
+    taskIds: group.tasks.map((task) => task.id),
+    joinId: group.join?.id,
+  }))
+  for (const group of others) {
+    target!.tasks.push(...group.tasks)
+    if (group.join) target!.join = group.join
+    owner.groups.splice(owner.groups.indexOf(group), 1)
+  }
+  scheduleSave(workflow)
+
+  record(
+    folderId,
+    `merged ${count(placed.length, 'group')}`,
+    () => unmerge(folderId, parent?.id ?? null, target!.id, merged),
+    () => !!findGroup(folderId, parent?.id ?? null, target!.id),
+  )
+  return target!
+}
+
+/** A group among a task's (or the inputs') groups, by id, in the current draft. */
+function findGroup(folderId: number, parentId: string | null, groupId: string) {
+  const current = workflowOf(folderId)
+  const owner = current && (parentId === null ? current : findTask(current, parentId))
+  return owner?.groups.find((group) => group.id === groupId)
+}
+
+/** Undoes a merge: each merged group comes back where it was, with its tasks and join. */
+function unmerge(folderId: number, parentId: string | null, targetId: string, merged: Merged[]) {
+  const workflow = editable(folderId)
+  const owner = workflow && (parentId === null ? workflow : findTask(workflow, parentId))
+  const target = owner?.groups.find((group) => group.id === targetId)
+  if (!workflow || !owner || !target) return
+  for (const { id, index, taskIds, joinId } of [...merged].sort((a, b) => a.index - b.index)) {
+    const tasks = taskIds
+      .map((taskId) => target.tasks.find((task) => task.id === taskId))
+      .filter((task): task is Task => !!task)
+    if (!tasks.length) continue
+    target.tasks = target.tasks.filter((task) => !tasks.includes(task))
+    const group: TaskGroup = { id, tasks }
+    if (joinId && target.join?.id === joinId) {
+      group.join = target.join
+      delete target.join
+    }
+    owner.groups.splice(Math.min(index, owner.groups.length), 0, group)
   }
   scheduleSave(workflow)
 }

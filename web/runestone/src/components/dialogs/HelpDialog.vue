@@ -80,7 +80,11 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['a'], does: 'Add a worker to a draft workflow, after the selected task' },
       { keys: ['⇧⏎'], does: 'Run a draft workflow' },
       { keys: ['del', '⌫'], does: 'Remove the selected task from a draft workflow' },
-      { keys: ['⌘Z'], does: 'Put back the task just removed' },
+      { keys: ['⌘Z'], does: 'Undo the last removal, split or merge in a draft workflow' },
+      {
+        keys: ['⌘click', '⇧click'],
+        does: 'In a draft flowchart: select more tasks of a group to split them out, or more groups (click their box) to merge them',
+      },
     ],
   },
   {

@@ -132,6 +132,24 @@ export const canJoin = (group: TaskGroup): boolean =>
   !group.join && group.tasks.length > 1 && group.tasks.every((task) => !task.groups.length)
 
 /**
+ * Why these sibling groups cannot be merged into one, or null when they can.
+ * Merging only changes what a join waits for, so it is refused exactly when
+ * the merged group could not keep its join: two joins, or a join over tasks
+ * that have workers after them (a join needs a free group, see `canJoin`).
+ */
+export function mergeProblem(groups: TaskGroup[]): string | null {
+  if (groups.length < 2) return 'Pick two or more groups.'
+  const joined = groups.filter((group) => group.join)
+  if (joined.length > 1) {
+    return 'Can’t merge: more than one of these groups has a worker after all of its tasks. Remove all but one first.'
+  }
+  if (joined.length && groups.some((group) => group.tasks.some((task) => task.groups.length))) {
+    return 'Can’t merge: one group has workers after its tasks, and a worker after all of a group needs nothing after them. Remove that worker first.'
+  }
+  return null
+}
+
+/**
  * Tasks nothing can be chained after: the members of a group a join waits
  * for — the join is what comes after that group. More can join the group.
  */

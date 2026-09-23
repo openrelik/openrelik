@@ -12,8 +12,11 @@ import {
   Plus,
   X,
 } from '@/components/icons'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+
+import Button from '@/components/base/Button.vue'
+import KeyHint from '@/components/base/KeyHint.vue'
 
 import { findItem } from '@/data/folders'
 import { STACK_MIN, useGroupStacks } from '@/composables/useGroupStacks'
@@ -21,6 +24,8 @@ import type { AddAt } from '@/composables/useWorkflow'
 import {
   canJoin,
   everyGroup,
+  groupOf,
+  mergeProblem,
   unchainable,
   type Task,
   type TaskGroup,
@@ -28,6 +33,7 @@ import {
   type Workflow,
 } from '@/data/workflows'
 import { count, formatDuration, formatSize } from '@/utils/format'
+import { isTyping } from '@/utils/keyboard'
 import { revealIn } from '@/utils/scroll'
 
 /**
@@ -74,6 +80,10 @@ const emit = defineEmits<{
   add: [at: AddAt]
   /** Remove this task, and the tasks after it, from the draft. */
   remove: [taskId: string]
+  /** Move these tasks out of their group into a new one; `join`: then add a worker after them. */
+  split: [taskIds: string[]]
+  /** Merge these sibling groups into one. */
+  merge: [groupIds: string[]]
 }>()
 
 const NODE_W = 196
@@ -83,8 +93,11 @@ const COL_GAP = 64
 const ROW_GAP = 16
 const PAD = 32
 const GROUP_PAD = ROW_GAP
-/** Clear space between two groups (or a group and a join) that share a column. */
+/** Clear space around a group's box in its column, from another group or a join. */
 const GROUP_SPACING = 24
+/** Between two blocks in a column: a row's gap, unless one is a box that needs clear space. */
+const gapBetween = (aBoxed: boolean, bBoxed: boolean) =>
+  aBoxed || bBoxed ? GROUP_SPACING : ROW_GAP
 
 interface Node {
   key: string
@@ -241,11 +254,18 @@ const layout = computed(() => {
   }
 
   // 2. The heights: each column keeps where it is free from.
-  const free: number[] = []
+  // Per column: where its last block ends, and whether that block is a box.
+  const end: { at: number; boxed: boolean }[] = []
   let bottom = PAD + NODE_H
-  const take = (column: number, from: number, height: number) => {
-    const top = Math.max(from, free[column] ?? PAD)
-    free[column] = top + height + GROUP_SPACING
+  /**
+   * Room in a column for a block of `height`, from `from` down. Boxes keep
+   * clear of what is next to them; plain tasks only keep a row's gap, so a
+   * lone follow-on task stays level with the task before it.
+   */
+  const take = (column: number, from: number, height: number, boxed = false) => {
+    const last = end[column]
+    const top = Math.max(from, last ? last.at + gapBetween(last.boxed, boxed) : PAD)
+    end[column] = { at: top + height, boxed }
     bottom = Math.max(bottom, top + height)
     return top
   }
@@ -255,11 +275,13 @@ const layout = computed(() => {
   const placeGroups = (groups: GroupNode[], column: number, center: number | null) => {
     if (!groups.length) return
     const blocks = groups.map(blockOf)
-    const total =
-      blocks.reduce((sum, height) => sum + height, 0) + GROUP_SPACING * (groups.length - 1)
+    const gaps = groups
+      .slice(1)
+      .reduce((sum, group, index) => sum + gapBetween(boxed(groups[index]!), boxed(group)), 0)
+    const total = blocks.reduce((sum, height) => sum + height, 0) + gaps
     let from = center === null ? -Infinity : center - total / 2
     groups.forEach((group, index) => {
-      const top = take(column, from, blocks[index]!) + padOf(group)
+      const top = take(column, from, blocks[index]!, boxed(group)) + padOf(group)
       group.members.forEach((member, at) => (member.top = top + at * (NODE_H + ROW_GAP)))
       // The next group follows right below, where the column is now free.
       from = -Infinity
@@ -302,8 +324,168 @@ const layout = computed(() => {
 /** A click on empty canvas, not on a node or a control, clears the selection. */
 function clickCanvas(event: MouseEvent) {
   if (event.target instanceof Element && event.target.closest('button, a, input')) return
+  letGo()
   if (props.selectedId) emit('select', null)
 }
+
+// --- picking tasks (to split) and groups (to merge) ---------------------------
+
+/** ⌘, Ctrl or Shift held: a click picks rather than selects. */
+const picking = (event: MouseEvent) => event.metaKey || event.ctrlKey || event.shiftKey
+
+/**
+ * Tasks picked with ⌘/Ctrl/Shift-click in a draft, all from one group: they
+ * can be split out into a group of their own, to give them a join of their
+ * own. A task already selected joins the pick; a plain click starts over.
+ */
+const picked = ref<string[]>([])
+
+/**
+ * Groups picked with ⌘/Ctrl/Shift-click on their box (or on a lone task, or a
+ * stacked card), all under one parent: they can be merged into one. Picking
+ * tasks and picking groups replace each other.
+ */
+const pickedGroups = ref<string[]>([])
+
+const parentIdOf = (groupId: string) =>
+  everyGroup(props.workflow).find(({ group }) => group.id === groupId)?.parent?.id ?? null
+
+function pickGroup(groupId: string) {
+  // Groups under another parent get another input: picking one starts over.
+  const parent = parentIdOf(groupId)
+  const siblings = pickedGroups.value.filter((id) => parentIdOf(id) === parent)
+  pickedGroups.value = siblings.includes(groupId)
+    ? siblings.filter((id) => id !== groupId)
+    : [...siblings, groupId]
+  picked.value = []
+  if (props.selectedId) emit('select', null)
+}
+
+function letGo() {
+  picked.value = []
+  pickedGroups.value = []
+}
+
+function clickTask(event: MouseEvent, task: Task) {
+  const placed = groupOf(props.workflow, task.id)
+  const member = placed && placed.group.join?.id !== task.id
+  if (!props.editable || !member || !picking(event)) {
+    letGo()
+    emit('select', task)
+    return
+  }
+  // A lone task is its group: picking it picks the group, to merge it into another.
+  if (placed.group.tasks.length === 1) return pickGroup(placed.group.id)
+  const inGroup = (id: string) => placed.group.tasks.some((t) => t.id === id)
+  let next = picked.value.filter(inGroup)
+  if (!next.length && props.selectedId && inGroup(props.selectedId)) next = [props.selectedId]
+  picked.value = next.includes(task.id) ? next.filter((id) => id !== task.id) : [...next, task.id]
+  pickedGroups.value = []
+  if (props.selectedId) emit('select', null)
+}
+
+/**
+ * A click on a box's padding selects its group, on its own; with ⌘/⇧ it adds
+ * the group to (or takes it from) those selected, to merge them.
+ */
+function clickBox(event: MouseEvent, groupId: string) {
+  if (!props.editable) return
+  event.stopPropagation()
+  if (picking(event)) return pickGroup(groupId)
+  picked.value = []
+  pickedGroups.value = [groupId]
+  if (props.selectedId) emit('select', null)
+}
+
+/** A stacked card opens on click, and is picked as its group on ⌘/⇧-click. */
+function clickStack(event: MouseEvent, groupId: string) {
+  if (props.editable && picking(event)) pickGroup(groupId)
+  else openStack(groupId)
+}
+
+/** Lone tasks whose group is picked: drawn picked, like a picked box. */
+const pickedLone = computed(
+  () =>
+    new Set(
+      layout.value.groups
+        .filter((placed) => !boxed(placed) && pickedGroups.value.includes(placed.group.id))
+        .flatMap(({ group }) => group.tasks.map((task) => task.id)),
+    ),
+)
+const isPicked = (taskId: string) => picked.value.includes(taskId) || pickedLone.value.has(taskId)
+
+/** Where an offer opens: under a group's box, or its lone task. */
+const under = (placed: GroupNode) => ({
+  left: x(placed.members[0]!) - padOf(placed),
+  top: y(placed.members.at(-1)!) + NODE_H + padOf(placed) + 12,
+})
+
+/** What the picked tasks can become, and where the offer shows: under their group's box. */
+const splitOffer = computed(() => {
+  if (!props.editable || !picked.value.length) return null
+  const placed = layout.value.groups.find(({ group }) =>
+    group.tasks.some((task) => task.id === picked.value[0]),
+  )
+  if (!placed || !boxed(placed)) return null
+  const tasks = placed.group.tasks.filter((task) => picked.value.includes(task.id))
+  return {
+    count: tasks.length,
+    // Splitting out every task would only move the whole group.
+    whole: tasks.length >= placed.group.tasks.length,
+    ...under(placed),
+  }
+})
+
+/** Whether the picked groups can merge, and where the offer shows: under the lowest of them. */
+const mergeOffer = computed(() => {
+  // One selected group needs no offer: its outline says it is selected, and
+  // an offer under it would cover the group below, the next one to click.
+  if (!props.editable || pickedGroups.value.length < 2) return null
+  const placed = layout.value.groups.filter(({ group }) => pickedGroups.value.includes(group.id))
+  if (placed.length < 2) return null
+  const lowest = placed.reduce((low, next) =>
+    y(next.members.at(-1)!) > y(low.members.at(-1)!) ? next : low,
+  )
+  return {
+    count: placed.length,
+    problem: mergeProblem(placed.map(({ group }) => group)),
+    ...under(lowest),
+  }
+})
+
+/** The canvas grows to hold an offer when it opens under the lowest group. */
+const OFFER_H = 36
+/** A refused merge explains why, over two lines. */
+const REFUSAL_H = 52
+const canvasHeight = computed(() => {
+  const offer = splitOffer.value ?? mergeOffer.value
+  if (!offer) return layout.value.height
+  const height = mergeOffer.value?.problem ? REFUSAL_H : OFFER_H
+  return Math.max(layout.value.height, offer.top + height + PAD)
+})
+
+function split() {
+  const ids = [...picked.value]
+  letGo()
+  emit('split', ids)
+}
+
+function merge() {
+  const ids = [...pickedGroups.value]
+  letGo()
+  emit('merge', ids)
+}
+
+/** Esc lets go of what is picked first. */
+function onKey(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || isTyping(event)) return
+  if (!picked.value.length && !pickedGroups.value.length) return
+  letGo()
+  event.preventDefault()
+  event.stopImmediatePropagation()
+}
+onMounted(() => window.addEventListener('keydown', onKey, { capture: true }))
+onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }))
 
 const x = (node: Node) => PAD + node.depth * (NODE_W + COL_GAP)
 const y = (node: Node) => node.top
@@ -519,13 +701,13 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
       <div
         class="shrink-0"
         :class="fill ? 'm-auto' : 'my-auto'"
-        :style="{ width: `${layout.width * scale}px`, height: `${layout.height * scale}px` }"
+        :style="{ width: `${layout.width * scale}px`, height: `${canvasHeight * scale}px` }"
       >
         <div
           class="relative origin-top-left"
           :style="{
             width: `${layout.width}px`,
-            height: `${layout.height}px`,
+            height: `${canvasHeight}px`,
             transform: `scale(${scale})`,
           }"
         >
@@ -534,7 +716,14 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
           <div
             v-for="group in boxes"
             :key="group.key"
-            class="absolute rounded-(--radius-card) border border-dashed border-ink-muted/45 bg-ink/5"
+            class="absolute rounded-(--radius-card) border border-dashed"
+            :class="
+              pickedGroups.includes(group.key)
+                ? 'border-brand bg-brand-tint/60'
+                : 'border-ink-muted/45 bg-ink/5'
+            "
+            v-tooltip="editable ? 'Select this group; ⌘-click more groups to merge them' : ''"
+            @click="clickBox($event, group.key)"
             :style="{
               left: `${group.left}px`,
               top: `${group.top}px`,
@@ -547,7 +736,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
           <svg
             class="pointer-events-none absolute inset-0"
             :width="layout.width"
-            :height="layout.height"
+            :height="canvasHeight"
             aria-hidden="true"
           >
             <defs>
@@ -619,7 +808,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 RAIL[node.task.status],
                 // One background per state, never two: a base bg-surface would
                 // fight these on stylesheet order and win.
-                node.task.id === selectedId
+                node.task.id === selectedId || isPicked(node.task.id)
                   ? 'border-brand bg-brand-selected shadow-(--shadow-float)'
                   : node.task.id === producerId
                     ? 'border-brand bg-brand-tint ring-2 ring-brand/40'
@@ -633,9 +822,9 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 height: `${NODE_H}px`,
               }"
               :data-task="node.task.id"
-              :aria-pressed="node.task.id === selectedId"
+              :aria-pressed="node.task.id === selectedId || isPicked(node.task.id)"
               v-tooltip="node.task.name"
-              @click="emit('select', node.task)"
+              @click="clickTask($event, node.task)"
               @pointerenter="hovered = node.task.id"
               @pointerleave="hovered = null"
             >
@@ -708,7 +897,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 ]"
                 :aria-label="`${stackSummary(node.stack).name} ${stackSummary(node.stack).times}: ${stackSummary(node.stack).line}. Show all ${node.stack.tasks.length}`"
                 v-tooltip="`Show all ${node.stack.tasks.length} tasks in this group`"
-                @click="openStack(node.stack.id)"
+                @click="clickStack($event, node.stack.id)"
               >
                 <span class="flex min-w-0 items-center gap-1.5">
                   <component
@@ -809,6 +998,68 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               :stroke-width="2"
             />
           </button>
+
+          <!-- tasks picked with ⌘/⇧-click: split them into a group of their own -->
+          <div
+            v-if="splitOffer"
+            class="absolute z-10 flex items-center gap-2 rounded-(--radius-card) border border-border-strong bg-surface px-2 py-1.5 text-[11px] whitespace-nowrap shadow-(--shadow-float)"
+            :style="{ left: `${splitOffer.left}px`, top: `${splitOffer.top}px` }"
+            role="group"
+            aria-label="Picked tasks"
+            @click.stop
+          >
+            <span class="tabular text-ink-secondary"
+              >{{ count(splitOffer.count, 'task') }} selected</span
+            >
+            <span v-if="splitOffer.whole" class="text-ink-muted"
+              >— the whole group; leave one out</span
+            >
+            <Button
+              v-else
+              size="row"
+              tooltip="Move them into a new group of their own: they still run on the same input"
+              @click="split"
+            >
+              Split into new group
+            </Button>
+            <KeyHint keys="esc" label="cancel" />
+          </div>
+
+          <!-- groups picked with ⌘/⇧-click on their boxes: merge them into one -->
+          <div
+            v-if="mergeOffer"
+            class="absolute z-10 flex w-max max-w-[40rem] items-center gap-2 rounded-(--radius-card) border px-2 py-1.5 text-[11px] shadow-(--shadow-float)"
+            :class="
+              mergeOffer.problem
+                ? 'border-danger/60 bg-danger-tint text-danger'
+                : 'border-border-strong bg-surface'
+            "
+            :style="{ left: `${mergeOffer.left}px`, top: `${mergeOffer.top}px` }"
+            role="group"
+            aria-label="Picked groups"
+            @click.stop
+          >
+            <span
+              v-if="!mergeOffer.problem"
+              class="tabular shrink-0 whitespace-nowrap text-ink-secondary"
+            >
+              {{ count(mergeOffer.count, 'group') }} selected
+            </span>
+            <!-- Refused: only why, so there is nothing to click that would not work. -->
+            <span v-if="mergeOffer.problem" class="min-w-0 text-danger">{{
+              mergeOffer.problem
+            }}</span>
+            <Button
+              v-else
+              size="row"
+              class="shrink-0 whitespace-nowrap"
+              tooltip="Merge them into the upper group: they still run on the same input"
+              @click="merge"
+            >
+              Merge groups
+            </Button>
+            <KeyHint keys="esc" label="cancel" class="shrink-0" />
+          </div>
 
           <!-- one more in a group: shown while one of its tasks is hovered or selected -->
           <template v-if="editable">

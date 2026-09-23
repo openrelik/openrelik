@@ -22,9 +22,11 @@ import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useRemembered } from '@/composables/useRemembered'
 import { openAddToWorkflow } from '@/composables/useRun'
 import {
-  lastRemoval,
+  lastEdit,
   type AddAt,
   removeTask,
+  splitGroup,
+  mergeGroups,
   retrySave,
   runWorkflow,
   workflowActivity,
@@ -120,6 +122,16 @@ const addTooltip = computed(() =>
       : `${selectedTask.value.name} is in a group a worker waits for; add after that worker instead`,
 )
 
+/** Splits picked tasks out of their group into one of their own; undo is offered in the header. */
+function split(taskIds: string[]) {
+  if (editable.value) splitGroup(props.workflow.folderId, taskIds)
+}
+
+/** Merges picked sibling groups into one; undo is offered in the header. */
+function merge(groupIds: string[]) {
+  if (editable.value) mergeGroups(props.workflow.folderId, groupIds)
+}
+
 /** Removes a task (and what follows it) from the draft; undo is offered in the header. */
 function remove(taskId: string) {
   if (!editable.value || !removeTask(props.workflow.folderId, taskId)) return
@@ -127,9 +139,9 @@ function remove(taskId: string) {
   if (props.selectedId && !findTask(props.workflow, props.selectedId)) emit('select', null)
 }
 
-/** The removal from this workflow that can still be undone. */
-const removal = computed(() =>
-  lastRemoval.value?.folderId === props.workflow.folderId ? lastRemoval.value : null,
+/** The edit to this workflow that undo reverts next, if any. */
+const edit = computed(() =>
+  lastEdit.value?.folderId === props.workflow.folderId ? lastEdit.value : null,
 )
 
 async function run() {
@@ -146,8 +158,8 @@ function onKey(event: KeyboardEvent) {
   if (modalStore.hasActiveModal) return
   if (isTyping(event) || event.altKey) return
   // ⌘Z / Ctrl+Z: put back what was just removed.
-  if ((event.metaKey || event.ctrlKey) && event.key === 'z' && removal.value) {
-    removal.value.undo()
+  if ((event.metaKey || event.ctrlKey) && event.key === 'z' && edit.value) {
+    edit.value.undo()
     event.preventDefault()
     event.stopPropagation()
     return
@@ -214,11 +226,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         <Button variant="ghost" size="row" @click="retrySave(workflow.folderId)">Retry</Button>
       </span>
       <span v-else-if="showSaving" class="text-ink-muted" aria-live="polite">saving…</span>
-      <span v-if="removal" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
-        <span class="truncate text-ink-secondary">removed {{ removal.label }}</span>
-        <Button variant="ghost" size="row" tooltip="Put it back (⌘Z)" @click="removal.undo()"
-          >Undo</Button
-        >
+      <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
+        <span class="truncate text-ink-secondary">{{ edit.label }}</span>
+        <Button variant="ghost" size="row" tooltip="Undo (⌘Z)" @click="edit.undo()">Undo</Button>
       </span>
       <span
         v-if="activity.error"
@@ -321,6 +331,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         @select="emit('select', $event)"
         @add="add"
         @remove="remove"
+        @split="split"
+        @merge="merge"
       />
     </template>
 
@@ -335,9 +347,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
       >
         <div class="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3">
           <WorkflowSummary :workflow="workflow" :stats="stats" />
-          <span v-if="removal" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
-            <span class="truncate text-ink-secondary">removed {{ removal.label }}</span>
-            <Button variant="ghost" size="row" tooltip="Put it back (⌘Z)" @click="removal.undo()"
+          <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
+            <span class="truncate text-ink-secondary">{{ edit.label }}</span>
+            <Button variant="ghost" size="row" tooltip="Undo (⌘Z)" @click="edit.undo()"
               >Undo</Button
             >
           </span>
@@ -382,6 +394,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             @select="emit('select', $event)"
             @add="add"
             @remove="remove"
+            @split="split"
+            @merge="merge"
           />
           <TaskInspector
             v-if="selectedTask"
