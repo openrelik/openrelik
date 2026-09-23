@@ -1,5 +1,4 @@
 import type { Item } from '@/data/folders'
-import { workflowOf } from '@/data/workflows'
 
 /**
  * File metadata and content helper utilities.
@@ -33,7 +32,7 @@ export const typeOf = (item: Item) =>
   item.dataType ??
   (item.kind === 'file'
     ? 'file:generic'
-    : workflowOf(item.id)
+    : item.workflowId !== undefined
       ? 'openrelik/workflow'
       : 'inode/directory')
 

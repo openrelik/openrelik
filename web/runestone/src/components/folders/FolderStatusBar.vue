@@ -19,10 +19,6 @@ defineProps<{
   selectedCount: number
   selectedBytes: number
 }>()
-
-defineEmits<{
-  undo: [folderId: number]
-}>()
 </script>
 
 <template>
@@ -40,14 +36,6 @@ defineEmits<{
         v-tooltip="`Open ${runNotice.label}`"
         >open</RouterLink
       >
-      <button
-        type="button"
-        class="shrink-0 cursor-pointer text-ink-muted underline hover:text-ink"
-        v-tooltip="`Undo run ${runNotice.label}`"
-        @click="$emit('undo', runNotice.folderId)"
-      >
-        undo
-      </button>
     </span>
 
     <span v-if="producer" class="truncate text-brand">

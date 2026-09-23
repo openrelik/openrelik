@@ -1,23 +1,69 @@
 <script setup lang="ts">
-import { File, Plus, RotateCcw, Trash2, X } from '@/components/icons'
+import { File, Merge, Plus, Trash2, X } from '@/components/icons'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import Button from '@/components/base/Button.vue'
 import KeyValueRow from '@/components/base/KeyValueRow.vue'
+import { removeTask, setTaskOption, type AddAt } from '@/composables/useWorkflow'
 import { findItem } from '@/data/folders'
-import type { Task } from '@/data/workflows'
+import { workerShortName } from '@/data/workers'
+import { allTasks, canChainAfter, canJoin, groupOf, workflowOf, type Task } from '@/data/workflows'
 import { count, formatDuration, formatSize, stamp } from '@/utils/format'
 
-/** One task, in full: what it runs, where, how it went, and what it made. */
-const props = defineProps<{ task: Task }>()
-defineEmits<{ close: [] }>()
+/**
+ * One task, in full: what it runs, where, how it went, and what it made. In a
+ * draft its options can be changed (saved as they are typed) and it can be
+ * removed, with the tasks after it.
+ */
+const props = defineProps<{
+  task: Task
+  /** The workflow's folder. */
+  folderId: number
+  /** The workflow is a draft. */
+  editable?: boolean
+}>()
+const emit = defineEmits<{
+  close: []
+  /** Add a worker: after this task, beside it, or after all of its group. */
+  add: [at: AddAt]
+}>()
 
+/** What runs on its output: how many tasks, in how many groups. */
+const next = computed(() => {
+  const { groups } = props.task
+  const tasks = groups.reduce((sum, group) => sum + group.tasks.length, 0)
+  if (!tasks) return ''
+  return groups.length > 1
+    ? `${count(tasks, 'task')} in ${groups.length} groups`
+    : count(tasks, 'task')
+})
+const workflow = computed(() => workflowOf(props.folderId))
+/** Its group, when it is one of the group's tasks rather than its join. */
+const group = computed(() => {
+  const placed = workflow.value && groupOf(workflow.value, props.task.id)
+  return placed && placed.group.join?.id !== props.task.id ? placed.group : undefined
+})
+/** Nothing is chained after a task in a group a join waits for. */
+const chainable = computed(() => !!workflow.value && canChainAfter(workflow.value, props.task.id))
+/** A callback after its group, as the flowchart offers. */
+const joinable = computed(() => !!group.value && canJoin(group.value))
+const allAfter = computed(() => allTasks(props.task.groups).length)
 const outputs = computed(() =>
   props.task.outputs.map((id) => findItem(id)).filter((item) => item !== undefined),
 )
-const config = computed(() => Object.entries(props.task.config))
+/** Options with a value, for a task that has run: what it ran with. */
+const used = computed(() => props.task.options.filter((o) => props.task.config[o.key]))
+
+function setOption(key: string, value: string) {
+  setTaskOption(props.folderId, props.task.id, key, value)
+}
+
+function remove() {
+  removeTask(props.folderId, props.task.id)
+  emit('close')
+}
 </script>
 
 <template>
@@ -48,7 +94,7 @@ const config = computed(() => Object.entries(props.task.config))
 
       <dl class="mt-2 divide-y divide-border">
         <KeyValueRow label="id" :value="task.id" />
-        <KeyValueRow label="queue" :value="task.queue.replace('openrelik-worker-', '')" />
+        <KeyValueRow label="queue" :value="workerShortName(task.queue)" />
         <KeyValueRow label="started">
           <span class="tabular">{{ task.started ? stamp(task.started) : '–' }}</span>
         </KeyValueRow>
@@ -57,21 +103,65 @@ const config = computed(() => Object.entries(props.task.config))
             task.duration === undefined ? '–' : formatDuration(task.duration)
           }}</span>
         </KeyValueRow>
-        <KeyValueRow
-          label="next"
-          :value="task.children.length ? count(task.children.length, 'task') : ''"
-        />
+        <KeyValueRow label="next" :value="next" />
       </dl>
 
       <p class="micro-label mt-3 pb-1">module</p>
       <p class="well px-2 py-1.5 text-[12px] break-all text-ink-secondary">{{ task.module }}</p>
 
-      <template v-if="config.length">
-        <p class="micro-label mt-3 pb-1">config</p>
+      <template v-if="editable && task.options.length">
+        <p class="micro-label mt-3 pb-1">options</p>
+        <label
+          v-for="option in task.options"
+          :key="option.key"
+          class="flex flex-col gap-1 py-1"
+          v-tooltip="option.description ?? ''"
+        >
+          <span class="text-ink-muted"
+            >{{ option.label }}<span v-if="option.required" class="text-warning"> *</span></span
+          >
+          <input
+            v-if="option.type === 'checkbox'"
+            type="checkbox"
+            class="size-3.5 accent-brand"
+            :checked="task.config[option.key] === 'true'"
+            @change="setOption(option.key, String(($event.target as HTMLInputElement).checked))"
+          />
+          <select
+            v-else-if="option.items?.length"
+            class="field h-7"
+            :value="task.config[option.key] ?? ''"
+            @change="setOption(option.key, ($event.target as HTMLSelectElement).value)"
+          >
+            <option v-if="!option.required" value="">–</option>
+            <option v-for="item in option.items" :key="item" :value="item">{{ item }}</option>
+          </select>
+          <textarea
+            v-else-if="option.type === 'textarea'"
+            rows="3"
+            spellcheck="false"
+            class="field py-1"
+            :value="task.config[option.key] ?? ''"
+            :placeholder="option.required ? 'required' : ''"
+            @input="setOption(option.key, ($event.target as HTMLTextAreaElement).value)"
+          />
+          <input
+            v-else
+            type="text"
+            spellcheck="false"
+            class="field h-7"
+            :value="task.config[option.key] ?? ''"
+            :placeholder="option.required ? 'required' : ''"
+            @input="setOption(option.key, ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+      </template>
+      <template v-else-if="used.length">
+        <p class="micro-label mt-3 pb-1">options</p>
         <dl class="well px-2 py-1 text-[12px]">
-          <div v-for="[key, value] in config" :key="key" class="flex justify-between gap-3 py-0.5">
-            <dt class="text-ink-muted">{{ key }}</dt>
-            <dd class="text-ink">{{ value }}</dd>
+          <div v-for="option in used" :key="option.key" class="flex justify-between gap-3 py-0.5">
+            <dt class="text-ink-muted">{{ option.label }}</dt>
+            <dd class="min-w-0 break-all text-ink">{{ task.config[option.key] }}</dd>
           </div>
         </dl>
       </template>
@@ -92,28 +182,56 @@ const config = computed(() => Object.entries(props.task.config))
         </li>
       </ul>
       <p v-else class="text-ink-muted">
-        {{ task.status === 'pending' || task.status === 'running' ? 'Not yet.' : 'None.' }}
+        {{
+          editable
+            ? 'Once it runs.'
+            : task.status === 'pending' || task.status === 'running'
+              ? 'Not yet.'
+              : 'None.'
+        }}
       </p>
 
-      <div class="mt-3 flex flex-col gap-1.5">
-        <Button size="row" class="justify-center" :tooltip="`Append task after ${task.name}`">
-          <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
-          Add task after
-        </Button>
+      <div v-if="editable" class="mt-3 flex flex-col gap-1.5">
         <Button
-          v-if="task.status === 'failed'"
+          v-if="chainable"
           size="row"
           class="justify-center"
-          :tooltip="`Retry ${task.name}`"
+          :tooltip="`Add worker after ${task.name} (a)`"
+          @click="emit('add', { after: task.id })"
         >
-          <template #icon><RotateCcw :size="13" :stroke-width="1.5" /></template>
-          Retry
+          <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
+          Add worker after
+        </Button>
+        <Button
+          v-if="group"
+          size="row"
+          class="justify-center"
+          :tooltip="`Add a worker to ${task.name}'s group: it runs in parallel, on the same input`"
+          @click="emit('add', { beside: task.id })"
+        >
+          <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
+          Add worker beside
+        </Button>
+        <Button
+          v-if="joinable && group"
+          size="row"
+          class="justify-center"
+          :tooltip="`Add a worker that runs once all ${group.tasks.length} tasks in this group have finished, on all their outputs`"
+          @click="emit('add', { join: group.id })"
+        >
+          <template #icon><Merge :size="13" :stroke-width="1.5" /></template>
+          Add worker after all {{ group.tasks.length }}
         </Button>
         <Button
           variant="danger"
           size="row"
           class="justify-center"
-          :tooltip="`Remove ${task.name} from workflow`"
+          :tooltip="
+            allAfter
+              ? `Remove ${task.name} and the ${count(allAfter, 'task')} after it`
+              : `Remove ${task.name} from the workflow`
+          "
+          @click="remove"
         >
           <template #icon><Trash2 :size="13" :stroke-width="1.5" /></template>
           Remove

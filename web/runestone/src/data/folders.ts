@@ -19,6 +19,8 @@ export interface Item {
   mime?: string
   /** OpenRelik's own classification of a file, e.g. "file:generic". */
   dataType?: string
+  /** Folders only: the workflow that owns this folder. */
+  workflowId?: number
   hashes?: {
     md5: string
     sha1: string

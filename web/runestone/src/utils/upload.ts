@@ -1,15 +1,13 @@
 /** Helpers for chunked uploads: pure, so the queue keeps only its state. */
 
+import { hexId } from '@/utils/id'
+
 /**
  * The id the server uses for one upload. It is interpolated into a path on the
  * server, so it must be plain hex — nothing that could climb out of a folder.
  */
 export function uploadIdentifier(): string {
-  const uuid = globalThis.crypto?.randomUUID?.()
-  if (uuid) return uuid.replaceAll('-', '')
-  const bytes = new Uint8Array(16)
-  globalThis.crypto.getRandomValues(bytes)
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  return hexId()
 }
 
 /**

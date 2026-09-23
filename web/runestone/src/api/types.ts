@@ -23,7 +23,8 @@ export interface Folder {
   created_at?: string
   updated_at?: string
   user?: User
-  workflows?: unknown[]
+  /** The workflow that owns this folder; at most one. */
+  workflows?: WorkflowRef[] | null
   selectable?: boolean
   file_count?: number
   folder_count?: number
@@ -75,4 +76,101 @@ export interface FolderDetail extends Folder {
   description?: string
   parent: FolderDetail | null
   storage_provider?: string | null
+}
+
+/** A workflow as folders list it. */
+export interface WorkflowRef {
+  id: number
+  display_name?: string
+}
+
+/** One option a worker takes, as it registers it; `value` holds what the user chose. */
+export interface TaskConfigOption {
+  name: string
+  label?: string
+  description?: string
+  /** `text`, `textarea`, `checkbox`, `select`, `autocomplete`, … */
+  type?: string
+  required?: boolean
+  items?: string[]
+  value?: unknown
+}
+
+/** A worker task the server can queue (GET /taskqueue/tasks/registered). */
+export interface RegisteredTask {
+  /** e.g. `openrelik-worker-strings.tasks.strings` */
+  task_name: string
+  queue_name: string
+  display_name?: string
+  description?: string
+  task_config?: TaskConfigOption[]
+}
+
+/** One task in a workflow spec. Its `tasks` run on its output, in parallel. */
+export interface SpecTask {
+  type: 'task'
+  /** 32 hex digits. The server replaces it on run and keys the task record on it. */
+  uuid: string
+  task_name: string
+  queue_name: string
+  display_name: string
+  description?: string
+  /** Must be a list: the server reads `{name: value}` pairs from it. */
+  task_config: TaskConfigOption[]
+  tasks: SpecNode[]
+  /**
+   * This UI's marker for which group a task belongs to among its siblings.
+   * The server ignores it; tasks without one form a single group.
+   */
+  group?: string
+}
+
+/**
+ * Parallel lines that a callback waits for: it runs once every line in
+ * `tasks` has finished, on all their results.
+ */
+export interface SpecChord {
+  type: 'chord'
+  tasks: SpecTask[]
+  callback: SpecTask
+}
+
+/** What a list of tasks in a spec may hold. */
+export type SpecNode = SpecTask | SpecChord
+
+/** What `spec_json` holds and what the run endpoint takes. The root's tasks run in parallel. */
+export interface WorkflowSpec {
+  workflow: { type: 'chain'; isRoot: true; tasks: SpecNode[] }
+}
+
+/** A task the server ran (or queued) for a workflow. */
+export interface WorkflowTaskRecord {
+  id: number
+  uuid: string | null
+  display_name: string | null
+  /** Celery state: PENDING, RECEIVED, STARTED, PROGRESS, SUCCESS, FAILURE, REVOKED, … */
+  status_short: string | null
+  status_detail?: string | null
+  /** Seconds. */
+  runtime?: number | null
+  error_exception?: string | null
+  created_at?: string
+  output_files?: { id: number; display_name: string; is_deleted?: boolean }[] | null
+}
+
+/** A workflow with its spec and task records (every workflow endpoint answers with this). */
+export interface WorkflowRecord {
+  id: number
+  display_name: string
+  description?: string | null
+  /** The spec as a JSON string; null until the first save. */
+  spec_json: string | null
+  uuid: string
+  created_at?: string
+  user?: User
+  /** The input files. */
+  files: { id: number; display_name: string; data_type?: string | null }[]
+  tasks: WorkflowTaskRecord[]
+  /** The folder the workflow owns; outputs land here. */
+  folder: { id: number }
 }

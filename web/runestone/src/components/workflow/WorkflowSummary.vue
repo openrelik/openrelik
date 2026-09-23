@@ -2,8 +2,9 @@
 import { nextTick, ref } from 'vue'
 import { Pencil, Workflow as WorkflowIcon } from '@/components/icons'
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
-import { renameWorkflow, type RunStats, type Workflow } from '@/data/workflows'
-import { formatDuration } from '@/utils/format'
+import { renameWorkflow } from '@/composables/useWorkflow'
+import type { RunStats, Workflow } from '@/data/workflows'
+import { count, formatDuration } from '@/utils/format'
 
 /** Name, overall state and the run in one line: "12/22 done · 1 failed · 20m 40s". */
 const props = defineProps<{ workflow: Workflow; stats: RunStats }>()
@@ -31,7 +32,7 @@ function commitEdit() {
   isEditing.value = false
   const trimmed = editingName.value.trim()
   if (trimmed && trimmed !== props.workflow.name) {
-    renameWorkflow(props.workflow.id, trimmed)
+    renameWorkflow(props.workflow.folderId, trimmed)
   }
 }
 
@@ -86,8 +87,12 @@ function onKeydown(event: KeyboardEvent) {
     </button>
   </div>
 
-  <TaskStatusBadge :status="stats.state" />
+  <span v-if="workflow.draft" class="tabular whitespace-nowrap text-ink-muted">
+    draft · {{ count(stats.total, 'worker') }}
+  </span>
+  <TaskStatusBadge v-if="!workflow.draft" :status="stats.state" />
   <span
+    v-if="!workflow.draft"
     class="tabular whitespace-nowrap text-ink-muted"
     v-tooltip="
       `${stats.done} completed of ${stats.total} tasks${

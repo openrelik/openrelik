@@ -7,7 +7,6 @@ import PromptResults from '@/components/prompt/PromptResults.vue'
 import { registerPrompt, usePrompt } from '@/composables/usePrompt'
 import { childrenOf, subfoldersOf, type Item } from '@/data/folders'
 import { rootListedItems } from '@/data/rootPages'
-import { workflowOf } from '@/data/workflows'
 import { useSettingsStore } from '@/stores/settings'
 
 /**
@@ -234,7 +233,7 @@ function onBarClick(event: MouseEvent) {
                 >{{ entry.name }}/</span
               >
               <span class="tabular ml-auto pl-4 text-[11px] text-ink-muted">{{
-                workflowOf(entry.id) ? 'workflow' : childrenOf(entry.id).length
+                entry.workflowId !== undefined ? 'workflow' : childrenOf(entry.id).length
               }}</span>
             </RouterLink>
             <p v-if="!entries.length" class="px-3 py-1 text-ink-muted">(no subfolders)</p>

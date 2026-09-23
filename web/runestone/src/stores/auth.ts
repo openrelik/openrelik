@@ -13,6 +13,7 @@ import { clearUploads } from '@/composables/useUploadQueue'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { clearItems } from '@/data/folders'
 import { clearRootPages } from '@/data/rootPages'
+import { forgetWorkflows } from '@/data/workflows'
 
 const STORAGE_USER_KEY = 'openrelik.auth.user'
 
@@ -45,6 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
       clearQueryCache()
       clearItems()
       clearRootPages()
+      forgetWorkflows()
       clearFolderSearch()
       forgetRoles()
       // Bytes must not keep flowing on a session that just ended.

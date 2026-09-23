@@ -7,6 +7,8 @@
 import { authApi } from './endpoints/auth'
 import { filesApi } from './endpoints/files'
 import { foldersApi } from './endpoints/folders'
+import { taskqueueApi } from './endpoints/taskqueue'
+import { workflowsApi } from './endpoints/workflows'
 import { httpClient } from './client'
 import { apiConfig } from './config'
 
@@ -14,6 +16,8 @@ export const api = {
   auth: authApi,
   files: filesApi,
   folders: foldersApi,
+  taskqueue: taskqueueApi,
+  workflows: workflowsApi,
   http: httpClient,
   config: apiConfig,
 }

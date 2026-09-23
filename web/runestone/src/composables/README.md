@@ -12,7 +12,10 @@ This directory houses reusable, stateful Vue composables. They encapsulate keybo
 | [`usePrompt`](#useprompt)                       | Terminal prompt navigation, fuzzy path search, `cd` autocompletion, and modal state.                              |
 | [`useRowSelection`](#userowselection)           | Table cursor positioning, multi-row selection, and anchor-based `Shift` range selections.                         |
 | [`useRemembered`](#useremembered)               | Safe, reactive `localStorage` state persistence with resilient fallback defaults.                                 |
-| [`useRun`](#userun)                             | Worker execution orchestration, worker target configuration, and `RunDialog` modal bridge.                        |
+| [`useRun`](#userun)                             | `RunDialog` bridge: quick-run a worker on files, or add one to a draft workflow.                                  |
+| [`useWorkflow`](#useworkflow)                   | Creates workflows, edits drafts (saved behind the edit), runs them; per-workflow saving/running state.            |
+| [`useWorkflowLoader`](#useworkflowloader)       | Loads the workflow of the folder on screen and polls it in the background while tasks run.                        |
+| [`useWorkers`](#useworkers)                     | The workers online, from the server's task registry, cached for five minutes.                                     |
 | [`useSettings`](#usesettings)                   | User settings reactive access (`theme`, `density`, AI features) and `SettingsDialog` state.                       |
 | [`useHelp`](#usehelp)                           | Reactive state and controls for opening/closing the `HelpDialog` shortcut sheet.                                  |
 | [`useTooltip`](#usetooltip)                     | Singleton tooltip coordinator with warmup/cooldown grouping, auto-placement, shortcut parsing, and edge clamping. |
@@ -62,11 +65,29 @@ A lightweight, fault-tolerant reactive wrapper around the browser's `localStorag
 
 ### `useRun`
 
-Provides a reactive interface for running background forensic workers and workflows against selected files.
+Opens `RunDialog.vue` for one of two things, through `useRunStore`:
 
-- Tracks target files and target folders for an execution run.
-- Bridges state with the `useRunStore` and controls the visibility of `RunDialog.vue`.
-- Supports run undo operations and tracks recent run execution notices.
+- `openRun(files, folderId)`: run one worker on files — a workflow of its own, created, given the worker and run at once (the status bar says where it went).
+- `openAddToWorkflow(workflow, at)`: add a worker to a draft workflow, at an `AddAt` (see `useWorkflow`); does nothing where no worker may go.
+
+### `useWorkflow`
+
+Workflows on the server (`/folders/{id}/workflows/`), kept in `data/workflows.ts` by the folder each owns. Module-scoped, so a save keeps going when the user moves on.
+
+- `createWorkflow(parentId, fileIds)`: the server makes the workflow and a new folder for it; both are written into the stores and marked fresh, so opening the folder costs no request.
+- What runs on the inputs, and on each task's output, is a list of groups (`TaskGroup`). `addTask(folderId, at, …)` places a worker with an `AddAt`: `{ after }` starts a new group on a task's output (or the inputs'), `{ beside }` adds it to a task's group, `{ join }` makes it the group's join — a worker that runs once all of the group's tasks have finished, on all their outputs, saved as a Celery chord (`{type: 'chord', tasks, callback}`). Groups without a join are saved as their tasks with a `group` marker, so the grouping survives a reload. As in the original editor, a join is only offered after a free group — two or more with nothing chained after them (`canJoin`) — and once a group has one, nothing more can be chained after its tasks (`canChainAfter`). A join left with nothing to wait for becomes a plain task; a group left empty goes.
+- `addTask` / `removeTask` / `setTaskOption` change a draft locally at once; the spec is saved behind them (debounced, one PATCH in flight, later edits saved after it). A load never overwrites edits the server has not got.
+- `runWorkflow(folderId)`: cancels a pending save, sends the spec with a fresh uuid per task, and adopts the spec the server answers with — its uuids are the ones its task records carry.
+- `workflowActivity(id)`: `saving`, `saveError`, `running`, `error`, for the panel.
+- The spec conversion is pure, in `utils/workflowSpec.ts`; `runBlocker()` refuses what the server would answer with a 500.
+
+### `useWorkflowLoader`
+
+Used by the folder view. Loads the folder's workflow as soon as the folder is known to own one (`Item.workflowId`, from any listing), alongside the listing. While tasks are queued or running it polls every 3 s in the background, skipping a tick while a poll is still in flight, and stops when they are done or the view leaves. New output files refresh the folder's file listing.
+
+### `useWorkers`
+
+The task registry (`GET /taskqueue/tasks/registered`) as `Worker`s, sorted by name. Fresh for five minutes; the picker shows its `<LoadState>`, and a draft's Run button checks its tasks against it.
 
 ### `useSettings`
 
