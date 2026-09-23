@@ -22,8 +22,10 @@ import { refreshAll, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { folderKeys } from '@/composables/useFolderLoader'
 import { invalidate, queryState, type QueryState } from '@/composables/useQueryCache'
 import { loadWorkflow, POLL_MS, workflowKeys } from '@/composables/useWorkflow'
-import type { Item } from '@/data/folders'
-import { everyTask, isActive, workflowOf, type Workflow } from '@/data/workflows'
+import type { Item } from '@/types/item'
+import { everyTask, isActive } from '@/utils/workflow'
+import { workflowOf } from '@/data/workflows'
+import type { Workflow } from '@/types/workflow'
 
 export interface UseWorkflowLoaderReturn {
   /** The workflow owning the folder, once loaded. */

@@ -21,7 +21,7 @@ import {
 
 import { api, errorMessage, type WorkflowTemplateRecord } from '@/api'
 import { ensure, markFresh, queryState, type QueryState } from '@/composables/useQueryCache'
-import { allTasks } from '@/data/workflows'
+import { allTasks } from '@/utils/workflow'
 import { useAuthStore } from '@/stores/auth'
 import { parseSpec, tasksFromSpec } from '@/utils/workflowSpec'
 

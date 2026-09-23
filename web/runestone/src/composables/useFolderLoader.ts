@@ -16,14 +16,8 @@
 import { onScopeDispose } from 'vue'
 import { api, ApiError, errorMessage, type Folder, type FolderDetail, type FolderFile } from '@/api'
 import { ensure, queryState, type QueryState } from '@/composables/useQueryCache'
-import {
-  findItem,
-  setFiles,
-  setSubfolders,
-  upsertItems,
-  upsertListed,
-  type Item,
-} from '@/data/folders'
+import { findItem, setFiles, setSubfolders, upsertItems, upsertListed } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { setRootPage } from '@/data/rootPages'
 import { useSettingsStore } from '@/stores/settings'
 

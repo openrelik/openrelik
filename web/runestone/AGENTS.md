@@ -167,7 +167,7 @@ The codebase follows a strict separation of concerns:
    import { computed, ref } from 'vue'
    import Button from '@/components/base/Button.vue'
    import { useSettings } from '@/composables/useSettings'
-   import type { Item } from '@/data/folders'
+   import type { Item } from '@/types/item'
 
    // 2. Props & Emits / Models
    const props = defineProps<{ item: Item }>()

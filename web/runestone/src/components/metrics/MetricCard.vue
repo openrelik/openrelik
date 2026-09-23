@@ -6,7 +6,7 @@ import LoadState from '@/components/base/LoadState.vue'
 import { api, type MetricSeries } from '@/api'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { ensure, queryState } from '@/composables/useQueryCache'
-import { workerShortName } from '@/data/workers'
+import { workerShortName } from '@/utils/worker'
 
 /**
  * One metric as a chart card: a Celery counter's increase over the chosen

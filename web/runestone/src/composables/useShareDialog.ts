@@ -28,7 +28,7 @@ import {
 } from '@/api'
 import type { ShareRole } from '@/api/endpoints/folders'
 import { ensure, invalidate, queryState, type QueryState } from '@/composables/useQueryCache'
-import type { Item } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { useModalStore } from '@/stores/modals'
 
 export type { ShareRole }

@@ -16,8 +16,9 @@ import type {
   WorkflowSpec,
   WorkflowTaskRecord,
 } from '@/api/types'
-import { mapOption, missingOptions } from '@/data/workers'
-import { allTasks, type Task, type TaskGroup, type TaskStatus } from '@/data/workflows'
+import { mapOption, missingOptions } from '@/utils/worker'
+import { allTasks } from '@/utils/workflow'
+import type { Task, TaskGroup, TaskStatus } from '@/types/workflow'
 import { hexId } from '@/utils/id'
 
 /** What runs on the inputs, or on a task's output. */

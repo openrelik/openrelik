@@ -9,7 +9,8 @@
 import { computed, shallowRef, type ComputedRef, type ShallowRef } from 'vue'
 
 import api from '@/api'
-import { mapRegisteredTask, type Worker } from '@/data/workers'
+import { mapRegisteredTask } from '@/utils/worker'
+import type { Worker } from '@/types/worker'
 import { ensure, queryState, type QueryState } from '@/composables/useQueryCache'
 
 const KEY = 'workers:registered'

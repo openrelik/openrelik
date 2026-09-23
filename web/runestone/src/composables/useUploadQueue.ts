@@ -29,7 +29,8 @@ import { connectionIsConstrained } from '@/composables/useFolderPrefetch'
 import { folderKeys, mapFileToItem } from '@/composables/useFolderLoader'
 import { canUpload, ensureRole, roleOf } from '@/composables/useFolderPermissions'
 import { markFresh, queryState } from '@/composables/useQueryCache'
-import { upsertItems, type Item } from '@/data/folders'
+import { upsertItems } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { useAuthStore } from '@/stores/auth'
 import {
   backoffMs,

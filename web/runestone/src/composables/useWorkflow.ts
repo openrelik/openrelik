@@ -29,7 +29,7 @@ import { addTemplate } from '@/composables/useWorkflowTemplates'
 import { refreshAll } from '@/composables/useAutoRefresh'
 import { ensure, forget, invalidate, markFresh } from '@/composables/useQueryCache'
 import { findItem, upsertItems } from '@/data/folders'
-import type { Worker } from '@/data/workers'
+import type { Worker } from '@/types/worker'
 import {
   allTasks,
   canChainAfter,
@@ -37,16 +37,12 @@ import {
   everyGroup,
   everyTask,
   findTask,
-  forgetWorkflow,
   groupOf,
   isActive,
   mergeProblem,
-  upsertWorkflow,
-  workflowOf,
-  type Task,
-  type TaskGroup,
-  type Workflow,
-} from '@/data/workflows'
+} from '@/utils/workflow'
+import { forgetWorkflow, upsertWorkflow, workflowOf } from '@/data/workflows'
+import type { Task, TaskGroup, Workflow } from '@/types/workflow'
 import { count } from '@/utils/format'
 import { hexId } from '@/utils/id'
 import { parseSpec, specFromTasks, tasksFromSpec, withFreshUuids } from '@/utils/workflowSpec'

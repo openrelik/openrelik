@@ -9,8 +9,10 @@ import KeyValueRow from '@/components/base/KeyValueRow.vue'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import { removeTask, setTaskOption, type AddAt } from '@/composables/useWorkflow'
 import { findItem } from '@/data/folders'
-import { workerShortName } from '@/data/workers'
-import { allTasks, canChainAfter, canJoin, groupOf, workflowOf, type Task } from '@/data/workflows'
+import { workerShortName } from '@/utils/worker'
+import { allTasks, canChainAfter, canJoin, groupOf } from '@/utils/workflow'
+import { workflowOf } from '@/data/workflows'
+import type { Task } from '@/types/workflow'
 import { count, formatDuration, formatSize, stamp } from '@/utils/format'
 
 /**

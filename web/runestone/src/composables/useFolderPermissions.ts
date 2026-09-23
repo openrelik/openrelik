@@ -14,7 +14,7 @@
 import { computed, onScopeDispose, reactive, watch, type ComputedRef } from 'vue'
 import { api, type FolderRole } from '@/api'
 import { folderKeys } from '@/composables/useFolderLoader'
-import type { Item } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { ensure } from '@/composables/useQueryCache'
 
 /** Roles rarely change; five minutes keeps navigation free of role requests. */

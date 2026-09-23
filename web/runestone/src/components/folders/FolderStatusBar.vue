@@ -2,7 +2,7 @@
 import { RouterLink } from 'vue-router'
 
 import StatusBar from '@/components/layout/StatusBar.vue'
-import type { Task } from '@/data/workflows'
+import type { Task } from '@/types/workflow'
 import { count, formatSize } from '@/utils/format'
 
 defineProps<{

@@ -11,8 +11,8 @@ import {
   runWorkflow,
   workflowActivity,
 } from '@/composables/useWorkflow'
-import type { Item } from '@/data/folders'
-import type { Worker } from '@/data/workers'
+import type { Item } from '@/types/item'
+import type { Worker } from '@/types/worker'
 
 /** What the worker picker is open for. */
 export interface RunTarget {

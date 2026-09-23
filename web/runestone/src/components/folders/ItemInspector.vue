@@ -18,7 +18,7 @@ import KeyValueRow from '@/components/base/KeyValueRow.vue'
 import { downloadFile, downloadFiles } from '@/composables/useDownload'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
-import type { Item } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { count, formatSize, stamp } from '@/utils/format'
 
 /**

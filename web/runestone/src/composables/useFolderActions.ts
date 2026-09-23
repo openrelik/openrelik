@@ -27,7 +27,8 @@ import {
   roleOf,
 } from '@/composables/useFolderPermissions'
 import { forget, invalidate, markFresh } from '@/composables/useQueryCache'
-import { findItem, removeTree, upsertItems, type Item } from '@/data/folders'
+import { findItem, removeTree, upsertItems } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { dropFromRootPages, prependToRootPages } from '@/data/rootPages'
 import { useAuthStore } from '@/stores/auth'
 import { count } from '@/utils/format'

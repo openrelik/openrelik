@@ -19,7 +19,7 @@ import Button from '@/components/base/Button.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
 
 import { findItem } from '@/data/folders'
-import { missingOptions } from '@/data/workers'
+import { missingOptions } from '@/utils/worker'
 import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
@@ -30,12 +30,8 @@ import {
   mergeProblem,
   STATUS_LABEL,
   unchainable,
-  type Task,
-  type TaskGroup,
-  type TaskStatus,
-  type Workflow,
-  type WorkflowInput,
-} from '@/data/workflows'
+} from '@/utils/workflow'
+import type { Task, TaskGroup, TaskStatus, Workflow, WorkflowInput } from '@/types/workflow'
 import { count, formatDuration, formatSize } from '@/utils/format'
 import { isTyping } from '@/utils/keyboard'
 import { revealIn } from '@/utils/scroll'

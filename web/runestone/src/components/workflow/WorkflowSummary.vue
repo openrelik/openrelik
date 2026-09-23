@@ -2,7 +2,7 @@
 import { nextTick, ref } from 'vue'
 import { Pencil, Workflow as WorkflowIcon } from '@/components/icons'
 import { renameWorkflow } from '@/composables/useWorkflow'
-import type { RunStats, Workflow } from '@/data/workflows'
+import type { RunStats, Workflow } from '@/types/workflow'
 import { count, formatDuration } from '@/utils/format'
 
 /** Name and the run in one line: "12/22 done · 1 failed · 20m 40s". */

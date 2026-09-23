@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 
-import { findItem, type Item } from '@/data/folders'
+import { findItem } from '@/data/folders'
+import type { Item } from '@/types/item'
 
 /**
  * Which folders are listed at the top level, page by page, in the server's

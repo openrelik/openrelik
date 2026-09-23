@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import type { Item } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { useModalStore } from '@/stores/modals'
 
 export interface WorkflowTarget {

@@ -5,10 +5,11 @@ import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import { findItem } from '@/data/folders'
-import { missingOptions } from '@/data/workers'
+import { missingOptions } from '@/utils/worker'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
-import { canJoin, unchainable, type Task, type TaskGroup, type Workflow } from '@/data/workflows'
+import { canJoin, unchainable } from '@/utils/workflow'
+import type { Task, TaskGroup, Workflow } from '@/types/workflow'
 import { formatDuration, formatSize } from '@/utils/format'
 import { revealIn } from '@/utils/scroll'
 

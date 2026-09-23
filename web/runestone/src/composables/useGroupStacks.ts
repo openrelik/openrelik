@@ -16,7 +16,7 @@
 
 import { reactive } from 'vue'
 
-import type { Task, TaskGroup } from '@/data/workflows'
+import type { Task, TaskGroup } from '@/types/workflow'
 
 /** A group with at least this many tasks starts stacked. */
 export const STACK_MIN = 3

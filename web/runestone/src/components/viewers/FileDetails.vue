@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 
 import KeyValueRow from '@/components/base/KeyValueRow.vue'
-import { dataTypeOf, exactSize, hashesOf, magicOf } from '@/data/files'
-import type { Item } from '@/data/folders'
+import { dataTypeOf, exactSize, hashesOf, magicOf } from '@/utils/item'
+import type { Item } from '@/types/item'
 import { formatSize, stamp } from '@/utils/format'
 
 /**

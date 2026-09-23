@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Check, Circle, Pencil, X } from '@/components/icons'
 
-import { STATUS_LABEL, type TaskStatus } from '@/data/workflows'
+import { STATUS_LABEL } from '@/utils/workflow'
+import type { TaskStatus } from '@/types/workflow'
 
 /** A task's status, or `draft` for a workflow that has not run (its tasks are not queued). */
 defineProps<{ status: TaskStatus | 'draft' }>()

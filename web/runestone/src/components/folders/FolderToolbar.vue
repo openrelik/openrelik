@@ -6,7 +6,7 @@ import PathBar from '@/components/layout/PathBar.vue'
 import Button from '@/components/base/Button.vue'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
-import type { Item } from '@/data/folders'
+import type { Item } from '@/types/item'
 
 const props = defineProps<{
   crumbs: Item[]

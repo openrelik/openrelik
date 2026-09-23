@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import KeyHint from '@/components/base/KeyHint.vue'
-import { childrenOf, type Item } from '@/data/folders'
+import { childrenOf } from '@/data/folders'
+import type { Item } from '@/types/item'
 import type { PromptResult } from '@/composables/usePrompt'
 import { highlight } from '@/utils/match'
 import { count, formatSize } from '@/utils/format'

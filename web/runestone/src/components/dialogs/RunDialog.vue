@@ -6,7 +6,8 @@ import KeyHint from '@/components/base/KeyHint.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import { runTarget, startRun } from '@/composables/useRun'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
-import { missingOptions, type Worker } from '@/data/workers'
+import { missingOptions } from '@/utils/worker'
+import type { Worker } from '@/types/worker'
 
 /**
  * Pick a worker. Two uses, one list:

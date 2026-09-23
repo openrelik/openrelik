@@ -19,7 +19,7 @@ import { api } from '@/api'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { mapFolderToItem } from '@/composables/useFolderLoader'
 import { ensure, queryState } from '@/composables/useQueryCache'
-import type { Item } from '@/data/folders'
+import type { Item } from '@/types/item'
 
 /** Typing pause before asking the server. */
 const SEARCH_DELAY_MS = 250

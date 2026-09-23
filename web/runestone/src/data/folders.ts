@@ -1,35 +1,6 @@
 import { reactive } from 'vue'
 
-export interface Item {
-  id: number
-  /** The containing folder, or null for a top-level folder. */
-  parent: number | null
-  kind: 'folder' | 'file'
-  name: string
-  /** The owner's display name, as the inspector and the tooltip show it. */
-  owner: string
-  /** The login the server knows the owner by. */
-  ownerUsername?: string
-  /** The owner's profile picture, when the server has one for them. */
-  ownerAvatar?: string
-  created?: string
-  modified: string
-  /** Bytes. Files only. */
-  size?: number
-  mime?: string
-  /** OpenRelik's own classification of a file, e.g. "file:generic". */
-  dataType?: string
-  /** Folders only: the workflow that owns this folder. */
-  workflowId?: number
-  /** Files only, once their details are loaded; empty strings until the server has hashed it. */
-  hashes?: {
-    md5: string
-    sha1: string
-    sha256: string
-  }
-  /** Files only, once their details are loaded: libmagic's description of the content. */
-  magicText?: string
-}
+import type { Item, Stats } from '@/types/item'
 
 /**
  * Reactive store of items. Folders and files are loaded dynamically from the
@@ -68,12 +39,6 @@ export function subfoldersOf(parent: number | null): Item[] {
   )
 }
 
-export interface Stats {
-  folders: number
-  files: number
-  bytes: number
-}
-
 /** Everything below a folder, all the way down. */
 export function statsOf(id: number): Stats {
   const stats: Stats = { folders: 0, files: 0, bytes: 0 }
@@ -103,17 +68,6 @@ export function descendantsOf(id: number): Item[] {
   return childrenOf(id).flatMap((item) =>
     item.kind === 'folder' ? [item, ...descendantsOf(item.id)] : [item],
   )
-}
-
-/** Generates a unique folder name within a directory, auto-incrementing if collisions exist. */
-export function getUniqueFolderName(baseName: string, existingNames: string[]): string {
-  const set = new Set(existingNames.map((n) => n.toLowerCase()))
-  if (!set.has(baseName.toLowerCase())) return baseName
-  let counter = 2
-  while (set.has(`${baseName} ${counter}`.toLowerCase())) {
-    counter++
-  }
-  return `${baseName} ${counter}`
 }
 
 /** Renames an item (file or folder) in the reactive items store. */

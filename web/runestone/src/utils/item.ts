@@ -1,15 +1,6 @@
-import type { Item } from '@/data/folders'
+import type { Hashes, Item } from '@/types/item'
 
-/**
- * File metadata and content helper utilities.
- * Real file data is loaded from the OpenRelik API.
- */
-
-export interface Hashes {
-  md5: string
-  sha1: string
-  sha256: string
-}
+/** File metadata and naming helpers over an `Item`. */
 
 export function hashesOf(item: Item): Hashes {
   return (
@@ -57,4 +48,15 @@ export function dataTypeOf(item: Item): string {
   if (item.mime === 'application/x-ewf') return 'image:ewf'
   if (item.mime === 'application/x-sqlite3') return 'plaso:storage'
   return 'file:generic'
+}
+
+/** Generates a unique folder name within a directory, auto-incrementing if collisions exist. */
+export function getUniqueFolderName(baseName: string, existingNames: string[]): string {
+  const set = new Set(existingNames.map((n) => n.toLowerCase()))
+  if (!set.has(baseName.toLowerCase())) return baseName
+  let counter = 2
+  while (set.has(`${baseName} ${counter}`.toLowerCase())) {
+    counter++
+  }
+  return `${baseName} ${counter}`
 }

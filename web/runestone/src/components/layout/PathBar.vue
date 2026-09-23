@@ -5,7 +5,8 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import PromptResults from '@/components/prompt/PromptResults.vue'
 import { registerPrompt, usePrompt } from '@/composables/usePrompt'
-import { childrenOf, subfoldersOf, type Item } from '@/data/folders'
+import { childrenOf, subfoldersOf } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { rootListedItems } from '@/data/rootPages'
 import { useSettingsStore } from '@/stores/settings'
 

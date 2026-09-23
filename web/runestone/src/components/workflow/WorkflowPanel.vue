@@ -37,14 +37,8 @@ import {
 } from '@/composables/useWorkflow'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
 import { stackable, useGroupStacks } from '@/composables/useGroupStacks'
-import {
-  everyGroup,
-  everyTask,
-  findTask,
-  runStats,
-  type Task,
-  type Workflow,
-} from '@/data/workflows'
+import { everyGroup, everyTask, findTask, runStats } from '@/utils/workflow'
+import type { Task, Workflow } from '@/types/workflow'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
 import { runBlocker } from '@/utils/workflowSpec'

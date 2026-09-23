@@ -3,7 +3,7 @@ import PanelResizeHandle from '@/components/base/PanelResizeHandle.vue'
 import PanelToggle from '@/components/base/PanelToggle.vue'
 import FileDetails from '@/components/viewers/FileDetails.vue'
 import { usePanelWidth } from '@/composables/usePanelWidth'
-import type { Item } from '@/data/folders'
+import type { Item } from '@/types/item'
 
 /**
  * The file page's one side panel, in two tabs: Details (the file) and

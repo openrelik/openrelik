@@ -6,15 +6,8 @@ import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderSearch } from '@/composables/useFolderSearch'
 import { folderKeys } from '@/composables/useFolderLoader'
 import { invalidate } from '@/composables/useQueryCache'
-import {
-  childrenOf,
-  descendantsOf,
-  findItem,
-  ITEMS,
-  pathTo,
-  subfoldersOf,
-  type Item,
-} from '@/data/folders'
+import { childrenOf, descendantsOf, findItem, ITEMS, pathTo, subfoldersOf } from '@/data/folders'
+import type { Item } from '@/types/item'
 import { rootListedItems } from '@/data/rootPages'
 import { useModalStore } from '@/stores/modals'
 import { useSettingsStore } from '@/stores/settings'
