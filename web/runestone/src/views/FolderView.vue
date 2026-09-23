@@ -7,6 +7,8 @@ import FolderStatusBar from '@/components/folders/FolderStatusBar.vue'
 import FolderTable, { type SortKey } from '@/components/folders/FolderTable.vue'
 import FolderToolbar from '@/components/folders/FolderToolbar.vue'
 import ItemInspector from '@/components/folders/ItemInspector.vue'
+import PanelResizeHandle from '@/components/base/PanelResizeHandle.vue'
+import PanelToggle from '@/components/base/PanelToggle.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
@@ -21,6 +23,8 @@ import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
+import { usePanelWidth } from '@/composables/usePanelWidth'
+import { useRemembered } from '@/composables/useRemembered'
 import { canDeleteItem, useFolderPermissions } from '@/composables/useFolderPermissions'
 import { useFolderPrefetch } from '@/composables/useFolderPrefetch'
 import { useDropZone } from '@/composables/useDropZone'
@@ -66,6 +70,14 @@ const filter = ref('')
 const toolbar = ref<InstanceType<typeof FolderToolbar> | null>(null)
 const table = ref<InstanceType<typeof FolderTable> | null>(null)
 const inspector = ref<InstanceType<typeof ItemInspector> | null>(null)
+/** The inspector column's width: dragged by its left edge, remembered, as on the file page. */
+const inspectorPanel = usePanelWidth('openrelik.folder.inspectorWidth', { initial: 256, min: 220 })
+/**
+ * The inspector column, shown or hidden (`i`), remembered. Its toggle sits at
+ * the right end of the top row either way: the inspector's header while it is
+ * open, the workflow's header or the listing's heading row while it is closed.
+ */
+const showInspector = useRemembered('openrelik.folder.inspector', true)
 
 /** Newest first, so what was just made (a folder, a workflow, an upload) is on top. */
 const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
@@ -567,6 +579,7 @@ function handleRename({ id, name }: { id: number; name: string }) {
 
 // --- keyboard navigation ---
 const KEYS: Record<string, () => void> = {
+  i: () => (showInspector.value = !showInspector.value),
   ArrowDown: () => (cursor.value = Math.min(rows.value.length - 1, cursor.value + 1)),
   ArrowUp: () => (cursor.value = Math.max(atRoot.value ? 0 : UP, cursor.value - 1)),
   Home: () => (cursor.value = 0),
@@ -768,6 +781,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           @retry-upload="uploads.retry"
           @dismiss-upload="uploads.dismiss"
         >
+          <template v-if="!showInspector && !workflow" #end>
+            <PanelToggle
+              :open="false"
+              name="inspector"
+              class="max-xl:hidden"
+              @toggle="showInspector = true"
+            />
+          </template>
           <template #workflow>
             <WorkflowPanel
               v-if="workflow"
@@ -777,7 +798,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               @select="selectTask"
               @discard="discard"
               @copied="router.push(`/folder/${$event}`)"
-            />
+            >
+              <template v-if="!showInspector" #end>
+                <PanelToggle
+                  :open="false"
+                  name="inspector"
+                  class="max-xl:hidden"
+                  @toggle="showInspector = true"
+                />
+              </template>
+            </WorkflowPanel>
             <LoadState
               v-else-if="folder?.workflowId !== undefined"
               class="border-b border-border"
@@ -802,34 +832,50 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         />
       </div>
 
-      <TaskInspector
-        v-if="task && workflow"
-        :task="task"
-        :folder-id="workflow.folderId"
-        :editable="workflow.draft"
-        class="w-64 shrink-0 border-l border-border max-xl:hidden"
-        @close="taskId = null"
-        @add="openAdd"
-      />
-      <ItemInspector
-        v-else-if="focused"
-        ref="inspector"
-        :item="focused"
-        :current="focused.id === folder?.id"
-        :producer="producer?.name"
-        :selected-files="selectedFiles"
-        :selected-items="selectedItems"
-        :can-delete="canDeleteAll"
-        :can-rename="canRenameFocused"
-        class="w-64 shrink-0 border-l border-border max-xl:hidden"
-        @open="open(findItem($event))"
-        @run-more="runPicker"
-        @clear-selection="clearSelection"
-        @toggle-item="toggle"
-        @rename="startRenameItem"
-        @rename-to="handleRename"
-        @delete="deleteItems"
-      />
+      <!-- the inspector column: one width, dragged by its left edge, for the item or the task -->
+      <div
+        v-if="showInspector && ((task && workflow) || focused)"
+        class="relative flex shrink-0 flex-col border-l border-border max-xl:hidden"
+        :style="{ width: `${inspectorPanel.width.value}px` }"
+      >
+        <PanelResizeHandle :panel="inspectorPanel" label="Resize the inspector" />
+        <TaskInspector
+          v-if="task && workflow"
+          :task="task"
+          :folder-id="workflow.folderId"
+          :editable="workflow.draft"
+          class="min-h-0 flex-1"
+          @close="taskId = null"
+          @add="openAdd"
+        >
+          <template #end>
+            <PanelToggle open name="inspector" @toggle="showInspector = false" />
+          </template>
+        </TaskInspector>
+        <ItemInspector
+          v-else-if="focused"
+          ref="inspector"
+          :item="focused"
+          :current="focused.id === folder?.id"
+          :producer="producer?.name"
+          :selected-files="selectedFiles"
+          :selected-items="selectedItems"
+          :can-delete="canDeleteAll"
+          :can-rename="canRenameFocused"
+          class="min-h-0 flex-1"
+          @open="open(findItem($event))"
+          @run-more="runPicker"
+          @clear-selection="clearSelection"
+          @toggle-item="toggle"
+          @rename="startRenameItem"
+          @rename-to="handleRename"
+          @delete="deleteItems"
+        >
+          <template #end>
+            <PanelToggle open name="inspector" @toggle="showInspector = false" />
+          </template>
+        </ItemInspector>
+      </div>
     </div>
 
     <!-- status bar -->

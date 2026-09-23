@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 export type ModalType =
-  'help' | 'settings' | 'prompt' | 'run' | 'workflow' | 'share' | 'confirm' | 'uploads'
+  'help' | 'settings' | 'prompt' | 'run' | 'workflow' | 'share' | 'confirm' | 'uploads' | 'account'
 
 export const useModalStore = defineStore('modals', () => {
   // Stack of active modal names (last element is topmost)

@@ -251,7 +251,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
 
 <template>
   <section :class="{ 'border-b border-border': open }" aria-label="Workflow">
-    <div class="flex h-7 items-center gap-2.5 border-b border-border bg-sunken px-3">
+    <div
+      class="flex h-7 items-center gap-2.5 border-b border-border bg-sunken pl-3"
+      :class="$slots.end ? 'pr-1' : 'pr-3'"
+    >
       <button
         type="button"
         class="flex size-4 cursor-pointer items-center justify-center text-ink-muted hover:text-ink"
@@ -383,6 +386,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             {{ showCopying ? 'Copying…' : 'Copy workflow' }}
           </Button>
         </template>
+        <!-- the page's control for its side panel (show), at the far right -->
+        <slot name="end" />
       </div>
     </div>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, PanelRightOpen, Workflow } from '@/components/icons'
+import { Download, Workflow } from '@/components/icons'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
@@ -7,6 +7,7 @@ import FileSidePanel, { type SideTab } from '@/components/viewers/FileSidePanel.
 import PathBar from '@/components/layout/PathBar.vue'
 import FileContent from '@/components/viewers/FileContent.vue'
 import Button from '@/components/base/Button.vue'
+import PanelToggle from '@/components/base/PanelToggle.vue'
 import { downloadFile } from '@/composables/useDownload'
 import { useFileDetails } from '@/composables/useFileDetails'
 import { useFolderLoader } from '@/composables/useFolderLoader'
@@ -173,15 +174,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <FileContent :file="file" @view="onView" @row-selected="onRowSelected">
         <!-- the details closed: opened again from the spot the panel's own button had -->
         <template v-if="!showDetails" #end>
-          <button
-            type="button"
-            class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink max-xl:hidden"
-            aria-label="Show details"
-            v-tooltip="'Show details (i)'"
-            @click="showDetails = true"
-          >
-            <PanelRightOpen :size="13" :stroke-width="1.5" />
-          </button>
+          <PanelToggle
+            :open="false"
+            name="details"
+            class="max-xl:hidden"
+            @toggle="showDetails = true"
+          />
         </template>
       </FileContent>
 

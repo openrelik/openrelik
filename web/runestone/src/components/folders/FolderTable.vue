@@ -335,6 +335,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
         <col class="w-44" />
         <col class="w-20" />
         <col class="w-40" />
+        <col v-if="$slots.end" class="w-7" />
       </colgroup>
       <thead class="sticky top-0 z-[1] bg-surface">
         <tr class="h-7 shadow-[inset_0_-1px_0_var(--color-border)]">
@@ -393,6 +394,10 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
                 :stroke-width="2"
               />
             </button>
+          </th>
+          <!-- the page's control for its side panel (show), at the far right -->
+          <th v-if="$slots.end" class="pr-1">
+            <div class="flex justify-end"><slot name="end" /></div>
           </th>
         </tr>
       </thead>

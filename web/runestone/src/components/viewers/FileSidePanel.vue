@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { PanelRightClose } from '@/components/icons'
+import PanelResizeHandle from '@/components/base/PanelResizeHandle.vue'
+import PanelToggle from '@/components/base/PanelToggle.vue'
 import FileDetails from '@/components/viewers/FileDetails.vue'
-import { useRemembered } from '@/composables/useRemembered'
+import { usePanelWidth } from '@/composables/usePanelWidth'
 import type { Item } from '@/data/folders'
 
 /**
@@ -25,48 +25,17 @@ defineProps<{
 const tab = defineModel<SideTab>({ required: true })
 defineEmits<{ close: [] }>()
 
-// --- width: dragged by the left edge, remembered; a double-click resets it ---
-
-const DEFAULT_WIDTH = 416
-const MIN_WIDTH = 280
-/** At most this share of the window, so the content always keeps room. */
-const MAX_SHARE = 0.6
-const stored = useRemembered('openrelik.file.sidePanelWidth', DEFAULT_WIDTH)
-const clamp = (px: number) =>
-  Math.round(Math.min(window.innerWidth * MAX_SHARE, Math.max(MIN_WIDTH, px)))
-const width = computed(() => clamp(stored.value))
-
-let drag: { x: number; width: number } | null = null
-function startResize(event: PointerEvent) {
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  drag = { x: event.clientX, width: width.value }
-}
-function onResize(event: PointerEvent) {
-  // The edge is on the left: dragging left widens the panel.
-  if (drag) stored.value = clamp(drag.width + drag.x - event.clientX)
-}
-const endResize = () => (drag = null)
+// Width: dragged by the left edge, remembered.
+const panel = usePanelWidth('openrelik.file.sidePanelWidth', { initial: 416, min: 280 })
 </script>
 
 <template>
   <aside
     class="relative flex shrink-0 flex-col border-l border-border max-xl:hidden"
-    :style="{ width: `${width}px` }"
+    :style="{ width: `${panel.width.value}px` }"
     aria-label="Side panel"
   >
-    <!-- the left edge: drag to resize, double-click for the default width -->
-    <div
-      class="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-brand/20 active:bg-brand/30"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize the side panel"
-      v-tooltip="'Drag to resize; double-click to reset'"
-      @pointerdown.prevent="startResize"
-      @pointermove="onResize"
-      @pointerup="endResize"
-      @pointercancel="endResize"
-      @dblclick="stored = DEFAULT_WIDTH"
-    />
+    <PanelResizeHandle :panel="panel" label="Resize the side panel" />
     <div class="flex h-7 shrink-0 items-stretch border-b border-border pr-1 pl-1">
       <!-- tabs: the file's details, and the inspector of the viewer on screen -->
       <div class="flex items-stretch" role="tablist" aria-label="Side panel">
@@ -94,15 +63,7 @@ const endResize = () => (drag = null)
           {{ option === 'details' ? 'Details' : 'Inspector' }}
         </button>
       </div>
-      <button
-        type="button"
-        class="ml-auto flex size-5 cursor-pointer items-center justify-center self-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink"
-        aria-label="Hide details"
-        v-tooltip="'Hide the panel (i)'"
-        @click="$emit('close')"
-      >
-        <PanelRightClose :size="13" :stroke-width="1.5" />
-      </button>
+      <PanelToggle open name="details" class="ml-auto" @toggle="$emit('close')" />
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">

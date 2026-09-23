@@ -153,7 +153,14 @@ function openWorkflow() {
 
 <template>
   <aside class="flex min-h-0 flex-col" aria-label="Inspector">
-    <p class="micro-label flex h-7 shrink-0 items-center border-b border-border px-3">inspector</p>
+    <div
+      class="flex h-7 shrink-0 items-center border-b border-border pl-3"
+      :class="$slots.end ? 'pr-1' : 'pr-3'"
+    >
+      <p class="micro-label">inspector</p>
+      <!-- the page's control for the whole panel (hide), at the far right -->
+      <div class="ml-auto flex items-center"><slot name="end" /></div>
+    </div>
 
     <!-- Multi-selection mode -->
     <div v-if="isMulti" class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">

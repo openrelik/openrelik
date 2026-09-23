@@ -36,6 +36,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     shortcuts: [
       { keys: ['g', '⌘K'], does: 'Prompt: focus path prompt or open prompt' },
       { keys: ['⌘,'], does: 'Settings' },
+      { keys: ['click your name'], does: 'Account: API keys, sign out' },
       { keys: ['?'], does: 'This help' },
     ],
   },
@@ -69,6 +70,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['⌘A'], does: 'Select all' },
       { keys: ['⌘⏎', 'r'], does: 'Run a worker on the highlighted or selected files' },
       { keys: ['w'], does: 'Create a workflow on the highlighted or selected files' },
+      { keys: ['i'], does: 'Show or hide the inspector' },
       { keys: ['/'], does: 'Filter this folder' },
       { keys: ['⇧R'], does: 'Refresh this folder from the server' },
       { keys: ['u'], does: 'Upload files here (or drop them on the listing)' },

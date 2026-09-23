@@ -80,6 +80,8 @@ function remove() {
       >
         <X :size="12" :stroke-width="1.5" />
       </button>
+      <!-- the page's control for the whole panel (hide), at the far right -->
+      <slot name="end" />
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">

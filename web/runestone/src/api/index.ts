@@ -10,6 +10,7 @@ import { directoryApi } from './endpoints/directory'
 import { filesApi } from './endpoints/files'
 import { foldersApi } from './endpoints/folders'
 import { taskqueueApi } from './endpoints/taskqueue'
+import { usersApi } from './endpoints/users'
 import { workflowsApi } from './endpoints/workflows'
 import { httpClient } from './client'
 import { apiConfig } from './config'
@@ -21,6 +22,7 @@ export const api = {
   files: filesApi,
   folders: foldersApi,
   taskqueue: taskqueueApi,
+  users: usersApi,
   workflows: workflowsApi,
   http: httpClient,
   config: apiConfig,
@@ -29,6 +31,7 @@ export const api = {
 export default api
 export * from './types'
 export type { SystemConfig } from './endpoints/configs'
+export type { ApiKeyRecord, NewApiKey } from './endpoints/users'
 export { apiConfig } from './config'
 export { ApiError, errorMessage } from './errors'
 export { onActivity, onReachability, onUnauthorized, type Activity } from './client'

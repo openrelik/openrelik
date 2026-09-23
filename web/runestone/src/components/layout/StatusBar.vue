@@ -8,6 +8,7 @@ import { useNetworkActivity } from '@/composables/useNetworkActivity'
 import { useUploadPanel } from '@/composables/useUploadPanel'
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import { helpOpen } from '@/composables/useHelp'
+import { openAccount } from '@/composables/useApiKeys'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -109,13 +110,16 @@ const { status: connection } = useConnection()
       v-if="authStore.isAuthenticated"
       class="-mr-3 flex h-full shrink-0 items-center gap-2 border-l border-border pr-3 pl-2.5"
     >
-      <span
-        class="flex items-center gap-1.5 text-ink-secondary"
-        v-tooltip="authStore.user?.email || 'Authenticated operator'"
+      <button
+        type="button"
+        class="flex cursor-pointer items-center gap-1.5 rounded-(--radius-check) px-1 text-ink-secondary hover:bg-surface"
+        aria-label="Account and API keys"
+        v-tooltip="`${authStore.user?.email || authStore.user?.username}: account and API keys`"
+        @click="openAccount"
       >
         <UserIcon :size="12" :stroke-width="1.5" class="text-brand" />
         <span class="text-ink">{{ authStore.user?.username }}</span>
-      </span>
+      </button>
       <button
         type="button"
         class="flex size-4.5 cursor-pointer items-center justify-center rounded-(--radius-check) text-ink-muted hover:bg-surface hover:text-danger transition-colors"

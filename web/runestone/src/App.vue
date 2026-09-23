@@ -3,6 +3,7 @@ import { RouterView } from 'vue-router'
 
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import Prompt from '@/components/prompt/Prompt.vue'
+import AccountDialog from '@/components/dialogs/AccountDialog.vue'
 import ConfirmDialog from '@/components/dialogs/ConfirmDialog.vue'
 import UploadQueuePanel from '@/components/layout/UploadQueuePanel.vue'
 import HelpDialog from '@/components/dialogs/HelpDialog.vue'
@@ -23,6 +24,7 @@ useKeyboardShortcuts()
   </main>
   <Prompt />
   <SettingsDialog />
+  <AccountDialog />
   <HelpDialog />
   <RunDialog />
   <WorkflowDialog />
