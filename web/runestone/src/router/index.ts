@@ -27,6 +27,11 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/metrics',
+      name: 'metrics',
+      component: () => import('@/views/MetricsView.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),

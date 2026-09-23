@@ -51,9 +51,7 @@
      simulated protanopia, against a floor of 8), and down here the same three
      measure 7.7 and 15.5. Each is the band's *border*; the fill is the same
      token at 25%, which lands around #202e42 on --surface. */
-  --color-series-1: #3d78b2;
-  --color-series-2: #29885e;
-  --color-series-3: #9d671c;
+  /* --color-series-1…8: in the `@theme static` block below. */
 
   /* Shape. Near-square: a console draws boxes, not cards. */
   --radius-sheet: 4px;
@@ -66,6 +64,22 @@
   --shadow-float: 0 8px 24px rgb(0 0 0 / 0.5);
   /* A popover beside the control it came from: lifted slightly, not floating. */
   --shadow-popover: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+/* The chart series, emitted whether or not a class uses them: charts pick
+   them by index at runtime (`var(--color-series-N)`), which Tailwind cannot see.
+   Four to eight are more bands for charts with many lines (a metric per
+   queue), at the same lightness and chroma as the first three, hues spread
+   between them. */
+@theme static {
+  --color-series-1: #3d78b2;
+  --color-series-2: #29885e;
+  --color-series-3: #9d671c;
+  --color-series-4: #8563b5;
+  --color-series-5: #23858d;
+  --color-series-6: #b0566b;
+  --color-series-7: #737a2d;
+  --color-series-8: #6a7389;
 }
 
 /* ---------------------------------------------------------------------------

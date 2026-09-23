@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
+
 import BrandLink from '@/components/layout/BrandLink.vue'
 import SettingsTrigger from '@/components/layout/SettingsTrigger.vue'
 import { LogOut, Upload, User as UserIcon } from '@/components/icons'
@@ -93,6 +95,14 @@ const { status: connection } = useConnection()
       </button>
     </span>
 
+    <RouterLink
+      to="/metrics"
+      class="cursor-pointer rounded-(--radius-check) px-1 text-ink-muted hover:bg-surface hover:text-ink"
+      active-class="text-ink"
+      v-tooltip="'Worker task counts over time'"
+    >
+      metrics
+    </RouterLink>
     <SettingsTrigger />
 
     <button
