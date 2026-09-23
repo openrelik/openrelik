@@ -58,6 +58,8 @@ const props = defineProps<{
   showPending?: boolean
   /** Why the last create or rename failed. */
   actionError?: string | null
+  /** What an empty folder says instead of inviting uploads (a workflow folder). */
+  emptyNote?: string
 }>()
 
 const emit = defineEmits<{
@@ -642,6 +644,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
       <template #empty>
         <template v-if="filter">Nothing here matches “{{ filter }}”.</template>
         <template v-else-if="atRoot">No folders yet. Create one with New folder.</template>
+        <template v-else-if="emptyNote">{{ emptyNote }}</template>
         <template v-else>Empty folder. Drop files here or use Upload.</template>
       </template>
     </LoadState>

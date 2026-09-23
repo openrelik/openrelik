@@ -286,6 +286,17 @@ const task = computed(() =>
 )
 watch(cursor, () => (taskId.value = null))
 
+/**
+ * A workflow folder holds what its tasks produce, so an empty one does not
+ * invite uploads: it says where the outputs will come from.
+ */
+const emptyNote = computed(() => {
+  if (folder.value?.workflowId === undefined) return undefined
+  return workflow.value?.draft === false
+    ? 'No outputs yet.'
+    : 'Outputs land here once the workflow runs.'
+})
+
 /** A folder row under the cursor or mouse is likely opened next: load its subfolders ahead. */
 function prefetchRow(item: Item | null | undefined) {
   prefetch.schedule(item?.kind === 'folder' ? item.id : null)
@@ -607,6 +618,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :may-rename="mayRename"
           :show-pending="showPending"
           :action-error="actionError ?? runError ?? uploads.error.value ?? dropRefusal"
+          :empty-note="emptyNote"
           :uploads="uploadsHere"
           :is-drop-target="isDropTarget"
           v-on="dropHandlers"

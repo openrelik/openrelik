@@ -19,7 +19,7 @@ import Button from '@/components/base/Button.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
 
 import { findItem } from '@/data/folders'
-import { STACK_MIN, useGroupStacks } from '@/composables/useGroupStacks'
+import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import type { AddAt } from '@/composables/useWorkflow'
 import {
   canJoin,
@@ -51,9 +51,11 @@ import { revealIn } from '@/utils/scroll'
  * their middle when there is room, with an edge from the last task of each
  * line.
  *
- * A large group (see `STACK_MIN`) whose tasks have nothing after them is drawn
- * as one stacked card with its progress, until it is opened — by a click, or
- * by one of its tasks being selected or lit. It keeps its box either way,
+ * A group's tasks with nothing after them can be folded into one stacked card
+ * with their progress, next to the tasks that do have workers after them;
+ * groups with many start that way (see `useGroupStacks`). A stack opens by a click, or by one of its tasks being
+ * selected or lit, and every group can be stacked or opened at once from the
+ * workflow's header. It keeps its box either way,
  * with a toggle on the box's corner to stack or show its tasks at any time;
  * a stacked card shows the selection.
  *
@@ -111,6 +113,7 @@ interface Node {
   /** A join: how many tasks it waits for. */
   waitsFor?: number
   /** A large group drawn as one stacked card: the group it stands for. */
+  /** A stacked card: the group it belongs to, with only the tasks it folds. */
   stack?: TaskGroup
 }
 
@@ -152,17 +155,7 @@ const padOf = (group: GroupNode) => (boxed(group) ? GROUP_PAD : 0)
 const blockOf = (group: GroupNode) =>
   group.members.length * NODE_H + (group.members.length - 1) * ROW_GAP + 2 * padOf(group)
 
-const { isOpen, openStack, closeStack } = useGroupStacks()
-
-/**
- * Whether a group can be drawn stacked: large, and nothing after its tasks
- * (their follow-on tasks would have nowhere to go).
- */
-const stackable = (group: TaskGroup) =>
-  group.tasks.length >= STACK_MIN && group.tasks.every((task) => !task.groups.length)
-
-/** Drawn stacked, unless opened. */
-const stacked = (group: TaskGroup) => stackable(group) && !isOpen(group.id)
+const { isStacked: stacked, openStack, closeStack } = useGroupStacks()
 
 /**
  * A task selected or lit inside a stack (from the tree, the listing) opens
@@ -174,7 +167,7 @@ watch(
   () => [props.selectedId, props.producerId],
   (ids) => {
     for (const { group } of everyGroup(props.workflow)) {
-      if (stackable(group) && group.tasks.some((task) => ids.includes(task.id))) {
+      if (stacked(group) && foldable(group).some((task) => ids.includes(task.id))) {
         openStack(group.id)
       }
     }
@@ -185,6 +178,13 @@ watch(
 /** A stack holding the selected task, or the one behind the highlighted file. */
 const holds = (group: TaskGroup, id: string | null | undefined) =>
   !!id && group.tasks.some((task) => task.id === id)
+
+/** A card's tooltip: which tasks it holds, by name, and how to see them. */
+function stackTip(stack: TaskGroup): string {
+  const names = stack.tasks.map((task) => task.name)
+  const shown = names.length > 4 ? [...names.slice(0, 4), `${names.length - 4} more`] : names
+  return `${shown.join(', ')} — click to show them`
+}
 
 /** One status for a stack: the most pressing of its tasks'. */
 function stackStatus(group: TaskGroup): TaskStatus {
@@ -231,9 +231,23 @@ const layout = computed(() => {
   })
   const shapeGroups = (groups: TaskGroup[], depth: number): GroupNode[] =>
     groups.map((group) => {
-      const members = stacked(group)
-        ? [{ key: `${group.id}:stack`, depth, top: 0, groups: [], stack: group }]
-        : group.tasks.map((task) => shape(task, depth))
+      // A stack folds the tasks with nothing after them into one card, below
+      // the ones that have workers after them: their lines stay in sight.
+      const folded = stacked(group) ? foldable(group) : []
+      const members = [
+        ...group.tasks.filter((task) => !folded.includes(task)).map((task) => shape(task, depth)),
+        ...(folded.length
+          ? [
+              {
+                key: `${group.id}:stack`,
+                depth,
+                top: 0,
+                groups: [],
+                stack: { id: group.id, tasks: folded },
+              },
+            ]
+          : []),
+      ]
       // As in the original editor: a callback is offered after a free group (two
       // or more with nothing chained after them), and nothing is chained after
       // a group's tasks once it has one.
@@ -542,21 +556,21 @@ const edges = computed(() =>
 /** Tasks without a right-edge +: members of a group a join waits for. */
 const blocked = computed(() => unchainable(props.workflow))
 
-/** A dashed box around every group whose tasks sit in adjacent rows. */
-/** Opened stacks, with the control on their box's corner that stacks them again. */
+/** Every group that can be stacked gets a toggle on its box's corner: stack it, or show its tasks. */
 const toggles = computed(() =>
   layout.value.groups
     .filter(({ group }) => stackable(group))
     .map(({ group, members }) => ({
       key: `${group.id}:toggle`,
       groupId: group.id,
-      open: isOpen(group.id),
+      open: !stacked(group),
       count: group.tasks.length,
       left: x(members[0]!) + NODE_W + GROUP_PAD - 8,
       top: y(members[0]!) - GROUP_PAD - 8,
     })),
 )
 
+/** A dashed box around every group of two or more, and every stack. */
 const boxes = computed(() =>
   layout.value.groups.filter(boxed).map(({ group, members }) => {
     const first = members[0]!
@@ -896,7 +910,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                       : 'border-border-strong bg-surface hover:bg-sunken',
                 ]"
                 :aria-label="`${stackSummary(node.stack).name} ${stackSummary(node.stack).times}: ${stackSummary(node.stack).line}. Show all ${node.stack.tasks.length}`"
-                v-tooltip="`Show all ${node.stack.tasks.length} tasks in this group`"
+                v-tooltip="stackTip(node.stack)"
                 @click="clickStack($event, node.stack.id)"
               >
                 <span class="flex min-w-0 items-center gap-1.5">

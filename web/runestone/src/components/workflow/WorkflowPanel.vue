@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import {
   ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Expand,
   ListTree,
-  Maximize2,
-  Minimize2,
   Network,
   Play,
-  Plus,
   Shrink,
 } from '@/components/icons'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -32,8 +31,9 @@ import {
   workflowActivity,
 } from '@/composables/useWorkflow'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
+import { stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import {
-  canChainAfter,
+  everyGroup,
   everyTask,
   findTask,
   runStats,
@@ -68,9 +68,6 @@ const modalStore = useModalStore()
 type View = 'tree' | 'graph'
 const view = useRemembered<View>('openrelik.workflow.view', 'tree')
 const open = ref(true)
-/** Big workflows would push the file listing off screen, so the body is capped
- *  and scrolls — until the user asks for all of it. */
-const maximized = ref(false)
 const fullscreen = ref(false)
 
 const VIEWS: { value: View; label: string; icon: typeof ListTree }[] = [
@@ -79,6 +76,35 @@ const VIEWS: { value: View; label: string; icon: typeof ListTree }[] = [
 ]
 
 const stats = computed(() => runStats(props.workflow))
+
+/**
+ * The flowchart's groups can all be stacked, or all shown, at once. A group
+ * whose tasks have workers after them cannot be stacked: those would have
+ * nowhere to go, so "stack all" leaves it open.
+ */
+const stacks = useGroupStacks()
+const allGroups = computed(() => everyGroup(props.workflow).map(({ group }) => group))
+/**
+ * One toggle for them all: it stacks every group that can be, until they all
+ * are — then it shows them all again. A mix (large groups start stacked,
+ * small ones open) counts as not all stacked.
+ */
+const groupToggle = computed(() => {
+  const groups = allGroups.value.filter(stackable)
+  const allStacked = groups.length > 0 && groups.every((group) => stacks.isStacked(group))
+  return allStacked
+    ? {
+        icon: ChevronsUpDown,
+        label: 'Show all tasks in every group',
+        stack: false,
+        disabled: false,
+      }
+    : { icon: ChevronsDownUp, label: 'Stack all groups', stack: true, disabled: !groups.length }
+})
+function toggleGroups() {
+  if (groupToggle.value.stack) stacks.stackAll(allGroups.value)
+  else stacks.openAll(allGroups.value)
+}
 const selectedTask = computed(
   () => everyTask(props.workflow).find((task) => task.id === props.selectedId) ?? null,
 )
@@ -109,18 +135,6 @@ const blocker = computed(() =>
 function add(at: AddAt = { after: props.selectedId }) {
   if (editable.value) openAddToWorkflow(props.workflow, at)
 }
-
-/** The + Worker button adds after the selected task, unless a join waits for its group. */
-const canAddHere = computed(
-  () => !selectedTask.value || canChainAfter(props.workflow, selectedTask.value.id),
-)
-const addTooltip = computed(() =>
-  !selectedTask.value
-    ? 'Add worker on the inputs (a)'
-    : canAddHere.value
-      ? `Add worker after ${selectedTask.value.name} (a)`
-      : `${selectedTask.value.name} is in a group a worker waits for; add after that worker instead`,
-)
 
 /** Splits picked tasks out of their group into one of their own; undo is offered in the header. */
 function split(taskIds: string[]) {
@@ -264,16 +278,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           </button>
         </div>
 
-        <button
-          type="button"
-          class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink"
-          :aria-label="maximized ? 'Cap workflow height' : 'Show whole workflow'"
-          v-tooltip="maximized ? 'Cap height' : 'Show all'"
-          :aria-pressed="maximized"
-          @click="((maximized = !maximized), (open = true))"
-        >
-          <component :is="maximized ? Minimize2 : Maximize2" :size="13" :stroke-width="1.5" />
-        </button>
+        <!-- the flowchart's groups: stack or show them all, one toggle -->
+        <template v-if="view === 'graph'">
+          <button
+            type="button"
+            class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+            :aria-label="groupToggle.label"
+            v-tooltip="groupToggle.label"
+            :disabled="groupToggle.disabled"
+            @click="toggleGroups"
+          >
+            <component :is="groupToggle.icon" :size="13" :stroke-width="1.5" />
+          </button>
+        </template>
+
         <button
           type="button"
           class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink"
@@ -286,15 +304,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
 
         <template v-if="workflow.draft">
           <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
-          <Button
-            size="row"
-            :disabled="!editable || !canAddHere"
-            :tooltip="addTooltip"
-            @click="add()"
-          >
-            <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
-            Worker
-          </Button>
           <Button
             variant="primary"
             size="row"
@@ -312,7 +321,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
     <template v-if="open && !fullscreen">
       <WorkflowTree
         v-if="view === 'tree'"
-        :class="{ 'max-h-[45vh] overflow-y-auto': !maximized }"
+        class="max-h-[70vh] overflow-y-auto"
         :workflow="workflow"
         :selected-id="selectedId"
         :producer-id="producerId"
@@ -323,7 +332,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
       />
       <WorkflowGraph
         v-else
-        :capped="!maximized"
+        capped
         :workflow="workflow"
         :selected-id="selectedId"
         :producer-id="producerId"
@@ -354,16 +363,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             >
           </span>
           <div class="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+              :aria-label="groupToggle.label"
+              v-tooltip="groupToggle.label"
+              :disabled="groupToggle.disabled"
+              @click="toggleGroups"
+            >
+              <component :is="groupToggle.icon" :size="13" :stroke-width="1.5" />
+            </button>
+            <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
             <template v-if="workflow.draft">
-              <Button
-                size="row"
-                :disabled="!editable || !canAddHere"
-                :tooltip="addTooltip"
-                @click="add()"
-              >
-                <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
-                Worker
-              </Button>
               <Button
                 variant="primary"
                 size="row"
