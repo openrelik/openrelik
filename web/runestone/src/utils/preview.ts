@@ -27,3 +27,41 @@ export function previewOf(file: { mime?: string; size?: number }): Preview {
   if ((file.size ?? 0) > PREVIEW_MAX_BYTES) return { kind: 'too-large', limit: PREVIEW_MAX_BYTES }
   return { kind: 'text' }
 }
+
+export type TableKind = 'csv' | 'tsv' | 'jsonl'
+
+const TABLE_MIMES: Record<string, TableKind> = {
+  'text/csv': 'csv',
+  'application/csv': 'csv',
+  'text/tab-separated-values': 'tsv',
+  'application/x-ndjson': 'jsonl',
+  'application/jsonl': 'jsonl',
+}
+const TABLE_EXTENSIONS: Record<string, TableKind> = {
+  csv: 'csv',
+  tsv: 'tsv',
+  jsonl: 'jsonl',
+  ndjson: 'jsonl',
+}
+
+/**
+ * Whether a file is a table the browser can show as one, and which kind:
+ * by the worker's data type (`openrelik:hayabusa:csv_timeline`,
+ * `dissect:target:jsonl`), then the extension, then the MIME type. The file
+ * must be text; a `.csv` that libmagic calls binary is not a table.
+ */
+export function tableKindOf(file: {
+  name: string
+  mime?: string
+  dataType?: string
+}): TableKind | null {
+  const text = !file.mime || isTextMime(file.mime) || file.mime in TABLE_MIMES
+  if (!text) return null
+  const type = file.dataType?.toLowerCase() ?? ''
+  if (/:(jsonl|ndjson)\b/.test(type)) return 'jsonl'
+  if (/:tsv\b/.test(type)) return 'tsv'
+  if (/:csv/.test(type)) return 'csv'
+  const extension = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase()
+  if (extension && TABLE_EXTENSIONS[extension]) return TABLE_EXTENSIONS[extension]
+  return (file.mime && TABLE_MIMES[file.mime]) || null
+}

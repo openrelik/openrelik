@@ -2,13 +2,14 @@
 import { computed, ref, watch } from 'vue'
 
 import HexViewer from '@/components/viewers/HexViewer.vue'
+import TableViewer from '@/components/viewers/TableViewer.vue'
 import { api } from '@/api'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useSystemConfig } from '@/composables/useSystemConfig'
 import type { Item } from '@/data/folders'
 import { useSettingsStore } from '@/stores/settings'
 import { formatSize } from '@/utils/format'
-import { previewOf } from '@/utils/preview'
+import { previewOf, tableKindOf } from '@/utils/preview'
 
 /**
  * A file's content, as the server renders it: a text file within the size
@@ -26,6 +27,10 @@ import { previewOf } from '@/utils/preview'
  *
  * Anything else — binary, or text too large for the page — is shown as hex
  * (`HexViewer`), a screen at a time; text files can be switched to hex too.
+ *
+ * CSV, TSV and JSONL open as a table (`TableViewer`), parsed in the browser as
+ * the file arrives, at any size: a table file too large for the text preview
+ * can still be read as a table.
  */
 const props = defineProps<{ file: Item }>()
 
@@ -42,24 +47,47 @@ const canRender = computed(
     !!system.value.allowed_data_types_preview?.includes(props.file.dataType),
 )
 const rendered = ref(false)
-/** Text files open as text and can be switched to hex; others are hex only. */
-const view = ref<'text' | 'hex'>('text')
+
+type View = 'table' | 'text' | 'hex'
+const tableKind = computed(() => tableKindOf(props.file))
+/** The ways this file can be shown, the first the default: table, text, hex. */
+const views = computed<View[]>(() => {
+  if (preview.value.kind === 'unknown') return []
+  return [
+    ...(tableKind.value ? (['table'] as const) : []),
+    ...(preview.value.kind === 'text' ? (['text'] as const) : []),
+    'hex',
+  ]
+})
+const chosen = ref<View | null>(null)
 watch(
   () => props.file.id,
   () => {
     rendered.value = false
-    view.value = 'text'
+    chosen.value = null
   },
 )
-const showHex = computed(
-  () =>
-    preview.value.kind === 'not-text' ||
-    preview.value.kind === 'too-large' ||
-    (preview.value.kind === 'text' && view.value === 'hex'),
+const view = computed<View | undefined>(() =>
+  chosen.value && views.value.includes(chosen.value) ? chosen.value : views.value[0],
+)
+const showHex = computed(() => view.value === 'hex')
+
+/**
+ * The file whose table has been opened: the table stays mounted (hidden)
+ * while text or hex is shown, so switching back keeps its rows, filter,
+ * sort and place instead of reading the file again. Another file starts over.
+ */
+const tableFor = ref<number | null>(null)
+watch(
+  [view, () => props.file.id],
+  ([now, id]) => {
+    if (now === 'table') tableFor.value = id
+  },
+  { immediate: true },
 )
 
 const src = computed(() =>
-  preview.value.kind === 'text' && view.value === 'text'
+  view.value === 'text'
     ? api.files.contentUrl(props.file.id, {
         theme: settings.resolvedTheme,
         unescaped: canRender.value && rendered.value,
@@ -79,13 +107,13 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       <span class="micro-label">content</span>
       <!-- text or hex: a segmented pick, like the workflow's views -->
       <div
-        v-if="preview.kind === 'text'"
+        v-if="views.length > 1"
         class="flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
         role="group"
         aria-label="Show as"
       >
         <button
-          v-for="option in ['text', 'hex'] as const"
+          v-for="option in views"
           :key="option"
           type="button"
           class="h-4 cursor-pointer rounded-(--radius-check) px-1.5 text-[11px] transition-colors duration-120"
@@ -95,7 +123,7 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
               : 'text-ink-muted hover:bg-sunken hover:text-ink-secondary'
           "
           :aria-pressed="view === option"
-          @click="view = option"
+          @click="chosen = option"
         >
           {{ option }}
         </button>
@@ -103,7 +131,7 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       <span class="truncate">
         {{ file.mime }}
         <template v-if="preview.kind === 'not-text'"> · no text preview</template>
-        <template v-else-if="preview.kind === 'too-large'">
+        <template v-else-if="preview.kind === 'too-large' && view !== 'table'">
           · too large for a text preview (over {{ formatSize(preview.limit) }})</template
         >
       </span>
@@ -117,10 +145,21 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       </label>
     </div>
 
+    <TableViewer
+      v-if="tableKind && tableFor === file.id"
+      v-show="view === 'table'"
+      :file-id="file.id"
+      :size="file.size ?? 0"
+      :kind="tableKind"
+    />
     <HexViewer v-if="showHex" :file-id="file.id" :size="file.size ?? 0" />
 
     <!-- The server's page sets its text flush to the edge: the room is kept here. -->
-    <div v-else class="relative min-h-0 flex-1 bg-surface" :class="{ 'py-2 pl-3': src }">
+    <div
+      v-else-if="view !== 'table'"
+      class="relative min-h-0 flex-1 bg-surface"
+      :class="{ 'py-2 pl-3': src }"
+    >
       <template v-if="src">
         <!-- sandbox="": no scripts, forms, popups or same-origin access for the file's page -->
         <iframe

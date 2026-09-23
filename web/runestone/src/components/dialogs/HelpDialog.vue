@@ -97,6 +97,15 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
+    title: 'table view',
+    shortcuts: [
+      { keys: ['↑', '↓'], does: 'Move through rows; the row shows in full on the right' },
+      { keys: ['/'], does: 'Filter rows: text in any cell, or column:value' },
+      { keys: ['⌘C'], does: 'Copy the row (tab-separated, or the JSON line)' },
+      { keys: ['esc'], does: 'Clear the row selection' },
+    ],
+  },
+  {
     title: 'hex view',
     shortcuts: [
       { keys: ['←', '→', '↑', '↓'], does: 'Move the cursor a byte or a row (⇧ selects)' },
