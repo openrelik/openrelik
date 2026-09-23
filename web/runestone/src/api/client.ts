@@ -26,8 +26,12 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   /** Plain objects and arrays are sent as JSON; native body types are sent as-is. */
   body?: unknown
   params?: QueryParams
-  /** `'auto'` parses JSON or text based on Content-Type (default). */
-  responseType?: 'auto' | 'blob'
+  /**
+   * `'auto'` parses JSON or text based on Content-Type (default). `'response'`
+   * hands back the unread response, for a caller that checks the status and
+   * headers before deciding to read the body (byte ranges).
+   */
+  responseType?: 'auto' | 'blob' | 'response'
   /** Do not try to refresh the session on 401 (used by login). */
   skipAuthRefresh?: boolean
   /** Do not attach an X-CSRF-Token header (used by endpoints outside the session). */
@@ -387,6 +391,7 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
 async function receive<T>(endpoint: string, options: RequestOptions): Promise<T> {
   const response = await send(endpoint, options)
 
+  if (options.responseType === 'response') return response as T
   if (options.responseType === 'blob') {
     return (await response.blob()) as T
   }

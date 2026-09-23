@@ -40,8 +40,8 @@ const { line, index, query, cwdPath, scopePath, results, serverSearch, go, handl
  *
  * Backspace is never passed on: it only ever edits the line, so one press too
  * many does nothing instead of leaving the folder. Going up is `cd ..`, or a
- * click on the path. On a file page, Esc on an empty line closes the file and
- * goes back to its folder, the way Esc closes a preview.
+ * click on the path. Esc clears the line, then leaves the prompt — never the
+ * page: on a file page the next Esc, the page's own, goes back to the folder.
  */
 const LISTING_KEYS = new Set([
   'ArrowUp',
@@ -60,12 +60,10 @@ function onInputKey(event: KeyboardEvent) {
   if (!line.value && LISTING_KEYS.has(event.key)) return
   // ⌘⏎ runs a worker on the highlighted file; the prompt never uses it.
   if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') return
-  // On a file page, Esc on an empty line is the page's: it closes the file.
-  if (!line.value && event.key === 'Escape' && route.name === 'file') return
   event.stopPropagation()
   if (handleKey(event)) return
   if (event.key === 'Escape') {
-    // The first Esc clears the line; in a folder, the second leaves the prompt.
+    // The first Esc clears the line; the second leaves the prompt.
     if (line.value) line.value = ''
     else input.value?.blur()
     event.preventDefault()
@@ -73,18 +71,26 @@ function onInputKey(event: KeyboardEvent) {
 }
 
 const focusPrompt = () => input.value?.focus({ preventScroll: true })
+/**
+ * Arriving in a folder puts you at the prompt, to keep walking with `cd`. A
+ * file page is for its own keys (j, k, d, w, and the hex view's): the prompt
+ * waits for `g` or a click there.
+ */
+const focusOnArrival = () => {
+  if (route.name !== 'file') focusPrompt()
+}
 
 let unregister = () => {}
 onMounted(() => {
   unregister = registerPrompt(focusPrompt)
-  focusPrompt()
+  focusOnArrival()
 })
 // Arriving somewhere — by prompt, link or keyboard — puts you back at the prompt.
 watch(
   () => route.fullPath,
   async () => {
     await nextTick()
-    focusPrompt()
+    focusOnArrival()
   },
 )
 onUnmounted(() => unregister())
@@ -270,9 +276,7 @@ function onBarClick(event: MouseEvent) {
       :aria-expanded="dropdown"
       :aria-activedescendant="dropdown ? `prompt-${index}` : undefined"
       class="min-w-24 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
-      :placeholder="
-        focused ? (route.name === 'file' ? 'Press ESC to go back' : 'cd, or type to find…') : ''
-      "
+      :placeholder="focused ? 'cd, or type to find…' : ''"
       @focus="focused = true"
       @blur="focused = false"
       @keydown="onInputKey"

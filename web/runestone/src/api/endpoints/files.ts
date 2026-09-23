@@ -45,6 +45,40 @@ export const filesApi = {
     return `${apiConfig.basePath}/files/${fileId}/download_stream`
   },
 
+  /**
+   * Bytes `start` to `end` (inclusive) of a file, through the server's plain
+   * download, which honours HTTP Range. Only a partial answer for exactly
+   * that range is read: a server or proxy that ignores Range would send the
+   * whole file, so anything else is cancelled before its body and rejected.
+   */
+  async readRange(
+    fileId: number,
+    start: number,
+    end: number,
+    options: Pick<RequestOptions, 'signal' | 'background'> = {},
+  ): Promise<Uint8Array> {
+    const controller = new AbortController()
+    const abort = () => controller.abort()
+    if (options.signal?.aborted) controller.abort()
+    options.signal?.addEventListener('abort', abort, { once: true })
+    try {
+      const response = await httpClient.get<Response>(`/files/${fileId}/download`, {
+        headers: { Range: `bytes=${start}-${end}` },
+        signal: controller.signal,
+        background: options.background,
+        responseType: 'response',
+      })
+      const range = /^bytes (\d+)-(\d+)\//.exec(response.headers.get('Content-Range') ?? '')
+      if (response.status !== 206 || Number(range?.[1]) !== start || Number(range?.[2]) > end) {
+        controller.abort()
+        throw new Error('The server did not answer with the requested byte range')
+      }
+      return new Uint8Array(await response.arrayBuffer())
+    } finally {
+      options.signal?.removeEventListener('abort', abort)
+    }
+  },
+
   /** One file in full: hashes, magic, data type. */
   getFile(
     fileId: number,

@@ -120,16 +120,22 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   /**
    * Where the typed line is resolved from, and what is left to match once the
    * `/` or `../` prefix is spent. `undefined` as a base means the very top.
+   *
+   * An open file is a level of its own, as the page shows it: from a file,
+   * the first `../` is the file's folder (its neighbours), the next its parent.
    */
   const resolved = computed(() => {
     let rest = query.value
     let base = cwd.value
+    let inFile = route.name === 'file'
     if (rest.startsWith('/')) {
       base = undefined
       rest = rest.slice(1)
+      inFile = false
     }
     while (rest.startsWith('../')) {
-      base = parentOf(base)
+      if (inFile) inFile = false
+      else base = parentOf(base)
       rest = rest.slice(3)
     }
     return { base, rest, prefix: query.value.slice(0, query.value.length - rest.length) }
@@ -343,8 +349,9 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
       }
       return
     }
-    if (result.here) {
-      // Back to the listing, with the open file (if any) under the cursor.
+    // From a file, `..` and `.` are its folder: back to the listing, with the
+    // file under the cursor. From a folder, `..` is its parent.
+    if (result.here || (result.up && route.name === 'file')) {
       if (route.name === 'file' && cwd.value) {
         router.push({
           path: `/folder/${cwd.value.id}`,

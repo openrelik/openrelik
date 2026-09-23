@@ -27,6 +27,7 @@ export {
   ChevronsUpDown,
   Circle,
   Copy,
+  CornerDownRight,
   CornerLeftUp,
   Download,
   Expand,

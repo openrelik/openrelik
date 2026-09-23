@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import HexViewer from '@/components/viewers/HexViewer.vue'
 import { api } from '@/api'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useSystemConfig } from '@/composables/useSystemConfig'
@@ -22,6 +23,9 @@ import { previewOf } from '@/utils/preview'
  * HTML can be shown rendered instead of as source, for data types the server
  * allows (`allowed_data_types_preview`); still in the sandbox, and off until
  * asked for.
+ *
+ * Anything else — binary, or text too large for the page — is shown as hex
+ * (`HexViewer`), a screen at a time; text files can be switched to hex too.
  */
 const props = defineProps<{ file: Item }>()
 
@@ -38,13 +42,24 @@ const canRender = computed(
     !!system.value.allowed_data_types_preview?.includes(props.file.dataType),
 )
 const rendered = ref(false)
+/** Text files open as text and can be switched to hex; others are hex only. */
+const view = ref<'text' | 'hex'>('text')
 watch(
   () => props.file.id,
-  () => (rendered.value = false),
+  () => {
+    rendered.value = false
+    view.value = 'text'
+  },
+)
+const showHex = computed(
+  () =>
+    preview.value.kind === 'not-text' ||
+    preview.value.kind === 'too-large' ||
+    (preview.value.kind === 'text' && view.value === 'hex'),
 )
 
 const src = computed(() =>
-  preview.value.kind === 'text'
+  preview.value.kind === 'text' && view.value === 'text'
     ? api.files.contentUrl(props.file.id, {
         theme: settings.resolvedTheme,
         unescaped: canRender.value && rendered.value,
@@ -62,9 +77,38 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">
     <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
       <span class="micro-label">content</span>
-      <span v-if="preview.kind === 'text'" class="truncate">{{ file.mime }}</span>
+      <!-- text or hex: a segmented pick, like the workflow's views -->
+      <div
+        v-if="preview.kind === 'text'"
+        class="flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
+        role="group"
+        aria-label="Show as"
+      >
+        <button
+          v-for="option in ['text', 'hex'] as const"
+          :key="option"
+          type="button"
+          class="h-4 cursor-pointer rounded-(--radius-check) px-1.5 text-[11px] transition-colors duration-120"
+          :class="
+            view === option
+              ? 'bg-brand-tint text-brand'
+              : 'text-ink-muted hover:bg-sunken hover:text-ink-secondary'
+          "
+          :aria-pressed="view === option"
+          @click="view = option"
+        >
+          {{ option }}
+        </button>
+      </div>
+      <span class="truncate">
+        {{ file.mime }}
+        <template v-if="preview.kind === 'not-text'"> · no text preview</template>
+        <template v-else-if="preview.kind === 'too-large'">
+          · too large for a text preview (over {{ formatSize(preview.limit) }})</template
+        >
+      </span>
       <label
-        v-if="preview.kind === 'text' && canRender"
+        v-if="preview.kind === 'text' && view === 'text' && canRender"
         class="ml-auto flex cursor-pointer items-center gap-1.5"
         v-tooltip="'Show the HTML rendered, in the sandbox, rather than its source'"
       >
@@ -73,8 +117,10 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       </label>
     </div>
 
+    <HexViewer v-if="showHex" :file-id="file.id" :size="file.size ?? 0" />
+
     <!-- The server's page sets its text flush to the edge: the room is kept here. -->
-    <div class="relative min-h-0 flex-1 bg-surface" :class="{ 'py-2 pl-3': src }">
+    <div v-else class="relative min-h-0 flex-1 bg-surface" :class="{ 'py-2 pl-3': src }">
       <template v-if="src">
         <!-- sandbox="": no scripts, forms, popups or same-origin access for the file's page -->
         <iframe
@@ -95,20 +141,7 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
         </p>
       </template>
 
-      <div v-else class="px-4 py-3 text-ink-muted">
-        <template v-if="preview.kind === 'too-large'">
-          <p class="text-ink">Too large to preview.</p>
-          <p class="tabular">
-            {{ formatSize(file.size ?? 0) }}; files up to {{ formatSize(preview.limit) }} are shown
-            here. Download it to examine it.
-          </p>
-        </template>
-        <template v-else-if="preview.kind === 'not-text'">
-          <p class="text-ink">No preview for {{ file.mime }}.</p>
-          <p>Only text files are shown here. Download it to examine it.</p>
-        </template>
-        <p v-else>Waiting for the file's type…</p>
-      </div>
+      <p v-else class="px-4 py-3 text-ink-muted">Waiting for the file's type…</p>
     </div>
   </div>
 </template>

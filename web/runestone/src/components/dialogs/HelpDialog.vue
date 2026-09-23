@@ -97,6 +97,16 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
+    title: 'hex view',
+    shortcuts: [
+      { keys: ['←', '→', '↑', '↓'], does: 'Move the cursor a byte or a row (⇧ selects)' },
+      { keys: ['⌘↑', '⌘↓'], does: 'Start, end of the file' },
+      { keys: ['o'], does: 'Go to an offset (hex as 0x1f0, or decimal)' },
+      { keys: ['[', ']'], does: 'Back, forward through jumps' },
+      { keys: ['⌘C', '⇧⌘C'], does: 'Copy the selection as hex, as text' },
+    ],
+  },
+  {
     title: 'full-screen flowchart',
     shortcuts: [
       { keys: ['esc'], does: 'Close the task, then exit' },
