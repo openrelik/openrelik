@@ -14,6 +14,8 @@ const props = defineProps<{
   pathPending?: boolean
   atRoot: boolean
   selectedFiles?: Item[]
+  /** Why uploading is off here (an empty workflow folder), or nothing. */
+  uploadBlocked?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -42,6 +44,7 @@ function focusFilter() {
 
 /** Opens the operating system's file picker (the Upload button, and `u`). */
 function pickFiles() {
+  if (props.uploadBlocked) return
   fileInput.value?.click()
 }
 
@@ -122,7 +125,8 @@ defineExpose({
         <Button
           :variant="uploadLeads ? 'primary' : 'secondary'"
           size="row"
-          :tooltip="`Upload files to ${currentFolder?.name ?? 'folder'} (u)`"
+          :disabled="!!uploadBlocked"
+          :tooltip="uploadBlocked || `Upload files to ${currentFolder?.name ?? 'folder'} (u)`"
           @click="pickFiles"
         >
           <template #icon><Upload :size="13" :stroke-width="1.5" /></template>

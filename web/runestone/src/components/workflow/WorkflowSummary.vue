@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import { Pencil, Workflow as WorkflowIcon } from '@/components/icons'
-import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import { renameWorkflow } from '@/composables/useWorkflow'
 import type { RunStats, Workflow } from '@/data/workflows'
 import { count, formatDuration } from '@/utils/format'
 
-/** Name, overall state and the run in one line: "12/22 done · 1 failed · 20m 40s". */
+/** Name and the run in one line: "12/22 done · 1 failed · 20m 40s". */
 const props = defineProps<{ workflow: Workflow; stats: RunStats }>()
 
 const isEditing = ref(false)
@@ -90,7 +89,6 @@ function onKeydown(event: KeyboardEvent) {
   <span v-if="workflow.draft" class="tabular whitespace-nowrap text-ink-muted">
     draft · {{ count(stats.total, 'worker') }}
   </span>
-  <TaskStatusBadge v-if="!workflow.draft" :status="stats.state" />
   <span
     v-if="!workflow.draft"
     class="tabular whitespace-nowrap text-ink-muted"

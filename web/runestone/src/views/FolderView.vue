@@ -28,7 +28,7 @@ import { useUploadPanel } from '@/composables/useUploadPanel'
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import { useRootPager } from '@/composables/useRootPager'
 import { useWorkflowLoader } from '@/composables/useWorkflowLoader'
-import type { AddAt } from '@/composables/useWorkflow'
+import { discardWorkflow, type AddAt } from '@/composables/useWorkflow'
 import { everyTask, findTask } from '@/data/workflows'
 import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
@@ -110,10 +110,24 @@ const uploadsHere = computed(() =>
 /** Why a drop was (partly) refused; cleared by the next drop or navigation. */
 const dropRefusal = ref<string | null>(null)
 
+/**
+ * An empty workflow folder takes no uploads: it is for the workflow's outputs,
+ * and files put there before it runs would pass for them.
+ */
+const uploadBlocked = computed(() =>
+  folder.value?.workflowId !== undefined && !childrenOf(folder.value.id).length
+    ? 'Uploads are off until the workflow has produced its outputs'
+    : null,
+)
+
 /** Queues files for this folder; at the root there is no folder to put them in. */
 function uploadFiles(files: File[]) {
   if (folderId.value === undefined) {
     dropRefusal.value = 'Files are uploaded into a case folder — open one first.'
+    return
+  }
+  if (uploadBlocked.value) {
+    dropRefusal.value = `${uploadBlocked.value}.`
     return
   }
   uploads.enqueue(folderId.value, files)
@@ -132,6 +146,10 @@ function pickedFiles(files: File[]) {
  */
 const { isOver: isDropTarget, handlers: dropHandlers } = useDropZone(({ entries, files }) => {
   dropRefusal.value = null
+  if (uploadBlocked.value) {
+    dropRefusal.value = `${uploadBlocked.value}.`
+    return
+  }
   if (entries.length) {
     uploads.enqueueDrop(folderId.value ?? null, entries)
     return
@@ -420,6 +438,13 @@ async function deleteItems(items: Item[]) {
   if (current && deleted.includes(current.id)) router.push(upTo)
 }
 
+/** Discards the draft workflow this folder holds, with the folder, and moves up. */
+async function discard() {
+  const current = folder.value
+  const upTo = parentPath.value
+  if (current && (await discardWorkflow(current.id))) router.push(upTo)
+}
+
 /** Delete / ⌘⌫: the selection, or the highlighted row. */
 function deleteCurrent() {
   const row = rows.value[cursor.value]
@@ -586,6 +611,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :path-pending="pathPending"
       :at-root="atRoot"
       :selected-files="selectedFiles"
+      :upload-blocked="uploadBlocked"
       @new-folder="startCreateFolder"
       @upload-files="pickedFiles"
     />
@@ -645,6 +671,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               :selected-id="taskId"
               :producer-id="producer?.id ?? null"
               @select="taskId = $event?.id ?? null"
+              @discard="discard"
             />
             <LoadState
               v-else-if="folder?.workflowId !== undefined"

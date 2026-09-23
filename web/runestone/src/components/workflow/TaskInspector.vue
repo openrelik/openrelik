@@ -83,7 +83,9 @@ function remove() {
 
     <div class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
       <p class="font-semibold text-ink">{{ task.name }}</p>
-      <div class="mt-1.5"><TaskStatusBadge :status="task.status" /></div>
+      <div class="mt-1.5">
+        <TaskStatusBadge :status="workflow?.draft ? 'draft' : task.status" />
+      </div>
 
       <p
         v-if="task.error"

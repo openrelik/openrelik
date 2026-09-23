@@ -81,6 +81,11 @@ export function upsertWorkflow(workflow: Workflow): void {
   WORKFLOWS.set(workflow.folderId, workflow)
 }
 
+/** Drops the workflow that owned `folderId` (its folder is gone). */
+export function forgetWorkflow(folderId: number): void {
+  WORKFLOWS.delete(folderId)
+}
+
 export function forgetWorkflows(): void {
   WORKFLOWS.clear()
 }
@@ -169,7 +174,8 @@ export interface RunStats {
   total: number
   /** Seconds. Wall time is the slowest chain: siblings overlap, a child waits for its parent. */
   elapsed: number
-  state: TaskStatus
+  /** A draft has not run: none of its tasks is queued, so it is not "pending". */
+  state: TaskStatus | 'draft'
 }
 
 export function runStats(workflow: Workflow): RunStats {
@@ -192,8 +198,9 @@ export function runStats(workflow: Workflow): RunStats {
     running,
     total: tasks.length,
     elapsed: chain(workflow.groups),
-    state:
-      workflow.draft || tasks.length === 0
+    state: workflow.draft
+      ? 'draft'
+      : tasks.length === 0
         ? 'pending'
         : isActive(workflow)
           ? 'running'

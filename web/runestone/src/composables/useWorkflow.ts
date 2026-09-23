@@ -12,6 +12,7 @@
  *   saved after it. `workflowActivity()` says what is in flight or failed.
  * - Running sends the spec with fresh task uuids and adopts the spec the
  *   server answers with, whose uuids its task records carry.
+ * - Discarding a draft deletes its folder, which takes the workflow with it.
  *
  * State is module-scoped, so a save keeps going when the user moves on.
  */
@@ -20,7 +21,9 @@ import { computed, reactive, shallowRef, type Ref } from 'vue'
 
 import { api, errorMessage, type WorkflowRecord } from '@/api'
 import { folderKeys, mapFolderToItem } from '@/composables/useFolderLoader'
-import { ensure, markFresh } from '@/composables/useQueryCache'
+import { confirmAction } from '@/composables/useConfirm'
+import { useFolderActions } from '@/composables/useFolderActions'
+import { ensure, forget, markFresh } from '@/composables/useQueryCache'
 import { upsertItems } from '@/data/folders'
 import type { Worker } from '@/data/workers'
 import {
@@ -29,6 +32,7 @@ import {
   canJoin,
   everyGroup,
   findTask,
+  forgetWorkflow,
   groupOf,
   isActive,
   mergeProblem,
@@ -626,6 +630,45 @@ export async function runWorkflow(folderId: number): Promise<boolean> {
   } finally {
     state.running = false
   }
+}
+
+// --- discard ---
+
+/**
+ * Discards a draft, after asking: deletes its folder, which takes the
+ * workflow with it. Resolves with whether it is gone; why not is in
+ * `workflowActivity().error`.
+ */
+export async function discardWorkflow(folderId: number): Promise<boolean> {
+  const workflow = editable(folderId)
+  if (!workflow) return false
+  const confirmed = await confirmAction({
+    title: `Discard “${workflow.name}”?`,
+    message: 'The draft and its folder are deleted. This cannot be undone.',
+    confirmLabel: 'Discard',
+    danger: true,
+  })
+  if (!confirmed) return false
+
+  // A save landing after the delete would only fail.
+  const id = workflow.id
+  clearTimeout(saveTimers.get(id))
+  saveTimers.delete(id)
+  unsaved.delete(id)
+  await saves.get(id)
+
+  const folders = useFolderActions()
+  const state = activityFor(id)
+  state.error = null
+  if (!(await folders.deleteItems([folderId])).length) {
+    state.error = folders.error.value ?? 'Could not discard the workflow.'
+    folders.clearError()
+    return false
+  }
+  forgetWorkflow(folderId)
+  forget([workflowKeys.workflow(id)])
+  activity.delete(id)
+  return true
 }
 
 const followed = new Set<number>()

@@ -8,6 +8,7 @@ import {
   Network,
   Play,
   Shrink,
+  Trash2,
 } from '@/components/icons'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
@@ -62,7 +63,11 @@ const props = defineProps<{
   /** The task that produced the file highlighted in the listing below. */
   producerId: string | null
 }>()
-const emit = defineEmits<{ select: [task: Task | null] }>()
+const emit = defineEmits<{
+  select: [task: Task | null]
+  /** Discard the draft: delete its folder (the view asks, and moves up). */
+  discard: []
+}>()
 const modalStore = useModalStore()
 
 type View = 'tree' | 'graph'
@@ -164,7 +169,7 @@ async function run() {
 }
 
 /**
- * Keys: `f` opens full screen; in a draft, `a` adds a worker (after the selected
+ * Keys: `f` opens full screen (from the flowchart); in a draft, `a` adds a worker (after the selected
  * task) and ⇧⏎ runs it. While full screen is open, Esc closes the task first and
  * then full screen, and nothing else reaches the listing behind the overlay.
  */
@@ -196,7 +201,7 @@ function onKey(event: KeyboardEvent) {
     return
   }
   if (!fullscreen.value) {
-    if (event.key === 'f') {
+    if (event.key === 'f' && view.value === 'graph') {
       enterFullscreen()
       event.preventDefault()
       event.stopPropagation()
@@ -278,25 +283,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           </button>
         </div>
 
-        <!-- the flowchart's groups: stack or show them all, one toggle -->
-        <template v-if="view === 'graph'">
-          <button
-            type="button"
-            class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
-            :aria-label="groupToggle.label"
-            v-tooltip="groupToggle.label"
-            :disabled="groupToggle.disabled"
-            @click="toggleGroups"
-          >
-            <component :is="groupToggle.icon" :size="13" :stroke-width="1.5" />
-          </button>
-        </template>
+        <!-- the flowchart's groups: stack or show them all, one toggle (the tree has no stacks) -->
+        <button
+          type="button"
+          class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+          :aria-label="groupToggle.label"
+          v-tooltip="view === 'graph' ? groupToggle.label : `${groupToggle.label} (flowchart only)`"
+          :disabled="view !== 'graph' || groupToggle.disabled"
+          @click="toggleGroups"
+        >
+          <component :is="groupToggle.icon" :size="13" :stroke-width="1.5" />
+        </button>
 
         <button
           type="button"
-          class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink"
+          class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
           aria-label="Full-screen flowchart"
-          v-tooltip="'Full-screen flowchart (f)'"
+          v-tooltip="
+            view === 'graph' ? 'Full-screen flowchart (f)' : 'Full screen (flowchart only)'
+          "
+          :disabled="view !== 'graph'"
           @click="enterFullscreen"
         >
           <Expand :size="13" :stroke-width="1.5" />
@@ -304,6 +310,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
 
         <template v-if="workflow.draft">
           <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+          <Button
+            variant="danger"
+            size="row"
+            :disabled="activity.running"
+            :tooltip="`Discard ${workflow.name}: delete the draft and its folder`"
+            @click="emit('discard')"
+          >
+            <template #icon><Trash2 :size="11" :stroke-width="2" /></template>
+            Discard
+          </Button>
           <Button
             variant="primary"
             size="row"

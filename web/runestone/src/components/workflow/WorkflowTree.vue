@@ -5,6 +5,7 @@ import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import { findItem } from '@/data/folders'
+import { missingOptions } from '@/data/workers'
 import type { AddAt } from '@/composables/useWorkflow'
 import { canJoin, unchainable, type Task, type TaskGroup, type Workflow } from '@/data/workflows'
 import { formatDuration, formatSize } from '@/utils/format'
@@ -53,6 +54,9 @@ interface TaskRow extends Line {
   /** The last task of its group: offers one more beside it. */
   endsGroup?: boolean
 }
+/** A draft's task: the required options it still lacks. */
+const missing = (task: Task) => missingOptions(task.options, task.config)
+
 /** A draft's "after all": adds a join after a free group. */
 interface JoinRow extends Line {
   kind: 'join'
@@ -270,7 +274,11 @@ const inputs = computed(() =>
                 <span class="flex min-w-0 items-center gap-2 pl-1">
                   <span
                     class="truncate"
-                    :class="row.task.status === 'pending' ? 'text-ink-secondary' : 'text-ink'"
+                    :class="
+                      row.task.status === 'pending' && !workflow.draft
+                        ? 'text-ink-secondary'
+                        : 'text-ink'
+                    "
                     >{{ row.task.name }}</span
                   >
                   <span
@@ -332,7 +340,16 @@ const inputs = computed(() =>
             <td class="truncate px-2 text-ink-muted" v-tooltip="row.task.queue">
               {{ row.task.queue.replace('openrelik-worker-', '') }}
             </td>
-            <td class="px-2"><TaskStatusBadge :status="row.task.status" /></td>
+            <td class="px-2">
+              <!-- a draft's tasks are not queued: what matters is whether they can run -->
+              <span
+                v-if="workflow.draft && missing(row.task).length"
+                class="block truncate text-warning"
+                v-tooltip="`Set ${missing(row.task).join(', ')} before running`"
+                >needs {{ missing(row.task).join(', ') }}</span
+              >
+              <TaskStatusBadge v-else-if="!workflow.draft" :status="row.task.status" />
+            </td>
             <td class="tabular px-2 text-right whitespace-nowrap text-ink-secondary">
               {{ row.task.duration === undefined ? '–' : formatDuration(row.task.duration) }}
             </td>

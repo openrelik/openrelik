@@ -9,6 +9,9 @@
  * chose per group — by a group's corner toggle, or all at once from the
  * workflow's header — for the session, across views and folders.
  * Module-scoped: one record for the app.
+ *
+ * A workflow's input files, when there are more than one, stack the same way:
+ * into one card, until opened.
  */
 
 import { reactive } from 'vue'
@@ -25,7 +28,10 @@ export const foldable = (group: TaskGroup): Task[] =>
 /** Whether a group can be stacked: two or more tasks to fold (folding one saves nothing). */
 export const stackable = (group: TaskGroup): boolean => foldable(group).length > 1
 
-/** What the user chose, by group id; groups without an entry follow `STACK_MIN`. */
+/**
+ * What the user chose, by group id (or `inputs:<workflow id>`); groups without
+ * an entry follow `STACK_MIN`, inputs start stacked.
+ */
 const chosen = reactive(new Map<string, 'open' | 'stacked'>())
 
 export interface UseGroupStacksReturn {
@@ -37,7 +43,12 @@ export interface UseGroupStacksReturn {
   stackAll: (groups: TaskGroup[]) => void
   /** Opens every one of these groups. */
   openAll: (groups: TaskGroup[]) => void
+  /** A workflow's input files are drawn as one card (when there are more than one). */
+  inputsStacked: (workflowId: number) => boolean
+  setInputsStacked: (workflowId: number, stacked: boolean) => void
 }
+
+const inputsKey = (workflowId: number) => `inputs:${workflowId}`
 
 export function useGroupStacks(): UseGroupStacksReturn {
   const isStacked = (group: TaskGroup) =>
@@ -53,5 +64,8 @@ export function useGroupStacks(): UseGroupStacksReturn {
     openAll: (groups) => {
       for (const group of groups) chosen.set(group.id, 'open')
     },
+    inputsStacked: (workflowId) => chosen.get(inputsKey(workflowId)) !== 'open',
+    setInputsStacked: (workflowId, stacked) =>
+      void chosen.set(inputsKey(workflowId), stacked ? 'stacked' : 'open'),
   }
 }

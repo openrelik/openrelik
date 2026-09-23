@@ -19,6 +19,7 @@ import Button from '@/components/base/Button.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
 
 import { findItem } from '@/data/folders'
+import { missingOptions } from '@/data/workers'
 import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import type { AddAt } from '@/composables/useWorkflow'
 import {
@@ -31,6 +32,7 @@ import {
   type TaskGroup,
   type TaskStatus,
   type Workflow,
+  type WorkflowInput,
 } from '@/data/workflows'
 import { count, formatDuration, formatSize } from '@/utils/format'
 import { isTyping } from '@/utils/keyboard'
@@ -58,6 +60,9 @@ import { revealIn } from '@/utils/scroll'
  * workflow's header. It keeps its box either way,
  * with a toggle on the box's corner to stack or show its tasks at any time;
  * a stacked card shows the selection.
+ *
+ * Several input files get a box too, and start stacked into one card; the
+ * toggle on its corner shows each file.
  *
  * In a draft every node has a + on its right edge (a new group on its
  * output), the last task of each group a + on its bottom edge (one more in
@@ -155,7 +160,26 @@ const padOf = (group: GroupNode) => (boxed(group) ? GROUP_PAD : 0)
 const blockOf = (group: GroupNode) =>
   group.members.length * NODE_H + (group.members.length - 1) * ROW_GAP + 2 * padOf(group)
 
-const { isStacked: stacked, openStack, closeStack } = useGroupStacks()
+const {
+  isStacked: stacked,
+  openStack,
+  closeStack,
+  inputsStacked,
+  setInputsStacked,
+} = useGroupStacks()
+
+/**
+ * More than one input file: they get a box, like a group, and start stacked
+ * into one card; opened, each file is a node of its own.
+ */
+const manyInputs = computed(() => props.workflow.inputs.length > 1)
+const inputsOpen = computed(() => manyInputs.value && !inputsStacked(props.workflow.id))
+/** The input nodes' height, top to bottom: every file when open, else one node. */
+const inputSpan = computed(() => {
+  const rows = inputsOpen.value ? props.workflow.inputs.length : 1
+  return rows * NODE_H + (rows - 1) * ROW_GAP
+})
+const inputPad = computed(() => (manyInputs.value ? GROUP_PAD : 0))
 
 /**
  * A task selected or lit inside a stack (from the tree, the listing) opens
@@ -201,12 +225,26 @@ function stackStatus(group: TaskGroup): TaskStatus {
 /** A node's status: its task's, or its stack's. */
 const statusOf = (node: Node): TaskStatus => node.task?.status ?? stackStatus(node.stack!)
 
+/**
+ * A draft's tasks have no status yet (none is queued): what they show instead
+ * is whether they can run — the options they still need.
+ */
+const needs = (task: Task): string => {
+  const missing = missingOptions(task.options, task.config)
+  return missing.length ? `needs ${missing.join(', ')}` : ''
+}
+
 /** "Strings ×7", or "7 workers" when they differ; with how far they got. */
 function stackSummary(group: TaskGroup) {
   const [first] = group.tasks
   const same = group.tasks.every((task) => task.module === first!.module)
   const by = (status: TaskStatus) => group.tasks.filter((task) => task.status === status).length
-  const parts = [`${by('success')}/${group.tasks.length} done`]
+  const needing = group.tasks.filter((task) => needs(task)).length
+  const parts = props.workflow.draft
+    ? needing
+      ? [`${needing} need options`]
+      : []
+    : [`${by('success')}/${group.tasks.length} done`]
   // Failures first: they are what a truncated line must not hide.
   if (by('failed')) parts.push(`${by('failed')} failed`)
   if (by('running')) parts.push(`${by('running')} running`)
@@ -309,10 +347,15 @@ const layout = computed(() => {
       placeGroups(join.groups, join.depth + 1, join.top + NODE_H / 2)
     }
   }
-  placeGroups(root.groups, 1, null)
-  // The inputs sit level with the middle of the first tasks.
+  // The first tasks go level with the inputs where they can; when they are
+  // taller, the inputs move down to their middle instead. Either way the
+  // line between them runs straight.
+  const span = inputSpan.value
+  const pad = inputPad.value
+  placeGroups(root.groups, 1, PAD + pad + span / 2)
   const first = root.groups.flatMap((group) => group.members)
-  if (first.length) root.top = middleOf(first) - NODE_H / 2
+  root.top = Math.max(PAD + pad, first.length ? middleOf(first) - span / 2 : 0)
+  bottom = Math.max(bottom, root.top + span + pad)
 
   const nodes: Node[] = []
   const placed: GroupNode[] = []
@@ -511,15 +554,23 @@ const y = (node: Node) => node.top
  */
 /** The shape every edge has: straight along its row, then a bend in the last gap. */
 function curve(x1: number, y1: number, x2: number, y2: number): string {
-  const bend = COL_GAP / 2
-  const bendFrom = x2 - COL_GAP
+  // From a box's edge the gap is narrower: the bend takes what there is.
+  const bendFrom = Math.max(x1, x2 - COL_GAP)
+  const bend = (x2 - bendFrom) / 2
   return `M ${x1} ${y1} H ${bendFrom} C ${bendFrom + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`
 }
 
+/** Where a node's edges leave from: its right edge, or the middle of the inputs' box. */
+const outOf = (node: Node) =>
+  node.key === 'input'
+    ? { x: x(node) + NODE_W + inputPad.value, y: y(node) + inputSpan.value / 2 }
+    : { x: x(node) + NODE_W, y: y(node) + NODE_H / 2 }
+
 function edge(from: Node, to: Node) {
+  const start = outOf(from)
   return {
     key: `${from.key}-${to.key}`,
-    d: curve(x(from) + NODE_W, y(from) + NODE_H / 2, x(to), y(to) + NODE_H / 2),
+    d: curve(start.x, start.y, x(to), y(to) + NODE_H / 2),
     status: statusOf(to),
   }
 }
@@ -538,8 +589,8 @@ const edges = computed(() =>
             {
               key: `${parent.key}-${group.id}`,
               d: curve(
-                x(parent) + NODE_W,
-                y(parent) + NODE_H / 2,
+                outOf(parent).x,
+                outOf(parent).y,
                 x(members[0]!) - GROUP_PAD,
                 (y(members[0]!) + y(members.at(-1)!) + NODE_H) / 2,
               ),
@@ -584,6 +635,20 @@ const boxes = computed(() =>
     }
   }),
 )
+
+/** The box around several input files, and what its toggle does. */
+const inputsBox = computed(() => {
+  const root = layout.value.nodes[0]
+  if (!manyInputs.value || !root) return null
+  const files = count(props.workflow.inputs.length, 'input file')
+  return {
+    left: x(root) - GROUP_PAD,
+    top: y(root) - GROUP_PAD,
+    width: NODE_W + GROUP_PAD * 2,
+    height: inputSpan.value + GROUP_PAD * 2,
+    label: inputsOpen.value ? `Stack the ${files}` : `Show all ${files}`,
+  }
+})
 
 /** Where each free group's "after all" button goes, with a dashed line from its box. */
 const ghosts = computed(() =>
@@ -660,19 +725,19 @@ onMounted(async () => {
 })
 
 const input = computed(() => props.workflow.inputs[0])
-/** Inputs come from the folder the workflow was made in. */
-const inputFolder = computed(
-  () =>
-    findItem(input.value?.id ?? -1)?.parent ?? findItem(props.workflow.folderId)?.parent ?? null,
-)
+/** An input's page: inputs come from the folder the workflow was made in. */
+const inputLink = (file: WorkflowInput) =>
+  `/folder/${findItem(file.id)?.parent ?? findItem(props.workflow.folderId)?.parent}/file/${file.id}`
+const sizeOf = (file: WorkflowInput) => findItem(file.id)?.size ?? 0
 const inputBytes = computed(() =>
-  props.workflow.inputs.reduce((sum, file) => sum + (findItem(file.id)?.size ?? 0), 0),
+  props.workflow.inputs.reduce((sum, file) => sum + sizeOf(file), 0),
 )
-const inputLabel = computed(() =>
-  props.workflow.inputs.length === 1
-    ? input.value!.name
-    : count(props.workflow.inputs.length, 'file'),
-)
+/** The stacked inputs' tooltip: which files, by name, and how to see them. */
+const inputsTip = computed(() => {
+  const names = props.workflow.inputs.map((file) => file.name)
+  const shown = names.length > 4 ? [...names.slice(0, 4), `${names.length - 4} more`] : names
+  return `${shown.join(', ')} — click to show them`
+})
 
 const EDGE: Record<TaskStatus, string> = {
   success: 'stroke-ink-muted/60',
@@ -680,6 +745,8 @@ const EDGE: Record<TaskStatus, string> = {
   pending: 'stroke-ink-muted/40 [stroke-dasharray:3_3]',
   failed: 'stroke-danger/60',
 }
+/** A draft's edges: nothing is queued yet, so none is dashed as pending. */
+const DRAFT_EDGE = 'stroke-ink-muted/60'
 const RAIL: Record<TaskStatus, string> = {
   success: 'border-l-success',
   running: 'border-l-brand',
@@ -725,6 +792,44 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
             transform: `scale(${scale})`,
           }"
         >
+          <!-- several input files: a solid, warm box (a group's is dashed and grey:
+               only groups can be picked and merged), labelled, with the same
+               corner toggle as a group -->
+          <template v-if="inputsBox">
+            <div
+              class="absolute rounded-(--radius-card) border border-warning/30 bg-warning-tint/45"
+              :style="{
+                left: `${inputsBox.left}px`,
+                top: `${inputsBox.top}px`,
+                width: `${inputsBox.width}px`,
+                height: `${inputsBox.height}px`,
+              }"
+            />
+            <span
+              class="micro-label absolute bg-canvas px-1 leading-none"
+              :style="{ left: `${inputsBox.left + 8}px`, top: `${inputsBox.top - 6}px` }"
+              >input</span
+            >
+            <button
+              type="button"
+              class="absolute z-[1] flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-border-strong bg-surface text-ink-muted hover:bg-sunken hover:text-ink"
+              :style="{
+                left: `${inputsBox.left + inputsBox.width - 8}px`,
+                top: `${inputsBox.top - 8}px`,
+              }"
+              :aria-label="inputsBox.label"
+              :aria-expanded="inputsOpen"
+              v-tooltip="inputsBox.label"
+              @click.stop="setInputsStacked(workflow.id, inputsOpen)"
+            >
+              <component
+                :is="inputsOpen ? ChevronsDownUp : ChevronsUpDown"
+                :size="11"
+                :stroke-width="2"
+              />
+            </button>
+          </template>
+
           <!-- parallel groups: tinted with the ink colour, so a box is a shade darker
                than the canvas in light mode and a shade lighter in dark mode -->
           <div
@@ -773,7 +878,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               fill="none"
               stroke-width="1.25"
               marker-end="url(#arrow)"
-              :class="EDGE[edge.status]"
+              :class="workflow.draft ? DRAFT_EDGE : EDGE[edge.status]"
             />
             <path
               v-for="ghost in ghosts"
@@ -787,32 +892,92 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
 
           <!-- nodes -->
           <template v-for="node in layout.nodes" :key="node.key">
-            <RouterLink
-              v-if="node.key === 'input' && input"
-              :to="`/folder/${inputFolder}/file/${input.id}`"
-              class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5 hover:border-brand"
-              :style="{
-                left: `${x(node)}px`,
-                top: `${y(node)}px`,
-                width: `${NODE_W}px`,
-                height: `${NODE_H}px`,
-              }"
-              v-tooltip="workflow.inputs.map((file) => file.name).join(', ')"
-            >
-              <span class="flex min-w-0 items-center gap-1.5 text-ink">
-                <component
-                  :is="workflow.inputs.length > 1 ? Files : File"
-                  :size="12"
-                  :stroke-width="1.5"
-                  class="shrink-0 text-ink-muted"
+            <template v-if="node.key === 'input' && input">
+              <!-- one input file: a node that opens it -->
+              <RouterLink
+                v-if="!manyInputs"
+                :to="inputLink(input)"
+                class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5 hover:border-brand"
+                :style="{
+                  left: `${x(node)}px`,
+                  top: `${y(node)}px`,
+                  width: `${NODE_W}px`,
+                  height: `${NODE_H}px`,
+                }"
+                v-tooltip="input.name"
+              >
+                <span class="flex min-w-0 items-center gap-1.5 text-ink">
+                  <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+                  <span class="truncate text-[11px]">{{ input.name }}</span>
+                </span>
+                <span class="tabular truncate text-[11px] text-ink-muted">
+                  input<template v-if="inputBytes"> · {{ formatSize(inputBytes) }}</template>
+                </span>
+              </RouterLink>
+
+              <!-- several, opened: a node for each file -->
+              <template v-else-if="inputsOpen">
+                <RouterLink
+                  v-for="(file, row) in workflow.inputs"
+                  :key="file.id"
+                  :to="inputLink(file)"
+                  class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5 hover:border-brand"
+                  :style="{
+                    left: `${x(node)}px`,
+                    top: `${y(node) + row * (NODE_H + ROW_GAP)}px`,
+                    width: `${NODE_W}px`,
+                    height: `${NODE_H}px`,
+                  }"
+                  v-tooltip="file.name"
+                >
+                  <span class="flex min-w-0 items-center gap-1.5 text-ink">
+                    <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+                    <span class="truncate text-[11px]">{{ file.name }}</span>
+                  </span>
+                  <span v-if="sizeOf(file)" class="tabular truncate text-[11px] text-ink-muted">
+                    {{ formatSize(sizeOf(file)) }}
+                  </span>
+                </RouterLink>
+              </template>
+
+              <!-- several, stacked: one card; opens on click -->
+              <div
+                v-else
+                class="absolute"
+                :style="{
+                  left: `${x(node)}px`,
+                  top: `${y(node)}px`,
+                  width: `${NODE_W}px`,
+                  height: `${NODE_H}px`,
+                }"
+              >
+                <span
+                  class="absolute inset-0 translate-x-[6px] translate-y-[6px] rounded-(--radius-card) border border-border-strong bg-surface"
+                  aria-hidden="true"
                 />
-                <span class="truncate text-[11px]">{{ inputLabel }}</span>
-              </span>
-              <span class="tabular truncate text-[11px] text-ink-muted">
-                input<template v-if="inputBytes"> · {{ formatSize(inputBytes) }}</template>
-                <template v-if="workflow.inputs.length > 1"> · {{ input.name }} …</template>
-              </span>
-            </RouterLink>
+                <span
+                  class="absolute inset-0 translate-x-[3px] translate-y-[3px] rounded-(--radius-card) border border-border-strong bg-surface"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  class="relative flex h-full w-full cursor-pointer flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5 text-left hover:bg-sunken"
+                  :aria-label="`${count(workflow.inputs.length, 'input file')}. Show them`"
+                  v-tooltip="inputsTip"
+                  @click="setInputsStacked(workflow.id, false)"
+                >
+                  <span class="flex min-w-0 items-center gap-1.5 text-ink">
+                    <Files :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+                    <span class="tabular truncate text-[11px]">{{
+                      count(workflow.inputs.length, 'file')
+                    }}</span>
+                  </span>
+                  <span v-if="inputBytes" class="tabular truncate text-[11px] text-ink-muted">
+                    {{ formatSize(inputBytes) }}
+                  </span>
+                </button>
+              </div>
+            </template>
 
             <button
               v-else-if="node.task"
@@ -827,7 +992,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                   : node.task.id === producerId
                     ? 'border-brand bg-brand-tint ring-2 ring-brand/40'
                     : 'border-border-strong bg-surface hover:bg-sunken',
-                node.task.status === 'pending' ? 'border-dashed' : '',
+                node.task.status === 'pending' && !workflow.draft ? 'border-dashed' : '',
               ]"
               :style="{
                 left: `${x(node)}px`,
@@ -844,6 +1009,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
             >
               <span class="flex min-w-0 items-center gap-1.5">
                 <component
+                  v-if="!workflow.draft"
                   :is="ICON[node.task.status].icon"
                   :size="11"
                   :stroke-width="2"
@@ -852,7 +1018,11 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 />
                 <span
                   class="truncate text-[11px] font-medium"
-                  :class="node.task.status === 'pending' ? 'text-ink-secondary' : 'text-ink'"
+                  :class="
+                    node.task.status === 'pending' && !workflow.draft
+                      ? 'text-ink-secondary'
+                      : 'text-ink'
+                  "
                   >{{ node.task.name }}</span
                 >
                 <Merge
@@ -864,7 +1034,13 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                   v-tooltip="`Runs once all ${node.waitsFor} lines before it have finished`"
                 />
               </span>
-              <span class="tabular truncate text-[11px] text-ink-muted">
+              <!-- a draft's task has no status: only what it still needs, if anything -->
+              <span
+                v-if="workflow.draft && needs(node.task)"
+                class="truncate text-[11px] text-warning"
+                >{{ needs(node.task) }}</span
+              >
+              <span v-else-if="!workflow.draft" class="tabular truncate text-[11px] text-ink-muted">
                 {{ node.task.status }}
                 <template v-if="node.task.duration !== undefined">
                   · {{ formatDuration(node.task.duration) }}</template
@@ -915,6 +1091,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               >
                 <span class="flex min-w-0 items-center gap-1.5">
                   <component
+                    v-if="!workflow.draft"
                     :is="ICON[statusOf(node)].icon"
                     :size="11"
                     :stroke-width="2"
@@ -928,11 +1105,18 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                     stackSummary(node.stack).times
                   }}</span>
                 </span>
-                <span class="tabular truncate text-[11px] text-ink-muted">{{
-                  stackSummary(node.stack).line
-                }}</span>
+                <span
+                  v-if="stackSummary(node.stack).line"
+                  class="tabular truncate text-[11px]"
+                  :class="workflow.draft ? 'text-warning' : 'text-ink-muted'"
+                  >{{ stackSummary(node.stack).line }}</span
+                >
                 <!-- how far the group got, in one line -->
-                <span class="absolute inset-x-0 bottom-0 flex h-0.5" aria-hidden="true">
+                <span
+                  v-if="!workflow.draft"
+                  class="absolute inset-x-0 bottom-0 flex h-0.5"
+                  aria-hidden="true"
+                >
                   <span
                     v-for="part in stackSummary(node.stack).bar"
                     :key="part.status"
@@ -973,8 +1157,8 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               type="button"
               class="absolute flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand hover:bg-brand-tint"
               :style="{
-                left: `${x(node) + NODE_W - 8}px`,
-                top: `${y(node) + NODE_H / 2 - 8}px`,
+                left: `${outOf(node).x - 8}px`,
+                top: `${outOf(node).y - 8}px`,
               }"
               :aria-label="`Add worker after ${node.task?.name ?? 'the inputs'}`"
               v-tooltip="
