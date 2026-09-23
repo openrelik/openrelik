@@ -4,15 +4,29 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import KeyHint from '@/components/base/KeyHint.vue'
+import { errorMessage } from '@/api'
+import { useDelayedFlag } from '@/composables/useDelayedFlag'
+import { createWorkflow } from '@/composables/useWorkflow'
 import { closeWorkflowDialog, useWorkflowDialog } from '@/composables/useWorkflowDialog'
-import { createWorkflow, WORKFLOW_TEMPLATES, type WorkflowTemplate } from '@/data/workflows'
 import { count } from '@/utils/format'
+
+/** A starting point for a new workflow. None yet: templates come from the server later. */
+interface WorkflowTemplate {
+  id: string
+  name: string
+  description: string
+}
+const WORKFLOW_TEMPLATES: WorkflowTemplate[] = []
 
 const router = useRouter()
 const { workflowTarget } = useWorkflowDialog()
 
 const query = ref('')
 const selectedIndex = ref(0)
+/** The server is making the workflow and its folder. */
+const creating = ref(false)
+const showCreating = useDelayedFlag(() => creating.value)
+const error = ref<string | null>(null)
 
 const title = computed(() => {
   const files = workflowTarget.value?.files ?? []
@@ -51,6 +65,7 @@ watch(workflowTarget, (target) => {
   if (target) {
     query.value = ''
     selectedIndex.value = 0
+    error.value = null
   }
 })
 
@@ -58,16 +73,23 @@ function close() {
   closeWorkflowDialog()
 }
 
-function select(templateId?: string) {
-  if (!workflowTarget.value) return
+async function select(templateId?: string) {
+  if (!workflowTarget.value || creating.value || templateId) return
   const { files, folderId } = workflowTarget.value
-  const newId = createWorkflow({
-    folderId,
-    files,
-    templateId,
-  })
-  close()
-  router.push(`/folder/${newId}`)
+  creating.value = true
+  error.value = null
+  try {
+    const workflow = await createWorkflow(
+      folderId,
+      files.map((file) => file.id),
+    )
+    close()
+    router.push(`/folder/${workflow.folderId}`)
+  } catch (err: unknown) {
+    error.value = `Could not create the workflow: ${errorMessage(err, 'request failed')}`
+  } finally {
+    creating.value = false
+  }
 }
 
 function chooseCurrent() {
@@ -154,7 +176,11 @@ function onKeydown(event: KeyboardEvent) {
             <div class="flex min-w-0 flex-1 flex-col">
               <span class="font-medium text-ink">New workflow</span>
               <span class="text-[11px] text-ink-muted">
-                Start with an empty workflow and add tasks
+                {{
+                  showCreating
+                    ? 'Creating…'
+                    : 'Start with an empty workflow in a new folder, and add workers'
+                }}
               </span>
             </div>
           </li>
@@ -205,6 +231,10 @@ function onKeydown(event: KeyboardEvent) {
             No templates matching "{{ query }}"
           </li>
         </ul>
+
+        <p v-if="error" role="alert" class="border-t border-border px-3 py-2 text-danger">
+          {{ error }}
+        </p>
 
         <!-- Footer with hints -->
         <div

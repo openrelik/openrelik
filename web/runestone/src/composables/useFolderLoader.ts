@@ -54,6 +54,7 @@ export function mapFolderToItem(folder: Folder, parent: number | null = null): I
     ownerAvatar: folder.user?.profile_picture_url || undefined,
     created: folder.created_at ?? folder.updated_at ?? new Date().toISOString(),
     modified: folder.updated_at ?? folder.created_at ?? new Date().toISOString(),
+    workflowId: folder.workflows?.[0]?.id,
   }
 }
 

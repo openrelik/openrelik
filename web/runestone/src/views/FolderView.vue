@@ -7,14 +7,14 @@ import FolderStatusBar from '@/components/folders/FolderStatusBar.vue'
 import FolderTable, { type SortKey } from '@/components/folders/FolderTable.vue'
 import FolderToolbar from '@/components/folders/FolderToolbar.vue'
 import ItemInspector from '@/components/folders/ItemInspector.vue'
+import LoadState from '@/components/base/LoadState.vue'
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
-import { lastRun, openRun, startRun, undoRun } from '@/composables/useRun'
+import { lastRun, openAddToWorkflow, openRun, runError } from '@/composables/useRun'
 import { bytesOf, typeOf } from '@/data/files'
 import { childrenOf, findItem, pathTo, renameItem, type Item } from '@/data/folders'
 import { rootPageItems, rootPageOf } from '@/data/rootPages'
-import type { Worker } from '@/data/workers'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
@@ -27,7 +27,9 @@ import { useDropZone } from '@/composables/useDropZone'
 import { useUploadPanel } from '@/composables/useUploadPanel'
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import { useRootPager } from '@/composables/useRootPager'
-import { allTasks, workflowOf, type Task } from '@/data/workflows'
+import { useWorkflowLoader } from '@/composables/useWorkflowLoader'
+import type { AddAt } from '@/composables/useWorkflow'
+import { everyTask, findTask } from '@/data/workflows'
 import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
@@ -161,6 +163,7 @@ watch(
 /** Refetch what is on screen, fresh or not (Shift+R, Retry). */
 function refresh() {
   loadHere(true)
+  loadWorkflow(true)
 }
 
 // Coming back to the tab or the network: refresh what is stale or failed.
@@ -274,9 +277,14 @@ const { canRenameAll: canRenameFocused } = useFolderPermissions(() =>
 )
 
 // --- workflow & tasks ---
-const workflow = computed(() => (folder.value ? workflowOf(folder.value.id) : undefined))
-const task = ref<Task | null>(null)
-watch(cursor, () => (task.value = null))
+// The folder's workflow loads alongside its listing, and polls while it runs.
+const { workflow, state: workflowState, load: loadWorkflow } = useWorkflowLoader(() => folder.value)
+/** By id: polling replaces the tasks, and the inspector follows the new ones. */
+const taskId = ref<string | null>(null)
+const task = computed(() =>
+  workflow.value && taskId.value ? (findTask(workflow.value, taskId.value) ?? null) : null,
+)
+watch(cursor, () => (taskId.value = null))
 
 /** A folder row under the cursor or mouse is likely opened next: load its subfolders ahead. */
 function prefetchRow(item: Item | null | undefined) {
@@ -290,12 +298,12 @@ const tracing = computed(() => produced.value.size > 0)
 const producer = computed(() => {
   const row = rows.value[cursor.value]
   if (task.value || !workflow.value || row?.kind !== 'file') return undefined
-  return allTasks(workflow.value.tasks).find((t) => t.outputs.includes(row.id))
+  return everyTask(workflow.value).find((t) => t.outputs.includes(row.id))
 })
 
 function pick(index: number) {
   rawPick(index)
-  task.value = null
+  taskId.value = null
 }
 
 function onRowClick(event: MouseEvent, index: number) {
@@ -309,7 +317,7 @@ function onRowClick(event: MouseEvent, index: number) {
 watch([() => props.id, () => (atRoot.value ? pager.page.value : 0)], (_, [previous]) => {
   clearSelection()
   filter.value = ''
-  task.value = null
+  taskId.value = null
   const from = rows.value.findIndex((row) => String(row.id) === previous)
   cursor.value = Math.max(0, from)
 })
@@ -328,15 +336,9 @@ function runPicker() {
   if (folder.value) openRun(runFiles(), folder.value.id)
 }
 
-function runQuick(worker: Worker) {
-  const files = runFiles()
-  if (folder.value && files.length) {
-    startRun(
-      worker,
-      { files, folderId: folder.value.id },
-      Object.fromEntries(worker.options.map((o) => [o.key, o.default])),
-    )
-  }
+/** The inspector's add buttons: the picker, for this folder's draft. */
+function openAdd(at: AddAt) {
+  if (workflow.value) openAddToWorkflow(workflow.value, at)
 }
 
 const runNotice = computed(() =>
@@ -470,8 +472,8 @@ const KEYS: Record<string, () => void> = {
       table.value.cancelRename()
       return
     }
-    if (task.value) {
-      task.value = null
+    if (taskId.value) {
+      taskId.value = null
     } else {
       clearSelection()
     }
@@ -604,7 +606,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :deleting-ids="deletingIds"
           :may-rename="mayRename"
           :show-pending="showPending"
-          :action-error="actionError ?? uploads.error.value ?? dropRefusal"
+          :action-error="actionError ?? runError ?? uploads.error.value ?? dropRefusal"
           :uploads="uploadsHere"
           :is-drop-target="isDropTarget"
           v-on="dropHandlers"
@@ -628,9 +630,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             <WorkflowPanel
               v-if="workflow"
               :workflow="workflow"
-              :selected-id="task?.id ?? null"
+              :selected-id="taskId"
               :producer-id="producer?.id ?? null"
-              @select="task = $event"
+              @select="taskId = $event?.id ?? null"
+            />
+            <LoadState
+              v-else-if="folder?.workflowId !== undefined"
+              class="border-b border-border"
+              :state="workflowState"
+              noun="workflow"
+              :has-content="false"
+              @retry="loadWorkflow(true)"
             />
           </template>
         </FolderTable>
@@ -649,10 +659,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       </div>
 
       <TaskInspector
-        v-if="task"
+        v-if="task && workflow"
         :task="task"
+        :folder-id="workflow.folderId"
+        :editable="workflow.draft"
         class="w-64 shrink-0 border-l border-border max-xl:hidden"
-        @close="task = null"
+        @close="taskId = null"
+        @add="openAdd"
       />
       <ItemInspector
         v-else-if="focused"
@@ -664,7 +677,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         :can-rename="canRenameFocused"
         class="w-64 shrink-0 border-l border-border max-xl:hidden"
         @open="open(findItem($event))"
-        @run="runQuick"
         @run-more="runPicker"
         @clear-selection="clearSelection"
         @toggle-item="toggle"
@@ -687,7 +699,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :produced-count="produced.size"
       :selected-count="selected.size"
       :selected-bytes="selectedBytes"
-      @undo="undoRun"
     />
   </section>
 </template>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { File } from '@/components/icons'
+import { File, ListPlus, Merge, Plus, X } from '@/components/icons'
 import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import { findItem } from '@/data/folders'
-import type { Task, Workflow } from '@/data/workflows'
+import type { AddAt } from '@/composables/useWorkflow'
+import { canJoin, unchainable, type Task, type TaskGroup, type Workflow } from '@/data/workflows'
 import { formatDuration, formatSize } from '@/utils/format'
 import { revealIn } from '@/utils/scroll'
 
@@ -14,30 +15,98 @@ import { revealIn } from '@/utils/scroll'
  * one whose output it consumes, siblings in parallel. Connector lines carry the
  * shape, so every row can spend its width on facts — status, queue, time,
  * outputs — instead of on boxes and curves.
+ *
+ * A join — a task that waits for all of its parent's parallel tasks — follows
+ * them at their level, marked with the merge sign. In a draft, a parent with
+ * several tasks and no join offers one in a dashed row of its own.
  */
 const props = defineProps<{
   workflow: Workflow
   selectedId: string | null
   /** Lit, not selected: the task behind the file highlighted in the listing. */
   producerId?: string | null
+  /** A draft: rows offer a + to add a worker on their output. */
+  editable?: boolean
 }>()
-const emit = defineEmits<{ select: [task: Task] }>()
+const emit = defineEmits<{
+  select: [task: Task]
+  /** Add a worker: after a task or the inputs, beside a task, or after all of a group. */
+  add: [at: AddAt]
+  /** Remove this task, and the tasks after it, from the draft. */
+  remove: [taskId: string]
+}>()
 
-interface Row {
-  task: Task
+interface Line {
+  key: string
   /** One entry per ancestor level: does a line continue down through it? */
   guides: boolean[]
   last: boolean
+  /** The first row of a group after another one under the same parent. */
+  newGroup?: boolean
 }
+interface TaskRow extends Line {
+  kind: 'task'
+  task: Task
+  /** A join: how many tasks it waits for. */
+  waitsFor?: number
+  /** The last task of its group: offers one more beside it. */
+  endsGroup?: boolean
+}
+/** A draft's "after all": adds a join after a free group. */
+interface JoinRow extends Line {
+  kind: 'join'
+  groupId: string
+  count: number
+}
+type Row = TaskRow | JoinRow
 
-function flatten(tasks: Task[], guides: boolean[]): Row[] {
-  return tasks.flatMap((task, index) => {
-    const last = index === tasks.length - 1
-    return [{ task, guides, last }, ...flatten(task.children, [...guides, !last])]
+/** A parent's groups at one level: each group's tasks, then its join (or a row to add one). */
+function flatten(groups: TaskGroup[], guides: boolean[]): Row[] {
+  const entries = groups.flatMap((group, g) => {
+    const offer = !!props.editable && canJoin(group)
+    return [
+      ...group.tasks.map((task, index) => ({
+        kind: 'task' as const,
+        task,
+        newGroup: g > 0 && index === 0,
+        endsGroup: index === group.tasks.length - 1,
+      })),
+      ...(group.join
+        ? [{ kind: 'task' as const, task: group.join, waitsFor: group.tasks.length }]
+        : []),
+      ...(offer ? [{ kind: 'offer' as const, group }] : []),
+    ]
+  })
+  return entries.flatMap((entry, index): Row[] => {
+    const last = index === entries.length - 1
+    if (entry.kind === 'offer') {
+      const { group } = entry
+      return [
+        {
+          kind: 'join',
+          key: `${group.id}:join`,
+          guides,
+          last,
+          groupId: group.id,
+          count: group.tasks.length,
+        },
+      ]
+    }
+    const { task, ...rest } = entry
+    return [
+      { ...rest, key: task.id, task, guides, last },
+      ...flatten(task.groups, [...guides, !last]),
+    ]
   })
 }
 
-const rows = computed(() => flatten(props.workflow.tasks, []))
+/** Tasks without a +: members of a group a join waits for. */
+const blocked = computed(() => unchainable(props.workflow))
+
+const rows = computed(() => flatten(props.workflow.groups, []))
+
+/** How many tasks run on a task's output, across its groups. */
+const parallel = (task: Task) => task.groups.reduce((sum, group) => sum + group.tasks.length, 0)
 
 /** Bring the lit producer into view when the capped tree has it scrolled away. */
 const root = ref<HTMLElement | null>(null)
@@ -50,8 +119,21 @@ watch(
     if (root.value && row) revealIn(root.value, row)
   },
 )
+/** Shown on the row's hover or focus, so the tree stays quiet to read. */
+const ADD_AFTER =
+  'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand opacity-0 group-hover:opacity-100 hover:bg-brand-tint focus-visible:opacity-100'
+
+/** Like the +, but also kept in sight while its row is selected. */
+const REMOVE =
+  'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-danger/60 bg-surface text-danger hover:bg-danger-tint focus-visible:opacity-100'
+
+/** Inputs come from the folder the workflow was made in; sizes are known once it is loaded. */
+const inputFolder = computed(() => findItem(props.workflow.folderId)?.parent ?? null)
 const inputs = computed(() =>
-  props.workflow.inputs.map((id) => findItem(id)).filter((item) => item !== undefined),
+  props.workflow.inputs.map((input) => {
+    const item = findItem(input.id)
+    return { ...input, parent: item?.parent ?? inputFolder.value, size: item?.size }
+  }),
 )
 </script>
 
@@ -67,89 +149,192 @@ const inputs = computed(() =>
       </colgroup>
       <tbody>
         <!-- inputs -->
-        <tr v-for="input in inputs" :key="input.id" class="h-7">
+        <tr v-for="(input, i) in inputs" :key="input.id" class="group h-7">
           <td class="px-3">
-            <RouterLink
-              :to="`/folder/${input.parent}/file/${input.id}`"
-              class="flex min-w-0 items-center gap-2 text-ink-secondary hover:text-brand"
-            >
-              <File :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
-              <span class="truncate">{{ input.name }}</span>
-            </RouterLink>
+            <span class="flex min-w-0 items-center gap-2">
+              <RouterLink
+                :to="`/folder/${input.parent}/file/${input.id}`"
+                class="flex min-w-0 items-center gap-2 text-ink-secondary hover:text-brand"
+              >
+                <File :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+                <span class="truncate">{{ input.name }}</span>
+              </RouterLink>
+              <button
+                v-if="editable && i === inputs.length - 1"
+                type="button"
+                :class="ADD_AFTER"
+                aria-label="Add worker on the inputs"
+                v-tooltip="'Add worker on the inputs'"
+                @click="emit('add', { after: null })"
+              >
+                <Plus :size="11" :stroke-width="2" />
+              </button>
+            </span>
           </td>
           <td class="micro-label truncate px-2">input</td>
           <td />
           <td />
           <td class="tabular px-2 pr-3 text-right whitespace-nowrap text-ink-muted">
-            {{ formatSize(input.size ?? 0) }}
+            {{ input.size === undefined ? '–' : formatSize(input.size) }}
           </td>
         </tr>
 
         <!-- tasks -->
         <tr v-if="!rows.length">
           <td colspan="5" class="px-3 py-6 text-center text-ink-muted">
-            Empty workflow. Click <span class="font-medium text-ink">+ Task</span> above to add
-            workers.
+            Empty workflow. Click <span class="font-medium text-ink">+</span> to add a worker.
           </td>
         </tr>
-        <tr
-          v-for="row in rows"
-          :key="row.task.id"
-          :data-task="row.task.id"
-          class="h-7 cursor-pointer transition-colors duration-120 ease-(--ease-standard)"
-          :class="
-            row.task.id === selectedId
-              ? 'bg-brand-selected shadow-[inset_2px_0_0_var(--color-brand)]'
-              : row.task.id === producerId
-                ? 'bg-brand-tint/50 shadow-[inset_2px_0_0_var(--color-brand)]'
-                : 'hover:bg-sunken'
-          "
-          :aria-selected="row.task.id === selectedId"
-          @click="emit('select', row.task)"
-        >
-          <td class="px-3">
-            <div class="flex h-7 min-w-0 items-stretch">
-              <!-- one guide per ancestor, then this task's own elbow -->
-              <span v-for="(guide, level) in row.guides" :key="level" class="relative w-4 shrink-0">
+        <template v-for="row in rows" :key="row.key">
+          <tr v-if="row.kind === 'join'" class="h-7">
+            <td class="px-3">
+              <div class="flex h-7 min-w-0 items-stretch">
                 <span
-                  v-if="guide"
-                  class="absolute top-0 bottom-0 left-1.5 border-l border-ink-muted/50"
-                />
-              </span>
-              <span class="relative w-4 shrink-0">
-                <span
-                  class="absolute top-0 left-1.5 border-l border-ink-muted/50"
-                  :class="row.last ? 'h-1/2' : 'bottom-0'"
-                />
-                <span class="absolute top-1/2 left-1.5 w-2.5 border-t border-ink-muted/50" />
-              </span>
-              <span class="flex min-w-0 items-center gap-2 pl-1">
-                <span
-                  class="truncate"
-                  :class="row.task.status === 'pending' ? 'text-ink-secondary' : 'text-ink'"
-                  >{{ row.task.name }}</span
+                  v-for="(guide, level) in row.guides"
+                  :key="level"
+                  class="relative w-4 shrink-0"
                 >
+                  <span
+                    v-if="guide"
+                    class="absolute top-0 bottom-0 left-1.5 border-l border-ink-muted/50"
+                  />
+                </span>
+                <span class="relative w-4 shrink-0">
+                  <span
+                    class="absolute top-0 left-1.5 h-1/2 border-l border-dashed border-ink-muted/50"
+                  />
+                  <span
+                    class="absolute top-1/2 left-1.5 w-2.5 border-t border-dashed border-ink-muted/50"
+                  />
+                </span>
+                <span class="flex min-w-0 items-center pl-1">
+                  <button
+                    type="button"
+                    class="flex h-5 min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-control) border border-dashed border-border-strong px-1.5 text-[11px] text-ink-muted hover:border-brand hover:text-brand"
+                    :aria-label="`Add worker after all ${row.count} tasks in this group`"
+                    v-tooltip="
+                      `Add a worker that runs once all ${row.count} tasks in this group have finished, on all their outputs`
+                    "
+                    @click="emit('add', { join: row.groupId })"
+                  >
+                    <Merge :size="11" :stroke-width="1.5" class="shrink-0" />
+                    after all {{ row.count }}
+                  </button>
+                </span>
+              </div>
+            </td>
+            <td colspan="4" />
+          </tr>
+          <tr
+            v-else
+            :data-task="row.task.id"
+            class="group h-7 cursor-pointer transition-colors duration-120 ease-(--ease-standard)"
+            :style="row.newGroup ? { borderTop: '1px dashed var(--color-border)' } : undefined"
+            :class="
+              row.task.id === selectedId
+                ? 'bg-brand-selected shadow-[inset_2px_0_0_var(--color-brand)]'
+                : row.task.id === producerId
+                  ? 'bg-brand-tint/50 shadow-[inset_2px_0_0_var(--color-brand)]'
+                  : 'hover:bg-sunken'
+            "
+            :aria-selected="row.task.id === selectedId"
+            @click="emit('select', row.task)"
+          >
+            <td class="px-3">
+              <div class="flex h-7 min-w-0 items-stretch">
+                <!-- one guide per ancestor, then this task's own elbow -->
                 <span
-                  v-if="row.task.children.length > 1"
-                  class="tabular shrink-0 text-[11px] text-ink-muted"
-                  v-tooltip="`${row.task.children.length} tasks run in parallel on its output`"
-                  >⇉ {{ row.task.children.length }}</span
+                  v-for="(guide, level) in row.guides"
+                  :key="level"
+                  class="relative w-4 shrink-0"
                 >
-              </span>
-            </div>
-          </td>
-          <td class="truncate px-2 text-ink-muted" v-tooltip="row.task.queue">
-            {{ row.task.queue.replace('openrelik-worker-', '') }}
-          </td>
-          <td class="px-2"><TaskStatusBadge :status="row.task.status" /></td>
-          <td class="tabular px-2 text-right whitespace-nowrap text-ink-secondary">
-            {{ row.task.duration === undefined ? '–' : formatDuration(row.task.duration) }}
-          </td>
-          <td class="tabular px-2 pr-3 text-right text-ink-muted">
-            <template v-if="row.task.outputs.length">{{ row.task.outputs.length }} out</template>
-            <template v-else>–</template>
-          </td>
-        </tr>
+                  <span
+                    v-if="guide"
+                    class="absolute top-0 bottom-0 left-1.5 border-l border-ink-muted/50"
+                  />
+                </span>
+                <span class="relative w-4 shrink-0">
+                  <span
+                    class="absolute top-0 left-1.5 border-l border-ink-muted/50"
+                    :class="row.last ? 'h-1/2' : 'bottom-0'"
+                  />
+                  <span class="absolute top-1/2 left-1.5 w-2.5 border-t border-ink-muted/50" />
+                </span>
+                <span class="flex min-w-0 items-center gap-2 pl-1">
+                  <span
+                    class="truncate"
+                    :class="row.task.status === 'pending' ? 'text-ink-secondary' : 'text-ink'"
+                    >{{ row.task.name }}</span
+                  >
+                  <span
+                    v-if="parallel(row.task) > 1"
+                    class="tabular shrink-0 text-[11px] text-ink-muted"
+                    v-tooltip="`${parallel(row.task)} tasks run in parallel on its output`"
+                    >⇉ {{ parallel(row.task) }}</span
+                  >
+                  <Merge
+                    v-if="row.waitsFor"
+                    :size="12"
+                    :stroke-width="1.5"
+                    class="shrink-0 text-ink-muted"
+                    :aria-label="`waits for ${row.waitsFor} tasks`"
+                    v-tooltip="
+                      `Runs once all ${row.waitsFor} tasks above it have finished, on all their outputs`
+                    "
+                  />
+                  <button
+                    v-if="editable && !blocked.has(row.task.id)"
+                    type="button"
+                    :class="ADD_AFTER"
+                    :aria-label="`Add worker after ${row.task.name}`"
+                    v-tooltip="
+                      `Add worker after ${row.task.name}${row.task.groups.length ? ', in a new group' : ''}`
+                    "
+                    @click.stop="emit('add', { after: row.task.id })"
+                  >
+                    <Plus :size="11" :stroke-width="2" />
+                  </button>
+                  <button
+                    v-if="editable && row.endsGroup"
+                    type="button"
+                    :class="ADD_AFTER"
+                    :aria-label="`Add worker beside ${row.task.name}`"
+                    v-tooltip="`Add worker beside ${row.task.name}: in parallel, on the same input`"
+                    @click.stop="emit('add', { beside: row.task.id })"
+                  >
+                    <ListPlus :size="11" :stroke-width="2" />
+                  </button>
+                  <button
+                    v-if="editable"
+                    type="button"
+                    :class="[
+                      REMOVE,
+                      row.task.id === selectedId
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover:opacity-100',
+                    ]"
+                    :aria-label="`Remove ${row.task.name}`"
+                    v-tooltip="`Remove ${row.task.name} (del)`"
+                    @click.stop="emit('remove', row.task.id)"
+                  >
+                    <X :size="10" :stroke-width="2" />
+                  </button>
+                </span>
+              </div>
+            </td>
+            <td class="truncate px-2 text-ink-muted" v-tooltip="row.task.queue">
+              {{ row.task.queue.replace('openrelik-worker-', '') }}
+            </td>
+            <td class="px-2"><TaskStatusBadge :status="row.task.status" /></td>
+            <td class="tabular px-2 text-right whitespace-nowrap text-ink-secondary">
+              {{ row.task.duration === undefined ? '–' : formatDuration(row.task.duration) }}
+            </td>
+            <td class="tabular px-2 pr-3 text-right text-ink-muted">
+              <template v-if="row.task.outputs.length">{{ row.task.outputs.length }} out</template>
+              <template v-else>–</template>
+            </td>
+          </tr>
+        </template>
       </tbody>
     </table>
   </div>

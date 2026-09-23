@@ -18,8 +18,6 @@ import KeyValueRow from '@/components/base/KeyValueRow.vue'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import type { Item } from '@/data/folders'
-import { choicesFor, type Worker } from '@/data/workers'
-import { workflowOf } from '@/data/workflows'
 import { count, formatSize, stamp } from '@/utils/format'
 
 /**
@@ -39,7 +37,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   open: [id: number]
-  run: [worker: Worker]
   runMore: []
   clearSelection: []
   toggleItem: [id: number]
@@ -97,15 +94,6 @@ const typeSummary = computed(() => {
     return entries.map(([t, c]) => `${t} (${c})`).join(', ')
   }
   return `${entries.length} distinct types`
-})
-
-/** One click for the likeliest workers: built for this file/selection's type. */
-const quick = computed(() => {
-  const target = isMulti.value ? multiFiles.value : props.item.kind === 'file' ? [props.item] : []
-  if (!target.length) return []
-  return choicesFor(target)
-    .suggested.filter((w) => !w.options.some((o) => o.required && !o.default))
-    .slice(0, 3)
 })
 
 const bytes = computed(() => props.item.size ?? 0)
@@ -216,23 +204,13 @@ function openWorkflow() {
         <p class="micro-label mt-3 pb-1">run worker ({{ multiFiles.length }} files)</p>
         <div class="flex flex-col gap-1">
           <button
-            v-for="worker in quick"
-            :key="worker.id"
             type="button"
             class="flex h-6 cursor-pointer items-center gap-2 rounded-(--radius-control) border border-border-strong px-2 text-left text-ink hover:bg-sunken"
-            v-tooltip="`Run ${worker.name} on ${multiFiles.length} files`"
-            @click="emit('run', worker)"
-          >
-            <Play :size="11" :stroke-width="1.5" class="shrink-0 text-brand" aria-hidden="true" />
-            <span class="truncate">{{ worker.name }}</span>
-          </button>
-          <button
-            type="button"
-            class="flex h-6 cursor-pointer items-center gap-2 px-2 text-left text-ink-muted hover:text-ink"
-            v-tooltip="`Open worker picker for ${multiFiles.length} files (⌘⏎)`"
+            v-tooltip="`Pick a worker to run on ${multiFiles.length} files (⌘⏎)`"
             @click="emit('runMore')"
           >
-            more workers…
+            <Play :size="11" :stroke-width="1.5" class="shrink-0 text-brand" aria-hidden="true" />
+            pick a worker…
             <kbd
               class="ml-auto rounded-(--radius-check) border border-border-strong px-1 text-[10px] leading-4"
               >⌘⏎</kbd
@@ -315,7 +293,9 @@ function openWorkflow() {
         <KeyValueRow label="kind" :value="item.kind" />
         <KeyValueRow
           label="type"
-          :value="item.mime ?? (workflowOf(item.id) ? 'openrelik/workflow' : 'inode/directory')"
+          :value="
+            item.mime ?? (item.workflowId !== undefined ? 'openrelik/workflow' : 'inode/directory')
+          "
         />
         <KeyValueRow v-if="item.kind === 'file'" label="size">
           <span class="tabular">{{ formatSize(bytes) }}</span>
@@ -339,23 +319,13 @@ function openWorkflow() {
         <p class="micro-label mt-3 pb-1">run worker</p>
         <div class="flex flex-col gap-1">
           <button
-            v-for="worker in quick"
-            :key="worker.id"
             type="button"
             class="flex h-6 cursor-pointer items-center gap-2 rounded-(--radius-control) border border-border-strong px-2 text-left text-ink hover:bg-sunken"
-            v-tooltip="`Run ${worker.name} on ${item.name}`"
-            @click="emit('run', worker)"
-          >
-            <Play :size="11" :stroke-width="1.5" class="shrink-0 text-brand" aria-hidden="true" />
-            <span class="truncate">{{ worker.name }}</span>
-          </button>
-          <button
-            type="button"
-            class="flex h-6 cursor-pointer items-center gap-2 px-2 text-left text-ink-muted hover:text-ink"
-            v-tooltip="'Open worker picker (⌘⏎)'"
+            v-tooltip="`Pick a worker to run on ${item.name} (⌘⏎)`"
             @click="emit('runMore')"
           >
-            more workers…
+            <Play :size="11" :stroke-width="1.5" class="shrink-0 text-brand" aria-hidden="true" />
+            pick a worker…
             <kbd
               class="ml-auto rounded-(--radius-check) border border-border-strong px-1 text-[10px] leading-4"
               >⌘⏎</kbd

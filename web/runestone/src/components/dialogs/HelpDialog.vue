@@ -68,6 +68,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['⇧↑', '⇧↓'], does: 'Extend the selection (also ⇧click)' },
       { keys: ['⌘A'], does: 'Select all' },
       { keys: ['⌘⏎', 'r'], does: 'Run a worker on the highlighted or selected files' },
+      { keys: ['w'], does: 'Create a workflow on the highlighted or selected files' },
       { keys: ['/'], does: 'Filter this folder' },
       { keys: ['⇧R'], does: 'Refresh this folder from the server' },
       { keys: ['u'], does: 'Upload files here (or drop them on the listing)' },
@@ -76,6 +77,10 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['del', '⌫', '⌘⌫'], does: 'Delete the selected or highlighted items' },
       { keys: ['esc'], does: 'Clear the selection, or close a task' },
       { keys: ['f'], does: 'Full-screen flowchart, in a workflow folder' },
+      { keys: ['a'], does: 'Add a worker to a draft workflow, after the selected task' },
+      { keys: ['⇧⏎'], does: 'Run a draft workflow' },
+      { keys: ['del', '⌫'], does: 'Remove the selected task from a draft workflow' },
+      { keys: ['⌘Z'], does: 'Put back the task just removed' },
     ],
   },
   {

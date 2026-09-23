@@ -6,11 +6,11 @@ import {
   Maximize2,
   Minimize2,
   Network,
+  Play,
   Plus,
   Shrink,
-  Square,
 } from '@/components/icons'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowGraph from '@/components/workflow/WorkflowGraph.vue'
@@ -18,16 +18,37 @@ import WorkflowSummary from '@/components/workflow/WorkflowSummary.vue'
 import WorkflowTree from '@/components/workflow/WorkflowTree.vue'
 import Button from '@/components/base/Button.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
+import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useRemembered } from '@/composables/useRemembered'
-import { allTasks, runStats, type Task, type Workflow } from '@/data/workflows'
-import { openRun } from '@/composables/useRun'
-import { findItem, type Item } from '@/data/folders'
+import { openAddToWorkflow } from '@/composables/useRun'
+import {
+  lastRemoval,
+  type AddAt,
+  removeTask,
+  retrySave,
+  runWorkflow,
+  workflowActivity,
+} from '@/composables/useWorkflow'
+import { loadWorkers, useWorkers } from '@/composables/useWorkers'
+import {
+  canChainAfter,
+  everyTask,
+  findTask,
+  runStats,
+  type Task,
+  type Workflow,
+} from '@/data/workflows'
+import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
+import { runBlocker } from '@/utils/workflowSpec'
 
 /**
  * A workflow, with a summary header and two views of the same tasks: a dense
  * tree table for reading status, and a flowchart for seeing shape. Selection is
  * shared, so switching views keeps the task you were looking at.
+ *
+ * Until it runs, a workflow is a draft: every node offers a + to add a worker
+ * on its output, edits save behind the user, and Run workflow sends it.
  *
  * The flowchart can also take the whole window. It keeps what you need to act
  * on the run — the summary, the run's buttons, zoom, the task inspector — and
@@ -40,6 +61,7 @@ const props = defineProps<{
   producerId: string | null
 }>()
 const emit = defineEmits<{ select: [task: Task | null] }>()
+const modalStore = useModalStore()
 
 type View = 'tree' | 'graph'
 const view = useRemembered<View>('openrelik.workflow.view', 'tree')
@@ -56,7 +78,7 @@ const VIEWS: { value: View; label: string; icon: typeof ListTree }[] = [
 
 const stats = computed(() => runStats(props.workflow))
 const selectedTask = computed(
-  () => allTasks(props.workflow.tasks).find((task) => task.id === props.selectedId) ?? null,
+  () => everyTask(props.workflow).find((task) => task.id === props.selectedId) ?? null,
 )
 
 function enterFullscreen() {
@@ -65,19 +87,88 @@ function enterFullscreen() {
   fullscreen.value = true
 }
 
-function addTask() {
-  const inputFiles = props.workflow.inputs
-    .map((id) => findItem(id))
-    .filter((item): item is Item => item !== undefined)
-  openRun(inputFiles, props.workflow.folderId)
+const activity = computed(() => workflowActivity(props.workflow.id))
+const editable = computed(() => props.workflow.draft && !activity.value.running)
+const showSaving = useDelayedFlag(() => activity.value.saving)
+const showRunning = useDelayedFlag(() => activity.value.running)
+
+// Run checks the tasks against the workers online, so a draft keeps the registry loaded.
+const { available } = useWorkers()
+watch(
+  () => props.workflow.draft,
+  (draft) => draft && loadWorkers(),
+  { immediate: true },
+)
+const blocker = computed(() =>
+  props.workflow.draft ? runBlocker(props.workflow, available.value) : null,
+)
+
+/** Add a worker (see `AddAt`): by default in a new group after the selected task, or on the inputs. */
+function add(at: AddAt = { after: props.selectedId }) {
+  if (editable.value) openAddToWorkflow(props.workflow, at)
+}
+
+/** The + Worker button adds after the selected task, unless a join waits for its group. */
+const canAddHere = computed(
+  () => !selectedTask.value || canChainAfter(props.workflow, selectedTask.value.id),
+)
+const addTooltip = computed(() =>
+  !selectedTask.value
+    ? 'Add worker on the inputs (a)'
+    : canAddHere.value
+      ? `Add worker after ${selectedTask.value.name} (a)`
+      : `${selectedTask.value.name} is in a group a worker waits for; add after that worker instead`,
+)
+
+/** Removes a task (and what follows it) from the draft; undo is offered in the header. */
+function remove(taskId: string) {
+  if (!editable.value || !removeTask(props.workflow.folderId, taskId)) return
+  // The selection may have gone with it.
+  if (props.selectedId && !findTask(props.workflow, props.selectedId)) emit('select', null)
+}
+
+/** The removal from this workflow that can still be undone. */
+const removal = computed(() =>
+  lastRemoval.value?.folderId === props.workflow.folderId ? lastRemoval.value : null,
+)
+
+async function run() {
+  if (blocker.value || activity.value.running) return
+  if (await runWorkflow(props.workflow.folderId)) emit('select', null)
 }
 
 /**
- * Keys: `f` opens full screen; while it is open, Esc closes the task first and then
- * full screen, and nothing else reaches the listing behind the overlay.
+ * Keys: `f` opens full screen; in a draft, `a` adds a worker (after the selected
+ * task) and ⇧⏎ runs it. While full screen is open, Esc closes the task first and
+ * then full screen, and nothing else reaches the listing behind the overlay.
  */
 function onKey(event: KeyboardEvent) {
-  if (isTyping(event) || event.altKey || event.metaKey || event.ctrlKey) return
+  if (modalStore.hasActiveModal) return
+  if (isTyping(event) || event.altKey) return
+  // ⌘Z / Ctrl+Z: put back what was just removed.
+  if ((event.metaKey || event.ctrlKey) && event.key === 'z' && removal.value) {
+    removal.value.undo()
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+  if (event.metaKey || event.ctrlKey) return
+  const removeSelected = () => props.selectedId && remove(props.selectedId)
+  const draftKeys: Record<string, () => void> = {
+    a: () => add(),
+    'Shift+Enter': run,
+    // Only with a task selected: otherwise these delete rows in the listing.
+    ...(props.selectedId ? { Delete: removeSelected, Backspace: removeSelected } : {}),
+  }
+  const draftAction = props.workflow.draft
+    ? draftKeys[event.shiftKey ? `Shift+${event.key}` : event.key]
+    : undefined
+  if (draftAction) {
+    draftAction()
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
   if (!fullscreen.value) {
     if (event.key === 'f') {
       enterFullscreen()
@@ -118,6 +209,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         />
       </button>
       <WorkflowSummary :workflow="workflow" :stats="stats" />
+      <span v-if="activity.saveError" role="alert" class="flex min-w-0 items-center gap-1.5">
+        <span class="truncate text-danger" v-tooltip="activity.saveError">not saved</span>
+        <Button variant="ghost" size="row" @click="retrySave(workflow.folderId)">Retry</Button>
+      </span>
+      <span v-else-if="showSaving" class="text-ink-muted" aria-live="polite">saving…</span>
+      <span v-if="removal" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
+        <span class="truncate text-ink-secondary">removed {{ removal.label }}</span>
+        <Button variant="ghost" size="row" tooltip="Put it back (⌘Z)" @click="removal.undo()"
+          >Undo</Button
+        >
+      </span>
+      <span
+        v-if="activity.error"
+        role="alert"
+        class="min-w-0 truncate text-danger"
+        v-tooltip="activity.error"
+        >{{ activity.error }}</span
+      >
 
       <div class="ml-auto flex items-center gap-1.5">
         <!-- A segmented track, the live view lit: the system's "pick one of a few". -->
@@ -165,21 +274,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           <Expand :size="13" :stroke-width="1.5" />
         </button>
 
-        <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
-
-        <Button size="row" :tooltip="`Add task to ${workflow.name}`" @click="addTask">
-          <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
-          Task
-        </Button>
-        <Button
-          v-if="stats.state === 'running'"
-          variant="danger"
-          size="row"
-          :tooltip="`Cancel running tasks in ${workflow.name}`"
-        >
-          <template #icon><Square :size="11" :stroke-width="2" /></template>
-          Cancel run
-        </Button>
+        <template v-if="workflow.draft">
+          <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+          <Button
+            size="row"
+            :disabled="!editable || !canAddHere"
+            :tooltip="addTooltip"
+            @click="add()"
+          >
+            <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
+            Worker
+          </Button>
+          <Button
+            variant="primary"
+            size="row"
+            :disabled="!!blocker || activity.running"
+            :tooltip="blocker ?? `Run ${workflow.name} (⇧⏎)`"
+            @click="run"
+          >
+            <template #icon><Play :size="11" :stroke-width="2" /></template>
+            {{ showRunning ? 'Starting…' : 'Run workflow' }}
+          </Button>
+        </template>
       </div>
     </div>
 
@@ -190,7 +306,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         :workflow="workflow"
         :selected-id="selectedId"
         :producer-id="producerId"
+        :editable="editable"
         @select="emit('select', $event)"
+        @add="add"
+        @remove="remove"
       />
       <WorkflowGraph
         v-else
@@ -198,7 +317,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         :workflow="workflow"
         :selected-id="selectedId"
         :producer-id="producerId"
+        :editable="editable"
         @select="emit('select', $event)"
+        @add="add"
+        @remove="remove"
       />
     </template>
 
@@ -213,21 +335,35 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
       >
         <div class="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3">
           <WorkflowSummary :workflow="workflow" :stats="stats" />
-          <div class="ml-auto flex items-center gap-1.5">
-            <Button size="row" :tooltip="`Add task to ${workflow.name}`">
-              <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
-              Task
-            </Button>
-            <Button
-              v-if="stats.state === 'running'"
-              variant="danger"
-              size="row"
-              :tooltip="`Cancel running tasks in ${workflow.name}`"
+          <span v-if="removal" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
+            <span class="truncate text-ink-secondary">removed {{ removal.label }}</span>
+            <Button variant="ghost" size="row" tooltip="Put it back (⌘Z)" @click="removal.undo()"
+              >Undo</Button
             >
-              <template #icon><Square :size="11" :stroke-width="2" /></template>
-              Cancel run
-            </Button>
-            <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+          </span>
+          <div class="ml-auto flex items-center gap-1.5">
+            <template v-if="workflow.draft">
+              <Button
+                size="row"
+                :disabled="!editable || !canAddHere"
+                :tooltip="addTooltip"
+                @click="add()"
+              >
+                <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
+                Worker
+              </Button>
+              <Button
+                variant="primary"
+                size="row"
+                :disabled="!!blocker || activity.running"
+                :tooltip="blocker ?? `Run ${workflow.name} (⇧⏎)`"
+                @click="run"
+              >
+                <template #icon><Play :size="11" :stroke-width="2" /></template>
+                {{ showRunning ? 'Starting…' : 'Run workflow' }}
+              </Button>
+              <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+            </template>
             <Button size="row" tooltip="Exit full screen (esc)" @click="fullscreen = false">
               <template #icon><Shrink :size="13" :stroke-width="1.5" /></template>
               Exit
@@ -242,13 +378,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             :capped="false"
             :workflow="workflow"
             :selected-id="selectedId"
+            :editable="editable"
             @select="emit('select', $event)"
+            @add="add"
+            @remove="remove"
           />
           <TaskInspector
             v-if="selectedTask"
             :task="selectedTask"
+            :folder-id="workflow.folderId"
+            :editable="editable"
             class="w-72 shrink-0 border-l border-border bg-surface"
             @close="emit('select', null)"
+            @add="add"
           />
         </div>
 

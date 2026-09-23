@@ -1,23 +1,31 @@
 import { reactive } from 'vue'
-import { ITEMS, type Item } from '@/data/folders'
+import type { WorkerOption } from '@/data/workers'
 
 /**
  * A workflow lives in a folder of its own: the tasks run on input files from
  * the parent folder, and what they produce lands in the workflow folder.
  *
- * A task's children run on its output, and siblings run in parallel — so a
- * plain tree is the whole graph, with no edges to draw.
+ * What runs on the inputs, and on each task's output, is a list of groups.
+ * Every task in every group runs in parallel on that output; a group only
+ * matters for its `join`, which runs once all of the group's tasks have
+ * finished, on everything they produced. The server calls that a chord: the
+ * group is its header, the join its callback.
+ *
+ * Workflows are loaded from the server (`useWorkflow`) and kept here by the
+ * folder they own.
  */
 
 export type TaskStatus = 'success' | 'running' | 'pending' | 'failed'
 
 export interface Task {
+  /** The spec uuid: 32 hex digits, also the server's task record uuid after a run. */
   id: string
   /** Display name, as the worker registers it. */
   name: string
   /** The Celery task that does the work. */
   module: string
   queue: string
+  description?: string
   status: TaskStatus
   started?: string
   /** Seconds. For a running task, time so far. */
@@ -25,8 +33,29 @@ export interface Task {
   /** File ids produced, in the workflow folder. */
   outputs: number[]
   error?: string
+  /** What the worker can be configured with. */
+  options: WorkerOption[]
+  /** The values chosen, by option key. */
   config: Record<string, string>
-  children: Task[]
+  /** What runs on its output. */
+  groups: TaskGroup[]
+}
+
+/** Tasks that run side by side, and what waits for all of them. */
+export interface TaskGroup {
+  /** Stable key for the UI and the spec's `group` marker; not a server id. */
+  id: string
+  /** At least one. */
+  tasks: Task[]
+  /** Runs after every task in the group has finished, on all their outputs. */
+  join?: Task
+}
+
+/** An input file, as the workflow knows it: its files may live in a folder not loaded yet. */
+export interface WorkflowInput {
+  id: number
+  name: string
+  dataType?: string
 }
 
 export interface Workflow {
@@ -35,20 +64,85 @@ export interface Workflow {
   folderId: number
   name: string
   created: string
-  /** File ids the first tasks run on. */
-  inputs: number[]
-  tasks: Task[]
+  /** The files the first tasks run on. */
+  inputs: WorkflowInput[]
+  /** What runs on the inputs. */
+  groups: TaskGroup[]
+  /** Not run yet: tasks can still be added, configured and removed. */
+  draft: boolean
 }
 
-export const WORKFLOWS: Workflow[] = reactive<Workflow[]>([])
+const WORKFLOWS = reactive(new Map<number, Workflow>())
 
-export const workflowOf = (folderId: number): Workflow | undefined =>
-  WORKFLOWS.find((workflow) => workflow.folderId === folderId)
+export const workflowOf = (folderId: number): Workflow | undefined => WORKFLOWS.get(folderId)
 
-/** Every task, depth first. */
-export function allTasks(tasks: Task[]): Task[] {
-  return tasks.flatMap((task) => [task, ...allTasks(task.children)])
+/** Adds or replaces the workflow that owns `workflow.folderId`. */
+export function upsertWorkflow(workflow: Workflow): void {
+  WORKFLOWS.set(workflow.folderId, workflow)
 }
+
+export function forgetWorkflows(): void {
+  WORKFLOWS.clear()
+}
+
+/** Every task in these groups and after them, depth first. */
+export function allTasks(groups: TaskGroup[]): Task[] {
+  const after = (task: Task): Task[] => [task, ...allTasks(task.groups)]
+  return groups.flatMap((group) => [
+    ...group.tasks.flatMap(after),
+    ...(group.join ? after(group.join) : []),
+  ])
+}
+
+/** Every task in the workflow. */
+export const everyTask = (workflow: Workflow): Task[] => allTasks(workflow.groups)
+
+export function findTask(workflow: Workflow, id: string): Task | undefined {
+  return everyTask(workflow).find((task) => task.id === id)
+}
+
+/** A group and what it runs on: a task, or the inputs (null). */
+export interface PlacedGroup {
+  group: TaskGroup
+  /** The task whose output it runs on, or null for the inputs. */
+  parent: Task | null
+}
+
+/** Every group in the workflow, with where it sits. */
+export function everyGroup(workflow: Workflow): PlacedGroup[] {
+  return [
+    ...workflow.groups.map((group) => ({ group, parent: null })),
+    ...everyTask(workflow).flatMap((task) => task.groups.map((group) => ({ group, parent: task }))),
+  ]
+}
+
+/** The group a task belongs to, as a member or as its join. */
+export function groupOf(workflow: Workflow, taskId: string): PlacedGroup | undefined {
+  return everyGroup(workflow).find(
+    ({ group }) => group.join?.id === taskId || group.tasks.some((task) => task.id === taskId),
+  )
+}
+
+/**
+ * Whether a join can follow a group: a free group — two or more, with nothing
+ * chained after any of them, and no join yet. As in the original editor, a
+ * chord's header is a plain group; its callback is what comes next.
+ */
+export const canJoin = (group: TaskGroup): boolean =>
+  !group.join && group.tasks.length > 1 && group.tasks.every((task) => !task.groups.length)
+
+/**
+ * Tasks nothing can be chained after: the members of a group a join waits
+ * for — the join is what comes after that group. More can join the group.
+ */
+export function unchainable(workflow: Workflow): Set<string> {
+  return new Set(
+    everyGroup(workflow).flatMap(({ group }) => (group.join ? group.tasks.map((t) => t.id) : [])),
+  )
+}
+
+export const canChainAfter = (workflow: Workflow, taskId: string): boolean =>
+  !unchainable(workflow).has(taskId)
 
 export interface RunStats {
   done: number
@@ -61,10 +155,16 @@ export interface RunStats {
 }
 
 export function runStats(workflow: Workflow): RunStats {
-  const tasks = allTasks(workflow.tasks)
+  const tasks = everyTask(workflow)
   const by = (status: TaskStatus) => tasks.filter((task) => task.status === status).length
-  const chain = (list: Task[]): number =>
-    Math.max(0, ...list.map((task) => (task.duration ?? 0) + chain(task.children)))
+  const line = (task: Task): number => (task.duration ?? 0) + chain(task.groups)
+  const chain = (groups: TaskGroup[]): number =>
+    Math.max(
+      0,
+      ...groups.map(
+        (group) => Math.max(0, ...group.tasks.map(line)) + (group.join ? line(group.join) : 0),
+      ),
+    )
   const done = by('success')
   const failed = by('failed')
   const running = by('running')
@@ -73,75 +173,31 @@ export function runStats(workflow: Workflow): RunStats {
     failed,
     running,
     total: tasks.length,
-    elapsed: chain(workflow.tasks),
-    state: running ? 'running' : failed ? 'failed' : tasks.length === 0 ? 'pending' : 'success',
+    elapsed: chain(workflow.groups),
+    state:
+      workflow.draft || tasks.length === 0
+        ? 'pending'
+        : isActive(workflow)
+          ? 'running'
+          : failed
+            ? 'failed'
+            : 'success',
   }
 }
 
-export interface WorkflowTemplate {
-  id: string
-  name: string
-  description: string
-  tasks: () => Task[]
-}
-
-export function cloneTasks(tasks: Task[], prefix: string = ''): Task[] {
-  return tasks.map((t) => {
-    const newId = prefix ? `${prefix}-${t.id}` : `${t.id}-${Math.random().toString(36).slice(2, 6)}`
-    return {
-      ...t,
-      id: newId,
-      outputs: [],
-      status: t.status === 'failed' ? 'failed' : t.status === 'running' ? 'running' : 'pending',
-      duration: t.status === 'running' ? 0 : t.duration,
-      children: cloneTasks(t.children, prefix),
-    }
-  })
-}
-
-export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = []
-
-export function createWorkflow(options: {
-  folderId: number
-  files: Item[]
-  templateId?: string
-}): number {
-  const nextId = Math.max(0, ...ITEMS.map((item) => item.id)) + 1
-  const template = options.templateId
-    ? WORKFLOW_TEMPLATES.find((t) => t.id === options.templateId)
-    : undefined
-  const name = template ? template.name : 'Untitled workflow'
-  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
-
-  ITEMS.push({
-    id: nextId,
-    parent: options.folderId,
-    kind: 'folder',
-    name,
-    owner: 'jbn',
-    created: now,
-    modified: now,
-  })
-
-  const tasks = template ? template.tasks() : []
-  WORKFLOWS.push({
-    id: 1000 + nextId,
-    folderId: nextId,
-    name,
-    created: now,
-    inputs: options.files.map((file) => file.id),
-    tasks,
-  })
-
-  return nextId
-}
-
-/** Renames a workflow without modifying the underlying folder. */
-export function renameWorkflow(id: number, newName: string): boolean {
-  const workflow = WORKFLOWS.find((w) => w.id === id)
-  if (!workflow) return false
-  const trimmed = newName.trim()
-  if (!trimmed) return false
-  workflow.name = trimmed
-  return true
+/**
+ * Queued or running tasks remain: the workflow is worth polling. Tasks after a
+ * failed one never start, so they do not count — nor does a join after a
+ * failure in any of the lines it waits for.
+ */
+export function isActive(workflow: Workflow): boolean {
+  const failed = (tasks: Task[]) =>
+    allTasks([{ id: '', tasks }]).some((task) => task.status === 'failed')
+  const live = (task: Task): boolean =>
+    task.status === 'pending' ||
+    task.status === 'running' ||
+    (task.status === 'success' && liveAfter(task.groups))
+  const liveAfter = (groups: TaskGroup[]): boolean =>
+    groups.some(({ tasks, join }) => tasks.some(live) || (!!join && !failed(tasks) && live(join)))
+  return !workflow.draft && liveAfter(workflow.groups)
 }

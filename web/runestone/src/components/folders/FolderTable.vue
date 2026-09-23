@@ -548,7 +548,9 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
           <td class="px-2">
             <div class="flex min-w-0 w-full items-center gap-2">
               <component
-                :is="row.kind === 'file' ? File : workflowOf(row.id) ? WorkflowIcon : Folder"
+                :is="
+                  row.kind === 'file' ? File : row.workflowId !== undefined ? WorkflowIcon : Folder
+                "
                 :size="13"
                 :stroke-width="1.5"
                 class="shrink-0"

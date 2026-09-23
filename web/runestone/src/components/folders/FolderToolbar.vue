@@ -23,6 +23,13 @@ const emit = defineEmits<{
 }>()
 
 const currentFolder = computed(() => props.crumbs.at(-1))
+/**
+ * Upload leads in a plain folder with nothing selected. Not in a workflow
+ * folder: outputs land there, and running the workflow is what matters.
+ */
+const uploadLeads = computed(
+  () => !props.selectedFiles?.length && currentFolder.value?.workflowId === undefined,
+)
 
 const filter = defineModel<string>('filter', { default: '' })
 
@@ -113,7 +120,7 @@ defineExpose({
           Share
         </Button>
         <Button
-          :variant="selectedFiles && selectedFiles.length > 0 ? 'secondary' : 'primary'"
+          :variant="uploadLeads ? 'primary' : 'secondary'"
           size="row"
           :tooltip="`Upload files to ${currentFolder?.name ?? 'folder'} (u)`"
           @click="pickFiles"
