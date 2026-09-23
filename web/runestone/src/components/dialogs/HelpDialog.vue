@@ -91,6 +91,8 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     title: 'file',
     shortcuts: [
       { keys: ['←', '→'], does: 'Previous, next file in the folder (also j k)' },
+      { keys: ['d'], does: 'Download the file' },
+      { keys: ['w'], does: 'Create a workflow on the file' },
       { keys: ['esc', 'cd .'], does: 'Back to the folder' },
     ],
   },

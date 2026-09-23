@@ -54,6 +54,17 @@ export interface FolderFile {
   is_deleted?: boolean
 }
 
+/** One file in full (GET /files/{id}): its hashes and what the server made of its content. */
+export interface FileDetail extends FolderFile {
+  /** Empty until the server has hashed it, in the background after an upload. */
+  hash_md5?: string | null
+  hash_sha1?: string | null
+  hash_sha256?: string | null
+  hash_ssdeep?: string | null
+  /** libmagic's description, e.g. "PNG image data, 1024 x 768, 8-bit/color RGBA". */
+  magic_text?: string | null
+}
+
 /**
  * The file the upload answers with once the last chunk lands. It is the raw
  * record: no `user`, and hashes are still empty (the server fills them in the
@@ -76,6 +87,38 @@ export interface FolderDetail extends Folder {
   description?: string
   parent: FolderDetail | null
   storage_provider?: string | null
+  /** Who has access, set on this folder itself (inherited roles are not listed). */
+  user_roles?: UserRoleRecord[]
+  group_roles?: GroupRoleRecord[]
+}
+
+/** A user as the directory lists them (search results, role holders). */
+export interface DirectoryUser {
+  id: number
+  display_name: string
+  username: string
+  profile_picture_url?: string | null
+}
+
+/** A group of users. */
+export interface GroupRecord {
+  id: number
+  name: string
+  description?: string | null
+}
+
+/** A user's role on a folder; `id` is the role's, for removing it. */
+export interface UserRoleRecord {
+  id: number
+  role: FolderRole
+  user: DirectoryUser
+}
+
+/** A group's role on a folder; `id` is the role's, for removing it. */
+export interface GroupRoleRecord {
+  id: number
+  role: FolderRole
+  group: GroupRecord
 }
 
 /** A workflow as folders list it. */

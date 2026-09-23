@@ -21,11 +21,14 @@ export interface Item {
   dataType?: string
   /** Folders only: the workflow that owns this folder. */
   workflowId?: number
+  /** Files only, once their details are loaded; empty strings until the server has hashed it. */
   hashes?: {
     md5: string
     sha1: string
     sha256: string
   }
+  /** Files only, once their details are loaded: libmagic's description of the content. */
+  magicText?: string
 }
 
 /**
@@ -156,7 +159,11 @@ export function upsertItems(items: Item[]): void {
   for (const item of items) {
     const index = ITEMS.findIndex((existing) => existing.id === item.id)
     if (index === -1) ITEMS.push(item)
-    else ITEMS[index] = item
+    else {
+      // Listings do not carry a file's details (hashes, magic): keep those loaded.
+      const { hashes, magicText } = ITEMS[index]!
+      ITEMS[index] = { hashes, magicText, ...item }
+    }
   }
 }
 

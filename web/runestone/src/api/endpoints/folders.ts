@@ -5,6 +5,9 @@
 import { httpClient, type RequestOptions } from '../client'
 import type { Folder, FolderDetail, FolderFile, FolderPage, FolderRole } from '../types'
 
+/** Roles a folder can be shared with. */
+export type ShareRole = Extract<FolderRole, 'Editor' | 'Viewer'>
+
 /** Per-call options that endpoints pass through: cancellation, and background for prefetches. */
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 
@@ -81,6 +84,28 @@ export const foldersApi = {
    */
   renameFolder(folderId: number, displayName: string): Promise<FolderDetail> {
     return httpClient.patch<FolderDetail>(`/folders/${folderId}`, { display_name: displayName })
+  },
+
+  /**
+   * Gives users and groups a role on a folder (Editors and Owners may). The
+   * server refuses (409) a role someone already has, and adds a second one
+   * rather than changing a different role: remove the old one first.
+   */
+  share(
+    folderId: number,
+    grant: { userIds?: number[]; userRole?: ShareRole; groupIds?: number[]; groupRole?: ShareRole },
+  ): Promise<FolderDetail> {
+    return httpClient.post<FolderDetail>(`/folders/${folderId}/roles`, {
+      user_ids: grant.userIds?.length ? grant.userIds : undefined,
+      user_role: grant.userIds?.length ? grant.userRole : undefined,
+      group_ids: grant.groupIds?.length ? grant.groupIds : undefined,
+      group_role: grant.groupIds?.length ? grant.groupRole : undefined,
+    })
+  },
+
+  /** Takes a role away, by the role's id (from `user_roles` / `group_roles`). */
+  removeRole(folderId: number, kind: 'user' | 'group', roleId: number): Promise<void> {
+    return httpClient.delete<void>(`/folders/${folderId}/roles/${kind}s/${roleId}`)
   },
 
   /**

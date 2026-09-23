@@ -15,6 +15,7 @@ import { computed, ref, watch } from 'vue'
 
 import Button from '@/components/base/Button.vue'
 import KeyValueRow from '@/components/base/KeyValueRow.vue'
+import { downloadFile, downloadFiles } from '@/composables/useDownload'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import type { Item } from '@/data/folders'
@@ -277,6 +278,7 @@ function openWorkflow() {
           size="row"
           class="justify-center"
           :tooltip="`Download ${multiFiles.length} selected files`"
+          @click="downloadFiles(multiFiles)"
         >
           <template #icon><Download :size="13" :stroke-width="1.5" /></template>
           {{ multiFiles.length > 1 ? `Download (${multiFiles.length})` : 'Download' }}
@@ -421,6 +423,7 @@ function openWorkflow() {
           size="row"
           class="justify-center"
           :tooltip="`Download ${item.name}`"
+          @click="downloadFile(item.id, item.name)"
         >
           <template #icon><Download :size="13" :stroke-width="1.5" /></template>
           Download

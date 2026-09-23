@@ -17,10 +17,14 @@ const props = defineProps<{
 const hashes = computed(() => hashesOf(props.file))
 const bytes = computed(() => exactSize(props.file))
 
+/** A hash, or why there is none: not loaded yet, or not computed (yet) on the server. */
+const hash = (value: string | undefined) =>
+  value || (props.file.hashes ? 'not computed yet' : 'loading…')
+
 const details = computed(() => [
-  { label: 'md5', value: hashes.value?.md5, copyable: true },
-  { label: 'sha-1', value: hashes.value?.sha1, copyable: true },
-  { label: 'sha-256', value: hashes.value?.sha256, copyable: true },
+  { label: 'md5', value: hash(hashes.value.md5), copyable: !!hashes.value.md5 },
+  { label: 'sha-1', value: hash(hashes.value.sha1), copyable: !!hashes.value.sha1 },
+  { label: 'sha-256', value: hash(hashes.value.sha256), copyable: !!hashes.value.sha256 },
   { label: 'data type', value: dataTypeOf(props.file) },
   { label: 'mime type', value: props.file.mime ?? '' },
   { label: 'magic', value: magicOf(props.file) },

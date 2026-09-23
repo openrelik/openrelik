@@ -46,25 +46,15 @@ const MAGIC: Record<string, string> = {
 }
 
 export function magicOf(item: Item): string {
+  if (item.magicText) return item.magicText
   if (item.mime && MAGIC[item.mime]) return MAGIC[item.mime]!
   return item.mime ?? '–'
 }
 
 /** OpenRelik's own tag for what kind of artefact this is. */
 export function dataTypeOf(item: Item): string {
+  if (item.dataType) return item.dataType
   if (item.mime === 'application/x-ewf') return 'image:ewf'
   if (item.mime === 'application/x-sqlite3') return 'plaso:storage'
   return 'file:generic'
-}
-
-export const textOf = (item: Item): string | undefined => {
-  void item
-  return undefined
-}
-
-/** The first `length` bytes of a binary file. */
-export function headOf(item: Item, length = 512): number[] {
-  void item
-  void length
-  return []
 }

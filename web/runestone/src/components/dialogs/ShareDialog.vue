@@ -1,170 +1,209 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { ChevronDown, User, Users, X } from '@/components/icons'
 import Button from '@/components/base/Button.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
+import LoadState from '@/components/base/LoadState.vue'
+import type { DirectoryUser, GroupRecord } from '@/api'
+import { useDelayedFlag } from '@/composables/useDelayedFlag'
+import { canShare, ensureRole, roleOf } from '@/composables/useFolderPermissions'
 import {
-  AVAILABLE_GROUPS,
-  AVAILABLE_USERS,
+  loadAccess,
+  loadGroups,
+  saveAccess,
+  searchUsers,
   useShareDialog,
-  type ShareCollaborator,
+  type Collaborator,
   type ShareRole,
 } from '@/composables/useShareDialog'
+import { useAuthStore } from '@/stores/auth'
 
-const { isOpen, shareTarget, close, getCollaborators, saveCollaborators } = useShareDialog()
+/**
+ * ShareDialog — who has access to a folder, and giving or taking it
+ *
+ * The folder's user and group roles come from the server. People are found by
+ * searching the server's users (by name or username); groups are listed.
+ * Changes are made to a working copy and sent on Save; Cancel drops them. An
+ * owner cannot be removed. Only an owner or editor of the folder may change
+ * anything: for anyone else the list is read-only.
+ */
+const {
+  isOpen,
+  shareTarget,
+  close,
+  accessOf,
+  accessState,
+  groups,
+  groupsState,
+  usersFor,
+  usersState,
+} = useShareDialog()
 
-// Local working copy of collaborators for the open folder
-const collaborators = ref<ShareCollaborator[]>([])
+const folderId = computed(() => shareTarget.value?.folder.id)
+const me = computed(() => useAuthStore().user?.id)
 
-// Inputs and roles for adding people and groups
+/** What the server has, and the copy being edited. */
+const baseline = ref<Collaborator[]>([])
+const collaborators = ref<Collaborator[]>([])
+const dirty = computed(
+  () => JSON.stringify(summary(collaborators.value)) !== JSON.stringify(summary(baseline.value)),
+)
+const summary = (list: Collaborator[]) => list.map((c) => `${c.key}=${c.role}`).sort()
+
+const mayShare = computed(() => folderId.value !== undefined && canShare(roleOf(folderId.value)))
+const state = computed(() => (folderId.value === undefined ? null : accessState(folderId.value)))
+
+const saving = ref(false)
+const showSaving = useDelayedFlag(() => saving.value)
+const error = ref<string | null>(null)
+
+// Adding people and groups
 const personQuery = ref('')
 const personRole = ref<ShareRole>('Editor')
 const showPersonMenu = ref(false)
-
 const groupQuery = ref('')
 const groupRole = ref<ShareRole>('Editor')
 const showGroupMenu = ref(false)
-
 const personInput = ref<HTMLInputElement | null>(null)
-const groupInput = ref<HTMLInputElement | null>(null)
 
-// Synchronize working copy when dialog opens
 watch(
-  [isOpen, shareTarget],
-  ([open, target]) => {
-    if (open && target) {
-      collaborators.value = [...getCollaborators(target.folder.id, target.folder.owner || 'jbn')]
-      personQuery.value = ''
-      groupQuery.value = ''
-      showPersonMenu.value = false
-      showGroupMenu.value = false
-      nextTick(() => {
-        personInput.value?.focus()
-      })
-    }
+  [isOpen, folderId],
+  ([open, id]) => {
+    if (!open || id === undefined) return
+    baseline.value = []
+    collaborators.value = []
+    personQuery.value = ''
+    groupQuery.value = ''
+    showPersonMenu.value = false
+    showGroupMenu.value = false
+    error.value = null
+    loadAccess(id)
+    loadGroups()
+    ensureRole(id).catch(() => {})
+    nextTick(() => personInput.value?.focus())
   },
   { immediate: true },
 )
 
-const filteredUsers = computed(() => {
-  const existingIds = new Set(collaborators.value.map((c) => c.name.toLowerCase()))
-  const q = personQuery.value.trim().toLowerCase()
-  return AVAILABLE_USERS.filter((u) => {
-    if (existingIds.has(u.name.toLowerCase())) return false
-    return !q || u.name.toLowerCase().includes(q) || u.description.toLowerCase().includes(q)
-  })
+// The working copy starts from what the server has, and follows it until edited.
+watch(
+  () => (folderId.value === undefined ? [] : accessOf(folderId.value)),
+  (list) => {
+    const edited = dirty.value
+    baseline.value = list.map((c) => ({ ...c }))
+    if (!edited) collaborators.value = list.map((c) => ({ ...c }))
+  },
+  { immediate: true },
+)
+
+const has = (key: string) => collaborators.value.some((c) => c.key === key)
+
+// --- people: searched on the server as you type ---
+
+const SEARCH_DELAY_MS = 250
+/** The query searched for, a moment after typing stops. */
+const searched = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+let searchController: AbortController | undefined
+watch(personQuery, (query) => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    searched.value = query.trim()
+    searchController?.abort()
+    searchController = new AbortController()
+    searchUsers(searched.value, searchController.signal)
+  }, SEARCH_DELAY_MS)
+})
+onScopeDispose(() => {
+  clearTimeout(searchTimer)
+  searchController?.abort()
 })
 
-const filteredGroups = computed(() => {
-  const existingIds = new Set(collaborators.value.map((c) => c.name.toLowerCase()))
-  const q = groupQuery.value.trim().toLowerCase()
-  return AVAILABLE_GROUPS.filter((g) => {
-    if (existingIds.has(g.name.toLowerCase())) return false
-    return !q || g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q)
+const foundUsers = computed(() =>
+  searched.value ? usersFor(searched.value).filter((u) => !has(`user:${u.id}`)) : [],
+)
+const searching = computed(
+  () =>
+    personQuery.value.trim() !== searched.value ||
+    (!!searched.value && usersState(searched.value).isFetching),
+)
+const showSearching = useDelayedFlag(() => searching.value)
+
+function addPerson(user: DirectoryUser | undefined) {
+  if (!user || has(`user:${user.id}`)) return
+  collaborators.value.push({
+    key: `user:${user.id}`,
+    type: 'user',
+    id: user.id,
+    name: user.display_name || user.username,
+    detail: user.username,
+    role: personRole.value,
+    roleIds: [],
   })
-})
-
-function addPerson(user?: { name: string; description?: string }) {
-  const name = (user ? user.name : personQuery.value).trim()
-  if (!name) return
-  const description = user?.description ?? `${name}@openrelik.local`
-
-  const existingIdx = collaborators.value.findIndex(
-    (c) => c.name.toLowerCase() === name.toLowerCase(),
-  )
-  if (existingIdx >= 0) {
-    if (collaborators.value[existingIdx]!.role !== 'Owner') {
-      collaborators.value[existingIdx]!.role = personRole.value
-    }
-  } else {
-    collaborators.value.push({
-      id: name,
-      name,
-      type: 'user',
-      role: personRole.value,
-      description,
-    })
-  }
-
   personQuery.value = ''
   showPersonMenu.value = false
 }
 
-function addGroup(group?: { name: string; description?: string }) {
-  const name = (group ? group.name : groupQuery.value).trim()
-  if (!name) return
-  const description = group?.description ?? `${name} team`
+// --- groups: all of them, filtered here ---
 
-  const existingIdx = collaborators.value.findIndex(
-    (c) => c.name.toLowerCase() === name.toLowerCase(),
+const filteredGroups = computed(() => {
+  const q = groupQuery.value.trim().toLowerCase()
+  return groups.value.filter(
+    (g) =>
+      !has(`group:${g.id}`) &&
+      (!q || g.name.toLowerCase().includes(q) || (g.description ?? '').toLowerCase().includes(q)),
   )
-  if (existingIdx >= 0) {
-    if (collaborators.value[existingIdx]!.role !== 'Owner') {
-      collaborators.value[existingIdx]!.role = groupRole.value
-    }
-  } else {
-    collaborators.value.push({
-      id: name,
-      name,
-      type: 'group',
-      role: groupRole.value,
-      description,
-    })
-  }
+})
 
+function addGroup(group: GroupRecord | undefined) {
+  if (!group || has(`group:${group.id}`)) return
+  collaborators.value.push({
+    key: `group:${group.id}`,
+    type: 'group',
+    id: group.id,
+    name: group.name,
+    detail: group.description ?? '',
+    role: groupRole.value,
+    roleIds: [],
+  })
   groupQuery.value = ''
   showGroupMenu.value = false
 }
 
-function removeCollaborator(id: string) {
-  collaborators.value = collaborators.value.filter((c) => c.id !== id || c.role === 'Owner')
+function removeCollaborator(key: string) {
+  collaborators.value = collaborators.value.filter((c) => c.key !== key || c.role === 'Owner')
 }
 
-function save() {
-  if (shareTarget.value) {
-    saveCollaborators(shareTarget.value.folder.id, collaborators.value)
+async function save() {
+  const id = folderId.value
+  if (id === undefined || saving.value) return
+  if (!dirty.value) return close()
+  saving.value = true
+  error.value = null
+  const failed = await saveAccess(id, baseline.value, collaborators.value)
+  saving.value = false
+  if (failed) {
+    // The list now shows what the server has, partly saved or not.
+    error.value = `Could not save all changes: ${failed}`
+    collaborators.value = accessOf(id).map((c) => ({ ...c }))
+    return
   }
   close()
 }
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
-    if (showPersonMenu.value) {
-      showPersonMenu.value = false
-      event.stopPropagation()
-      return
-    }
-    if (showGroupMenu.value) {
-      showGroupMenu.value = false
-      event.stopPropagation()
-      return
-    }
-    close()
+    if (showPersonMenu.value) showPersonMenu.value = false
+    else if (showGroupMenu.value) showGroupMenu.value = false
+    else close()
     event.stopPropagation()
   } else if (event.key === 'Enter') {
-    if (showPersonMenu.value && filteredUsers.value.length > 0) {
-      addPerson(filteredUsers.value[0])
-      event.preventDefault()
-      return
-    }
-    if (showGroupMenu.value && filteredGroups.value.length > 0) {
-      addGroup(filteredGroups.value[0])
-      event.preventDefault()
-      return
-    }
-    if (personQuery.value.trim()) {
-      addPerson()
-      event.preventDefault()
-      return
-    }
-    if (groupQuery.value.trim()) {
-      addGroup()
-      event.preventDefault()
-      return
-    }
-    // Enter saves when not typing a new user/group
-    save()
+    // A focused button (remove, a suggestion) takes its own Enter.
+    if (event.target instanceof HTMLButtonElement) return
     event.preventDefault()
+    if (showPersonMenu.value && personQuery.value.trim()) return addPerson(foundUsers.value[0])
+    if (showGroupMenu.value && groupQuery.value.trim()) return addGroup(filteredGroups.value[0])
+    if (mayShare.value) save()
   }
 }
 </script>
@@ -213,154 +252,186 @@ function onKeydown(event: KeyboardEvent) {
 
         <!-- Form Body -->
         <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <!-- Row 1: Add people -->
-          <div class="flex items-center gap-2">
-            <div class="relative min-w-0 flex-1">
-              <div
-                class="flex h-8 items-center rounded-(--radius-control) border border-border-strong bg-surface pr-2 pl-2.5 transition-colors focus-within:border-brand"
-              >
-                <input
-                  ref="personInput"
-                  v-model="personQuery"
-                  type="text"
-                  spellcheck="false"
-                  autocomplete="off"
-                  placeholder="Add people"
-                  aria-label="Add people"
-                  class="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-muted/70 outline-none"
-                  @focus="showPersonMenu = true"
-                  @click="showPersonMenu = true"
-                  @keydown.enter.prevent="addPerson()"
-                />
-                <button
-                  type="button"
-                  tabindex="-1"
-                  class="cursor-pointer text-ink-muted hover:text-ink"
-                  @click.stop="showPersonMenu = !showPersonMenu"
+          <template v-if="mayShare">
+            <!-- Row 1: Add people -->
+            <div class="flex items-center gap-2">
+              <div v-click-outside="() => (showPersonMenu = false)" class="relative min-w-0 flex-1">
+                <div
+                  class="flex h-8 items-center rounded-(--radius-control) border border-border-strong bg-surface pr-2 pl-2.5 transition-colors focus-within:border-brand"
                 >
-                  <ChevronDown :size="14" :stroke-width="1.5" />
-                </button>
-              </div>
+                  <input
+                    ref="personInput"
+                    v-model="personQuery"
+                    type="text"
+                    spellcheck="false"
+                    autocomplete="off"
+                    placeholder="Add people: type a name or username"
+                    aria-label="Add people"
+                    class="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-muted/70 outline-none"
+                    @focus="((showPersonMenu = true), (showGroupMenu = false))"
+                    @click="showPersonMenu = true"
+                    @input="showPersonMenu = true"
+                  />
+                </div>
 
-              <!-- Autocomplete suggestions menu -->
-              <div
-                v-if="showPersonMenu && filteredUsers.length > 0"
-                class="sheet absolute top-full left-0 z-20 mt-1 max-h-48 w-full overflow-y-auto py-1 shadow-(--shadow-float)"
-              >
-                <button
-                  v-for="user in filteredUsers"
-                  :key="user.id"
-                  type="button"
-                  class="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-sunken"
-                  @click="addPerson(user)"
+                <!-- Search results -->
+                <div
+                  v-if="showPersonMenu && personQuery.trim()"
+                  class="sheet absolute top-full left-0 z-20 mt-1 max-h-48 w-full overflow-y-auto py-1 shadow-(--shadow-float)"
                 >
-                  <div
-                    class="flex size-5 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-muted"
+                  <button
+                    v-for="user in foundUsers"
+                    :key="user.id"
+                    type="button"
+                    class="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-sunken"
+                    @click="addPerson(user)"
                   >
-                    <User :size="12" :stroke-width="1.5" />
-                  </div>
-                  <span class="font-medium text-ink">{{ user.name }}</span>
-                  <span class="ml-auto text-[11px] text-ink-muted">{{ user.description }}</span>
-                </button>
+                    <div
+                      class="flex size-5 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-muted"
+                    >
+                      <User :size="12" :stroke-width="1.5" />
+                    </div>
+                    <span class="truncate font-medium text-ink">{{
+                      user.display_name || user.username
+                    }}</span>
+                    <span class="ml-auto shrink-0 text-[11px] text-ink-muted">{{
+                      user.username
+                    }}</span>
+                  </button>
+                  <p v-if="!foundUsers.length" class="px-3 py-1.5 text-ink-muted">
+                    <span :class="{ invisible: searching && !showSearching }">{{
+                      searching ? 'Searching…' : 'No one matches'
+                    }}</span>
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <!-- Role Selector -->
-            <div class="relative w-28 shrink-0">
-              <select
-                v-model="personRole"
-                aria-label="Person role"
-                class="field h-8 w-full appearance-none pr-7 pl-2.5 font-medium cursor-pointer"
-              >
-                <option value="Editor">Editor</option>
-                <option value="Viewer">Viewer</option>
-              </select>
-              <ChevronDown
-                :size="13"
-                :stroke-width="1.5"
-                class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
-              />
-            </div>
-          </div>
-
-          <!-- Row 2: Add groups -->
-          <div class="flex items-center gap-2">
-            <div class="relative min-w-0 flex-1">
-              <div
-                class="flex h-8 items-center rounded-(--radius-control) border border-border-strong bg-surface pr-2 pl-2.5 transition-colors focus-within:border-brand"
-              >
-                <input
-                  ref="groupInput"
-                  v-model="groupQuery"
-                  type="text"
-                  spellcheck="false"
-                  autocomplete="off"
-                  placeholder="Add groups"
-                  aria-label="Add groups"
-                  class="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-muted/70 outline-none"
-                  @focus="showGroupMenu = true"
-                  @click="showGroupMenu = true"
-                  @keydown.enter.prevent="addGroup()"
+              <!-- Role Selector -->
+              <div class="relative w-28 shrink-0">
+                <select
+                  v-model="personRole"
+                  aria-label="Role for people added"
+                  class="field h-8 w-full cursor-pointer appearance-none pr-7 pl-2.5 font-medium"
+                >
+                  <option value="Editor">Editor</option>
+                  <option value="Viewer">Viewer</option>
+                </select>
+                <ChevronDown
+                  :size="13"
+                  :stroke-width="1.5"
+                  class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
                 />
-                <button
-                  type="button"
-                  tabindex="-1"
-                  class="cursor-pointer text-ink-muted hover:text-ink"
-                  @click.stop="showGroupMenu = !showGroupMenu"
-                >
-                  <ChevronDown :size="14" :stroke-width="1.5" />
-                </button>
               </div>
+            </div>
 
-              <!-- Group suggestions menu -->
-              <div
-                v-if="showGroupMenu && filteredGroups.length > 0"
-                class="sheet absolute top-full left-0 z-20 mt-1 max-h-48 w-full overflow-y-auto py-1 shadow-(--shadow-float)"
-              >
-                <button
-                  v-for="group in filteredGroups"
-                  :key="group.id"
-                  type="button"
-                  class="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-sunken"
-                  @click="addGroup(group)"
+            <!-- Row 2: Add groups -->
+            <div class="flex items-center gap-2">
+              <div v-click-outside="() => (showGroupMenu = false)" class="relative min-w-0 flex-1">
+                <div
+                  class="flex h-8 items-center rounded-(--radius-control) border border-border-strong bg-surface pr-2 pl-2.5 transition-colors focus-within:border-brand"
                 >
-                  <div
-                    class="flex size-5 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-muted"
+                  <input
+                    v-model="groupQuery"
+                    type="text"
+                    spellcheck="false"
+                    autocomplete="off"
+                    placeholder="Add groups"
+                    aria-label="Add groups"
+                    class="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-muted/70 outline-none"
+                    @focus="((showGroupMenu = true), (showPersonMenu = false))"
+                    @click="showGroupMenu = true"
+                    @input="showGroupMenu = true"
+                  />
+                  <button
+                    type="button"
+                    tabindex="-1"
+                    class="cursor-pointer text-ink-muted hover:text-ink"
+                    aria-label="Show groups"
+                    @click.stop="showGroupMenu = !showGroupMenu"
                   >
-                    <Users :size="12" :stroke-width="1.5" />
-                  </div>
-                  <span class="font-medium text-ink">{{ group.name }}</span>
-                  <span class="ml-auto text-[11px] text-ink-muted">{{ group.description }}</span>
-                </button>
+                    <ChevronDown :size="14" :stroke-width="1.5" />
+                  </button>
+                </div>
+
+                <!-- Group list -->
+                <div
+                  v-if="showGroupMenu"
+                  class="sheet absolute top-full left-0 z-20 mt-1 max-h-48 w-full overflow-y-auto py-1 shadow-(--shadow-float)"
+                >
+                  <button
+                    v-for="group in filteredGroups"
+                    :key="group.id"
+                    type="button"
+                    class="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-sunken"
+                    @click="addGroup(group)"
+                  >
+                    <div
+                      class="flex size-5 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-muted"
+                    >
+                      <Users :size="12" :stroke-width="1.5" />
+                    </div>
+                    <span class="truncate font-medium text-ink">{{ group.name }}</span>
+                    <span class="ml-auto shrink-0 truncate text-[11px] text-ink-muted">{{
+                      group.description
+                    }}</span>
+                  </button>
+                  <LoadState
+                    v-if="!filteredGroups.length"
+                    :state="groupsState"
+                    noun="groups"
+                    :has-content="false"
+                    @retry="loadGroups({ force: true })"
+                  >
+                    <template #empty>{{
+                      groups.length ? 'No other groups match' : 'There are no groups'
+                    }}</template>
+                  </LoadState>
+                </div>
+              </div>
+
+              <!-- Role Selector -->
+              <div class="relative w-28 shrink-0">
+                <select
+                  v-model="groupRole"
+                  aria-label="Role for groups added"
+                  class="field h-8 w-full cursor-pointer appearance-none pr-7 pl-2.5 font-medium"
+                >
+                  <option value="Editor">Editor</option>
+                  <option value="Viewer">Viewer</option>
+                </select>
+                <ChevronDown
+                  :size="13"
+                  :stroke-width="1.5"
+                  class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
+                />
               </div>
             </div>
-
-            <!-- Role Selector -->
-            <div class="relative w-28 shrink-0">
-              <select
-                v-model="groupRole"
-                aria-label="Group role"
-                class="field h-8 w-full appearance-none pr-7 pl-2.5 font-medium cursor-pointer"
-              >
-                <option value="Editor">Editor</option>
-                <option value="Viewer">Viewer</option>
-              </select>
-              <ChevronDown
-                :size="13"
-                :stroke-width="1.5"
-                class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
-              />
-            </div>
-          </div>
+          </template>
+          <p v-else class="text-ink-muted">
+            Only an owner or editor of this folder can change who has access.
+          </p>
 
           <!-- Section: People with access -->
           <div class="mt-2 flex flex-col gap-2">
-            <h3 class="font-semibold text-ink text-[13px]">People with access</h3>
+            <h3 class="text-[13px] font-semibold text-ink">People with access</h3>
 
-            <div class="divide-y divide-border/60 rounded-(--radius-control) border border-border">
+            <LoadState
+              v-if="state"
+              :state="state"
+              noun="access"
+              :has-content="collaborators.length > 0"
+              @retry="folderId !== undefined && loadAccess(folderId, { force: true })"
+            >
+              <template #empty>Only you.</template>
+            </LoadState>
+
+            <div
+              v-if="collaborators.length"
+              class="divide-y divide-border/60 rounded-(--radius-control) border border-border"
+            >
               <div
                 v-for="collaborator in collaborators"
-                :key="collaborator.id"
+                :key="collaborator.key"
                 class="flex h-11 items-center gap-3 px-3 transition-colors hover:bg-sunken/50"
               >
                 <!-- Avatar -->
@@ -378,28 +449,31 @@ function onKeydown(event: KeyboardEvent) {
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-1.5">
                     <span class="truncate font-medium text-ink">{{ collaborator.name }}</span>
-                    <span v-if="collaborator.role === 'Owner'" class="text-[11px] text-ink-muted">
+                    <span
+                      v-if="collaborator.type === 'user' && String(collaborator.id) === String(me)"
+                      class="text-[11px] text-ink-muted"
+                    >
                       (you)
                     </span>
                   </div>
-                  <p v-if="collaborator.description" class="truncate text-[10px] text-ink-muted">
-                    {{ collaborator.description }}
+                  <p v-if="collaborator.detail" class="truncate text-[11px] text-ink-muted">
+                    {{ collaborator.detail }}
                   </p>
                 </div>
 
                 <!-- Role / Actions -->
                 <div class="flex shrink-0 items-center gap-2">
                   <span
-                    v-if="collaborator.role === 'Owner'"
+                    v-if="collaborator.role === 'Owner' || !mayShare"
                     class="px-2 py-0.5 text-[11px] font-medium text-ink-muted"
                   >
-                    Owner
+                    {{ collaborator.role }}
                   </span>
                   <template v-else>
                     <div class="relative">
                       <select
                         v-model="collaborator.role"
-                        aria-label="Change permission role"
+                        :aria-label="`Role of ${collaborator.name}`"
                         class="h-6 cursor-pointer appearance-none rounded-(--radius-control) border border-border bg-surface pr-6 pl-2 text-[11px] font-medium text-ink"
                       >
                         <option value="Editor">Editor</option>
@@ -416,7 +490,7 @@ function onKeydown(event: KeyboardEvent) {
                       class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted transition-colors hover:bg-danger-tint hover:text-danger"
                       :aria-label="`Remove access for ${collaborator.name}`"
                       v-tooltip="`Remove access for ${collaborator.name}`"
-                      @click="removeCollaborator(collaborator.id)"
+                      @click="removeCollaborator(collaborator.key)"
                     >
                       <X :size="13" :stroke-width="1.5" />
                     </button>
@@ -425,6 +499,8 @@ function onKeydown(event: KeyboardEvent) {
               </div>
             </div>
           </div>
+
+          <p v-if="error" role="alert" class="text-danger">{{ error }}</p>
         </div>
 
         <!-- Footer / Action Buttons -->
@@ -433,25 +509,25 @@ function onKeydown(event: KeyboardEvent) {
         >
           <div class="flex items-center gap-2">
             <Button
+              v-if="mayShare"
               variant="primary"
-              size="default"
-              v-tooltip="'Save permissions (⏎)'"
+              :disabled="saving || !dirty"
+              :tooltip="dirty ? 'Save who has access (⏎)' : 'Nothing changed yet'"
               @click="save"
             >
-              Save
+              {{ showSaving ? 'Saving…' : 'Save' }}
             </Button>
             <Button
               variant="secondary"
-              size="default"
-              v-tooltip="'Cancel and discard changes (esc)'"
+              :tooltip="mayShare ? 'Cancel and discard changes (esc)' : 'Close (esc)'"
               @click="close"
             >
-              Cancel
+              {{ mayShare ? 'Cancel' : 'Close' }}
             </Button>
           </div>
           <div class="flex items-center gap-3 text-[11px] text-ink-muted">
-            <KeyHint keys="⏎" label="save" />
-            <KeyHint keys="esc" label="cancel" />
+            <KeyHint v-if="mayShare" keys="⏎" label="save" />
+            <KeyHint keys="esc" :label="mayShare ? 'cancel' : 'close'" />
           </div>
         </div>
       </div>

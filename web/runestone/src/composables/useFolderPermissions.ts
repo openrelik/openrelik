@@ -43,6 +43,11 @@ export function canUpload(role: FolderRole | null | undefined): boolean {
   return canRename(role)
 }
 
+/** Sharing a folder (giving or taking roles) takes Owner or Editor. */
+export function canShare(role: FolderRole | null | undefined): boolean {
+  return canRename(role)
+}
+
 /**
  * Whether the operator may delete an item. A folder takes Owner on itself. A
  * file takes Owner on the file, which the server grants through the folder it

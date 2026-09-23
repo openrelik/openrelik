@@ -51,15 +51,19 @@ function readStoredSettings(): Settings {
   return merged
 }
 
-function applyTheme(choice: ThemeChoice) {
-  if (typeof document === 'undefined') return
+/** Applies a theme choice to the page; resolves `system` to what the OS prefers. */
+function applyTheme(choice: ThemeChoice): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light'
   const light = choice === 'system' ? window.matchMedia(LIGHT_QUERY).matches : choice === 'light'
   document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark')
+  return light ? 'light' : 'dark'
 }
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Settings>(readStoredSettings())
   const isOpen = ref(false)
+  /** The theme on screen, `system` resolved: for content the server renders (file previews). */
+  const resolvedTheme = ref<'light' | 'dark'>('light')
 
   function open() {
     isOpen.value = true
@@ -89,7 +93,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // Apply theme on change
   watch(
     () => settings.value.appearance.theme,
-    (theme) => applyTheme(theme),
+    (theme) => (resolvedTheme.value = applyTheme(theme)),
     { immediate: true },
   )
 
@@ -97,13 +101,14 @@ export const useSettingsStore = defineStore('settings', () => {
   if (typeof window !== 'undefined') {
     window.matchMedia(LIGHT_QUERY).addEventListener('change', () => {
       if (settings.value.appearance.theme === 'system') {
-        applyTheme('system')
+        resolvedTheme.value = applyTheme('system')
       }
     })
   }
 
   return {
     settings,
+    resolvedTheme,
     isOpen,
     open,
     close,

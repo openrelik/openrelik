@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight, Download, Workflow } from '@/components/icons'
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
-import HexViewer from '@/components/viewers/HexViewer.vue'
 import FileDetails from '@/components/viewers/FileDetails.vue'
 import PathBar from '@/components/layout/PathBar.vue'
-import TextViewer from '@/components/viewers/TextViewer.vue'
+import FileContent from '@/components/viewers/FileContent.vue'
 import Button from '@/components/base/Button.vue'
+import { downloadFile } from '@/composables/useDownload'
+import { useFileDetails } from '@/composables/useFileDetails'
+import { useFolderLoader } from '@/composables/useFolderLoader'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import StatusBar from '@/components/layout/StatusBar.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
-import { exactSize, headOf, textOf } from '@/data/files'
+import { exactSize } from '@/data/files'
 import { childrenOf, findItem, pathTo } from '@/data/folders'
-import { count, formatSize } from '@/utils/format'
+import { formatSize } from '@/utils/format'
 import { isTyping } from '@/utils/keyboard'
 import { useModalStore } from '@/stores/modals'
 
@@ -31,6 +33,25 @@ const file = computed(() => {
   const item = findItem(Number(props.fileId))
   return item?.kind === 'file' ? item : undefined
 })
+// Opened by link or reload, the file is not in the store yet: its folder's
+// listing brings it, with the files beside it and the path. Known, it costs nothing.
+const { load, listingState } = useFolderLoader()
+watch(
+  () => props.folderId,
+  (id) => {
+    if (/^\d+$/.test(id)) load(Number(id))
+  },
+  { immediate: true },
+)
+const loading = computed(() => {
+  if (file.value || !/^\d+$/.test(props.folderId)) return false
+  const { status } = listingState(Number(props.folderId))
+  return status === 'idle' || status === 'loading'
+})
+
+// Hashes and magic are not in the listing: loaded for the file on screen.
+useFileDetails(() => file.value?.id)
+
 /** The file's real parent, whatever the URL claims. */
 const folderId = computed(() => file.value?.parent ?? Number(props.folderId))
 
@@ -44,8 +65,6 @@ const position = computed(() => siblings.value.findIndex((item) => item.id === f
 const previous = computed(() => siblings.value[position.value - 1])
 const next = computed(() => siblings.value[position.value + 1])
 
-const text = computed(() => (file.value ? textOf(file.value) : undefined))
-const head = computed(() => (file.value && text.value === undefined ? headOf(file.value) : []))
 const bytes = computed(() => (file.value ? exactSize(file.value) : 0))
 
 const fileUrl = (id: number) => `/folder/${folderId.value}/file/${id}`
@@ -71,6 +90,7 @@ const KEYS: Record<string, () => void> = {
   ArrowRight: () => go(next.value),
   ArrowLeft: () => go(previous.value),
   w: openWorkflow,
+  d: () => file.value && downloadFile(file.value.id, file.value.name),
   Escape: back,
 }
 
@@ -87,7 +107,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div v-if="!file" class="h-full bg-surface px-4 py-6 text-ink-muted">
+  <div v-if="!file && loading" class="h-full bg-surface px-4 py-6 text-ink-muted">
+    Loading file…
+  </div>
+  <div v-else-if="!file" class="h-full bg-surface px-4 py-6 text-ink-muted">
     No file {{ fileId }}.
     <RouterLink to="/" class="text-brand hover:underline">Back home</RouterLink>
   </div>
@@ -136,7 +159,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <template #icon><Workflow :size="13" :stroke-width="1.5" /></template>
           Create workflow
         </Button>
-        <Button variant="primary" size="row" :tooltip="`Download ${file.name}`">
+        <Button
+          variant="primary"
+          size="row"
+          :tooltip="`Download ${file.name} (d)`"
+          @click="downloadFile(file.id, file.name)"
+        >
           <template #icon><Download :size="13" :stroke-width="1.5" /></template>
           Download
         </Button>
@@ -145,24 +173,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- panes -->
     <div class="flex min-h-0 flex-1">
-      <div class="flex min-w-0 flex-1 flex-col">
-        <div
-          class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted"
-        >
-          <span class="micro-label">{{ text !== undefined ? 'text' : 'hex' }}</span>
-          <span v-if="text !== undefined" class="tabular">{{
-            count(text.split('\n').length, 'line')
-          }}</span>
-          <span v-else class="truncate">
-            No preview for {{ file.mime }} — first {{ head.length }} bytes of
-            {{ bytes.toLocaleString('en-US') }}.
-          </span>
-        </div>
-        <div class="min-h-0 flex-1 overflow-auto">
-          <TextViewer v-if="text !== undefined" :text="text" />
-          <HexViewer v-else :bytes="head" />
-        </div>
-      </div>
+      <FileContent :file="file" />
 
       <FileDetails :file="file" />
     </div>
@@ -172,6 +183,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <span class="tabular">{{ file.mime }} · {{ formatSize(bytes) }}</span>
       <template #hints>
         <KeyHint keys="w" label="workflow" />
+        <KeyHint keys="d" label="download" />
         <KeyHint keys="j k" label="next / prev file" />
         <KeyHint keys="esc" label="back to folder" />
       </template>
