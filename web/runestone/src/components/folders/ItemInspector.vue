@@ -11,7 +11,7 @@ import {
   Workflow,
   X,
 } from '@/components/icons'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import Button from '@/components/base/Button.vue'
 import KeyValueRow from '@/components/base/KeyValueRow.vue'
@@ -33,6 +33,11 @@ const props = defineProps<{
   canDelete?: boolean
   /** The operator may rename the item shown (owner or editor of the folder). */
   canRename?: boolean
+  /**
+   * The item is the folder on screen itself (an empty folder, or the cursor
+   * on ".."): there is nothing to open, and it is renamed here, not in a row.
+   */
+  current?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -41,9 +46,44 @@ const emit = defineEmits<{
   clearSelection: []
   toggleItem: [id: number]
   rename: [id: number]
+  /** The current folder renamed here, in place. */
+  renameTo: [change: { id: number; name: string }]
   /** Delete these items (the view asks for confirmation first). */
   delete: [items: Item[]]
 }>()
+
+// --- renaming the current folder in place ---
+
+const renaming = ref(false)
+const renameText = ref('')
+watch(
+  () => props.item.id,
+  () => (renaming.value = false),
+)
+
+/** Renames: the current folder here, anything else in its row (the view's). */
+function rename() {
+  if (!props.current) return emit('rename', props.item.id)
+  renameText.value = props.item.name
+  renaming.value = true
+}
+
+function commitRename() {
+  if (!renaming.value) return
+  renaming.value = false
+  const name = renameText.value.trim()
+  if (name && name !== props.item.name) emit('renameTo', { id: props.item.id, name })
+}
+
+function onRenameKey(event: KeyboardEvent) {
+  event.stopPropagation()
+  if (event.key === 'Enter') commitRename()
+  else if (event.key === 'Escape') renaming.value = false
+  else return
+  event.preventDefault()
+}
+
+defineExpose({ rename })
 
 const isMulti = computed(() => {
   const itemsCount = props.selectedItems?.length ?? 0
@@ -275,14 +315,25 @@ function openWorkflow() {
           :class="item.kind === 'folder' ? 'text-brand' : 'text-ink-muted'"
           aria-hidden="true"
         />
-        <p class="min-w-0 flex-1 font-semibold break-all text-ink">{{ item.name }}</p>
+        <input
+          v-if="renaming"
+          v-model="renameText"
+          v-autofocus.select
+          type="text"
+          spellcheck="false"
+          class="field h-6 min-w-0 flex-1 font-semibold"
+          :aria-label="`Rename ${item.name}`"
+          @keydown="onRenameKey"
+          @blur="commitRename"
+        />
+        <p v-else class="min-w-0 flex-1 font-semibold break-all text-ink">{{ item.name }}</p>
         <button
-          v-if="canRename"
+          v-if="canRename && !renaming"
           type="button"
           class="shrink-0 cursor-pointer rounded p-1 text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
           :aria-label="`Rename ${item.name}`"
           v-tooltip="'Rename (F2)'"
-          @click="emit('rename', item.id)"
+          @click="rename"
         >
           <Pencil :size="12" :stroke-width="1.5" />
         </button>
@@ -334,6 +385,7 @@ function openWorkflow() {
 
       <div class="mt-3 flex flex-col gap-1.5">
         <Button
+          v-if="!current"
           size="row"
           class="justify-center"
           :tooltip="
@@ -378,7 +430,7 @@ function openWorkflow() {
           size="row"
           class="justify-center"
           :tooltip="`Rename ${item.name} (F2)`"
-          @click="emit('rename', item.id)"
+          @click="rename"
         >
           <template #icon><Pencil :size="13" :stroke-width="1.5" /></template>
           Rename

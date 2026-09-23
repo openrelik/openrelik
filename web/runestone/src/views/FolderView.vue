@@ -65,6 +65,7 @@ const crumbs = computed(() => (folder.value ? pathTo(folder.value.id) : []))
 const filter = ref('')
 const toolbar = ref<InstanceType<typeof FolderToolbar> | null>(null)
 const table = ref<InstanceType<typeof FolderTable> | null>(null)
+const inspector = ref<InstanceType<typeof ItemInspector> | null>(null)
 
 /** Newest first, so what was just made (a folder, a workflow, an upload) is on top. */
 const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
@@ -508,9 +509,12 @@ async function handleCreateFolder(name: string) {
   if (idx >= 0) cursor.value = idx
 }
 
+/** F2: the row under the cursor, or — none, in an empty folder or on ".." — the folder itself, in the inspector. */
 function startRenameCurrent() {
   const item = rows.value[cursor.value]
   if (item) table.value?.startRename(item)
+  else if (focused.value?.id === folder.value?.id && canRenameFocused.value)
+    inspector.value?.rename()
 }
 
 /**
@@ -809,7 +813,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       />
       <ItemInspector
         v-else-if="focused"
+        ref="inspector"
         :item="focused"
+        :current="focused.id === folder?.id"
         :producer="producer?.name"
         :selected-files="selectedFiles"
         :selected-items="selectedItems"
@@ -821,6 +827,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         @clear-selection="clearSelection"
         @toggle-item="toggle"
         @rename="startRenameItem"
+        @rename-to="handleRename"
         @delete="deleteItems"
       />
     </div>
