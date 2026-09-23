@@ -5,7 +5,7 @@ import Button from '@/components/base/Button.vue'
 import { ChevronDown, X } from '@/components/icons'
 import { useUploadPanel } from '@/composables/useUploadPanel'
 import { sentBytes, uploadPercent, useUploadQueue } from '@/composables/useUploadQueue'
-import { findItem } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import { count, formatSize } from '@/utils/format'
 
 /**
@@ -17,12 +17,13 @@ import { count, formatSize } from '@/utils/format'
  */
 const uploads = useUploadQueue()
 const { isOpen, minimize } = useUploadPanel()
+const itemsStore = useItemsStore()
 
 const failed = computed(() => uploads.all.value.filter((upload) => upload.status === 'failed'))
 const running = computed(() => uploads.all.value.filter((upload) => upload.status !== 'failed'))
 
 /** Where a file is going, so a queue spanning folders still makes sense. */
-const folderName = (folderId: number) => findItem(folderId)?.name ?? 'folder'
+const folderName = (folderId: number) => itemsStore.findItem(folderId)?.name ?? 'folder'
 
 const stateOf = (upload: (typeof uploads.all.value)[number]) => {
   if (upload.status === 'failed') return 'failed'

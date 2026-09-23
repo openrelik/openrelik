@@ -27,9 +27,9 @@ import {
   roleOf,
 } from '@/composables/useFolderPermissions'
 import { forget, invalidate, markFresh } from '@/composables/useQueryCache'
-import { findItem, removeTree, upsertItems } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
-import { dropFromRootPages, prependToRootPages } from '@/data/rootPages'
+import { useRootPagesStore } from '@/stores/rootPages'
 import { useAuthStore } from '@/stores/auth'
 import { count } from '@/utils/format'
 
@@ -96,11 +96,11 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
   try {
     const folder = await api.folders.createFolder(name, parent)
     const item = mapFolderToItem(folder, folder.parent?.id ?? parent)
-    upsertItems([item])
+    useItemsStore().upsertItems([item])
     if (item.parent === null) {
       // The newest folder: first on page 1 now; later pages shift by one, so
       // they refetch when visited.
-      const written = prependToRootPages(item.id)
+      const written = useRootPagesStore().prependToRootPages(item.id)
       invalidate(folderKeys.rootPrefix)
       for (const key of written) markFresh(key)
     }
@@ -118,7 +118,8 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
 }
 
 async function renameFolder(id: number, name: string): Promise<boolean> {
-  const item = findItem(id)
+  const itemsStore = useItemsStore()
+  const item = itemsStore.findItem(id)
   if (!item || savingIds.has(id)) return false
   clearError()
 
@@ -127,10 +128,10 @@ async function renameFolder(id: number, name: string): Promise<boolean> {
   savingIds.add(id)
   try {
     const folder = await api.folders.renameFolder(id, name)
-    upsertItems([mapFolderToItem(folder, folder.parent?.id ?? item.parent)])
+    itemsStore.upsertItems([mapFolderToItem(folder, folder.parent?.id ?? item.parent)])
     return true
   } catch (err: unknown) {
-    const current = findItem(id)
+    const current = itemsStore.findItem(id)
     if (current) current.name = previousName
     error.value = `Could not rename “${previousName}”: ${errorMessage(err, 'request failed')}`
     return false
@@ -140,8 +141,9 @@ async function renameFolder(id: number, name: string): Promise<boolean> {
 }
 
 async function deleteItems(ids: number[]): Promise<number[]> {
+  const itemsStore = useItemsStore()
   const targets = ids
-    .map((id) => findItem(id))
+    .map((id) => itemsStore.findItem(id))
     .filter((item): item is Item => !!item && !deletingIds.has(item.id))
   if (!targets.length) return []
   clearError()
@@ -163,7 +165,7 @@ async function deleteItems(ids: number[]): Promise<number[]> {
       deleted.push(item.id)
       // Gone on the server: drop it, everything below it, their cached data and
       // roles. A file takes nothing else with it.
-      const gone = removeTree(item.id)
+      const gone = itemsStore.removeTree(item.id)
       forget(
         gone.flatMap((g) => [
           folderKeys.folder(g),
@@ -184,7 +186,7 @@ async function deleteItems(ids: number[]): Promise<number[]> {
 
   // Listed at the top: pages shrink now, then refill from the server (the
   // current page right away, the others when visited).
-  if (dropFromRootPages(removed)) {
+  if (useRootPagesStore().dropFromRootPages(removed)) {
     invalidate(folderKeys.rootPrefix)
     refreshAll()
   }
@@ -232,7 +234,7 @@ async function confirmDeleteItems(items: Item[]): Promise<number[]> {
   const folders = targets.filter((item) => item.kind === 'folder')
   const fileParents = targets
     .filter((item) => item.kind === 'file' && item.parent !== null)
-    .map((item) => findItem(item.parent!))
+    .map((item) => useItemsStore().findItem(item.parent!))
     .filter((item): item is Item => !!item)
 
   try {

@@ -11,7 +11,7 @@ import type { WorkerOption } from '@/types/worker'
  * group is its header, the join its callback.
  *
  * Workflows are loaded from the server (`useWorkflow`) and kept by the folder
- * they own (`data/workflows.ts`).
+ * they own (`stores/workflows.ts`).
  */
 
 export type TaskStatus = 'success' | 'running' | 'pending' | 'failed'

@@ -2,7 +2,7 @@
  * Workflow Composable
  *
  * Creates, edits and runs workflows through the OpenRelik REST API and keeps
- * them in the workflow store (`data/workflows.ts`), by the folder they own.
+ * them in the workflow store (`stores/workflows.ts`), by the folder they own.
  *
  * - Creating asks the server for a workflow over the chosen files; it makes
  *   the workflow's folder, which is written into the items store at once so
@@ -28,7 +28,7 @@ import { useFolderActions } from '@/composables/useFolderActions'
 import { addTemplate } from '@/composables/useWorkflowTemplates'
 import { refreshAll } from '@/composables/useAutoRefresh'
 import { ensure, forget, invalidate, markFresh } from '@/composables/useQueryCache'
-import { findItem, upsertItems } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import type { Worker } from '@/types/worker'
 import {
   allTasks,
@@ -41,7 +41,7 @@ import {
   isActive,
   mergeProblem,
 } from '@/utils/workflow'
-import { forgetWorkflow, upsertWorkflow, workflowOf } from '@/data/workflows'
+import { useWorkflowsStore } from '@/stores/workflows'
 import type { Task, TaskGroup, Workflow } from '@/types/workflow'
 import { count } from '@/utils/format'
 import { hexId } from '@/utils/id'
@@ -112,6 +112,7 @@ async function fetchWorkflow(
   signal: AbortSignal,
   background: boolean,
 ): Promise<void> {
+  const workflowsStore = useWorkflowsStore()
   const runsBefore = runs.get(workflowId) ?? 0
   const record = await api.workflows.get(folderId, workflowId, { signal, background })
   // Edits the server has not got yet win over what it had.
@@ -120,8 +121,8 @@ async function fetchWorkflow(
   // on focus while the run was in flight) and would put the draft back.
   if (workflowActivity(workflowId).running || (runs.get(workflowId) ?? 0) !== runsBefore) return
   const workflow = mapWorkflow(record)
-  listNewOutputs(workflowOf(folderId), workflow)
-  upsertWorkflow(workflow)
+  listNewOutputs(workflowsStore.workflowOf(folderId), workflow)
+  workflowsStore.upsertWorkflow(workflow)
 }
 
 /**
@@ -177,7 +178,7 @@ export async function createWorkflow(
  */
 function adopt(record: WorkflowRecord, parentId: number): Workflow {
   const workflow = mapWorkflow(record)
-  upsertItems([
+  useItemsStore().upsertItems([
     mapFolderToItem(
       {
         id: record.folder.id,
@@ -189,7 +190,7 @@ function adopt(record: WorkflowRecord, parentId: number): Workflow {
       parentId,
     ),
   ])
-  upsertWorkflow(workflow)
+  useWorkflowsStore().upsertWorkflow(workflow)
   // All known without asking: the folder is new and empty.
   markFresh(workflowKeys.workflow(workflow.id))
   markFresh(folderKeys.subfolders(workflow.folderId))
@@ -205,7 +206,7 @@ const untitledFolder = (name: string | undefined) =>
 
 /** A workflow still named by default: renaming its folder names it too. */
 export const untitledWorkflow = (folderId: number): boolean =>
-  workflowOf(folderId)?.name === UNTITLED_WORKFLOW
+  useWorkflowsStore().workflowOf(folderId)?.name === UNTITLED_WORKFLOW
 
 /**
  * Renames the workflow: the new name shows at once and goes back if the
@@ -214,13 +215,13 @@ export const untitledWorkflow = (folderId: number): boolean =>
  * user named otherwise keeps its own.
  */
 export async function renameWorkflow(folderId: number, name: string): Promise<boolean> {
-  const workflow = workflowOf(folderId)
+  const workflow = useWorkflowsStore().workflowOf(folderId)
   const trimmed = name.trim()
   if (!workflow || !trimmed || trimmed === workflow.name) return false
   const before = workflow.name
   workflow.name = trimmed
   activityFor(workflow.id).error = null
-  const folderName = findItem(folderId)?.name
+  const folderName = useItemsStore().findItem(folderId)?.name
   if (untitledFolder(folderName) || folderName === before) {
     useFolderActions().renameFolder(folderId, trimmed)
   }
@@ -238,7 +239,7 @@ export async function renameWorkflow(folderId: number, name: string): Promise<bo
 
 /** The draft owning `folderId`, if it can still be edited. */
 function editable(folderId: number): Workflow | undefined {
-  const workflow = workflowOf(folderId)
+  const workflow = useWorkflowsStore().workflowOf(folderId)
   return workflow?.draft && !workflowActivity(workflow.id).running ? workflow : undefined
 }
 
@@ -462,7 +463,7 @@ export function splitGroup(folderId: number, taskIds: string[]): TaskGroup | nul
   scheduleSave(workflow)
 
   const splitOf = () => {
-    const current = workflowOf(folderId)
+    const current = useWorkflowsStore().workflowOf(folderId)
     const owner = current && (parent ? findTask(current, parent.id) : current)
     return owner?.groups.find((g) => g.id === split.id)
   }
@@ -558,7 +559,7 @@ export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | n
 
 /** A group among a task's (or the inputs') groups, by id, in the current draft. */
 function findGroup(folderId: number, parentId: string | null, groupId: string) {
-  const current = workflowOf(folderId)
+  const current = useWorkflowsStore().workflowOf(folderId)
   const owner = current && (parentId === null ? current : findTask(current, parentId))
   return owner?.groups.find((group) => group.id === groupId)
 }
@@ -599,7 +600,7 @@ export function setTaskOption(folderId: number, taskId: string, key: string, val
  * meanwhile. Resolves with whether the server has the latest edits.
  */
 function saveDraft(folderId: number): Promise<boolean> {
-  const workflow = workflowOf(folderId)
+  const workflow = useWorkflowsStore().workflowOf(folderId)
   if (!workflow?.draft) return Promise.resolve(true)
   const id = workflow.id
   clearTimeout(saveTimers.get(id))
@@ -634,7 +635,7 @@ function saveDraft(folderId: number): Promise<boolean> {
 
 /** Retries a failed save. */
 export function retrySave(folderId: number): void {
-  const workflow = workflowOf(folderId)
+  const workflow = useWorkflowsStore().workflowOf(folderId)
   if (!workflow) return
   unsaved.add(workflow.id)
   saveDraft(folderId)
@@ -648,7 +649,8 @@ export function retrySave(folderId: number): void {
  * why not is in `workflowActivity().error`.
  */
 export async function runWorkflow(folderId: number): Promise<boolean> {
-  const workflow = workflowOf(folderId)
+  const workflowsStore = useWorkflowsStore()
+  const workflow = workflowsStore.workflowOf(folderId)
   if (!workflow?.draft) return false
   const id = workflow.id
   const state = activityFor(id)
@@ -667,7 +669,7 @@ export async function runWorkflow(folderId: number): Promise<boolean> {
   try {
     const spec = withFreshUuids(specFromTasks(workflow))
     const record = await api.workflows.run(folderId, id, spec)
-    upsertWorkflow({ ...mapWorkflow(record), draft: false })
+    workflowsStore.upsertWorkflow({ ...mapWorkflow(record), draft: false })
     state.saveError = null
     markFresh(workflowKeys.workflow(id))
     return true
@@ -689,8 +691,8 @@ export async function runWorkflow(folderId: number): Promise<boolean> {
  * Resolves with the copy; null on failure, why in `workflowActivity().error`.
  */
 export async function copyWorkflow(folderId: number): Promise<Workflow | null> {
-  const workflow = workflowOf(folderId)
-  const parentId = findItem(folderId)?.parent
+  const workflow = useWorkflowsStore().workflowOf(folderId)
+  const parentId = useItemsStore().findItem(folderId)?.parent
   if (!workflow || parentId === null || parentId === undefined) return null
   const state = activityFor(workflow.id)
   state.error = null
@@ -708,7 +710,7 @@ export async function copyWorkflow(folderId: number): Promise<Workflow | null> {
  * when cancelled or refused, why in `workflowActivity().error`.
  */
 export async function saveAsTemplate(folderId: number): Promise<string | null> {
-  const workflow = workflowOf(folderId)
+  const workflow = useWorkflowsStore().workflowOf(folderId)
   if (!workflow) return null
   const name = await askForText({
     title: 'Save as template',
@@ -762,7 +764,7 @@ export async function discardWorkflow(folderId: number): Promise<boolean> {
     folders.clearError()
     return false
   }
-  forgetWorkflow(folderId)
+  useWorkflowsStore().forgetWorkflow(folderId)
   forget([workflowKeys.workflow(id)])
   activity.delete(id)
   return true
@@ -776,12 +778,13 @@ const followed = new Set<number>()
  * Stops when it is done, on an error, or on sign-out (the store is cleared).
  */
 export function followWorkflow(folderId: number): void {
-  const workflow = workflowOf(folderId)
+  const workflowsStore = useWorkflowsStore()
+  const workflow = workflowsStore.workflowOf(folderId)
   if (!workflow || followed.has(workflow.id)) return
   const id = workflow.id
   followed.add(id)
   const tick = () => {
-    const current = workflowOf(folderId)
+    const current = workflowsStore.workflowOf(folderId)
     if (!current || !isActive(current)) {
       followed.delete(id)
       return

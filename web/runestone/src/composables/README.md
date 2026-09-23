@@ -72,7 +72,7 @@ Opens `RunDialog.vue` for one of two things, through `useRunStore`:
 
 ### `useWorkflow`
 
-Workflows on the server (`/folders/{id}/workflows/`), kept in `data/workflows.ts` by the folder each owns. Module-scoped, so a save keeps going when the user moves on.
+Workflows on the server (`/folders/{id}/workflows/`), kept in the workflows store (`stores/workflows.ts`) by the folder each owns. Module-scoped, so a save keeps going when the user moves on.
 
 - `createWorkflow(parentId, fileIds)`: the server makes the workflow and a new folder for it; both are written into the stores and marked fresh, so opening the folder costs no request.
 - What runs on the inputs, and on each task's output, is a list of groups (`TaskGroup`). `addTask(folderId, at, …)` places a worker with an `AddAt`: `{ after }` starts a new group on a task's output (or the inputs'), `{ beside }` adds it to a task's group, `{ join }` makes it the group's join — a worker that runs once all of the group's tasks have finished, on all their outputs, saved as a Celery chord (`{type: 'chord', tasks, callback}`). Groups without a join are saved as their tasks with a `group` marker, so the grouping survives a reload. As in the original editor, a join is only offered after a free group — two or more with nothing chained after them (`canJoin`) — and once a group has one, nothing more can be chained after its tasks (`canChainAfter`). A join left with nothing to wait for becomes a plain task; a group left empty goes.
@@ -112,7 +112,7 @@ Central coordinator for application-wide floating tooltips and keyboard shortcut
 
 ### `useQueryCache`
 
-Module-scoped record of which server listings are loaded and when. The data itself lives in the normalized stores (`ITEMS`); fetchers write into them.
+Module-scoped record of which server listings are loaded and when. The data itself lives in the normalized Pinia stores (`stores/items.ts`, `stores/rootPages.ts`, `stores/workflows.ts`); fetchers write into them.
 
 - `ensure(key, fetcher)`: fresh keys (30 s) cost no request, stale keys resolve at once and refresh in the background, and concurrent callers share one request. A request is aborted only when every caller waiting for it has left.
 - Per-key state (`idle` → `loading` → `success` | `error`, plus `isFetching` and `error`). A key that has loaded stays `success` while refreshing or after a failed refresh.
@@ -139,7 +139,7 @@ Subscribes to the API client's in-flight request count and exposes the status ba
 Pagination of the top-level folder list, which the server pages (`GET /folders/all/`, newest created first, no other order).
 
 - The page is in the URL (`/?page=3`, changed with `router.replace`), so reload and Back keep it; the size is `settings.explorer.pageSize` (25 / 40 / 100), and changing it keeps the first visible folder in view.
-- Each page is its own query-cache entry (`folders:root:s{size}:p{page}`); its folder ids and the total live in `src/data/rootPages.ts`, the folders themselves in `ITEMS`.
+- Each page is its own query-cache entry (`folders:root:s{size}:p{page}`); its folder ids and the total live in the root pages store (`src/stores/rootPages.ts`), the folders themselves in the items store.
 - Past the last page it moves to the last one; once a page has loaded, the next is prefetched in the background (not offline or on constrained connections).
 - New top-level folders are written into page 1 and deleted ones leave every page; other pages refetch when visited.
 
@@ -148,7 +148,7 @@ Pagination of the top-level folder list, which the server pages (`GET /folders/a
 Server-side search behind the prompt, for folders nobody has loaded yet (`GET /folders/all/?q=`, recursive over every folder the operator can reach, matching names).
 
 - Runs only for a search from the top (at the root or `/…`) and for a name, not a path; asks after typing pauses (250 ms) and from 2 characters; a newer term cancels the older request; results are cached like any other query.
-- Results are kept apart from `ITEMS`: the server does not say where a found folder lives. The prompt lists loaded matches first, then server matches marked `server`; opening one loads its real path.
+- Results are kept apart from the items store: the server does not say where a found folder lives. The prompt lists loaded matches first, then server matches marked `server`; opening one loads its real path.
 
 ### `useUploadQueue`
 

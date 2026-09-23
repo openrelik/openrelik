@@ -24,7 +24,7 @@ import { invalidate, queryState, type QueryState } from '@/composables/useQueryC
 import { loadWorkflow, POLL_MS, workflowKeys } from '@/composables/useWorkflow'
 import type { Item } from '@/types/item'
 import { everyTask, isActive } from '@/utils/workflow'
-import { workflowOf } from '@/data/workflows'
+import { useWorkflowsStore } from '@/stores/workflows'
 import type { Workflow } from '@/types/workflow'
 
 export interface UseWorkflowLoaderReturn {
@@ -37,6 +37,7 @@ export interface UseWorkflowLoaderReturn {
 }
 
 export function useWorkflowLoader(folder: () => Item | undefined): UseWorkflowLoaderReturn {
+  const workflowsStore = useWorkflowsStore()
   let controller: AbortController | null = null
   let timer: ReturnType<typeof setInterval> | undefined
   let settleTimer: ReturnType<typeof setTimeout> | undefined
@@ -74,7 +75,7 @@ export function useWorkflowLoader(folder: () => Item | undefined): UseWorkflowLo
 
   const workflow = computed(() => {
     const item = folder()
-    return item ? workflowOf(item.id) : undefined
+    return item ? workflowsStore.workflowOf(item.id) : undefined
   })
 
   /** The folder's file listing, fetched again behind what is shown. */

@@ -20,7 +20,7 @@ import { bytesOf, typeOf } from '@/utils/item'
 import { getUniqueFolderName } from '@/utils/item'
 import type { Item } from '@/types/item'
 import { runStats } from '@/utils/workflow'
-import { workflowOf } from '@/data/workflows'
+import { useWorkflowsStore } from '@/stores/workflows'
 import { count, formatSize, stamp } from '@/utils/format'
 
 /** `created` has no column: it is a folder's default order, newest first. */
@@ -82,6 +82,8 @@ const emit = defineEmits<{
   retryUpload: [key: string]
   dismissUpload: [key: string]
 }>()
+
+const workflowsStore = useWorkflowsStore()
 
 /** A drop can be thousands of files; the listing stays a listing. */
 const MAX_UPLOAD_ROWS = 50
@@ -286,7 +288,7 @@ const UP = -1
 type WorkflowState = ReturnType<typeof runStats>['state']
 /** A workflow folder's state, or undefined until its workflow is loaded. */
 const workflowState = (folderId: number): WorkflowState | undefined => {
-  const workflow = workflowOf(folderId)
+  const workflow = workflowsStore.workflowOf(folderId)
   return workflow && runStats(workflow).state
 }
 /**

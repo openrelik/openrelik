@@ -9,9 +9,9 @@
  *   fast typist sends one request, not one per key. A newer term cancels the
  *   older request.
  * - Goes through the query cache: the same term within 30 s costs nothing.
- * - Results are kept here, not in `ITEMS`: the server does not say where a
- *   found folder lives, and putting it in the store would give it a false
- *   path. Opening one loads its real path as usual.
+ * - Results are kept here, not in the items store: the server does not say
+ *   where a found folder lives, and putting it in the store would give it a
+ *   false path. Opening one loads its real path as usual.
  */
 
 import { computed, onScopeDispose, reactive, ref, watch, type ComputedRef, type Ref } from 'vue'

@@ -16,7 +16,7 @@ import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import StatusBar from '@/components/layout/StatusBar.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
 import { exactSize } from '@/utils/item'
-import { findItem, pathTo } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import { formatSize } from '@/utils/format'
 import { isTyping } from '@/utils/keyboard'
 import { useModalStore } from '@/stores/modals'
@@ -31,8 +31,10 @@ import { useModalStore } from '@/stores/modals'
 const props = defineProps<{ folderId: string; fileId: string }>()
 const router = useRouter()
 
+const itemsStore = useItemsStore()
+
 const file = computed(() => {
-  const item = findItem(Number(props.fileId))
+  const item = itemsStore.findItem(Number(props.fileId))
   return item?.kind === 'file' ? item : undefined
 })
 // Opened by link or reload, the file is not in the store yet: its folder's
@@ -145,7 +147,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   >
     <!-- toolbar: path · actions -->
     <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-2 pl-3">
-      <PathBar :path="pathTo(file.id)" />
+      <PathBar :path="itemsStore.pathTo(file.id)" />
 
       <div class="flex shrink-0 items-center gap-1.5">
         <Button

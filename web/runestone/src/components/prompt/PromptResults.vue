@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import KeyHint from '@/components/base/KeyHint.vue'
-import { childrenOf } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import type { PromptResult } from '@/composables/usePrompt'
 import { highlight } from '@/utils/match'
@@ -24,9 +24,13 @@ defineProps<{
 }>()
 const emit = defineEmits<{ go: [result: PromptResult]; hover: [index: number] }>()
 
+const itemsStore = useItemsStore()
+
 const meta = (item: Item) => {
   if (item.kind === 'file') return formatSize(item.size ?? 0)
-  return item.workflowId !== undefined ? 'workflow' : count(childrenOf(item.id).length, 'item')
+  return item.workflowId !== undefined
+    ? 'workflow'
+    : count(itemsStore.childrenOf(item.id).length, 'item')
 }
 </script>
 

@@ -16,9 +16,9 @@
 import { onScopeDispose } from 'vue'
 import { api, ApiError, errorMessage, type Folder, type FolderDetail, type FolderFile } from '@/api'
 import { ensure, queryState, type QueryState } from '@/composables/useQueryCache'
-import { findItem, setFiles, setSubfolders, upsertItems, upsertListed } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
-import { setRootPage } from '@/data/rootPages'
+import { useRootPagesStore } from '@/stores/rootPages'
 import { useSettingsStore } from '@/stores/settings'
 
 /** Query cache keys for folder data. */
@@ -81,10 +81,11 @@ function mapFolderChain(folder: FolderDetail): Item[] {
 
 /** Whether the folder and every ancestor up to the root are loaded, so the path can be drawn. */
 function isChainKnown(folderId: number): boolean {
+  const itemsStore = useItemsStore()
   for (
-    let item = findItem(folderId);
+    let item = itemsStore.findItem(folderId);
     item;
-    item = item.parent === null ? undefined : findItem(item.parent)
+    item = item.parent === null ? undefined : itemsStore.findItem(item.parent)
   ) {
     if (item.parent === null) return true
   }
@@ -103,8 +104,8 @@ async function fetchRootPage(
   background = false,
 ): Promise<void> {
   const result = await api.folders.getAllFolders({ page, pageSize: size }, { signal, background })
-  upsertListed(result.folders.map((folder) => mapFolderToItem(folder)))
-  setRootPage(folderKeys.rootPage(page, size), {
+  useItemsStore().upsertListed(result.folders.map((folder) => mapFolderToItem(folder)))
+  useRootPagesStore().setRootPage(folderKeys.rootPage(page, size), {
     ids: result.folders.map((folder) => folder.id),
     total: result.total_count,
     page,
@@ -130,7 +131,7 @@ export function prefetchRootPage(ref: RootPageRef, signal: AbortSignal): Promise
 const currentPageSize = (): number => useSettingsStore().settings.explorer.pageSize
 
 async function fetchFolder(folderId: number, signal: AbortSignal): Promise<void> {
-  upsertItems(mapFolderChain(await api.folders.getFolder(folderId, { signal })))
+  useItemsStore().upsertItems(mapFolderChain(await api.folders.getFolder(folderId, { signal })))
 }
 
 async function fetchSubfolders(
@@ -139,7 +140,7 @@ async function fetchSubfolders(
   background = false,
 ): Promise<void> {
   const subfolders = await api.folders.getSubfolders(folderId, { signal, background })
-  setSubfolders(
+  useItemsStore().setSubfolders(
     folderId,
     subfolders.map((subfolder) => mapFolderToItem(subfolder, folderId)),
   )
@@ -152,7 +153,7 @@ async function fetchFiles(
 ): Promise<void> {
   const files = await api.folders.getFolderFiles(folderId, { signal, background })
   // The listing includes deleted files; the explorer must not.
-  setFiles(
+  useItemsStore().setFiles(
     folderId,
     files.filter((file) => !file.is_deleted).map((file) => mapFileToItem(file, folderId)),
   )

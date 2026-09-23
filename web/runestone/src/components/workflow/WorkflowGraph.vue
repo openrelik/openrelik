@@ -18,7 +18,7 @@ import { RouterLink } from 'vue-router'
 import Button from '@/components/base/Button.vue'
 import KeyHint from '@/components/base/KeyHint.vue'
 
-import { findItem } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import { missingOptions } from '@/utils/worker'
 import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import { anchorOf, type Anchor } from '@/composables/useRun'
@@ -90,6 +90,8 @@ const emit = defineEmits<{
   /** Merge these sibling groups into one. */
   merge: [groupIds: string[]]
 }>()
+
+const itemsStore = useItemsStore()
 
 const NODE_W = 196
 const NODE_H = 44
@@ -725,8 +727,8 @@ onMounted(async () => {
 const input = computed(() => props.workflow.inputs[0])
 /** An input's page: inputs come from the folder the workflow was made in. */
 const inputLink = (file: WorkflowInput) =>
-  `/folder/${findItem(file.id)?.parent ?? findItem(props.workflow.folderId)?.parent}/file/${file.id}`
-const sizeOf = (file: WorkflowInput) => findItem(file.id)?.size ?? 0
+  `/folder/${itemsStore.findItem(file.id)?.parent ?? itemsStore.findItem(props.workflow.folderId)?.parent}/file/${file.id}`
+const sizeOf = (file: WorkflowInput) => itemsStore.findItem(file.id)?.size ?? 0
 const inputBytes = computed(() =>
   props.workflow.inputs.reduce((sum, file) => sum + sizeOf(file), 0),
 )

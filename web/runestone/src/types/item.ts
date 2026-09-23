@@ -1,4 +1,4 @@
-/** A folder or a file, as the app keeps it (`data/folders.ts`). */
+/** A folder or a file, as the app keeps it (`stores/items.ts`). */
 export interface Item {
   id: number
   /** The containing folder, or null for a top-level folder. */

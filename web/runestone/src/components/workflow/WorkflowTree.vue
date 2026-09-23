@@ -4,7 +4,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
-import { findItem } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import { missingOptions } from '@/utils/worker'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
@@ -39,6 +39,8 @@ const emit = defineEmits<{
   /** Remove this task, and the tasks after it, from the draft. */
   remove: [taskId: string]
 }>()
+
+const itemsStore = useItemsStore()
 
 interface Line {
   key: string
@@ -141,10 +143,10 @@ const REMOVE =
   'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-danger/60 bg-surface text-danger hover:bg-danger-tint focus-visible:opacity-100'
 
 /** Inputs come from the folder the workflow was made in; sizes are known once it is loaded. */
-const inputFolder = computed(() => findItem(props.workflow.folderId)?.parent ?? null)
+const inputFolder = computed(() => itemsStore.findItem(props.workflow.folderId)?.parent ?? null)
 const inputs = computed(() =>
   props.workflow.inputs.map((input) => {
-    const item = findItem(input.id)
+    const item = itemsStore.findItem(input.id)
     return { ...input, parent: item?.parent ?? inputFolder.value, size: item?.size }
   }),
 )

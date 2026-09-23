@@ -114,6 +114,8 @@ The codebase follows a strict separation of concerns:
   - Active modal stack (`modals.ts`)
   - User preferences and theme (`settings.ts`)
   - Background execution queues and notices (`run.ts`)
+  - Normalized server data, one copy per entity: folders and files (`items.ts`), the paginated top-level list (`rootPages.ts`), workflows (`workflows.ts`)
+- Outside a component's setup (module-level functions in composables), call `useXStore()` inside the function, never at module top level: Pinia is not installed yet when modules load.
 - Local UI state (cursor index, hover item, filter text, inline editing state) belongs in views or composables, **not** in global stores.
 
 #### 5. Directives (`src/directives/`)
@@ -127,9 +129,13 @@ The codebase follows a strict separation of concerns:
   - `v-tooltip`: Bind hover tooltips to the global singleton tooltip coordinator.
 
 #### 6. Utils (`src/utils/`)
-- Pure, stateless helper functions (e.g. `format.ts`, `keyboard.ts`, `match.ts`, `scroll.ts`).
+- Pure, stateless helper functions (e.g. `format.ts`, `keyboard.ts`, `match.ts`, `scroll.ts`, and domain helpers `item.ts`, `workflow.ts`, `worker.ts`).
 - Zero reactive dependencies (`ref`, `reactive`), zero Pinia imports, and no DOM side-effects.
 - Easily testable and deterministic.
+
+#### 7. Types (`src/types/`)
+- The app's own domain types (`Item`, `Workflow`, `Task`, `Worker`), as the UI uses them. Server response shapes stay in `src/api/types.ts`.
+- Type declarations only: no values, no imports beyond other types. Import them with `import type`.
 
 ### Disconnected Component Communication (No EventBus)
 

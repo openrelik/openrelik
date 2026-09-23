@@ -5,9 +5,9 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import PromptResults from '@/components/prompt/PromptResults.vue'
 import { registerPrompt, usePrompt } from '@/composables/usePrompt'
-import { childrenOf, subfoldersOf } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
-import { rootListedItems } from '@/data/rootPages'
+import { useRootPagesStore } from '@/stores/rootPages'
 import { useSettingsStore } from '@/stores/settings'
 
 /**
@@ -26,6 +26,9 @@ const props = defineProps<{
   pending?: boolean
 }>()
 const route = useRoute()
+
+const itemsStore = useItemsStore()
+const rootPagesStore = useRootPagesStore()
 
 // --- the prompt -----------------------------------------------------------------
 
@@ -125,8 +128,8 @@ const entries = computed(() => {
   if (openAt.value === null) return []
   const parent = folderOf(openAt.value)
   return parent === null
-    ? rootListedItems(settingsStore.settings.explorer.pageSize)
-    : subfoldersOf(parent)
+    ? rootPagesStore.rootListedItems(settingsStore.settings.explorer.pageSize)
+    : itemsStore.subfoldersOf(parent)
 })
 /** The entry that is on the current path, if any. */
 const onPath = computed(() => (openAt.value === null ? undefined : props.path[openAt.value + 1]))
@@ -240,7 +243,7 @@ function onBarClick(event: MouseEvent) {
                 >{{ entry.name }}/</span
               >
               <span class="tabular ml-auto pl-4 text-[11px] text-ink-muted">{{
-                entry.workflowId !== undefined ? 'workflow' : childrenOf(entry.id).length
+                entry.workflowId !== undefined ? 'workflow' : itemsStore.childrenOf(entry.id).length
               }}</span>
             </RouterLink>
             <p v-if="!entries.length" class="px-3 py-1 text-ink-muted">(no subfolders)</p>

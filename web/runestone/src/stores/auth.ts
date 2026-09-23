@@ -11,9 +11,9 @@ import { forgetRoles } from '@/composables/useFolderPermissions'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
 import { clearUploads } from '@/composables/useUploadQueue'
 import { clearQueryCache } from '@/composables/useQueryCache'
-import { clearItems } from '@/data/folders'
-import { clearRootPages } from '@/data/rootPages'
-import { forgetWorkflows } from '@/data/workflows'
+import { useItemsStore } from '@/stores/items'
+import { useRootPagesStore } from '@/stores/rootPages'
+import { useWorkflowsStore } from '@/stores/workflows'
 
 const STORAGE_USER_KEY = 'openrelik.auth.user'
 
@@ -44,9 +44,9 @@ export const useAuthStore = defineStore('auth', () => {
       removeSession(STORAGE_USER_KEY)
       // The next operator must not see this one's folders, even for a moment.
       clearQueryCache()
-      clearItems()
-      clearRootPages()
-      forgetWorkflows()
+      useItemsStore().clearItems()
+      useRootPagesStore().clearRootPages()
+      useWorkflowsStore().forgetWorkflows()
       clearFolderSearch()
       forgetRoles()
       // Bytes must not keep flowing on a session that just ended.

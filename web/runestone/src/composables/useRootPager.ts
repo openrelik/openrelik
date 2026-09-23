@@ -19,7 +19,7 @@ import { useConnection } from '@/composables/useConnection'
 import { folderKeys, prefetchRootPage } from '@/composables/useFolderLoader'
 import { connectionIsConstrained } from '@/composables/useFolderPrefetch'
 import { queryState } from '@/composables/useQueryCache'
-import { rootPage } from '@/data/rootPages'
+import { useRootPagesStore } from '@/stores/rootPages'
 import { useSettingsStore } from '@/stores/settings'
 
 export interface UseRootPagerReturn {
@@ -48,6 +48,7 @@ function parsePage(raw: unknown): number {
 
 /** `active`: whether the top level is on screen (pages are ignored elsewhere). */
 export function useRootPager(active: () => boolean): UseRootPagerReturn {
+  const rootPagesStore = useRootPagesStore()
   const route = useRoute()
   const router = useRouter()
   const settingsStore = useSettingsStore()
@@ -60,9 +61,9 @@ export function useRootPager(active: () => boolean): UseRootPagerReturn {
   // The total is the same at every page and size: keep the last one known, so
   // the pager does not blank out while a new page loads.
   const lastTotal = ref<number | null>(null)
-  const total = computed(() => rootPage(key.value)?.total ?? lastTotal.value)
+  const total = computed(() => rootPagesStore.rootPage(key.value)?.total ?? lastTotal.value)
   watch(
-    () => rootPage(key.value)?.total,
+    () => rootPagesStore.rootPage(key.value)?.total,
     (known) => {
       if (known !== undefined) lastTotal.value = known
     },

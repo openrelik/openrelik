@@ -8,10 +8,10 @@ import Button from '@/components/base/Button.vue'
 import KeyValueRow from '@/components/base/KeyValueRow.vue'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import { removeTask, setTaskOption, type AddAt } from '@/composables/useWorkflow'
-import { findItem } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import { workerShortName } from '@/utils/worker'
 import { allTasks, canChainAfter, canJoin, groupOf } from '@/utils/workflow'
-import { workflowOf } from '@/data/workflows'
+import { useWorkflowsStore } from '@/stores/workflows'
 import type { Task } from '@/types/workflow'
 import { count, formatDuration, formatSize, stamp } from '@/utils/format'
 
@@ -33,6 +33,9 @@ const emit = defineEmits<{
   add: [at: AddAt, anchor?: Anchor]
 }>()
 
+const itemsStore = useItemsStore()
+const workflowsStore = useWorkflowsStore()
+
 /** What runs on its output: how many tasks, in how many groups. */
 const next = computed(() => {
   const { groups } = props.task
@@ -42,7 +45,7 @@ const next = computed(() => {
     ? `${count(tasks, 'task')} in ${groups.length} groups`
     : count(tasks, 'task')
 })
-const workflow = computed(() => workflowOf(props.folderId))
+const workflow = computed(() => workflowsStore.workflowOf(props.folderId))
 /** Its group, when it is one of the group's tasks rather than its join. */
 const group = computed(() => {
   const placed = workflow.value && groupOf(workflow.value, props.task.id)
@@ -54,7 +57,7 @@ const chainable = computed(() => !!workflow.value && canChainAfter(workflow.valu
 const joinable = computed(() => !!group.value && canJoin(group.value))
 const allAfter = computed(() => allTasks(props.task.groups).length)
 const outputs = computed(() =>
-  props.task.outputs.map((id) => findItem(id)).filter((item) => item !== undefined),
+  props.task.outputs.map((id) => itemsStore.findItem(id)).filter((item) => item !== undefined),
 )
 /** Options with a value, for a task that has run: what it ran with. */
 const used = computed(() => props.task.options.filter((o) => props.task.config[o.key]))

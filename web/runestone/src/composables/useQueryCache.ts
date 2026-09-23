@@ -3,8 +3,9 @@
  *
  * Remembers which server listings are loaded and how fresh they are, so the
  * UI never waits for data it has already seen and never fetches what is
- * still fresh. The data itself lives in the normalized stores (`ITEMS`);
- * a query's fetcher writes into them. This module only tracks, per key:
+ * still fresh. The data itself lives in the normalized Pinia stores
+ * (`stores/items.ts` and friends); a query's fetcher writes into them. This
+ * module only tracks, per key:
  *
  * - `status`: `idle` (never loaded) → `loading` → `success` | `error`.
  *   Once a key has succeeded it stays `success`, also while refreshing or

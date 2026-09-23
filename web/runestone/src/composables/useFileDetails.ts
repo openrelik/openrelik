@@ -16,7 +16,7 @@ import { onScopeDispose, watch } from 'vue'
 import { api, type FileDetail } from '@/api'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { ensure } from '@/composables/useQueryCache'
-import { findItem } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 
 const detailsKey = (fileId: number) => `file:${fileId}:details`
 
@@ -25,12 +25,12 @@ const RETRIES = 10
 
 /** Whether a loaded file has its hashes; a file not in the store has nothing to wait for. */
 function hashed(fileId: number): boolean {
-  const item = findItem(fileId)
+  const item = useItemsStore().findItem(fileId)
   return !item || !!(item.hashes?.md5 || item.hashes?.sha256)
 }
 
 function merge(file: FileDetail) {
-  const item = findItem(file.id)
+  const item = useItemsStore().findItem(file.id)
   if (!item) return
   item.hashes = {
     md5: file.hash_md5 ?? '',

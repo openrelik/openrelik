@@ -29,7 +29,7 @@ import { connectionIsConstrained } from '@/composables/useFolderPrefetch'
 import { folderKeys, mapFileToItem } from '@/composables/useFolderLoader'
 import { canUpload, ensureRole, roleOf } from '@/composables/useFolderPermissions'
 import { markFresh, queryState } from '@/composables/useQueryCache'
-import { upsertItems } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -212,7 +212,7 @@ function finish(upload: Upload, created: UploadedFile): void {
     },
     upload.folderId,
   )
-  upsertItems([item])
+  useItemsStore().upsertItems([item])
 
   // The answer holds everything the listing shows, so nothing is refetched.
   // A folder whose files were never loaded stays unloaded: we know our file,

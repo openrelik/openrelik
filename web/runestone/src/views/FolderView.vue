@@ -15,9 +15,9 @@ import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
 import { lastRun, openAddToWorkflow, openRun, runError, type Anchor } from '@/composables/useRun'
 import { bytesOf, typeOf } from '@/utils/item'
-import { childrenOf, findItem, pathTo, renameItem } from '@/data/folders'
+import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
-import { rootPageItems, rootPageOf } from '@/data/rootPages'
+import { useRootPagesStore } from '@/stores/rootPages'
 import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
@@ -42,7 +42,7 @@ import {
   type AddAt,
 } from '@/composables/useWorkflow'
 import { everyTask, findTask, isActive } from '@/utils/workflow'
-import { workflowOf } from '@/data/workflows'
+import { useWorkflowsStore } from '@/stores/workflows'
 import type { Task } from '@/types/workflow'
 import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
@@ -56,6 +56,9 @@ const props = defineProps<{ id?: string }>()
 const route = useRoute()
 const router = useRouter()
 const modalStore = useModalStore()
+const itemsStore = useItemsStore()
+const rootPagesStore = useRootPagesStore()
+const workflowsStore = useWorkflowsStore()
 
 const atRoot = computed(() => props.id === undefined)
 /** The folder id from the route, or undefined at the root or for a malformed id. */
@@ -64,10 +67,10 @@ const folderId = computed(() =>
 )
 const folder = computed(() => {
   if (atRoot.value) return undefined
-  const item = findItem(Number(props.id))
+  const item = itemsStore.findItem(Number(props.id))
   return item?.kind === 'folder' ? item : undefined
 })
-const crumbs = computed(() => (folder.value ? pathTo(folder.value.id) : []))
+const crumbs = computed(() => (folder.value ? itemsStore.pathTo(folder.value.id) : []))
 
 const filter = ref('')
 const toolbar = ref<InstanceType<typeof FolderToolbar> | null>(null)
@@ -139,7 +142,7 @@ const dropRefusal = ref<string | null>(null)
  * and files put there before it runs would pass for them.
  */
 const uploadBlocked = computed(() =>
-  folder.value?.workflowId !== undefined && !childrenOf(folder.value.id).length
+  folder.value?.workflowId !== undefined && !itemsStore.childrenOf(folder.value.id).length
     ? 'Uploads are off until the workflow has produced its outputs'
     : null,
 )
@@ -219,9 +222,9 @@ const rows = computed(() => {
   if (!atRoot.value && !folder.value) return []
   const needle = filter.value.trim().toLowerCase()
   if (atRoot.value) {
-    return rootPageItems(pager.key.value).filter(
-      (item) => !needle || item.name.toLowerCase().includes(needle),
-    )
+    return rootPagesStore
+      .rootPageItems(pager.key.value)
+      .filter((item) => !needle || item.name.toLowerCase().includes(needle))
   }
   const { key, dir } = sort.value
   const by: Record<SortKey, (a: Item, b: Item) => number> = {
@@ -237,7 +240,8 @@ const rows = computed(() => {
       (a.created ?? a.modified).localeCompare(b.created ?? b.modified) ||
       a.name.localeCompare(b.name),
   }
-  return childrenOf(folder.value!.id)
+  return itemsStore
+    .childrenOf(folder.value!.id)
     .filter((item) => !needle || item.name.toLowerCase().includes(needle))
     .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1) || by[key](a, b) * dir)
 })
@@ -379,7 +383,7 @@ watch(
       if (row.workflowId === undefined) continue
       ensureWorkflow(row.id, row.workflowId, { signal, background: true })
         .then(() => {
-          const workflow = workflowOf(row.id)
+          const workflow = workflowsStore.workflowOf(row.id)
           if (workflow && isActive(workflow)) followWorkflow(row.id)
         })
         .catch(() => {})
@@ -486,12 +490,14 @@ const parentPath = computed(() => {
   const parent = folder.value?.parent
   if (parent !== null && parent !== undefined) return `/folder/${parent}`
   // Up from a top-level folder: back to the page that lists it.
-  const page = folder.value ? rootPageOf(folder.value.id, pager.size.value) : undefined
+  const page = folder.value
+    ? rootPagesStore.rootPageOf(folder.value.id, pager.size.value)
+    : undefined
   return page && page > 1 ? `/?page=${page}` : '/'
 })
 const parentName = computed(() => {
   const parent = folder.value?.parent
-  return parent === null || parent === undefined ? '/' : (findItem(parent)?.name ?? '')
+  return parent === null || parent === undefined ? '/' : (itemsStore.findItem(parent)?.name ?? '')
 })
 
 function goUp() {
@@ -561,7 +567,7 @@ function deleteCurrent() {
 }
 
 function startRenameItem(id: number) {
-  const item = findItem(id)
+  const item = itemsStore.findItem(id)
   if (item) {
     const idx = rows.value.findIndex((r) => r.id === id)
     if (idx >= 0) cursor.value = idx
@@ -571,7 +577,7 @@ function startRenameItem(id: number) {
 
 function handleRename({ id, name }: { id: number; name: string }) {
   // Files are not loaded from the server yet, so they are still renamed locally.
-  if (findItem(id)?.kind !== 'folder') return renameItem(id, name)
+  if (itemsStore.findItem(id)?.kind !== 'folder') return itemsStore.renameItem(id, name)
   // A workflow still named by default takes its folder's new name. The folder
   // goes first: its new name shows at once, so the workflow's rename does not
   // take it for an untitled folder and rename it again.
@@ -866,7 +872,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :can-delete="canDeleteAll"
           :can-rename="canRenameFocused"
           class="min-h-0 flex-1"
-          @open="open(findItem($event))"
+          @open="open(itemsStore.findItem($event))"
           @run-more="runPicker"
           @clear-selection="clearSelection"
           @toggle-item="toggle"
