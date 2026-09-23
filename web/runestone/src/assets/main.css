@@ -28,6 +28,9 @@
   --color-brand-tint: #0e2745;
   --color-brand-tint-hover: #16375f;
   --color-brand-selected: #131e2c;
+  /* A selection of bytes or text in a dense grid: must read at a glance, so
+     stronger than a selected row. */
+  --color-selection: #27466f;
 
   --color-success: #6fdea2;
   --color-success-ink: #6fdea2;
@@ -117,6 +120,7 @@
   --color-brand-tint: #d7ebff;
   --color-brand-tint-hover: #c3dfff;
   --color-brand-selected: #e4f2ff;
+  --color-selection: #bcd9fb;
 
   --color-success: #00673c;
   --color-success-ink: #00673c;

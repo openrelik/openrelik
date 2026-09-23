@@ -335,7 +335,7 @@ const selectionDecodings = computed(() => decodings(decoded.value))
 // --- a byte's look: selected, cursor, or marked from the other column ---
 
 function tone(offset: number) {
-  if (selected(offset)) return 'bg-brand-selected'
+  if (selected(offset)) return 'bg-selection'
   if (hovered.value === offset) return 'bg-sunken'
   return ''
 }
