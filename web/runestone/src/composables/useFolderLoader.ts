@@ -79,19 +79,6 @@ function mapFolderChain(folder: FolderDetail): Item[] {
   return items
 }
 
-/** Whether the folder and every ancestor up to the root are loaded, so the path can be drawn. */
-function isChainKnown(folderId: number): boolean {
-  const itemsStore = useItemsStore()
-  for (
-    let item = itemsStore.findItem(folderId);
-    item;
-    item = item.parent === null ? undefined : itemsStore.findItem(item.parent)
-  ) {
-    if (item.parent === null) return true
-  }
-  return false
-}
-
 /** Where the top-level list is: which page, at which page size. */
 export interface RootPageRef {
   page: number
@@ -254,15 +241,11 @@ export function useFolderLoader(): UseFolderLoaderReturn {
               common,
             ),
             ensure(folderKeys.files(folderId), (signal) => fetchFiles(folderId, signal), common),
-            // Clicking into a folder already put it and its parents in the store.
-            ...(options.force || !isChainKnown(folderId)
-              ? [
-                  ensure(folderKeys.folder(folderId), (signal) => fetchFolder(folderId, signal), {
-                    signal: controller.signal,
-                    force: options.force,
-                  }),
-                ]
-              : []),
+            // Always load folder details - follows design system rule (30s freshness)
+            ensure(folderKeys.folder(folderId), (signal) => fetchFolder(folderId, signal), {
+              signal: controller.signal,
+              force: options.force,
+            }),
           ]
 
     for (const result of await Promise.allSettled(requests)) {
