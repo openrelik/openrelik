@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Download, Workflow } from '@/components/icons'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import FileSidePanel, { type SideTab } from '@/components/viewers/FileSidePanel.vue'
 import PathBar from '@/components/layout/PathBar.vue'
@@ -17,6 +17,7 @@ import StatusBar from '@/components/layout/StatusBar.vue'
 import { exactSize } from '@/utils/item'
 import { useItemsStore } from '@/stores/items'
 import { formatSize } from '@/utils/format'
+import { formatLineHash, parseLineRange, type LineRange } from '@/utils/lines'
 import { isTyping } from '@/utils/keyboard'
 import { useModalStore } from '@/stores/modals'
 
@@ -29,6 +30,18 @@ import { useModalStore } from '@/stores/modals'
  */
 const props = defineProps<{ folderId: string; fileId: string }>()
 const router = useRouter()
+const route = useRoute()
+
+/**
+ * The text view's marked lines, kept in the URL (`#L12-L40`) so a link opens
+ * on them. Replaced, not pushed: marking lines is not a step to go back through.
+ */
+const lines = computed<LineRange | null>({
+  get: () => parseLineRange(route.hash),
+  set: (range) => {
+    router.replace({ query: route.query, hash: range ? formatLineHash(range) : '' })
+  },
+})
 
 const itemsStore = useItemsStore()
 
@@ -60,7 +73,7 @@ const showDetails = useRemembered('openrelik.file.details', true)
  * table row is selected, Details otherwise — until a tab is clicked; that
  * choice holds until the view changes.
  */
-const contentView = ref<'table' | 'text' | 'hex' | undefined>(undefined)
+const contentView = ref<'table' | 'rendered' | 'text' | 'hex' | undefined>(undefined)
 const inspector = computed(() =>
   contentView.value === 'hex' ? 'bytes' : contentView.value === 'table' ? 'row' : null,
 )
@@ -163,7 +176,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- panes -->
     <div class="flex min-h-0 flex-1">
-      <FileContent :file="file" @view="onView" @row-selected="onRowSelected">
+      <FileContent v-model:lines="lines" :file="file" @view="onView" @row-selected="onRowSelected">
         <!-- the details closed: opened again from the spot the panel's own button had -->
         <template v-if="!showDetails" #end>
           <PanelToggle

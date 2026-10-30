@@ -1,10 +1,13 @@
 /**
- * What of a file can be previewed as text, decided before asking the server:
- * it reads the whole file to render it, so only text, and only up to a size.
- * The same rules as the original UI.
+ * What of a file can be shown as text, and what the server can render.
+ *
+ * Text is read and shown in the browser, at any size (the text viewer). The
+ * server renders Markdown, and HTML on its allow-list, as a page: it reads
+ * the whole file to do so, so only up to a size. The same rules as the
+ * original UI.
  */
 
-/** The server reads the whole file into the page: larger ones are not previewed. */
+/** The server reads the whole file into the page: larger ones are not rendered. */
 export const PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 
 /** Types that are text without saying so in their `text/` prefix. */
@@ -26,6 +29,15 @@ export function previewOf(file: { mime?: string; size?: number }): Preview {
   if (!isTextMime(file.mime)) return { kind: 'not-text' }
   if ((file.size ?? 0) > PREVIEW_MAX_BYTES) return { kind: 'too-large', limit: PREVIEW_MAX_BYTES }
   return { kind: 'text' }
+}
+
+/** Markdown, by the server's rule: the extension, the name, or the MIME type. */
+export function isMarkdown(file: { name: string; mime?: string }): boolean {
+  return (
+    /\.(md|markdown)$/i.test(file.name) ||
+    file.mime === 'text/markdown' ||
+    file.mime === 'text/x-markdown'
+  )
 }
 
 export type TableKind = 'csv' | 'tsv' | 'jsonl'

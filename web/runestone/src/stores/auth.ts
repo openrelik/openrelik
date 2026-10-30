@@ -12,6 +12,7 @@ import { clearCaseLookups } from '@/composables/useCaseRef'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
 import { clearUploads } from '@/composables/useUploadQueue'
 import { clearQueryCache } from '@/composables/useQueryCache'
+import { forgetTextFiles } from '@/composables/useTextStream'
 import { useItemsStore } from '@/stores/items'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useWorkflowsStore } from '@/stores/workflows'
@@ -49,6 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
       useRootPagesStore().clearRootPages()
       useWorkflowsStore().forgetWorkflows()
       clearFolderSearch()
+      forgetTextFiles()
       clearCaseLookups()
       forgetRoles()
       // Bytes must not keep flowing on a session that just ended.

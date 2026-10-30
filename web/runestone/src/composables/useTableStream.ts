@@ -1,12 +1,10 @@
 /**
  * Table Stream Composable
  *
- * A CSV, TSV or JSONL file as rows, read front to back in 1 MiB byte-range
- * requests and parsed as they arrive (see `utils/table.ts`): the first rows
- * show while the rest is still coming, and a file of any size can be opened.
+ * A CSV, TSV or JSONL file as rows, read front to back (see `useRangeText`)
+ * and parsed as the text arrives (see `utils/table.ts`): the first rows show
+ * while the rest is still coming, and a file of any size can be opened.
  *
- * - Text is decoded as UTF-8 in streaming mode, so a character split across
- *   two chunks arrives whole; a byte-order mark is dropped.
  * - Opening reads the first 5 MB — tens of thousands of rows, cheap on a
  *   slow link. `loadMore()` reads 10 MB more, `loadAll()` the rest of the
  *   file. Memory holds the parsed rows only.
@@ -25,7 +23,7 @@ import {
   type ShallowRef,
 } from 'vue'
 
-import { api, errorMessage } from '@/api'
+import { createRangeText, FIRST_BYTES, type RangeText } from '@/composables/useRangeText'
 import type { TableKind } from '@/utils/preview'
 import {
   csvParser,
@@ -38,11 +36,7 @@ import {
   type TableRow,
 } from '@/utils/table'
 
-const CHUNK_SIZE = 1024 * 1024
-/** Read on opening (decimal megabytes, as sizes are shown). */
-export const FIRST_BYTES = 5_000_000
-/** Read by each "load more". */
-export const MORE_BYTES = 10_000_000
+export { FIRST_BYTES, MORE_BYTES } from '@/composables/useRangeText'
 /** Rows looked at to infer the columns' types. */
 const TYPE_SAMPLE = 1000
 
@@ -75,31 +69,10 @@ export function useTableStream(
   const rows = shallowRef<TableRow[]>([])
   const columns = ref<string[]>([])
   const delimiter = ref(',')
-  const bytesRead = ref(0)
-  const reading = ref(false)
-  const capped = ref(false)
-  const done = ref(false)
-  const error = ref<string | null>(null)
 
   let parser: TableParser | null = null
-  let decoder = new TextDecoder('utf-8')
-  let controller: AbortController | null = null
-  let run = 0
-
-  function reset() {
-    controller?.abort()
-    controller = null
-    run++
-    parser = null
-    decoder = new TextDecoder('utf-8')
-    rows.value = []
-    columns.value = []
-    bytesRead.value = 0
-    reading.value = false
-    capped.value = false
-    done.value = false
-    error.value = null
-  }
+  /** The reader of the file on screen: a new one for each file. */
+  const reader = shallowRef<RangeText | null>(null)
 
   function append(parsed: TableRow[]) {
     if (!parser) return
@@ -110,58 +83,36 @@ export function useTableStream(
     triggerRef(rows)
   }
 
-  /** Reads on from where it stopped, until the file ends or `amount` more bytes are in. */
-  async function read(amount: number) {
-    const { id, size } = file()
-    const mine = run
-    controller = new AbortController()
-    const { signal } = controller
-    reading.value = true
-    capped.value = false
-    const stopBytes = bytesRead.value + amount
-    try {
-      while (bytesRead.value < size) {
-        if (bytesRead.value >= stopBytes) {
-          capped.value = true
-          return
-        }
-        const start = bytesRead.value
-        const end = Math.min(size, start + CHUNK_SIZE) - 1
-        const bytes = await api.files.readRange(id, start, end, { signal })
-        if (mine !== run) return
-        let text = decoder.decode(bytes, { stream: end < size - 1 })
-        if (!parser) {
-          if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
-          const kindNow = kind()
-          if (kindNow === 'jsonl') parser = jsonlParser()
-          else {
-            delimiter.value = kindNow === 'tsv' ? '\t' : sniffDelimiter(text.slice(0, 64 * 1024))
-            // The first row names the columns.
-            parser = csvParser(delimiter.value)
-          }
-        }
-        append(parser.push(text))
-        bytesRead.value = end + 1
-        // Let the page draw between chunks.
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        if (mine !== run) return
+  function onText(text: string, last: boolean) {
+    if (!parser) {
+      if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
+      const kindNow = kind()
+      if (kindNow === 'jsonl') parser = jsonlParser()
+      else {
+        delimiter.value = kindNow === 'tsv' ? '\t' : sniffDelimiter(text.slice(0, 64 * 1024))
+        // The first row names the columns.
+        parser = csvParser(delimiter.value)
       }
-      if (parser) append(parser.end())
-      done.value = true
-    } catch (err: unknown) {
-      if (mine !== run || signal.aborted) return
-      error.value = errorMessage(err, 'could not read the file')
-    } finally {
-      if (mine === run) reading.value = false
     }
+    append(parser.push(text))
+    if (last) append(parser.end())
+  }
+
+  function reset() {
+    reader.value?.stop()
+    reader.value = null
+    parser = null
+    rows.value = []
+    columns.value = []
   }
 
   watch(
     [() => file().id, kind],
     () => {
       reset()
-      if (file().size > 0) read(FIRST_BYTES)
-      else done.value = true
+      const next = createRangeText(file(), onText)
+      reader.value = next
+      next.read(FIRST_BYTES)
     },
     { immediate: true },
   )
@@ -186,22 +137,13 @@ export function useTableStream(
     types,
     cellsOf,
     delimiter,
-    bytesRead,
-    reading,
-    capped,
-    done,
-    error,
-    loadMore: () => {
-      if (!reading.value && capped.value) read(MORE_BYTES)
-    },
-    loadAll: () => {
-      if (!reading.value && capped.value) read(Infinity)
-    },
-    stop: () => {
-      if (!reading.value) return
-      controller?.abort()
-      reading.value = false
-      capped.value = bytesRead.value < file().size
-    },
+    bytesRead: computed(() => reader.value?.bytesRead.value ?? 0),
+    reading: computed(() => reader.value?.reading.value ?? false),
+    capped: computed(() => reader.value?.capped.value ?? false),
+    done: computed(() => reader.value?.done.value ?? false),
+    error: computed(() => reader.value?.error.value ?? null),
+    loadMore: () => reader.value?.loadMore(),
+    loadAll: () => reader.value?.loadAll(),
+    stop: () => reader.value?.stop(),
   }
 }

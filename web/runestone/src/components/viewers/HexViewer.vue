@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from '@/components/icons'
 import HexInspector from '@/components/viewers/HexInspector.vue'
 import { useByteChunks } from '@/composables/useByteChunks'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
+import { useRowScroller } from '@/composables/useRowScroller'
 import {
   decodings,
   hex2,
@@ -55,23 +56,20 @@ const last = computed(() => Math.max(0, props.size - 1))
 
 const body = ref<HTMLElement | null>(null)
 const grid = ref<HTMLElement | null>(null)
-const bodyHeight = ref(0)
-const visibleRows = computed(() => Math.max(1, Math.floor(bodyHeight.value / ROW_H)))
-const maxTop = computed(() => Math.max(0, totalRows.value - visibleRows.value))
-const topRow = ref(0)
-const clampTop = (row: number) => Math.min(maxTop.value, Math.max(0, Math.round(row)))
-const scrollTo = (row: number) => (topRow.value = clampTop(row))
-
-let observer: ResizeObserver | undefined
-onMounted(() => {
-  if (!body.value) return
-  // Measured now, not only when the observer first reports (it waits for a
-  // paint, which a tab in the background never gets).
-  bodyHeight.value = body.value.clientHeight
-  observer = new ResizeObserver(([entry]) => (bodyHeight.value = entry!.contentRect.height))
-  observer.observe(body.value)
-})
-onUnmounted(() => observer?.disconnect())
+const track = ref<HTMLElement | null>(null)
+const {
+  topRow,
+  visibleRows,
+  scrollTo,
+  reveal: revealRow,
+  onWheel,
+  thumbHeight,
+  thumbTop,
+  onThumbDown,
+  onThumbMove,
+  onThumbUp,
+  onTrackDown,
+} = useRowScroller(body, track, () => totalRows.value, ROW_H)
 
 const rows = computed(() => {
   const out: { row: number; offset: number }[] = []
@@ -87,51 +85,6 @@ watch(
   () => bytes.show(topRow.value * ROW, (topRow.value + visibleRows.value) * ROW - 1),
   { immediate: true },
 )
-
-/** A trackpad sends fractions of rows: they add up until they make one. */
-let wheelRest = 0
-function onWheel(event: WheelEvent) {
-  const px =
-    event.deltaMode === 1
-      ? event.deltaY * ROW_H
-      : event.deltaMode === 2
-        ? event.deltaY * bodyHeight.value
-        : event.deltaY
-  wheelRest += px / ROW_H
-  const step = Math.trunc(wheelRest)
-  if (!step) return
-  wheelRest -= step
-  scrollTo(topRow.value + step)
-}
-
-// --- the scrollbar: a thumb over the whole file ---
-
-const track = ref<HTMLElement | null>(null)
-const THUMB_MIN = 24
-const thumbHeight = computed(() =>
-  !bodyHeight.value || totalRows.value <= visibleRows.value
-    ? 0
-    : Math.max(THUMB_MIN, (visibleRows.value / totalRows.value) * bodyHeight.value),
-)
-const thumbTop = computed(() =>
-  maxTop.value ? (topRow.value / maxTop.value) * (bodyHeight.value - thumbHeight.value) : 0,
-)
-let grab: { y: number; top: number } | null = null
-function onThumbDown(event: PointerEvent) {
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  grab = { y: event.clientY, top: thumbTop.value }
-}
-function onThumbMove(event: PointerEvent) {
-  if (!grab) return
-  const room = bodyHeight.value - thumbHeight.value
-  if (room > 0) scrollTo(((grab.top + event.clientY - grab.y) / room) * maxTop.value)
-}
-function onTrackDown(event: PointerEvent) {
-  if (event.target !== track.value) return
-  // A click on the track pages toward it.
-  const above = event.offsetY < thumbTop.value
-  scrollTo(topRow.value + (above ? -1 : 1) * visibleRows.value)
-}
 
 // --- the cursor and selection: byte offsets, shared by both columns ---
 
@@ -153,9 +106,7 @@ watch(
 
 /** Keeps the cursor's row on screen, scrolling as little as it takes. */
 function reveal(offset: number) {
-  const row = Math.floor(offset / ROW)
-  if (row < topRow.value) scrollTo(row)
-  else if (row >= topRow.value + visibleRows.value) scrollTo(row - visibleRows.value + 1)
+  revealRow(Math.floor(offset / ROW))
 }
 
 function moveTo(offset: number, extend: boolean) {
@@ -421,7 +372,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         role="grid"
         aria-label="File bytes"
         @keydown="onKey"
-        @wheel.prevent="onWheel"
+        @wheel="onWheel"
         @pointerleave="hovered = null"
       >
         <!-- A column: the body fills what the heads leave, whatever rows it holds, so
@@ -516,7 +467,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             aria-hidden="true"
             @pointerdown.stop="onThumbDown"
             @pointermove="onThumbMove"
-            @pointerup="grab = null"
+            @pointerup="onThumbUp"
           />
         </div>
       </div>

@@ -3,101 +3,110 @@ import { computed, ref, watch } from 'vue'
 
 import HexViewer from '@/components/viewers/HexViewer.vue'
 import TableViewer from '@/components/viewers/TableViewer.vue'
+import TextViewer from '@/components/viewers/TextViewer.vue'
 import { api } from '@/api'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useSystemConfig } from '@/composables/useSystemConfig'
 import type { Item } from '@/types/item'
 import { useSettingsStore } from '@/stores/settings'
 import { formatSize } from '@/utils/format'
-import { previewOf, tableKindOf } from '@/utils/preview'
+import type { LineRange } from '@/utils/lines'
+import { isMarkdown, previewOf, PREVIEW_MAX_BYTES, tableKindOf } from '@/utils/preview'
 
 /**
- * A file's content, as the server renders it: a text file within the size
- * limit is shown in a sandboxed iframe — no scripts, no same-origin access,
- * no navigation of the app — so nothing in a file can act on the page. The
- * server escapes the text (and renders and sanitises Markdown) and themes the
- * page to match.
+ * A file's content, in as many ways as it can be shown:
  *
- * Whether to ask is decided here first (see `previewOf`): the server reads the
- * whole file, so binary files and large ones are never requested.
+ * - **text**: any text file, at any size, read and shown line by line in the
+ *   browser (`TextViewer`): line numbers, go-to, find, and line ranges that
+ *   the page's URL carries (`#L12-L40`).
+ * - **table**: CSV, TSV and JSONL, parsed in the browser as the file arrives
+ *   (`TableViewer`), at any size.
+ * - **rendered**: Markdown, and HTML for data types the server allows
+ *   (`allowed_data_types_preview`), as the server renders them, in a
+ *   sandboxed iframe — no scripts, no same-origin access, no navigation of
+ *   the app — so nothing in a file can act on the page. The server reads the
+ *   whole file, so only files within the preview limit are asked for.
+ * - **hex**: anything, a screen at a time (`HexViewer`).
  *
- * HTML can be shown rendered instead of as source, for data types the server
- * allows (`allowed_data_types_preview`); still in the sandbox, and off until
- * asked for.
- *
- * Anything else — binary, or text too large for the page — is shown as hex
- * (`HexViewer`), a screen at a time; text files can be switched to hex too.
- *
- * CSV, TSV and JSONL open as a table (`TableViewer`), parsed in the browser as
- * the file arrives, at any size: a table file too large for the text preview
- * can still be read as a table.
+ * The first is the default: table, then rendered Markdown, then text; HTML
+ * shows as text until asked for rendered. A link to lines opens text.
  */
 const props = defineProps<{ file: Item }>()
 const emit = defineEmits<{
   /** The view on screen, for the page's side panel to offer its tab. */
-  view: [view: 'table' | 'text' | 'hex' | undefined]
+  view: [view: View | undefined]
   /** The table's row selection, for the side panel to follow. */
   rowSelected: [selected: boolean]
 }>()
+/** The marked lines of the text view: the page keeps them in its URL. */
+const lines = defineModel<LineRange | null>('lines', { default: null })
 
 const settings = useSettingsStore()
 const system = useSystemConfig()
 
 const preview = computed(() => previewOf(props.file))
+const markdown = computed(() => isMarkdown(props.file))
 
 /** HTML the server lets through unescaped, for this file's data type. */
-const canRender = computed(
+const htmlRenders = computed(
   () =>
     props.file.mime === 'text/html' &&
     !!props.file.dataType &&
     !!system.value.allowed_data_types_preview?.includes(props.file.dataType),
 )
-const rendered = ref(false)
+/** Rendered by the server, but too large for it to be asked. */
+const tooLargeToRender = computed(
+  () => (markdown.value || htmlRenders.value) && preview.value.kind === 'too-large',
+)
 
-type View = 'table' | 'text' | 'hex'
+type View = 'table' | 'rendered' | 'text' | 'hex'
 const tableKind = computed(() => tableKindOf(props.file))
-/** The ways this file can be shown, the first the default: table, text, hex. */
+/** The ways this file can be shown, the first the default. */
 const views = computed<View[]>(() => {
-  if (preview.value.kind === 'unknown') return []
+  const kind = preview.value.kind
+  if (kind === 'unknown') return []
+  const isText = kind === 'text' || kind === 'too-large'
+  const renders = kind === 'text'
   return [
     ...(tableKind.value ? (['table'] as const) : []),
-    ...(preview.value.kind === 'text' ? (['text'] as const) : []),
+    ...(renders && markdown.value ? (['rendered'] as const) : []),
+    ...(isText ? (['text'] as const) : []),
+    ...(renders && htmlRenders.value && !markdown.value ? (['rendered'] as const) : []),
     'hex',
   ]
 })
-const chosen = ref<View | null>(null)
+/** Picked by the user; a link to lines picks text. */
+const chosen = ref<View | null>(lines.value ? 'text' : null)
 watch(
   () => props.file.id,
-  () => {
-    rendered.value = false
-    chosen.value = null
-  },
+  () => (chosen.value = lines.value ? 'text' : null),
 )
 const view = computed<View | undefined>(() =>
   chosen.value && views.value.includes(chosen.value) ? chosen.value : views.value[0],
 )
-const showHex = computed(() => view.value === 'hex')
 watch(view, (now) => emit('view', now), { immediate: true })
 
 /**
- * The file whose table has been opened: the table stays mounted (hidden)
- * while text or hex is shown, so switching back keeps its rows, filter,
- * sort and place instead of reading the file again. Another file starts over.
+ * The file whose table, or text, has been opened: each stays mounted
+ * (hidden) while another view is shown, so switching back keeps its place,
+ * filter or search instead of reading the file again. Another file starts over.
  */
 const tableFor = ref<number | null>(null)
+const textFor = ref<number | null>(null)
 watch(
   [view, () => props.file.id],
   ([now, id]) => {
     if (now === 'table') tableFor.value = id
+    if (now === 'text') textFor.value = id
   },
   { immediate: true },
 )
 
 const src = computed(() =>
-  view.value === 'text'
+  view.value === 'rendered'
     ? api.files.contentUrl(props.file.id, {
         theme: settings.resolvedTheme,
-        unescaped: canRender.value && rendered.value,
+        unescaped: htmlRenders.value,
       })
     : undefined,
 )
@@ -115,7 +124,7 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       :class="$slots.end ? 'pr-1' : 'pr-3'"
     >
       <span class="micro-label">content</span>
-      <!-- text or hex: a segmented pick, like the workflow's views -->
+      <!-- the views: a segmented pick, like the workflow's views -->
       <div
         v-if="views.length > 1"
         class="flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
@@ -141,19 +150,11 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       <span class="truncate">
         {{ file.mime }}
         <template v-if="preview.kind === 'not-text'"> · no text preview</template>
-        <template v-else-if="preview.kind === 'too-large' && view !== 'table'">
-          · too large for a text preview (over {{ formatSize(preview.limit) }})</template
+        <template v-else-if="tooLargeToRender && view === 'text'">
+          · too large to render (over {{ formatSize(PREVIEW_MAX_BYTES) }})</template
         >
       </span>
       <div class="ml-auto flex shrink-0 items-center gap-3">
-        <label
-          v-if="preview.kind === 'text' && view === 'text' && canRender"
-          class="flex cursor-pointer items-center gap-1.5"
-          v-tooltip="'Show the HTML rendered, in the sandbox, rather than its source'"
-        >
-          <input v-model="rendered" type="checkbox" class="size-3.5 accent-brand" />
-          render HTML
-        </label>
         <!-- the page's own controls for this bar's right end (the details' toggle) -->
         <slot name="end" />
       </div>
@@ -167,35 +168,37 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       :kind="tableKind"
       @row-selected="emit('rowSelected', $event)"
     />
-    <HexViewer v-if="showHex" :file-id="file.id" :size="file.size ?? 0" />
+    <TextViewer
+      v-if="textFor === file.id"
+      v-show="view === 'text'"
+      v-model:lines="lines"
+      :file-id="file.id"
+      :size="file.size ?? 0"
+      :active="view === 'text'"
+    />
+    <HexViewer v-if="view === 'hex'" :file-id="file.id" :size="file.size ?? 0" />
 
-    <!-- The server's page sets its text flush to the edge: the room is kept here. -->
-    <div
-      v-else-if="view !== 'table'"
-      class="relative min-h-0 flex-1 bg-surface"
-      :class="{ 'py-2 pl-3': src }"
-    >
-      <template v-if="src">
-        <!-- sandbox="": no scripts, forms, popups or same-origin access for the file's page -->
-        <iframe
-          :key="src"
-          :src="src"
-          sandbox=""
-          referrerpolicy="no-referrer"
-          :title="`Content of ${file.name}`"
-          class="block size-full border-0"
-          @load="loaded = true"
-        />
-        <p
-          v-if="!loaded"
-          class="absolute inset-0 bg-surface px-4 py-3 text-ink-muted"
-          aria-busy="true"
-        >
-          <span :class="{ invisible: !showLoading }">Loading content…</span>
-        </p>
-      </template>
-
-      <p v-else class="px-4 py-3 text-ink-muted">Waiting for the file's type…</p>
+    <!-- The server's page sets its content flush to the edge: the room is kept here. -->
+    <div v-else-if="view === 'rendered'" class="relative min-h-0 flex-1 bg-surface py-2 pl-3">
+      <!-- sandbox="": no scripts, forms, popups or same-origin access for the file's page -->
+      <iframe
+        :key="src"
+        :src="src"
+        sandbox=""
+        referrerpolicy="no-referrer"
+        :title="`Content of ${file.name}`"
+        class="block size-full border-0"
+        @load="loaded = true"
+      />
+      <p
+        v-if="!loaded"
+        class="absolute inset-0 bg-surface px-4 py-3 text-ink-muted"
+        aria-busy="true"
+      >
+        <span :class="{ invisible: !showLoading }">Loading content…</span>
+      </p>
     </div>
+
+    <p v-else-if="!view" class="px-4 py-3 text-ink-muted">Waiting for the file's type…</p>
   </div>
 </template>

@@ -109,6 +109,16 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
+    title: 'text view',
+    shortcuts: [
+      { keys: ['⌘F', '/'], does: 'Find: text, or a regular expression (.*)' },
+      { keys: ['⏎', '⇧⏎'], does: 'Next, previous hit (⌘G, ⇧⌘G anywhere on the page)' },
+      { keys: [':'], does: 'Go to a line, or a range as 12-40' },
+      { keys: ['⌘↑', '⌘↓'], does: 'Start, end of what is read' },
+      { keys: ['esc'], does: 'Clear the marked lines' },
+    ],
+  },
+  {
     title: 'hex view',
     shortcuts: [
       { keys: ['←', '→', '↑', '↓'], does: 'Move the cursor a byte or a row (⇧ selects)' },
