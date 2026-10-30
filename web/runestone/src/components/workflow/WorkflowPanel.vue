@@ -19,6 +19,7 @@ import WorkflowGraph from '@/components/workflow/WorkflowGraph.vue'
 import WorkflowSummary from '@/components/workflow/WorkflowSummary.vue'
 import WorkflowTree from '@/components/workflow/WorkflowTree.vue'
 import Button from '@/components/base/Button.vue'
+import SlidePane from '@/components/base/SlidePane.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useRemembered } from '@/composables/useRemembered'
 import { openAddToWorkflow, type Anchor } from '@/composables/useRun'
@@ -249,7 +250,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
 </script>
 
 <template>
-  <section :class="{ 'border-b border-border': open }" aria-label="Workflow">
+  <section aria-label="Workflow">
     <!-- Right padding as the toolbar's, so the two rows of buttons share an edge. -->
     <div
       class="flex h-9 items-center gap-2.5 border-b border-border bg-sunken pl-3"
@@ -386,32 +387,36 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
       </div>
     </div>
 
-    <template v-if="open && !fullscreen">
-      <WorkflowTree
-        v-if="view === 'tree'"
-        class="max-h-[70vh] overflow-y-auto"
-        :workflow="workflow"
-        :selected-id="selectedId"
-        :producer-id="producerId"
-        :editable="editable"
-        @select="emit('select', $event)"
-        @add="add"
-        @remove="remove"
-      />
-      <WorkflowGraph
-        v-else
-        capped
-        :workflow="workflow"
-        :selected-id="selectedId"
-        :producer-id="producerId"
-        :editable="editable"
-        @select="emit('select', $event)"
-        @add="add"
-        @remove="remove"
-        @split="split"
-        @merge="merge"
-      />
-    </template>
+    <!-- Slides up under the bar; its bottom rule goes with it. The full-screen
+         chart replaces it while open. -->
+    <SlidePane :open="open" edge="top">
+      <div v-if="!fullscreen" class="border-b border-border">
+        <WorkflowTree
+          v-if="view === 'tree'"
+          class="max-h-[70vh] overflow-y-auto"
+          :workflow="workflow"
+          :selected-id="selectedId"
+          :producer-id="producerId"
+          :editable="editable"
+          @select="emit('select', $event)"
+          @add="add"
+          @remove="remove"
+        />
+        <WorkflowGraph
+          v-else
+          capped
+          :workflow="workflow"
+          :selected-id="selectedId"
+          :producer-id="producerId"
+          :editable="editable"
+          @select="emit('select', $event)"
+          @add="add"
+          @remove="remove"
+          @split="split"
+          @merge="merge"
+        />
+      </div>
+    </SlidePane>
 
     <!-- full screen: teleported so no ancestor's overflow or stacking can clip it -->
     <Teleport to="body">

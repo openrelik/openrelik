@@ -570,6 +570,8 @@ function merge() {
 function onKey(event: KeyboardEvent) {
   if (event.key !== 'Escape' || isTyping(event)) return
   if (!picked.value.length && !pickedGroups.value.length) return
+  // Collapsed, the chart stays mounted but out of sight: Esc is not its to take.
+  if (!viewport.value?.checkVisibility({ visibilityProperty: true })) return
   letGo()
   event.preventDefault()
   event.stopImmediatePropagation()

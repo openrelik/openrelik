@@ -568,7 +568,15 @@ This produces an immediate, responsive pickup with a gentle, smooth settling fin
 
 ### Snappy Durations
 - **Standard micro-transitions**: `120ms` (`duration-120 ease-(--ease-standard)`). Used for button hover fills, selection rings, and badge transitions.
+- **Panes that open and close**: `200ms` (`duration-200 ease-(--ease-standard)`). See below.
 - Consoles never use slow, floaty animations ($> 250\text{ms}$). Sluggish transitions make software feel unresponsive under heavy daily use.
+
+### Opening & Closing Panes
+Every pane the operator shows and hides (the file page's side panel, the workflow chart under its bar, and any new panel or collapsible section) goes through `<SlidePane :open edge>` (`src/components/base/SlidePane.vue`), never a bare `v-if`/`v-show` or a hand-rolled transition:
+- It **slides out past the edge it is attached to** (`edge="right"` for a side panel, `"top"` for a section under a bar), and back, in 200 ms on the standard curve.
+- The content **keeps its size**: nothing in it reflows, and its neighbours grow into the room as it goes. A rule that belongs to the pane (its bottom border) goes inside it, so it slides too.
+- Closed, it **stays mounted**, invisible and inert. A component inside that listens on `window` ignores keys while it is out of sight.
+- Only opening and closing animate: a drag-resize or new content does not.
 
 ### Reduced Motion Override
 For users with vestibular motion sensitivities, animations and transitions are globally neutralized:

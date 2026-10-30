@@ -95,7 +95,7 @@ The codebase follows a strict separation of concerns:
 
 #### 2. Components (`src/components/`)
 - Categorized into focused subdirectories:
-  - `base/`: Reusable primitive components (`Button.vue`, `Switch.vue`, `KeyHint.vue` (Help dialog only), `KeyValueRow.vue`, `Tooltip.vue`).
+  - `base/`: Reusable primitive components (`Button.vue`, `Switch.vue`, `KeyHint.vue` (Help dialog only), `KeyValueRow.vue`, `Tooltip.vue`, `SlidePane.vue` (every pane that opens and closes)).
   - `layout/`: Shell layout structures (`PathBar.vue`, `StatusBar.vue`, `BrandLink.vue`).
   - `dialogs/`: Modal sheets (`SettingsDialog.vue`, `HelpDialog.vue`, `ShareDialog.vue`, `RunDialog.vue`).
   - Domain-specific folders (e.g. `folders/`, `workflow/`, `prompt/`).

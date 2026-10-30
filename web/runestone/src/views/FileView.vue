@@ -201,8 +201,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     </div>
 
     <!-- panes -->
-    <!-- overflow hidden: the side panel slides out past the right edge -->
-    <div class="flex min-h-0 flex-1 overflow-hidden">
+    <div class="flex min-h-0 flex-1">
       <FileContent
         v-model:mark="mark"
         :file="file"
