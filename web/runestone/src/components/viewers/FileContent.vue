@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import HexViewer from '@/components/viewers/HexViewer.vue'
+import MarkdownViewer from '@/components/viewers/MarkdownViewer.vue'
 import TableViewer from '@/components/viewers/TableViewer.vue'
 import TextViewer from '@/components/viewers/TextViewer.vue'
 import { api } from '@/api'
@@ -21,11 +22,13 @@ import { isMarkdown, previewOf, PREVIEW_MAX_BYTES, tableKindOf } from '@/utils/p
  *   the page's URL carries (`#L12-L40`).
  * - **table**: CSV, TSV and JSONL, parsed in the browser as the file arrives
  *   (`TableViewer`), at any size.
- * - **rendered**: Markdown, and HTML for data types the server allows
- *   (`allowed_data_types_preview`), as the server renders them, in a
- *   sandboxed iframe — no scripts, no same-origin access, no navigation of
- *   the app — so nothing in a file can act on the page. The server reads the
- *   whole file, so only files within the preview limit are asked for.
+ * - **rendered**: Markdown, at any size, rendered in the app
+ *   (`MarkdownViewer`): never HTML, links and images shown as text, so a
+ *   file can neither act on the page nor reach out. HTML, for data types the
+ *   server allows (`allowed_data_types_preview`), as the server renders it,
+ *   in a sandboxed iframe — no scripts, no same-origin access, no navigation
+ *   of the app. The server reads the whole file, so only HTML within the
+ *   preview limit is asked for.
  * - **hex**: anything, a screen at a time (`HexViewer`).
  *
  * The first is the default: table, then rendered Markdown, then text; HTML
@@ -57,7 +60,7 @@ const htmlRenders = computed(
 )
 /** Rendered by the server, but too large for it to be asked. */
 const tooLargeToRender = computed(
-  () => (markdown.value || htmlRenders.value) && preview.value.kind === 'too-large',
+  () => htmlRenders.value && !markdown.value && preview.value.kind === 'too-large',
 )
 
 type View = 'table' | 'rendered' | 'text' | 'hex'
@@ -85,7 +88,7 @@ const views = computed<View[]>(() => {
   const renders = kind === 'text'
   return [
     ...(tableKind.value ? (['table'] as const) : []),
-    ...(renders && markdown.value ? (['rendered'] as const) : []),
+    ...(isText && markdown.value ? (['rendered'] as const) : []),
     ...(isText ? (['text'] as const) : []),
     ...(renders && htmlRenders.value && !markdown.value ? (['rendered'] as const) : []),
     'hex',
@@ -129,8 +132,7 @@ const tabs = computed<{ view: View; label: string; reason?: string }[]>(() => {
     label: v === 'text' && views.value.includes('rendered') ? 'Source' : LABELS[v],
   }))
   if (tooLargeToRender.value) {
-    const at = markdown.value ? out.findIndex((tab) => tab.view === 'text') : out.length - 1
-    out.splice(Math.max(0, at), 0, {
+    out.splice(Math.max(0, out.length - 1), 0, {
       view: 'rendered',
       label: LABELS.rendered,
       reason: `Too large to render: over ${formatSize(PREVIEW_MAX_BYTES)}`,
@@ -157,8 +159,15 @@ watch(
   { immediate: true },
 )
 
+/** Shows the source at a line, marked: from a rendered block. */
+function showSource(line: number) {
+  mark.value = { kind: 'line', from: line, to: line }
+  chosen.value = 'text'
+}
+
+/** The server's page, for HTML: Markdown is rendered here. */
 const src = computed(() =>
-  view.value === 'rendered'
+  view.value === 'rendered' && !markdown.value
     ? api.files.contentUrl(props.file.id, {
         theme: settings.resolvedTheme,
         unescaped: htmlRenders.value,
@@ -233,6 +242,13 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       v-model:mark="offsetMark"
       :file-id="file.id"
       :size="file.size ?? 0"
+    />
+
+    <MarkdownViewer
+      v-else-if="view === 'rendered' && markdown"
+      :file-id="file.id"
+      :size="file.size ?? 0"
+      @source="showSource"
     />
 
     <!-- The server's page sets its content flush to the edge: the room is kept here. -->

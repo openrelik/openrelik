@@ -17,6 +17,8 @@ export default defineConfigWithVueTs(
   {
     rules: {
       'vue/multi-word-component-names': ['error', { ignores: ['Button', 'Switch', 'Tooltip', 'Prompt'] }],
+      // Content from files and workers never becomes markup: see utils/markdown.ts.
+      'vue/no-v-html': 'error',
     },
   },
 

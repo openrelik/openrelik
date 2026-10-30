@@ -2,7 +2,7 @@
 import { File, X } from '@/components/icons'
 import { RouterLink } from 'vue-router'
 
-import MarkdownView from '@/components/reports/MarkdownView.vue'
+import MarkdownView from '@/components/markdown/MarkdownView.vue'
 import PriorityBadge from '@/components/reports/PriorityBadge.vue'
 import { useTaskReport } from '@/composables/useTaskReport'
 

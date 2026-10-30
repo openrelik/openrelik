@@ -8,6 +8,8 @@
  * - Opening reads the first 5 MB; `loadMore()` reads 10 MB more, `loadAll()`
  *   the rest. `readUntil(line)` reads on until a line has arrived — a deep
  *   link or a go-to past what is read.
+ * - A file open in two views at once (rendered Markdown and its source) is
+ *   read once, for both.
  * - The last few files read are kept, lines and all, so stepping back to a
  *   file costs no request. Leaving a file stops its reading; coming back
  *   resumes it up to the first 5 MB. Files read past `KEEP_MAX` are not kept.
@@ -34,14 +36,23 @@ interface TextFile {
 
 /** Files kept, least recently shown first. */
 const kept = new Map<string, TextFile>()
+/** Files on screen, and how many views show each. */
+const shown = new Map<string, { file: TextFile; views: number }>()
 
 function openFile(id: number, size: number): TextFile {
   const key = `${id}:${size}`
-  const known = kept.get(key)
+  const known = shown.get(key)
   if (known) {
-    kept.delete(key)
-    return known
+    known.views++
+    return known.file
   }
+  const file = kept.get(key) ?? newFile(key, id, size)
+  kept.delete(key)
+  shown.set(key, { file, views: 1 })
+  return file
+}
+
+function newFile(key: string, id: number, size: number): TextFile {
   const index = createLineIndex()
   const version = ref(0)
   const reader = createRangeText({ id, size }, (text, last) => {
@@ -51,7 +62,11 @@ function openFile(id: number, size: number): TextFile {
   return { key, reader, index, version }
 }
 
+/** A view lets go of a file: once no view shows it, it stops reading and is kept. */
 function keep(file: TextFile) {
+  const known = shown.get(file.key)
+  if (known && --known.views > 0) return
+  shown.delete(file.key)
   file.reader.stop()
   if (file.reader.bytesRead.value > KEEP_MAX) return
   kept.set(file.key, file)
@@ -62,6 +77,8 @@ function keep(file: TextFile) {
 export function forgetTextFiles(): void {
   for (const file of kept.values()) file.reader.stop()
   kept.clear()
+  for (const { file } of shown.values()) file.reader.stop()
+  shown.clear()
 }
 
 export interface UseTextStreamReturn {

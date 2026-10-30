@@ -41,6 +41,7 @@ export {
   Folder,
   FolderOpen,
   FolderPlus,
+  ImageOff,
   HardDrive,
   KeyRound,
   ListTree,

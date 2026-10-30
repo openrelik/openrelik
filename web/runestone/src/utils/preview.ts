@@ -1,13 +1,12 @@
 /**
  * What of a file can be shown as text, and what the server can render.
  *
- * Text is read and shown in the browser, at any size (the text viewer). The
- * server renders Markdown, and HTML on its allow-list, as a page: it reads
- * the whole file to do so, so only up to a size. The same rules as the
- * original UI.
+ * Text is read and shown in the browser, at any size (the text viewer), and
+ * so is Markdown, rendered. The server renders HTML on its allow-list as a
+ * page: it reads the whole file to do so, so only up to a size.
  */
 
-/** The server reads the whole file into the page: larger ones are not rendered. */
+/** The server reads the whole file into its page: larger HTML is not rendered. */
 export const PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 
 /** Types that are text without saying so in their `text/` prefix. */
