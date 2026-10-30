@@ -217,6 +217,24 @@ function onGutterEnter(line: number) {
   mark({ from: Math.min(anchor.value, line), to: Math.max(anchor.value, line) })
 }
 const endDrag = () => (dragging = false)
+
+/**
+ * A plain click in the text, away from the line numbers, unmarks the lines.
+ * A drag that selected text, or a click that ends one, leaves them: copying
+ * from inside marked lines must not lose them.
+ */
+let pressedInGutter = false
+function onTextPress(event: PointerEvent) {
+  pressedInGutter = !!(event.target as HTMLElement).closest('[data-gutter]')
+}
+function onTextClick(event: MouseEvent) {
+  // Where the press began, not where the click lands: a drag across line
+  // numbers ends with a click on the row they share.
+  if (!range.value || pressedInGutter || event.shiftKey || event.detail > 1) return
+  if (!(window.getSelection()?.isCollapsed ?? true)) return
+  anchor.value = null
+  mark(null)
+}
 onMounted(() => window.addEventListener('pointerup', endDrag))
 onUnmounted(() => window.removeEventListener('pointerup', endDrag))
 
@@ -447,20 +465,22 @@ async function loadAll() {
         aria-label="File text"
         @keydown="onKey"
         @wheel="onWheel"
+        @pointerdown.capture="onTextPress"
+        @click="onTextClick"
       >
         <div class="w-max min-w-full">
           <div
             v-for="row in rows"
             :key="row.row"
             class="flex h-5 items-center"
-            :class="{ 'bg-brand-selected': inRange(row.line) }"
+            :class="{ 'bg-warning-tint': inRange(row.line) }"
           >
             <span
               data-gutter
               class="tabular sticky left-0 shrink-0 cursor-pointer px-3 text-right select-none"
               :class="
                 inRange(row.line)
-                  ? 'bg-brand-selected text-brand'
+                  ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
                   : 'bg-surface text-ink-muted hover:text-ink-secondary'
               "
               :style="{ width: `calc(${gutterChars}ch + 1.5rem)` }"

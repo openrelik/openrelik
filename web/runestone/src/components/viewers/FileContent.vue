@@ -86,6 +86,35 @@ const view = computed<View | undefined>(() =>
 )
 watch(view, (now) => emit('view', now), { immediate: true })
 
+const LABELS: Record<View, string> = {
+  table: 'Table',
+  rendered: 'Rendered',
+  text: 'Text',
+  hex: 'Hex',
+}
+/**
+ * The tabs: every view, plus a rendered view the server would give but for
+ * the file's size — shown, unavailable, with the reason, so the gap is
+ * explained where it is noticed. Text is "Source" beside a rendered view.
+ */
+const tabs = computed<{ view: View; label: string; reason?: string }[]>(() => {
+  const out: { view: View; label: string; reason?: string }[] = views.value.map((v) => ({
+    view: v,
+    label: v === 'text' && views.value.includes('rendered') ? 'Source' : LABELS[v],
+  }))
+  if (tooLargeToRender.value) {
+    const at = markdown.value ? out.findIndex((tab) => tab.view === 'text') : out.length - 1
+    out.splice(Math.max(0, at), 0, {
+      view: 'rendered',
+      label: LABELS.rendered,
+      reason: `Too large to render: over ${formatSize(PREVIEW_MAX_BYTES)}`,
+    })
+    const text = out.find((tab) => tab.view === 'text')
+    if (text) text.label = 'Source'
+  }
+  return out
+})
+
 /**
  * The file whose table, or text, has been opened: each stays mounted
  * (hidden) while another view is shown, so switching back keeps its place,
@@ -119,42 +148,31 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-    <div
-      class="flex h-7 shrink-0 items-center gap-3 border-b border-border pl-3 text-ink-muted"
-      :class="$slots.end ? 'pr-1' : 'pr-3'"
-    >
-      <span class="micro-label">content</span>
-      <!-- the views: a segmented pick, like the workflow's views -->
-      <div
-        v-if="views.length > 1"
-        class="flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
-        role="group"
-        aria-label="Show as"
-      >
+    <!-- The pane's tabs, styled as the side panel's: the header row reads as two panes. -->
+    <div class="flex h-7 shrink-0 items-stretch border-b border-border px-1">
+      <div class="flex items-stretch" role="tablist" aria-label="Show the file as">
         <button
-          v-for="option in views"
-          :key="option"
+          v-for="tab in tabs"
+          :key="tab.view"
           type="button"
-          class="h-4 cursor-pointer rounded-(--radius-check) px-1.5 text-[11px] transition-colors duration-120"
+          role="tab"
+          class="-mb-px flex items-center border-b-2 px-2 transition-colors duration-120"
           :class="
-            view === option
-              ? 'bg-brand-tint text-brand'
-              : 'text-ink-muted hover:bg-sunken hover:text-ink-secondary'
+            tab.reason
+              ? 'cursor-default border-transparent text-ink-muted/50'
+              : view === tab.view
+                ? 'cursor-pointer border-brand text-ink'
+                : 'cursor-pointer border-transparent text-ink-muted hover:text-ink-secondary'
           "
-          :aria-pressed="view === option"
-          @click="chosen = option"
+          :aria-selected="view === tab.view"
+          :aria-disabled="!!tab.reason || undefined"
+          v-tooltip="tab.reason"
+          @click="tab.reason || (chosen = tab.view)"
         >
-          {{ option }}
+          {{ tab.label }}
         </button>
       </div>
-      <span class="truncate">
-        {{ file.mime }}
-        <template v-if="preview.kind === 'not-text'"> · no text preview</template>
-        <template v-else-if="tooLargeToRender && view === 'text'">
-          · too large to render (over {{ formatSize(PREVIEW_MAX_BYTES) }})</template
-        >
-      </span>
-      <div class="ml-auto flex shrink-0 items-center gap-3">
+      <div class="ml-auto flex shrink-0 items-center">
         <!-- the page's own controls for this bar's right end (the details' toggle) -->
         <slot name="end" />
       </div>
