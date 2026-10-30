@@ -19,6 +19,8 @@ const props = defineProps<{
   selectionActions?: ItemAction[]
   /** Why uploading is off here (an empty workflow folder), or nothing. */
   uploadBlocked?: string | null
+  /** Why new folders are off here (an empty workflow folder too), or nothing. */
+  newFolderBlocked?: string | null
   /** Asked before the current folder's name turns into a field (see `PathBar`). */
   mayRename?: (item: Item) => Promise<boolean>
 }>()
@@ -110,7 +112,13 @@ defineExpose({
         </Button>
         <span class="w-1.5 shrink-0" aria-hidden="true" />
       </template>
-      <Button :variant="atRoot ? 'primary' : 'secondary'" size="row" @click="emit('newFolder')">
+      <Button
+        :variant="atRoot ? 'primary' : 'secondary'"
+        size="row"
+        :disabled="!!newFolderBlocked"
+        :tooltip="newFolderBlocked || undefined"
+        @click="emit('newFolder')"
+      >
         <template #icon><FolderPlus :size="13" :stroke-width="1.5" /></template>
         New folder
       </Button>

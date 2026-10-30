@@ -14,7 +14,7 @@ import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
 import { lastRun, openAddToWorkflow, openRun, runError, type Anchor } from '@/composables/useRun'
-import { bytesOf, isEmptyFile, typeOf } from '@/utils/item'
+import { awaitsOutputs, bytesOf, isEmptyFile, typeOf } from '@/utils/item'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useRootPagesStore } from '@/stores/rootPages'
@@ -132,14 +132,16 @@ const uploadsHere = computed(() =>
 /** Why a drop was (partly) refused; cleared by the next drop or navigation. */
 const dropRefusal = ref<string | null>(null)
 
-/**
- * An empty workflow folder takes no uploads: it is for the workflow's outputs,
- * and files put there before it runs would pass for them.
- */
+/** An empty workflow folder takes no uploads and no new folders (`awaitsOutputs`). */
+const awaitingOutputs = computed(
+  () =>
+    !!folder.value && awaitsOutputs(folder.value, itemsStore.childrenOf(folder.value.id).length),
+)
 const uploadBlocked = computed(() =>
-  folder.value?.workflowId !== undefined && !itemsStore.childrenOf(folder.value.id).length
-    ? 'Uploads are off until the workflow has produced its outputs'
-    : null,
+  awaitingOutputs.value ? 'Uploads are off until the workflow has produced its outputs' : null,
+)
+const newFolderBlocked = computed(() =>
+  awaitingOutputs.value ? 'New folders are off until the workflow has produced its outputs' : null,
 )
 
 /** Queues files for this folder; at the root there is no folder to put them in. */
@@ -547,6 +549,11 @@ function open(item: Item | undefined) {
 }
 
 async function startCreateFolder() {
+  // `n` comes here too, past the toolbar's disabled button: say why, like a refused drop.
+  if (newFolderBlocked.value) {
+    dropRefusal.value = `${newFolderBlocked.value}.`
+    return
+  }
   // A new top-level folder is the newest: create it on page 1, where it will stay.
   if (atRoot.value && pager.page.value > 1) {
     await pager.goTo(1)
@@ -775,6 +782,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :selected-count="selectedItems.length"
       :selection-actions="selectionActions"
       :upload-blocked="uploadBlocked"
+      :new-folder-blocked="newFolderBlocked"
       :may-rename="mayRename"
       @rename="(id, name) => handleRename({ id, name })"
       @new-folder="startCreateFolder"

@@ -63,3 +63,12 @@ export function getUniqueFolderName(baseName: string, existingNames: string[]): 
   }
   return `${baseName} ${counter}`
 }
+
+/**
+ * An empty workflow folder is for its workflow's outputs: a file or folder put
+ * there by hand before it runs would pass for one, so nothing is added to it
+ * until the outputs arrive.
+ */
+export function awaitsOutputs(folder: Item | undefined, childCount: number): boolean {
+  return folder?.workflowId !== undefined && childCount === 0
+}

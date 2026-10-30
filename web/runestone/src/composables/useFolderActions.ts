@@ -33,6 +33,7 @@ import { useRootPagesStore } from '@/stores/rootPages'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/stores/workflows'
 import { count } from '@/utils/format'
+import { awaitsOutputs } from '@/utils/item'
 
 export interface PendingFolder {
   /** Stable key for the placeholder row; not a server id. */
@@ -91,6 +92,14 @@ function pendingIn(parent: number | null): PendingFolder[] {
 
 async function createFolder(parent: number | null, name: string): Promise<Item | null> {
   clearError()
+  // Every way in (the toolbar, `mkdir`) meets the same rule here.
+  if (parent !== null) {
+    const itemsStore = useItemsStore()
+    if (awaitsOutputs(itemsStore.findItem(parent), itemsStore.childrenOf(parent).length)) {
+      error.value = `Could not create “${name}”: the workflow has not produced its outputs yet`
+      return null
+    }
+  }
   const pending: PendingFolder = { key: `pending-${nextPendingKey++}`, parent, name }
   pendingCreates.push(pending)
 
