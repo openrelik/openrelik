@@ -309,13 +309,14 @@ const workflowState = (folderId: number): WorkflowState | undefined => {
  */
 const WORKFLOW_TONE: Record<WorkflowState | 'unknown', string> = {
   // A stroke colour alone is too thin to tell apart at this size: a state that
-  // ran also fills the icon with its tint; a draft stays an outline.
+  // ran also fills the icon's two boxes solid (not the connector, an open
+  // path); a draft stays an outline.
   unknown: 'text-ink-muted/60',
   draft: 'text-ink-muted/60',
-  pending: 'fill-brand/25 text-brand',
-  running: 'fill-brand/25 text-brand motion-safe:animate-pulse',
-  success: 'fill-success/25 text-success',
-  failed: 'fill-danger/25 text-danger',
+  pending: '[&_rect]:fill-current text-brand-icon',
+  running: '[&_rect]:fill-current text-brand-icon motion-safe:animate-pulse',
+  success: '[&_rect]:fill-current text-success-icon',
+  failed: '[&_rect]:fill-current text-danger-icon',
 }
 const WORKFLOW_SAYS: Record<WorkflowState, string> = {
   draft: 'draft',
@@ -522,7 +523,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               <Folder
                 :size="13"
                 :stroke-width="1.5"
-                class="shrink-0 fill-brand-tint text-brand"
+                class="shrink-0 fill-current text-brand-icon"
                 aria-hidden="true"
               />
               <input
@@ -596,7 +597,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               <Folder
                 :size="13"
                 :stroke-width="1.5"
-                class="shrink-0 fill-brand-tint text-brand"
+                class="shrink-0 fill-current text-brand-icon"
                 aria-hidden="true"
               />
               <span class="truncate text-ink-secondary">{{ pending.name }}/</span>
@@ -665,7 +666,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                   row.workflowId !== undefined
                     ? WORKFLOW_TONE[workflowState(row.id) ?? 'unknown']
                     : row.kind === 'folder'
-                      ? 'fill-brand-tint text-brand'
+                      ? 'fill-current text-brand-icon'
                       : 'text-ink-muted'
                 "
                 :aria-label="

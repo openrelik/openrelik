@@ -108,6 +108,9 @@ To prevent any single status hue from shouting louder than its peers, **all sema
 | `--color-danger-tint` | `#451214` | `#ffe0de` | Danger badge fills, danger button hover fills. |
 | `--color-idle` | `#878899` | `#6a6a7a` | Inactive, paused, or queued processes. |
 | `--color-idle-tint` | `#22222b` | `#ececf1` | Idle badge fills. |
+| `--color-brand-icon` | `#a9c7ee` | `#4186e0` | Solid folder and running-workflow icons. Light lifts the accent to OKLCH 0.62 (3.68:1, a graphic's 3:1). |
+| `--color-success-icon` | `#6fdea2` | `#469a6b` | Solid finished-workflow icons (3.45:1 light). |
+| `--color-danger-icon` | `#efb3b0` | `#d95356` | Solid failed-workflow icons (3.95:1 light). |
 
 ### Derived Tints Rule
 Status accents are **never displayed as solid, saturated blocks of color**. Solid alert banners trigger visual exhaustion and induce false urgency. Instead, status indicators always use **tint fills** (lightness ~0.27 in dark mode, light pastels in light mode) paired with crisp accent borders and text:

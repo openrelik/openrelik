@@ -73,6 +73,13 @@
   --color-idle: #878899;
   --color-idle-tint: #22222b;
 
+  /* Solid icons (folders, workflow states): a filled glyph is a field of
+     colour, not a line of text. Here the accents already sit light enough to
+     fill one, so these are the accents; the light theme lifts them. */
+  --color-brand-icon: #a9c7ee;
+  --color-success-icon: #6fdea2;
+  --color-danger-icon: #efb3b0;
+
   /* Chart bands: three hues at OKLCH lightness 0.56, chroma 0.11. Far below
      the accents above, and deliberately — a band is a field of colour, not a
      mark, and at accent weight three of them fight the data. Dropping the
@@ -182,6 +189,14 @@
   --color-danger-tint: #ffe0de;
   --color-idle: #6a6a7a;
   --color-idle-tint: #ececf1;
+
+  /* Solid icons: at 0.449 a filled glyph reads near-black, so they take the
+     accent hues up to OKLCH lightness 0.62 — the lightest at which each still
+     clears the 3:1 a graphic needs on the panel (brand 3.68, success 3.45,
+     danger 3.95). */
+  --color-brand-icon: #4186e0;
+  --color-success-icon: #469a6b;
+  --color-danger-icon: #d95356;
 
   /* The chart bands do not change, and that is a finding rather than an
      omission. At OKLCH lightness 0.56 they measure 4.64, 4.40 and 4.78 on the
