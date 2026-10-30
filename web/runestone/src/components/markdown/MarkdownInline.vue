@@ -20,7 +20,7 @@ defineProps<{ inlines: Inline[] }>()
     }}</strong>
     <em v-else-if="part.type === 'em'">{{ part.text }}</em>
     <template v-else-if="part.type === 'link'"
-      ><span v-if="part.text !== part.url" class="text-ink">{{ part.text }} </span
+      ><span v-if="part.text !== part.url" class="text-ink">{{ `${part.text} ` }}</span
       ><span class="break-all text-ink-muted">‹{{ part.url }}›</span></template
     >
     <span v-else-if="part.type === 'image'" class="text-ink-muted"
