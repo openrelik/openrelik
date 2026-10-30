@@ -254,7 +254,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
     <!-- Right padding as the toolbar's, so the two rows of buttons share an edge. -->
     <div
       class="flex h-9 items-center gap-2.5 border-b border-border bg-sunken pl-3"
-      :class="$slots.end ? 'pr-1' : 'pr-2'"
+      :class="$slots.end ? 'pr-2' : 'pr-3'"
     >
       <button
         type="button"
@@ -272,6 +272,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         />
       </button>
       <WorkflowSummary :workflow="workflow" :stats="stats" />
+      <!-- Discard acts on the draft as a whole: beside its name, far from Run, and
+           quiet (ghost); deleting still asks first. -->
+      <Button
+        v-if="workflow.draft"
+        variant="ghost"
+        size="row"
+        :disabled="activity.running"
+        tooltip="Deletes the draft and its folder"
+        @click="emit('discard')"
+      >
+        <template #icon><Trash2 :size="11" :stroke-width="2" /></template>
+        Discard
+      </Button>
       <span v-if="activity.saveError" role="alert" class="flex min-w-0 items-center gap-1.5">
         <span class="truncate text-danger" v-overflow-tooltip
           >not saved: {{ activity.saveError }}</span
@@ -342,18 +355,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           <Expand :size="13" :stroke-width="1.5" />
         </button>
 
+        <!-- the chart's controls, then — set further apart — what to do with the workflow -->
+        <span class="w-3 shrink-0" aria-hidden="true" />
         <template v-if="workflow.draft">
-          <span class="w-1.5 shrink-0" aria-hidden="true" />
-          <Button
-            variant="danger"
-            size="row"
-            :disabled="activity.running"
-            tooltip="Deletes the draft and its folder"
-            @click="emit('discard')"
-          >
-            <template #icon><Trash2 :size="11" :stroke-width="2" /></template>
-            Discard
-          </Button>
           <Button
             variant="primary"
             size="row"
@@ -367,7 +371,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         </template>
         <!-- after a run: take it further as a new draft, or keep its shape -->
         <template v-else>
-          <span class="w-1.5 shrink-0" aria-hidden="true" />
           <Button size="row" tooltip="A template to start new workflows from" @click="saveTemplate">
             <template #icon><Save :size="11" :stroke-width="2" /></template>
             Save as template
