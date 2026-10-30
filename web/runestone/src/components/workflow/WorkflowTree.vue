@@ -234,9 +234,10 @@ const inputs = computed(() =>
                     type="button"
                     class="flex h-5 min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-control) border border-dashed border-border-strong px-1.5 text-[11px] text-ink-muted hover:border-brand hover:text-brand"
                     :aria-label="`Add worker after all ${row.count} tasks in this group`"
-                    v-tooltip="
-                      `Add a worker that runs once all ${row.count} tasks in this group have finished, on all their outputs`
-                    "
+                    v-tooltip="{
+                      text: 'Add worker after all of them',
+                      detail: 'Runs once they have finished, on all their outputs',
+                    }"
                     @click="emit('add', { join: row.groupId }, anchorOf($event))"
                   >
                     <Merge :size="11" :stroke-width="1.5" class="shrink-0" />
@@ -295,7 +296,7 @@ const inputs = computed(() =>
                   <span
                     v-if="parallel(row.task) > 1"
                     class="tabular shrink-0 text-[11px] text-ink-muted"
-                    v-tooltip="`${parallel(row.task)} tasks run in parallel on its output`"
+                    v-tooltip="'Tasks running in parallel on its output'"
                     >⇉ {{ parallel(row.task) }}</span
                   >
                   <Merge
@@ -304,9 +305,7 @@ const inputs = computed(() =>
                     :stroke-width="1.5"
                     class="shrink-0 text-ink-muted"
                     :aria-label="`waits for ${row.waitsFor} tasks`"
-                    v-tooltip="
-                      `Runs once all ${row.waitsFor} tasks above it have finished, on all their outputs`
-                    "
+                    v-tooltip="'Runs once all tasks above it have finished, on all their outputs'"
                   />
                   <button
                     v-if="editable && !blocked.has(row.task.id)"
@@ -314,7 +313,9 @@ const inputs = computed(() =>
                     :class="ADD_AFTER"
                     :aria-label="`Add worker after ${row.task.name}`"
                     v-tooltip="
-                      `Add worker after ${row.task.name}${row.task.groups.length ? ', in a new group' : ''}`
+                      row.task.groups.length
+                        ? 'Add worker after, in a new group'
+                        : 'Add worker after'
                     "
                     @click.stop="emit('add', { after: row.task.id }, anchorOf($event))"
                   >
@@ -325,7 +326,10 @@ const inputs = computed(() =>
                     type="button"
                     :class="ADD_AFTER"
                     :aria-label="`Add worker beside ${row.task.name}`"
-                    v-tooltip="`Add worker beside ${row.task.name}: in parallel, on the same input`"
+                    v-tooltip="{
+                      text: 'Add worker beside',
+                      detail: 'In parallel, on the same input',
+                    }"
                     @click.stop="emit('add', { beside: row.task.id }, anchorOf($event))"
                   >
                     <ListPlus :size="11" :stroke-width="2" />
@@ -340,7 +344,7 @@ const inputs = computed(() =>
                         : 'opacity-0 group-hover:opacity-100',
                     ]"
                     :aria-label="`Remove ${row.task.name}`"
-                    v-tooltip="`Remove ${row.task.name}`"
+                    v-tooltip="'Remove task'"
                     @click.stop="emit('remove', row.task.id)"
                   >
                     <X :size="10" :stroke-width="2" />
@@ -356,7 +360,6 @@ const inputs = computed(() =>
               <span
                 v-if="workflow.draft && missing(row.task).length"
                 class="block truncate text-warning"
-                v-tooltip="`Set ${missing(row.task).join(', ')} before running`"
                 >needs {{ missing(row.task).join(', ') }}</span
               >
               <TaskStatusBadge v-else-if="!workflow.draft" :status="row.task.status" />

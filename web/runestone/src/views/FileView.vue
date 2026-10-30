@@ -150,21 +150,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <PathBar :path="itemsStore.pathTo(file.id)" />
 
       <div class="flex shrink-0 items-center gap-1.5">
-        <Button
-          variant="secondary"
-          size="row"
-          :tooltip="`Create workflow for ${file.name}`"
-          @click="openWorkflow"
-        >
+        <Button variant="secondary" size="row" @click="openWorkflow">
           <template #icon><Workflow :size="13" :stroke-width="1.5" /></template>
           Create workflow
         </Button>
-        <Button
-          variant="primary"
-          size="row"
-          :tooltip="`Download ${file.name}`"
-          @click="downloadFile(file.id, file.name)"
-        >
+        <Button variant="primary" size="row" @click="downloadFile(file.id, file.name)">
           <template #icon><Download :size="13" :stroke-width="1.5" /></template>
           Download
         </Button>

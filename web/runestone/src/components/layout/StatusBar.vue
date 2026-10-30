@@ -45,7 +45,6 @@ const { status: connection } = useConnection()
         <button
           type="button"
           class="cursor-pointer text-ink-muted underline hover:text-ink"
-          v-tooltip="'Try the server again'"
           @click="refreshAll({ force: true })"
         >
           retry
@@ -119,7 +118,7 @@ const { status: connection } = useConnection()
         type="button"
         class="flex cursor-pointer items-center gap-1.5 rounded-(--radius-check) px-1 text-ink-secondary hover:bg-surface"
         aria-label="Account and API keys"
-        v-tooltip="`${authStore.user?.email || authStore.user?.username}: account and API keys`"
+        v-tooltip="'Account and API keys'"
         @click="openAccount"
       >
         <UserIcon :size="12" :stroke-width="1.5" class="text-brand" />

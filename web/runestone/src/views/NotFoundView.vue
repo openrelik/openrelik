@@ -42,7 +42,7 @@ const route = useRoute()
         </p>
         <div class="mt-2 flex gap-2">
           <RouterLink to="/">
-            <Button variant="primary" tooltip="Return to root folder">
+            <Button variant="primary">
               <template #icon><HardDrive :size="13" :stroke-width="1.5" /></template>
               Return to root
             </Button>

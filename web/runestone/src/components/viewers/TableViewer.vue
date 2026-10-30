@@ -367,17 +367,15 @@ async function loadAll() {
                 >{{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }} read</span
               >
               <!-- two choices: a step, or the rest -->
-              <Button
-                size="row"
-                :tooltip="`Read the next ${moreLabel}`"
-                class="shrink-0"
-                @click="table.loadMore()"
-              >
+              <Button size="row" class="shrink-0" @click="table.loadMore()">
                 Load {{ moreLabel }} more
               </Button>
               <Button
                 size="row"
-                :tooltip="`Read the rest: ${formatSize(remaining)}, parsed and kept in this page`"
+                :tooltip="{
+                  text: `Read the remaining ${formatSize(remaining)}`,
+                  detail: 'Kept in this page',
+                }"
                 class="shrink-0"
                 @click="loadAll"
               >
@@ -438,7 +436,7 @@ async function loadAll() {
                   :aria-sort="
                     sort?.column === index ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'
                   "
-                  v-tooltip="`${name}: sort (${types[index]})`"
+                  v-tooltip="{ text: 'Sort by this column', detail: types[index] }"
                   @click="sortBy(index)"
                 >
                   <span class="truncate">{{ name }}</span>

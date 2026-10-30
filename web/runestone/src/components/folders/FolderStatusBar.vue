@@ -33,12 +33,7 @@ defineProps<{
 
     <span v-if="runNotice" class="flex min-w-0 items-center gap-1.5 text-brand">
       <span class="truncate">started {{ runNotice.label }} →</span>
-      <RouterLink
-        :to="`/folder/${runNotice.folderId}`"
-        class="shrink-0 underline"
-        v-tooltip="`Open ${runNotice.label}`"
-        >open</RouterLink
-      >
+      <RouterLink :to="`/folder/${runNotice.folderId}`" class="shrink-0 underline">open</RouterLink>
     </span>
 
     <span v-if="producer" class="truncate text-brand">

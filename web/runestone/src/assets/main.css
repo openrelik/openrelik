@@ -18,6 +18,11 @@
   --color-ink: #e6e6ec;
   --color-ink-secondary: #a6a6b4;
   --color-ink-muted: #818293;
+  /* Tooltips: lifted by lightness above the panels, not inverted — an ink
+     slab would be the brightest thing on a dark screen. 11.42:1. */
+  --color-tooltip: #2a2a34;
+  --color-tooltip-ink: #e6e6ec;
+  --color-tooltip-border: #3b3b48;
 
   /* Accents. Every one sits at OKLCH lightness 0.82, so none shouts louder than
      another and the hue alone tells them apart. Each clears 10:1 on --surface.
@@ -123,6 +128,12 @@
   --color-ink: #29292d;
   --color-ink-secondary: #545460;
   --color-ink-muted: #707081;
+  /* On a white ground the inverted chip is the convention, and reads as
+     transient at a glance. 12.97:1. The border is the chip itself: a light
+     rim around it would only blur its edge. */
+  --color-tooltip: #29292d;
+  --color-tooltip-ink: #f2f2f5;
+  --color-tooltip-border: #29292d;
 
   /* Accents, all at OKLCH lightness 0.449 — the lightest value at which every
      hue still clears 7:1, so no hue shouts louder than another and the hue

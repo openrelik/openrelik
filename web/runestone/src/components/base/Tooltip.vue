@@ -1,11 +1,39 @@
 <script setup lang="ts">
-import { useTooltip } from '@/composables/useTooltip'
+import { computed, ref, watch } from 'vue'
+import { HIDE_GRACE, TOOLTIP_ID, useTooltip } from '@/composables/useTooltip'
+import { breakOpportunities } from '@/utils/breakable'
+import { place } from '@/utils/placement'
 
 /**
  * Top-layer singleton tooltip presenter.
- * Automatically aligns and positions itself to whatever element is hovered or focused.
+ * Measures itself once its text is in, then sits beside whatever element is
+ * hovered or focused: flipped and shifted to stay inside the viewport.
  */
-const { state } = useTooltip()
+const { state, hideTooltip, holdTooltip } = useTooltip()
+
+const box = ref<HTMLElement | null>(null)
+
+const parts = computed(() => breakOpportunities(state.text))
+
+watch(
+  () => [state.visible, state.revision] as const,
+  () => {
+    const el = box.value
+    if (!state.visible || !el || !state.anchor) return
+    // Layout size, not the bounding box: the enter transition scales it.
+    const placed = place(
+      state.anchor,
+      { width: el.offsetWidth, height: el.offsetHeight },
+      state.preferred,
+      { width: window.innerWidth, height: window.innerHeight },
+    )
+    state.left = placed.left
+    state.top = placed.top
+    state.placement = placed.placement
+    state.measured = true
+  },
+  { flush: 'post' },
+)
 </script>
 
 <template>
@@ -19,22 +47,21 @@ const { state } = useTooltip()
   >
     <div
       v-if="state.visible"
-      class="pointer-events-none fixed z-100 flex items-center gap-1.5 rounded-(--radius-control) border border-border-strong bg-ink px-2 py-0.5 text-[11px] font-medium text-canvas shadow-(--shadow-float)"
-      :style="{
-        left: `${state.x}px`,
-        top: `${state.y}px`,
-        transform:
-          state.placement === 'top'
-            ? 'translate(-50%, -100%)'
-            : state.placement === 'bottom'
-              ? 'translate(-50%, 0)'
-              : state.placement === 'left'
-                ? 'translate(-100%, -50%)'
-                : 'translate(0, -50%)',
-      }"
+      :id="TOOLTIP_ID"
+      ref="box"
+      class="fixed top-0 left-0 z-100 w-max max-w-[min(60ch,calc(100vw-16px))] rounded-(--radius-control) border border-tooltip-border bg-tooltip px-2 py-1 text-[12px] leading-4 font-normal wrap-anywhere whitespace-pre-line text-tooltip-ink shadow-(--shadow-popover)"
+      :class="{ invisible: !state.measured }"
+      :style="{ left: `${state.left}px`, top: `${state.top}px` }"
       role="tooltip"
+      @pointerenter="holdTooltip"
+      @pointerleave="hideTooltip(undefined, HIDE_GRACE)"
     >
-      <span>{{ state.text }}</span>
+      <span class="block"
+        ><template v-for="(part, index) in parts" :key="index"
+          ><wbr v-if="index" />{{ part }}</template
+        ></span
+      >
+      <span v-if="state.detail" class="block text-tooltip-ink/70">{{ state.detail }}</span>
     </div>
   </Transition>
 </template>

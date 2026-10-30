@@ -90,29 +90,14 @@ const failed = computed(() => props.upload.status === 'failed')
     <td class="truncate px-2">
       <div class="flex items-center justify-end gap-1">
         <template v-if="failed">
-          <Button
-            variant="ghost"
-            size="row"
-            :tooltip="`Upload ${upload.name} again`"
-            @click="emit('retry')"
-          >
-            Retry
-          </Button>
-          <Button
-            variant="ghost"
-            size="row"
-            :tooltip="`Dismiss ${upload.name}`"
-            @click="emit('dismiss')"
-          >
-            Dismiss
-          </Button>
+          <Button variant="ghost" size="row" @click="emit('retry')"> Retry </Button>
+          <Button variant="ghost" size="row" @click="emit('dismiss')"> Dismiss </Button>
         </template>
         <Button
           v-else
           variant="ghost"
           size="row"
           :aria-label="`Cancel upload of ${upload.name}`"
-          :tooltip="`Cancel upload of ${upload.name}`"
           @click="emit('cancel')"
         >
           <template #icon><X :size="11" :stroke-width="1.5" /></template>

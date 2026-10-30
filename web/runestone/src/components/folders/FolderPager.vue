@@ -46,13 +46,7 @@ const pageWidth = computed(() => String(props.lastPage).length * 2 + 'page  of '
     <span class="tabular text-ink-muted" :style="{ width: `${rangeWidth}ch` }">{{ range }}</span>
 
     <div class="ml-auto flex items-center gap-2">
-      <Button
-        size="row"
-        :disabled="!hasPrev"
-        tooltip="Previous page"
-        aria-label="Previous page"
-        @click="emit('prev')"
-      >
+      <Button size="row" :disabled="!hasPrev" aria-label="Previous page" @click="emit('prev')">
         <template #icon><ChevronLeft :size="13" :stroke-width="1.5" /></template>
         Previous
       </Button>
@@ -62,13 +56,7 @@ const pageWidth = computed(() => String(props.lastPage).length * 2 + 'page  of '
         aria-live="polite"
         >page {{ page }} of {{ lastPage }}</span
       >
-      <Button
-        size="row"
-        :disabled="!hasNext"
-        tooltip="Next page"
-        aria-label="Next page"
-        @click="emit('next')"
-      >
+      <Button size="row" :disabled="!hasNext" aria-label="Next page" @click="emit('next')">
         Next
         <template #icon-trailing><ChevronRight :size="13" :stroke-width="1.5" /></template>
       </Button>

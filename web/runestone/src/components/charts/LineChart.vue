@@ -269,7 +269,7 @@ const READING_MAX = 8
           class="flex cursor-pointer items-center gap-1.5 text-ink-secondary hover:text-ink"
           :class="{ 'opacity-40': hidden.has(entry.name) }"
           :aria-pressed="!hidden.has(entry.name)"
-          v-tooltip="hidden.has(entry.name) ? `Show ${entry.name}` : `Hide ${entry.name}`"
+          v-tooltip="hidden.has(entry.name) ? 'Show this line' : 'Hide this line'"
           @click="toggle(entry.name)"
         >
           <span class="size-2 rounded-(--radius-check)" :style="{ background: color(index) }" />

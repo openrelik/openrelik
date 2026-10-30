@@ -1,87 +1,138 @@
 import { reactive } from 'vue'
+import type { Placement } from '@/utils/placement'
 
-export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right'
+export type TooltipPlacement = Placement
 
 export interface TooltipOptions {
   text: string
+  /** A second, quieter line: what clicking does, or what the label leaves out. */
+  detail?: string
   placement?: TooltipPlacement
 }
 
 export type TooltipInput = string | TooltipOptions
 
+/** The presenter's id, for the anchor's `aria-describedby`. */
+export const TOOLTIP_ID = 'app-tooltip'
+
+/** Cold hover: long enough that sweeping across a toolbar shows nothing. */
+const COLD_DELAY = 400
+/** After a tooltip hides, the next one shows at once for this long. */
+const WARM_WINDOW = 400
+/** Leaving the anchor waits this long, so the pointer can cross onto the tooltip. */
+export const HIDE_GRACE = 100
+
 interface TooltipState {
   visible: boolean
   text: string
-  x: number
-  y: number
+  detail: string
+  /** The anchor's screen rectangle, read when the tooltip was shown. */
+  anchor: DOMRect | null
+  preferred: TooltipPlacement
   placement: TooltipPlacement
+  left: number
+  top: number
+  /** False until the presenter has measured the box and placed it. */
+  measured: boolean
+  /** Bumped on every show and text change: the presenter re-measures on it. */
+  revision: number
 }
 
 const state = reactive<TooltipState>({
   visible: false,
   text: '',
-  x: 0,
-  y: 0,
+  detail: '',
+  anchor: null,
+  preferred: 'top',
   placement: 'top',
+  left: 0,
+  top: 0,
+  measured: false,
+  revision: 0,
 })
 
 let showTimer: ReturnType<typeof setTimeout> | null = null
+let hideTimer: ReturnType<typeof setTimeout> | null = null
 let flashTimer: ReturnType<typeof setTimeout> | null = null
 let cooldownTimer: ReturnType<typeof setTimeout> | null = null
 let isWarm = false
 let currentTarget: HTMLElement | null = null
+/** The anchor carrying our `aria-describedby`, and what it held before. */
+let described: { el: HTMLElement; previous: string | null } | null = null
+
+function clear(timer: ReturnType<typeof setTimeout> | null): null {
+  if (timer) clearTimeout(timer)
+  return null
+}
 
 export function parseTooltip(input: TooltipInput): TooltipOptions {
   return typeof input === 'string' ? { text: input } : input
 }
 
-export function showTooltip(target: HTMLElement, input: TooltipInput) {
-  if (currentTarget === target && state.visible) return
+function describe(target: HTMLElement, { text, detail }: TooltipOptions) {
+  undescribe()
+  // Focus inside the anchor (an input in a labelled row) is what a screen
+  // reader is on, so that is what the tooltip describes.
+  const focused = document.activeElement
+  const el = focused instanceof HTMLElement && target.contains(focused) ? focused : target
+  // A label that already says it all would be read twice.
+  if (!detail && el.getAttribute('aria-label') === text) return
+  described = { el, previous: el.getAttribute('aria-describedby') }
+  el.setAttribute(
+    'aria-describedby',
+    described.previous ? `${described.previous} ${TOOLTIP_ID}` : TOOLTIP_ID,
+  )
+}
+
+function undescribe() {
+  if (!described) return
+  const { el, previous } = described
+  if (previous) el.setAttribute('aria-describedby', previous)
+  else el.removeAttribute('aria-describedby')
+  described = null
+}
+
+/** Shows `options` beside `target` now; the presenter measures and places it. */
+function present(target: HTMLElement, options: TooltipOptions) {
   currentTarget = target
+  hideTimer = clear(hideTimer)
+  cooldownTimer = clear(cooldownTimer)
+  state.text = options.text
+  state.detail = options.detail ?? ''
+  state.anchor = target.getBoundingClientRect()
+  state.preferred = options.placement ?? 'top'
+  state.measured = false
+  state.revision++
+  state.visible = true
+  isWarm = true
+}
 
-  if (cooldownTimer) {
-    clearTimeout(cooldownTimer)
-    cooldownTimer = null
+/**
+ * Shows `input` beside `target` after `delay` ms, or at once while warm (a
+ * tooltip was open moments ago). Keyboard focus passes 0: focus is intent.
+ */
+export function showTooltip(target: HTMLElement, input: TooltipInput, delay = COLD_DELAY) {
+  if (currentTarget === target && state.visible) {
+    hideTimer = clear(hideTimer)
+    return
   }
-  if (showTimer) {
-    clearTimeout(showTimer)
-    showTimer = null
-  }
+  currentTarget = target
+  showTimer = clear(showTimer)
+  hideTimer = clear(hideTimer)
+  cooldownTimer = clear(cooldownTimer)
 
-  // 0ms delay if another tooltip was open recently; otherwise 250ms
-  const delay = isWarm ? 0 : 250
+  const options = parseTooltip(input)
+  if (!options.text) return
 
-  showTimer = setTimeout(() => {
-    if (currentTarget !== target) return
-
-    const { text, placement: explicitPlacement } = parseTooltip(input)
-    if (!text) return
-
-    const rect = target.getBoundingClientRect()
-    // Auto-placement: flip to bottom if near the top edge
-    const placement = explicitPlacement ?? (rect.top < 120 ? 'bottom' : 'top')
-
-    let x = rect.left + rect.width / 2
-    let y = placement === 'bottom' ? rect.bottom + 6 : rect.top - 6
-
-    if (placement === 'left') {
-      x = rect.left - 6
-      y = rect.top + rect.height / 2
-    } else if (placement === 'right') {
-      x = rect.right + 6
-      y = rect.top + rect.height / 2
-    }
-
-    // Viewport edge clamping
-    const clampedX = Math.max(16, Math.min(window.innerWidth - 16, x))
-
-    state.text = text
-    state.x = clampedX
-    state.y = y
-    state.placement = placement
-    state.visible = true
-    isWarm = true
-  }, delay)
+  showTimer = setTimeout(
+    () => {
+      showTimer = null
+      if (currentTarget !== target || !target.isConnected) return
+      present(target, options)
+      describe(target, options)
+    },
+    isWarm ? 0 : delay,
+  )
 }
 
 /**
@@ -91,9 +142,12 @@ export function showTooltip(target: HTMLElement, input: TooltipInput) {
  */
 export function updateTooltip(target: HTMLElement, input: TooltipInput) {
   if (currentTarget !== target || !state.visible) return
-  const { text } = parseTooltip(input)
+  const { text, detail } = parseTooltip(input)
   if (!text) return
   state.text = text
+  state.detail = detail ?? ''
+  state.anchor = target.getBoundingClientRect()
+  state.revision++
 }
 
 /**
@@ -101,55 +155,57 @@ export function updateTooltip(target: HTMLElement, input: TooltipInput) {
  * without warm-up delay, and automatically dismisses after `duration` ms.
  */
 export function flashTooltip(target: HTMLElement, text: string, duration = 1500) {
-  if (showTimer) {
-    clearTimeout(showTimer)
-    showTimer = null
-  }
-  if (flashTimer) {
-    clearTimeout(flashTimer)
-    flashTimer = null
-  }
-
-  currentTarget = target
-  const rect = target.getBoundingClientRect()
-  const placement: TooltipPlacement = rect.top < 120 ? 'bottom' : 'top'
-
-  const x = rect.left + rect.width / 2
-  const y = placement === 'bottom' ? rect.bottom + 6 : rect.top - 6
-  const clampedX = Math.max(16, Math.min(window.innerWidth - 16, x))
-
-  state.text = text
-  state.x = clampedX
-  state.y = y
-  state.placement = placement
-  state.visible = true
-  isWarm = true
-
+  showTimer = clear(showTimer)
+  flashTimer = clear(flashTimer)
+  undescribe()
+  present(target, { text })
   flashTimer = setTimeout(() => {
-    hideTooltip(target)
     flashTimer = null
+    hideTooltip(target)
   }, duration)
 }
 
-export function hideTooltip(target?: HTMLElement) {
+/**
+ * Hides the tooltip (only `target`'s, when given). A `grace` delay lets the
+ * pointer move from the anchor onto the tooltip, which then holds it open.
+ */
+export function hideTooltip(target?: HTMLElement, grace = 0) {
   if (target && currentTarget !== target) return
 
-  if (showTimer) {
-    clearTimeout(showTimer)
-    showTimer = null
+  showTimer = clear(showTimer)
+  hideTimer = clear(hideTimer)
+  if (grace > 0 && state.visible) {
+    hideTimer = setTimeout(() => {
+      hideTimer = null
+      hideTooltip(target)
+    }, grace)
+    return
   }
-  if (flashTimer) {
-    clearTimeout(flashTimer)
-    flashTimer = null
-  }
+  flashTimer = clear(flashTimer)
 
   currentTarget = null
   state.visible = false
+  undescribe()
 
-  if (cooldownTimer) clearTimeout(cooldownTimer)
+  cooldownTimer = clear(cooldownTimer)
   cooldownTimer = setTimeout(() => {
     isWarm = false
-  }, 500)
+  }, WARM_WINDOW)
+}
+
+/** The pointer reached the tooltip itself: keep it open (WCAG 1.4.13, hoverable). */
+export function holdTooltip() {
+  hideTimer = clear(hideTimer)
+}
+
+/** Whether a pointer event came from touch, where a tap is not a hover. */
+export function isTouch(event: Event): boolean {
+  return event instanceof PointerEvent && event.pointerType === 'touch'
+}
+
+/** Whether a focus event's target got there by keyboard, not by a click. */
+export function isKeyboardFocus(event: FocusEvent): boolean {
+  return event.target instanceof Element && event.target.matches(':focus-visible')
 }
 
 // Global dismiss listeners
@@ -157,13 +213,19 @@ if (typeof window !== 'undefined') {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && state.visible) hideTooltip()
   })
+  // Only a scroll that moves the anchor: a log tailing in another pane must
+  // not take the tooltip away from the one being read.
   window.addEventListener(
     'scroll',
-    () => {
-      if (state.visible) hideTooltip()
+    (e) => {
+      if (!state.visible || !currentTarget) return
+      if (e.target instanceof Node && e.target.contains(currentTarget)) hideTooltip()
     },
     true,
   )
+  window.addEventListener('resize', () => {
+    if (state.visible) hideTooltip()
+  })
 }
 
 export function useTooltip() {
@@ -171,6 +233,7 @@ export function useTooltip() {
     state,
     showTooltip,
     hideTooltip,
+    holdTooltip,
     flashTooltip,
   }
 }

@@ -1,6 +1,10 @@
 import type { Directive } from 'vue'
 import {
+  HIDE_GRACE,
   hideTooltip,
+  isKeyboardFocus,
+  isTouch,
+  parseTooltip,
   showTooltip,
   updateTooltip,
   type TooltipInput,
@@ -9,30 +13,39 @@ import {
 interface TooltipElement extends HTMLElement {
   _tooltipValue?: TooltipInput
   _tooltipListeners?: {
-    onPointerEnter: () => void
+    onPointerEnter: (event: PointerEvent) => void
     onPointerLeave: () => void
-    onFocusIn: () => void
+    onFocusIn: (event: FocusEvent) => void
     onFocusOut: () => void
     onClick: () => void
   }
 }
 
+/** Whether two bindings say the same: an object literal is new on every render. */
+function sameTooltip(a: TooltipInput, b: TooltipInput | null | undefined): boolean {
+  if (!b) return false
+  const x = parseTooltip(a)
+  const y = parseTooltip(b)
+  return x.text === y.text && x.detail === y.detail
+}
+
 /**
  * v-tooltip directive: attaches hover and keyboard focus listeners to any control.
  * Dismisses on click and blur, and feeds the singleton Tooltip presenter.
+ * A touch tap and a mouse click's focus show nothing: neither asked for it.
  */
 export const vTooltip: Directive<TooltipElement, TooltipInput | undefined> = {
   mounted(el, binding) {
     el._tooltipValue = binding.value
 
-    const onPointerEnter = () => {
-      if (el._tooltipValue) showTooltip(el, el._tooltipValue)
+    const onPointerEnter = (event: PointerEvent) => {
+      if (el._tooltipValue && !isTouch(event)) showTooltip(el, el._tooltipValue)
     }
     const onPointerLeave = () => {
-      hideTooltip(el)
+      hideTooltip(el, HIDE_GRACE)
     }
-    const onFocusIn = () => {
-      if (el._tooltipValue) showTooltip(el, el._tooltipValue)
+    const onFocusIn = (event: FocusEvent) => {
+      if (el._tooltipValue && isKeyboardFocus(event)) showTooltip(el, el._tooltipValue, 0)
     }
     const onFocusOut = () => {
       hideTooltip(el)
@@ -60,7 +73,7 @@ export const vTooltip: Directive<TooltipElement, TooltipInput | undefined> = {
     el._tooltipValue = binding.value
     if (!binding.value) {
       hideTooltip(el)
-    } else if (binding.value !== binding.oldValue) {
+    } else if (!sameTooltip(binding.value, binding.oldValue)) {
       updateTooltip(el, binding.value)
     }
   },

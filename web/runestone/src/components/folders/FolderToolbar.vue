@@ -41,14 +41,7 @@ const barActions = computed(() => (props.selectionActions ?? []).filter((action)
  */
 const uploadLeads = computed(() => currentFolder.value?.workflowId === undefined)
 
-const filter = defineModel<string>('filter', { default: '' })
-
-const filterInput = ref<HTMLInputElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
-
-function focusFilter() {
-  filterInput.value?.focus()
-}
 
 /** Opens the operating system's file picker (the Upload button, and `u`). */
 function pickFiles() {
@@ -65,8 +58,6 @@ function onFilesPicked(event: Event) {
 }
 
 defineExpose({
-  focusFilter,
-  filterInput,
   pickFiles,
 })
 </script>
@@ -79,21 +70,6 @@ defineExpose({
       :may-rename="mayRename"
       @rename="(id, name) => emit('rename', id, name)"
     />
-
-    <!-- No filter at the root: the top-level list is found through the prompt. -->
-    <div v-if="!atRoot" class="relative w-52 shrink-0">
-      <input
-        ref="filterInput"
-        v-model="filter"
-        type="search"
-        aria-label="Filter this folder"
-        placeholder="filter"
-        v-tooltip="'Filter folder contents'"
-        class="h-7 w-full rounded-(--radius-control) border border-border-strong bg-surface px-2 text-ink placeholder:text-ink-muted"
-      />
-    </div>
-
-    <span v-if="!atRoot" class="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 
     <!-- A selection: what can be done to it, where the folder's own buttons were. -->
     <div v-if="selectedCount" class="flex shrink-0 items-center gap-1.5" aria-label="Selection">
@@ -120,41 +96,33 @@ defineExpose({
       </button>
     </div>
 
+    <!--
+      The folder itself (Share), then what adds to it (Upload, New). New keeps the
+      right edge at the root and in every folder, so it never moves under the mouse.
+    -->
     <div v-else class="flex shrink-0 items-center gap-1.5">
-      <Button
-        :variant="atRoot ? 'primary' : 'secondary'"
-        size="row"
-        :tooltip="
-          atRoot
-            ? 'Create new folder at root'
-            : `Create subfolder in ${currentFolder?.name ?? 'folder'}`
-        "
-        @click="emit('newFolder')"
-      >
-        <template #icon><FolderPlus :size="13" :stroke-width="1.5" /></template>
-        {{ atRoot ? 'New folder' : 'New subfolder' }}
-      </Button>
-      <!-- Workflows, sharing and uploads all happen inside a folder. -->
+      <!-- Sharing and uploads happen inside a folder. -->
       <template v-if="!atRoot">
-        <Button
-          size="row"
-          :tooltip="`Share ${currentFolder?.name ?? 'folder'}`"
-          @click="currentFolder && openShareDialog(currentFolder)"
-        >
+        <Button size="row" @click="currentFolder && openShareDialog(currentFolder)">
           <template #icon><UserPlus :size="13" :stroke-width="1.5" /></template>
           Share
         </Button>
+        <span class="w-1.5 shrink-0" aria-hidden="true" />
         <Button
           :variant="uploadLeads ? 'primary' : 'secondary'"
           size="row"
           :disabled="!!uploadBlocked"
-          :tooltip="uploadBlocked || `Upload files to ${currentFolder?.name ?? 'folder'}`"
+          :tooltip="uploadBlocked || undefined"
           @click="pickFiles"
         >
           <template #icon><Upload :size="13" :stroke-width="1.5" /></template>
           Upload
         </Button>
       </template>
+      <Button :variant="atRoot ? 'primary' : 'secondary'" size="row" @click="emit('newFolder')">
+        <template #icon><FolderPlus :size="13" :stroke-width="1.5" /></template>
+        New folder
+      </Button>
     </div>
 
     <!-- Outside both button groups, so `u` still picks files while rows are selected. -->

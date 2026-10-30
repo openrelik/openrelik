@@ -192,7 +192,6 @@ function remove() {
         <Button
           size="row"
           class="mt-2 w-full justify-center"
-          :tooltip="`Read what ${task.name} found`"
           @click="openTaskReport(task, folderId)"
         >
           <template #icon><FileText :size="13" :stroke-width="1.5" /></template>
@@ -331,7 +330,6 @@ function remove() {
           v-if="chainable"
           size="row"
           class="justify-center"
-          :tooltip="`Add worker after ${task.name}`"
           @click="emit('add', { after: task.id }, anchorOf($event))"
         >
           <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
@@ -341,7 +339,7 @@ function remove() {
           v-if="group"
           size="row"
           class="justify-center"
-          :tooltip="`Add a worker to ${task.name}'s group: it runs in parallel, on the same input`"
+          :tooltip="'Runs in parallel, on the same input'"
           @click="emit('add', { beside: task.id }, anchorOf($event))"
         >
           <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
@@ -351,7 +349,7 @@ function remove() {
           v-if="join"
           size="row"
           class="justify-center"
-          :tooltip="`Add a worker that runs once all ${join.count} tasks have finished, on all their outputs`"
+          :tooltip="'Runs once they have finished, on all their outputs'"
           @click="emit('add', join.at, anchorOf($event))"
         >
           <template #icon><Merge :size="13" :stroke-width="1.5" /></template>
@@ -361,11 +359,7 @@ function remove() {
           variant="danger"
           size="row"
           class="justify-center"
-          :tooltip="
-            allAfter
-              ? `Remove ${task.name} and the ${count(allAfter, 'task')} after it`
-              : `Remove ${task.name} from the workflow`
-          "
+          :tooltip="allAfter ? 'Also removes the tasks after it' : undefined"
           @click="remove"
         >
           <template #icon><Trash2 :size="13" :stroke-width="1.5" /></template>

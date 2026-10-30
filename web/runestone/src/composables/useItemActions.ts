@@ -30,13 +30,13 @@ import { openShareDialog } from '@/composables/useShareDialog'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import { useAuthStore } from '@/stores/auth'
 import type { Item } from '@/types/item'
-import { count } from '@/utils/format'
 
 export interface ItemAction {
   key: string
   label: string
   icon: Component
-  tooltip: string
+  /** Only where it says more than the label. */
+  tooltip?: string
   /** Shown in the selection bar too, not only in a row's menu. */
   inBar?: boolean
   /** The one solid button of the bar. */
@@ -73,7 +73,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
     const files = items.filter((item) => item.kind === 'file')
     const onlyFiles = files.length === items.length
     const here = handlers.folder()
-    const what = single ? single.name : count(items.length, 'item')
     const actions: ItemAction[] = []
 
     if (single) {
@@ -81,7 +80,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
         key: 'open',
         label: 'Open',
         icon: FolderOpen,
-        tooltip: single.kind === 'folder' ? `Open folder ${single.name}` : `View ${single.name}`,
         run: () => handlers.open(single),
       })
     }
@@ -91,7 +89,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
           key: 'workflow',
           label: 'Create workflow',
           icon: Workflow,
-          tooltip: `Create a workflow for ${what}`,
           inBar: true,
           primary: true,
           run: () => openWorkflowDialog(files, here.id),
@@ -100,7 +97,7 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
           key: 'run',
           label: 'Run worker…',
           icon: Play,
-          tooltip: `Pick a worker to run on ${what}`,
+          tooltip: 'Pick a worker to run on the selection',
           inBar: true,
           run: () => openRun(files, here.id),
         },
@@ -108,7 +105,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
           key: 'download',
           label: 'Download',
           icon: Download,
-          tooltip: `Download ${what}`,
           inBar: true,
           run: () => (single ? downloadFile(single.id, single.name) : downloadFiles(files)),
         },
@@ -119,7 +115,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
         key: 'share',
         label: 'Share…',
         icon: UserPlus,
-        tooltip: `Share ${single.name}`,
         inBar: true,
         run: () => openShareDialog(single),
       })
@@ -128,7 +123,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
           key: 'rename',
           label: 'Rename',
           icon: Pencil,
-          tooltip: `Rename ${single.name}`,
           inBar: true,
           run: () => handlers.rename(single),
         })
@@ -142,9 +136,7 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
           key: 'case',
           label: single.caseRef ? 'Change case…' : 'Set case…',
           icon: Briefcase,
-          tooltip: single.caseRef
-            ? `Change or clear case ${single.caseRef}`
-            : `Make ${single.name} the folder of a case`,
+          tooltip: single.caseRef ? 'Change or clear the case' : 'Make this the folder of a case',
           run: () => handlers.editCase(single),
         })
       }
@@ -154,7 +146,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
         key: 'copy-id',
         label: 'Copy id',
         icon: Copy,
-        tooltip: `Copy ${single.kind} id ${single.id}`,
         run: () => handlers.copyId(single),
       })
     }
@@ -163,7 +154,6 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
         key: 'delete',
         label: 'Delete',
         icon: Trash2,
-        tooltip: `Delete ${what}`,
         inBar: true,
         danger: true,
         run: () => handlers.remove(items),

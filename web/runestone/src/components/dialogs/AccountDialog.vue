@@ -339,7 +339,7 @@ const user = computed(() => auth.user)
                   type="button"
                   class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted transition-colors hover:bg-danger-tint hover:text-danger"
                   :aria-label="`Revoke ${key.display_name}`"
-                  v-tooltip="`Revoke ${key.display_name}`"
+                  v-tooltip="'Revoke key'"
                   :disabled="deleting === key.id"
                   @click="revoke(key)"
                 >

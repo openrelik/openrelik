@@ -488,7 +488,7 @@ function onKeydown(event: KeyboardEvent) {
                       type="button"
                       class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted transition-colors hover:bg-danger-tint hover:text-danger"
                       :aria-label="`Remove access for ${collaborator.name}`"
-                      v-tooltip="`Remove access for ${collaborator.name}`"
+                      v-tooltip="'Remove access'"
                       @click="removeCollaborator(collaborator.key)"
                     >
                       <X :size="13" :stroke-width="1.5" />
@@ -511,14 +511,14 @@ function onKeydown(event: KeyboardEvent) {
               v-if="mayShare"
               variant="primary"
               :disabled="saving || !dirty"
-              :tooltip="dirty ? 'Save who has access' : 'Nothing changed yet'"
+              :tooltip="dirty ? undefined : 'Nothing changed yet'"
               @click="save"
             >
               {{ showSaving ? 'Saving…' : 'Save' }}
             </Button>
             <Button
               variant="secondary"
-              :tooltip="mayShare ? 'Cancel and discard changes' : 'Close'"
+              :tooltip="mayShare ? 'Discard the changes' : undefined"
               @click="close"
             >
               {{ mayShare ? 'Cancel' : 'Close' }}

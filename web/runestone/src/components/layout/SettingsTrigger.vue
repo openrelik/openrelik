@@ -12,7 +12,6 @@ import { openSettings } from '@/composables/useSettings'
   <button
     type="button"
     class="flex h-full shrink-0 cursor-pointer items-center gap-1.5 border-l border-border px-3 text-ink-muted transition-colors duration-120 ease-(--ease-standard) hover:bg-surface hover:text-ink"
-    v-tooltip="'Settings'"
     aria-label="Settings"
     @click="openSettings"
   >

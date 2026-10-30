@@ -60,7 +60,7 @@ const stateOf = (upload: (typeof uploads.all.value)[number]) => {
           type="button"
           class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
           aria-label="Minimize upload queue"
-          v-tooltip="'Minimize — uploads carry on'"
+          v-tooltip="{ text: 'Minimize', detail: 'Uploads carry on' }"
           @click="minimize"
         >
           <ChevronDown :size="14" :stroke-width="1.5" />
@@ -102,7 +102,6 @@ const stateOf = (upload: (typeof uploads.all.value)[number]) => {
             v-if="upload.status === 'failed'"
             variant="ghost"
             size="row"
-            :tooltip="`Upload ${upload.name} again`"
             @click="uploads.retry(upload.key)"
           >
             Retry
@@ -111,7 +110,7 @@ const stateOf = (upload: (typeof uploads.all.value)[number]) => {
             variant="ghost"
             size="row"
             :aria-label="`Cancel upload of ${upload.name}`"
-            :tooltip="`Cancel upload of ${upload.name}`"
+            tooltip="Cancel upload"
             @click="uploads.cancel(upload.key)"
           >
             <template #icon><X :size="11" :stroke-width="1.5" /></template>
@@ -125,13 +124,7 @@ const stateOf = (upload: (typeof uploads.all.value)[number]) => {
       <div class="flex h-10 shrink-0 items-center gap-2 border-t border-border bg-sunken px-4">
         <!-- Nothing running, nothing to cancel: the button goes rather than
              sitting there greyed out. -->
-        <Button
-          v-if="running.length"
-          variant="danger"
-          size="row"
-          tooltip="Cancel every upload"
-          @click="uploads.cancelAll()"
-        >
+        <Button v-if="running.length" variant="danger" size="row" @click="uploads.cancelAll()">
           Cancel all
         </Button>
         <span class="ml-auto text-ink-muted">Uploads carry on while you work.</span>

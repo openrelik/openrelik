@@ -6,11 +6,14 @@ import {
   Ellipsis,
   File,
   Folder,
+  FolderPlus,
+  Upload as UploadIcon,
   Workflow as WorkflowIcon,
 } from '@/components/icons'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import Button from '@/components/base/Button.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import UserAvatar from '@/components/base/UserAvatar.vue'
 import UploadRow from '@/components/folders/UploadRow.vue'
@@ -41,7 +44,6 @@ const props = defineProps<{
   tracing: boolean
   parentPath: string
   parentName: string
-  filter: string
   /** Load state of this listing: drives loading, failure and empty messages. */
   listing: QueryState
   /** Folders being created here; shown as placeholder rows until confirmed. */
@@ -91,6 +93,9 @@ const emit = defineEmits<{
   dismissUpload: [key: string]
   /** Show or fold the empty files. */
   toggleEmpty: []
+  /** The empty listing's own buttons, the same as the toolbar's. */
+  newFolder: []
+  upload: []
 }>()
 
 const workflowsStore = useWorkflowsStore()
@@ -268,7 +273,17 @@ function openMenuFor(index: number) {
   if (row && button) openMenuAtButton(row, index, button)
 }
 
+/** Narrows the rows by name; it sits in the name column's header. */
+const filter = defineModel<string>('filter', { default: '' })
+const filterInput = ref<HTMLInputElement | null>(null)
+
+function focusFilter() {
+  filterInput.value?.focus()
+}
+
 defineExpose({
+  focusFilter,
+  filterInput,
   startCreateFolder,
   isCreating,
   startRename,
@@ -382,6 +397,40 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 : undefined
             "
           >
+            <!-- The filter matches names, so it lives in their header. No filter at
+                 the root: the top-level list is found through the prompt. -->
+            <div v-if="column.key === 'name' && !atRoot" class="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                class="micro-label inline-flex shrink-0 cursor-pointer items-center gap-1 hover:text-ink"
+                :class="{ 'text-ink-secondary': sort.key === column.key }"
+                v-tooltip="
+                  sort.key === column.key
+                    ? {
+                        text: sort.dir === 1 ? 'Sorted ascending' : 'Sorted descending',
+                        detail: 'Click to invert',
+                      }
+                    : 'Sort by this column'
+                "
+                @click="emit('sort', column.key as SortKey)"
+              >
+                {{ column.label }}
+                <component
+                  :is="sort.dir === 1 ? ArrowUp : ArrowDown"
+                  v-if="sort.key === column.key"
+                  :size="10"
+                  :stroke-width="2"
+                />
+              </button>
+              <input
+                :ref="(el) => (filterInput = el as HTMLInputElement | null)"
+                v-model="filter"
+                type="search"
+                aria-label="Filter by name"
+                placeholder="filter names"
+                class="h-5 w-full max-w-52 min-w-0 rounded-(--radius-control) border border-border-strong bg-surface px-1.5 font-normal text-ink placeholder:text-ink-muted"
+              />
+            </div>
             <!-- Paginated by the server, which only orders by creation: plain labels. -->
             <span
               v-if="!sortable"
@@ -392,16 +441,17 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               >{{ column.label }}</span
             >
             <button
-              v-else
+              v-else-if="column.key !== 'name' || atRoot"
               type="button"
               class="micro-label inline-flex cursor-pointer items-center gap-1 hover:text-ink"
               :class="{ 'text-ink-secondary': sort.key === column.key }"
               v-tooltip="
                 sort.key === column.key
-                  ? sort.dir === 1
-                    ? `Sorted by ${column.label} ascending (click to invert)`
-                    : `Sorted by ${column.label} descending (click to invert)`
-                  : `Sort by ${column.label}`
+                  ? {
+                      text: sort.dir === 1 ? 'Sorted ascending' : 'Sorted descending',
+                      detail: 'Click to invert',
+                    }
+                  : 'Sort by this column'
               "
               @click="emit('sort', column.key as SortKey)"
             >
@@ -445,7 +495,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 :to="parentPath"
                 class="text-brand hover:underline"
                 :aria-label="`Up to ${parentName}`"
-                v-tooltip="`Navigate up to ${parentName}`"
+                v-tooltip="'Up to the parent folder'"
                 @click.stop
                 >..</RouterLink
               >
@@ -598,7 +648,6 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               type="checkbox"
               class="accent-brand align-middle"
               :aria-label="`Select ${row.name}`"
-              v-tooltip="selected.has(row.id) ? `Deselect ${row.name}` : `Select ${row.name}`"
               :checked="selected.has(row.id)"
               @change="emit('toggle', row.id)"
             />
@@ -735,9 +784,6 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               type="button"
               class="tabular cursor-pointer hover:text-ink hover:underline"
               :aria-pressed="!!emptyShown"
-              v-tooltip="
-                hiddenEmpty ? 'List files with no content' : 'Fold away files with no content'
-              "
               @click="emit('toggleEmpty')"
             >
               {{
@@ -761,9 +807,26 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
     >
       <template #empty>
         <template v-if="filter">Nothing here matches “{{ filter }}”.</template>
-        <template v-else-if="atRoot">No folders yet. Create one with New folder.</template>
+        <!-- Secondary: the toolbar holds the view's one primary. -->
+        <template v-else-if="atRoot">
+          <span>No folders yet.</span>
+          <Button size="row" @click="emit('newFolder')">
+            <template #icon><FolderPlus :size="13" :stroke-width="1.5" /></template>
+            New folder
+          </Button>
+        </template>
         <template v-else-if="emptyNote">{{ emptyNote }}</template>
-        <template v-else>Empty folder. Drop files here or use Upload.</template>
+        <template v-else>
+          <span>Empty folder. Drop files here, or</span>
+          <Button size="row" @click="emit('upload')">
+            <template #icon><UploadIcon :size="13" :stroke-width="1.5" /></template>
+            Upload
+          </Button>
+          <Button size="row" @click="emit('newFolder')">
+            <template #icon><FolderPlus :size="13" :stroke-width="1.5" /></template>
+            New folder
+          </Button>
+        </template>
       </template>
     </LoadState>
   </div>

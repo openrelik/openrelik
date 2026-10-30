@@ -38,8 +38,6 @@ import {
   discardWorkflow,
   followWorkflow,
   loadWorkflow as ensureWorkflow,
-  renameWorkflow,
-  untitledWorkflow,
   type AddAt,
 } from '@/composables/useWorkflow'
 import { everyTask, findTask, isActive } from '@/utils/workflow'
@@ -612,12 +610,8 @@ function startRenameItem(id: number) {
 function handleRename({ id, name }: { id: number; name: string }) {
   // Files are not loaded from the server yet, so they are still renamed locally.
   if (itemsStore.findItem(id)?.kind !== 'folder') return itemsStore.renameItem(id, name)
-  // A workflow still named by default takes its folder's new name. The folder
-  // goes first: its new name shows at once, so the workflow's rename does not
-  // take it for an untitled folder and rename it again.
-  const untitled = untitledWorkflow(id)
+  // Its workflow, if it holds one, takes the name too.
   renameFolder(id, name)
-  if (untitled) renameWorkflow(id, name)
 }
 
 // --- keyboard navigation ---
@@ -634,7 +628,7 @@ const KEYS: Record<string, () => void> = {
     const row = rows.value[cursor.value]
     if (row) toggle(row.id)
   },
-  '/': () => toolbar.value?.focusFilter(),
+  '/': () => table.value?.focusFilter(),
   n: startCreateFolder,
   r: runPicker,
   s: () => {
@@ -689,10 +683,10 @@ function onKey(event: KeyboardEvent) {
   if (modalStore.hasActiveModal || event.defaultPrevented) return
 
   if (isTyping(event)) {
-    if (event.target === toolbar.value?.filterInput) {
+    if (event.target === table.value?.filterInput) {
       if (['Escape', 'Enter', 'ArrowDown'].includes(event.key)) {
         if (event.key === 'Escape') filter.value = ''
-        toolbar.value?.filterInput?.blur()
+        table.value?.filterInput?.blur()
         event.preventDefault()
       }
     }
@@ -774,7 +768,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <!-- toolbar -->
     <FolderToolbar
       ref="toolbar"
-      v-model:filter="filter"
       :crumbs="crumbs"
       :path-pending="pathPending"
       :at-root="atRoot"
@@ -807,7 +800,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :tracing="tracing"
           :parent-path="parentPath"
           :parent-name="parentName"
-          :filter="filter"
+          v-model:filter="filter"
           :listing="listing"
           :pending-folders="pendingHere"
           :saving-ids="savingIds"
@@ -834,6 +827,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           @create-folder="handleCreateFolder"
           @rename="handleRename"
           @retry="refresh"
+          @new-folder="startCreateFolder"
+          @upload="toolbar?.pickFiles()"
           @hover="prefetchRow"
           @show-queue="uploadPanel.open()"
           @cancel-upload="uploads.cancel"

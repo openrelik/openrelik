@@ -94,6 +94,9 @@ To prevent any single status hue from shouting louder than its peers, **all sema
 | `--color-ink` | `#e6e6ec` | `#29292d` | Primary body text, titles, prominent values (14.49:1). |
 | `--color-ink-secondary` | `#a6a6b4` | `#545460` | Secondary descriptions, timestamps, table metadata (7.46:1). |
 | `--color-ink-muted` | `#818293` | `#707081` | Micro-labels, column headers, shortcut badges (≥ 4.5:1). |
+| `--color-tooltip` | `#2a2a34` | `#29292d` | Tooltip fill. Dark lifts it above the panels; light inverts it. |
+| `--color-tooltip-ink` | `#e6e6ec` | `#f2f2f5` | Tooltip text (11.42:1 dark, 12.97:1 light). |
+| `--color-tooltip-border` | `#3b3b48` | `#29292d` | Tooltip rim; in light it is the chip itself. |
 | `--color-brand` | `#a9c7ee` | `#0052a7` | Primary brand accent, keyboard focus rings, active links. |
 | `--color-brand-tint` | `#0e2745` | `#d7ebff` | Brand badge backgrounds, switch active backgrounds. |
 | `--color-brand-selected` | `#131e2c` | `#e4f2ff` | Row selection background in data grids. |
@@ -231,7 +234,7 @@ Every primary console view conforms to a three-tier vertical architecture:
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ 1. TOP BAR / PATH BAR (h-10 / 40px)                                         │
-│    [Path / Breadcrumb / Prompt]       [Filter Input /]   [Action Buttons]   │
+│    [Path / Breadcrumb / Prompt]                          [Action Buttons]   │
 ├──────────────────────────────────────────────────────────────┬──────────────┤
 │ 2. MAIN WORKSPACE (flex-1, min-h-0)                          │ 2b. INSPECTOR│
 │                                                              │     (w-64)   │
@@ -246,7 +249,7 @@ Every primary console view conforms to a three-tier vertical architecture:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Tier 1: Top Bar (`h-10` / 40px)**: Anchors current location, breadcrumbs, search/filter fields, and view-level actions.
+- **Tier 1: Top Bar (`h-10` / 40px)**: Anchors current location, breadcrumbs, the prompt, and view-level actions. A listing's filter is not here: it narrows the table, so it sits in the table's header, in the column it matches (a folder's names).
 - **Tier 2: Work Area (`flex-1 min-h-0`)**: Edge-to-edge multi-pane flex layout.
   - *Primary Pane*: Expands flexibly (`min-w-0 flex-1`) with internal scroll containment.
   - *Side Pane*: Only where it shows what the primary pane cannot — a file's details beside its viewer, the task picked in a workflow chart. Fixed width (`w-64 shrink-0 border-l border-border max-xl:hidden`), resizable by its left edge. A folder listing has none: a pane that repeats a row's own columns earns no width.
@@ -302,6 +305,10 @@ Buttons exist in **exactly two sizes, and only two**:
 2. **Row (`size="row"`, `px-2 py-0.5`, height ~24px)**: Used *inside* data table rows or compact toolbars. Because table rows have a minimum 28px–36px height, a standard 32px button would overflow the row line.
 
 *Rule: Padding is the whole of the size.* Font size (`13px`) and weight (`500`) remain identical between sizes.
+
+### Grouping Buttons: Space, Not Lines
+Buttons in a bar sit `gap-1.5` (6px) apart. Groups are set apart by space alone: a `<span class="w-1.5 shrink-0" aria-hidden="true" />` between them makes the gap 18px, three times the gap inside a group. No vertical dividers between toolbar groups; a line is a heavier mark than the difference it would point at.
+- *Exceptions*: menus keep their separator before destructive items (§11, the row menu), and a small compound control may divide its parts (the flowchart's zoom: `− 100% +` | fit).
 
 ---
 
@@ -473,13 +480,21 @@ Modals represent high-focus workflows (e.g. running a pipeline, editing system s
   - Pressing `Escape` pops the modal from the global `useModalStore` stack without triggering underlying view actions.
 
 ### 2. Singleton Tooltip Coordinator
-To prevent DOM bloat and garbage collection lag, tooltips do not instantiate individual DOM elements per button. A single top-layer `<Tooltip />` element coordinates all tooltip hints application-wide:
+To prevent DOM bloat and garbage collection lag, tooltips do not instantiate individual DOM elements per button. A single top-layer `<Tooltip />` element coordinates all tooltip hints application-wide (`useTooltip.ts`, fed by `v-tooltip`, `v-overflow-tooltip` and `v-copy`):
 
-- **Warmup & Cooldown Delay**:
-  - *Cold hover*: 250ms initial delay before appearing.
-  - *Warm hover (moving between sibling controls)*: Instant 0ms transition within a 500ms window.
-- **Plain Text Only**: A tooltip says what the control does, nothing more: no shortcut in parentheses, no keycap.
-- **Viewport Clamping**: Tooltip coordinates automatically clamp to viewport boundaries, flipping from top to bottom or shifting horizontally to prevent clipping.
+- **Surface**: `bg-tooltip`, `text-tooltip-ink`, `border-tooltip-border`, `--shadow-popover`, `--radius-control`, no arrow. In dark mode it is lifted by lightness, never inverted: an `ink` slab would be the brightest thing on the screen. In light mode it is the inverted dark chip.
+- **Size**: 12px regular on a 16px line, `px-2 py-1`, as wide as its text up to `min(60ch, 100vw − 16px)`, then wrapping. Long tokens break with `overflow-wrap: anywhere`, and paths and names break first at `/ \ . _ -` (`utils/breakable.ts` renders `<wbr>`). A tooltip never truncates: it is where the full value lives.
+- **Two parts**: `{ text, detail }` puts a quieter second line under the label, for what a click does or what the label leaves out (`{ text: 'Select this group', detail: '⌘-click more groups to merge them' }`). Never join the two with a dash in one string.
+- **Placement**: measured, not guessed. The presenter renders invisibly, measures itself, then `utils/placement.ts` puts it on the preferred side (`top` by default), flips it to the opposite side when only that fits, and shifts it to stay 8px inside the viewport on both axes. The offset from the anchor is 6px.
+- **Timing**:
+  - *Cold hover*: 400ms, so sweeping across a toolbar shows nothing. `v-overflow-tooltip` waits 500ms.
+  - *Warm hover (moving between sibling controls)*: instant, within 400ms of the last tooltip hiding.
+  - *Keyboard focus*: instant, and only for `:focus-visible`. Focus from a mouse click shows nothing.
+  - *Touch*: a tap is not a hover and shows nothing.
+- **Hoverable, dismissible, persistent (WCAG 1.4.13)**: leaving the anchor waits 100ms, and the pointer can cross onto the tooltip to read or select it. Escape hides it. A scroll hides it only if it moves the anchor, and a resize always does.
+- **Accessibility**: while it shows, the anchor (or the control focused inside it) carries `aria-describedby="app-tooltip"`. It is skipped when the anchor's `aria-label` already says the same thing and there is no detail. Icon buttons still need their own `aria-label`; the tooltip describes, it does not name.
+- **Earn its place**: a tooltip must say something the screen does not. It may name an icon-only control, give the target ("Share case-123"), a consequence ("Leave without copying: the key is lost"), an exact value ("12,288 bytes"), or why a control is disabled ("Nothing changed yet"). It never restates the visible label: a `settings` button gets no "Settings" tooltip, and a `Cancel` button gets none. When a tooltip only helps in one state, bind it in that state alone (`dirty ? undefined : 'Nothing changed yet'`).
+- **Content**: a tooltip names a control or reveals clipped text, in plain text, in about 80 characters or fewer. No shortcut in parentheses, no keycap. Errors, required information and anything a user must read to proceed do not belong in a tooltip; show them inline. Text that is already on screen gets `v-overflow-tooltip`, not `v-tooltip`.
 
 ---
 
@@ -529,6 +544,9 @@ What can be done to rows comes from one list (`useItemActions`) and shows in two
 - **The row menu**: a `⋯` button at the row's end (shown on hover and on the cursor row), right-click, or `⇧F10` / the menu key. Its header names the row with what the columns leave out — id and created. Destructive actions sit last, after a separator.
 - **The selection bar**: while rows are selected, the toolbar's own buttons make way for `N selected`, the actions that apply to all of them (one primary at most, Delete as `danger`), and a clear button.
 An action the operator's role does not allow is not shown, in either place.
+
+### The Folder Toolbar
+Without a selection, the toolbar's buttons come in two groups, set apart by space: what acts on the folder itself (Share), then what adds to it (Upload, the view's primary in a plain folder; New folder). New folder keeps the right edge and its label at the top level and in every folder, so nothing moves under the mouse. An empty listing offers the same add actions in its empty line, as secondary row buttons.
 - **Workflow & Container Titles**: Inline click-to-edit allows rapid renaming of container titles without opening heavy modal dialogs. The update is scoped strictly to the target entity.
 
 ---

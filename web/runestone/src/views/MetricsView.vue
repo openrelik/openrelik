@@ -124,7 +124,7 @@ onUnmounted(() => clearInterval(timer))
             {{ option.label }}
           </option>
         </select>
-        <Button size="row" tooltip="Read every chart again" @click="refreshNow()">
+        <Button size="row" @click="refreshNow()">
           <template #icon><RotateCcw :size="12" :stroke-width="1.5" /></template>
           Refresh
         </Button>

@@ -23,6 +23,7 @@ import { missingOptions } from '@/utils/worker'
 import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
+import type { TooltipOptions } from '@/composables/useTooltip'
 import {
   canJoin,
   canJoinAll,
@@ -227,10 +228,10 @@ const holds = (group: TaskGroup, id: string | null | undefined) =>
   !!id && group.tasks.some((task) => task.id === id)
 
 /** A card's tooltip: which tasks it holds, by name, and how to see them. */
-function stackTip(stack: TaskGroup): string {
+function stackTip(stack: TaskGroup): TooltipOptions {
   const names = stack.tasks.map((task) => task.name)
   const shown = names.length > 4 ? [...names.slice(0, 4), `${names.length - 4} more`] : names
-  return `${shown.join(', ')} — click to show them`
+  return { text: shown.join(', '), detail: 'Click to show them' }
 }
 
 /** One status for a stack: the most pressing of its tasks'. */
@@ -788,10 +789,10 @@ const inputBytes = computed(() =>
   props.workflow.inputs.reduce((sum, file) => sum + sizeOf(file), 0),
 )
 /** The stacked inputs' tooltip: which files, by name, and how to see them. */
-const inputsTip = computed(() => {
+const inputsTip = computed((): TooltipOptions => {
   const names = props.workflow.inputs.map((file) => file.name)
   const shown = names.length > 4 ? [...names.slice(0, 4), `${names.length - 4} more`] : names
-  return `${shown.join(', ')} — click to show them`
+  return { text: shown.join(', '), detail: 'Click to show them' }
 })
 
 const EDGE: Record<TaskStatus, string> = {
@@ -878,7 +879,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               }"
               :aria-label="inputsBox.label"
               :aria-expanded="inputsOpen"
-              v-tooltip="inputsBox.label"
+              v-tooltip="inputsOpen ? 'Stack the input files' : 'Show all input files'"
               @click.stop="setInputsStacked(workflow.id, inputsOpen)"
             >
               <component
@@ -900,7 +901,11 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 ? 'border-brand bg-brand-tint/60'
                 : 'border-ink-muted/45 bg-ink/5'
             "
-            v-tooltip="editable ? 'Select this group; ⌘-click more groups to merge them' : ''"
+            v-tooltip="
+              editable
+                ? { text: 'Select this group', detail: '⌘-click more groups to merge them' }
+                : ''
+            "
             @click="clickBox($event, group.key)"
             :style="{
               left: `${group.left}px`,
@@ -963,7 +968,6 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                   width: `${NODE_W}px`,
                   height: `${NODE_H}px`,
                 }"
-                v-tooltip="input.name"
               >
                 <span class="flex min-w-0 items-center gap-1.5 text-ink">
                   <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
@@ -987,7 +991,6 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                     width: `${NODE_W}px`,
                     height: `${NODE_H}px`,
                   }"
-                  v-tooltip="file.name"
                 >
                   <span class="flex min-w-0 items-center gap-1.5 text-ink">
                     <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
@@ -1060,7 +1063,6 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               }"
               :data-task="node.task.id"
               :aria-pressed="node.task.id === selectedId || isPicked(node.task.id)"
-              v-tooltip="node.task.name"
               @click="clickTask($event, node.task)"
               @pointerenter="hovered = node.task.id"
               @pointerleave="hovered = null"
@@ -1089,7 +1091,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                   :stroke-width="1.5"
                   class="ml-auto shrink-0 text-ink-muted"
                   :aria-label="`waits for ${node.waitsFor} lines`"
-                  v-tooltip="`Runs once all ${node.waitsFor} lines before it have finished`"
+                  v-tooltip="'Runs once all lines before it have finished'"
                 />
               </span>
               <!-- a draft's task has no status: only what it still needs, if anything -->
@@ -1191,7 +1193,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               "
               :style="{ left: `${x(node) + NODE_W - 8}px`, top: `${y(node) - 8}px` }"
               :aria-label="`Remove ${node.task.name}`"
-              v-tooltip="`Remove ${node.task.name}`"
+              v-tooltip="'Remove task'"
               @pointerenter="hovered = node.task.id"
               @pointerleave="hovered = null"
               @click.stop="emit('remove', node.task.id)"
@@ -1214,7 +1216,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               }"
               :aria-label="`Add worker after ${node.task?.name ?? 'the inputs'}`"
               v-tooltip="
-                `Add worker after ${node.task?.name ?? 'the inputs'}${node.groups.length ? ', in a new group' : ''}`
+                node.groups.length ? 'Add worker after, in a new group' : 'Add worker after'
               "
               @click.stop="emit('add', { after: node.task?.id ?? null }, anchorOf($event))"
             >
@@ -1230,15 +1232,11 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
             class="absolute flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-border-strong bg-surface text-ink-muted hover:bg-sunken hover:text-ink"
             :style="{ left: `${toggle.left}px`, top: `${toggle.top}px` }"
             :aria-label="
-              toggle.open
-                ? `Stack the ${toggle.count} tasks in this group`
-                : `Show all ${toggle.count} tasks in this group`
+              toggle.open ? 'Stack the tasks in this group' : 'Show all tasks in this group'
             "
             :aria-expanded="toggle.open"
             v-tooltip="
-              toggle.open
-                ? `Stack the ${toggle.count} tasks in this group`
-                : `Show all ${toggle.count} tasks in this group`
+              toggle.open ? 'Stack the tasks in this group' : 'Show all tasks in this group'
             "
             @click.stop="toggle.open ? closeStack(toggle.groupId) : openStack(toggle.groupId)"
           >
@@ -1323,7 +1321,10 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               "
               :style="{ left: `${beside.left}px`, top: `${beside.top}px` }"
               :aria-label="`Add worker beside ${beside.after.name}`"
-              v-tooltip="`Add worker beside ${beside.after.name}: in parallel, on the same input`"
+              v-tooltip="{
+                text: 'Add worker beside',
+                detail: 'In parallel, on the same input',
+              }"
               @pointerenter="hovered = beside.after.id"
               @pointerleave="hovered = null"
               @click.stop="emit('add', { beside: beside.after.id }, anchorOf($event))"
@@ -1345,9 +1346,10 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               height: `${NODE_H}px`,
             }"
             :aria-label="`Add worker after all ${ghost.count} ${ghost.what}`"
-            v-tooltip="
-              `Add a worker that runs once all ${ghost.count} ${ghost.what} have finished, on all their outputs`
-            "
+            v-tooltip="{
+              text: 'Add worker after all of them',
+              detail: 'Runs once they have finished, on all their outputs',
+            }"
             @click.stop="emit('add', ghost.at, anchorOf($event))"
           >
             <Plus :size="13" :stroke-width="1.5" class="shrink-0" />

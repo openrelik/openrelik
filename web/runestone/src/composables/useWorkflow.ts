@@ -199,41 +199,20 @@ function adopt(record: WorkflowRecord, parentId: number): Workflow {
   return workflow
 }
 
-/** The name the server gives a new workflow, and its folder. */
-const UNTITLED_WORKFLOW = 'Untitled workflow'
-/** A folder still named by default: the server's, or a new folder's here. */
-const untitledFolder = (name: string | undefined) =>
-  name === UNTITLED_WORKFLOW || name === 'Untitled folder'
-
-/** A workflow still named by default: renaming its folder names it too. */
-export const untitledWorkflow = (folderId: number): boolean =>
-  useWorkflowsStore().workflowOf(folderId)?.name === UNTITLED_WORKFLOW
-
 /**
- * Renames the workflow: the new name shows at once and goes back if the
- * server refuses it. The folder takes the name too while it follows the
- * workflow: still named by default, or named as the workflow was. One the
- * user named otherwise keeps its own.
+ * Renames the workflow, which is renaming its folder: the two share one name,
+ * owned by the folder (`renameFolder` renames both). A failure shows on the
+ * workflow too, where the rename was typed.
  */
 export async function renameWorkflow(folderId: number, name: string): Promise<boolean> {
   const workflow = useWorkflowsStore().workflowOf(folderId)
   const trimmed = name.trim()
-  if (!workflow || !trimmed || trimmed === workflow.name) return false
-  const before = workflow.name
-  workflow.name = trimmed
+  if (!workflow || !trimmed) return false
   activityFor(workflow.id).error = null
-  const folderName = useItemsStore().findItem(folderId)?.name
-  if (untitledFolder(folderName) || folderName === before) {
-    useFolderActions().renameFolder(folderId, trimmed)
-  }
-  try {
-    await api.workflows.rename(folderId, workflow.id, trimmed)
-    return true
-  } catch (err: unknown) {
-    workflow.name = before
-    activityFor(workflow.id).error = `Could not rename: ${errorMessage(err, 'request failed')}`
-    return false
-  }
+  const folderActions = useFolderActions()
+  const ok = await folderActions.renameFolder(folderId, trimmed)
+  if (!ok && folderActions.error.value) activityFor(workflow.id).error = folderActions.error.value
+  return ok
 }
 
 // --- draft edits ---

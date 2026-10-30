@@ -54,7 +54,7 @@ const showLoading = useDelayedFlag(waiting)
     <Button variant="ghost" size="row" @click="emit('retry')">Retry</Button>
   </p>
 
-  <p v-else-if="!hasContent" class="px-3 py-6 text-ink-muted">
+  <p v-else-if="!hasContent" class="flex items-center gap-3 px-3 py-6 text-ink-muted">
     <slot name="empty" />
   </p>
 </template>

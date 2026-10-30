@@ -46,7 +46,6 @@ const placing = computed(() => {
     return { header: 'add beside', footer: 'runs in parallel with it, on the same input' }
   return { header: 'add after', footer: 'runs on its output' }
 })
-const verb = computed(() => (adding.value ? 'Add' : 'Run'))
 
 const matches = (worker: Worker) => {
   const q = query.value.trim().toLowerCase()
@@ -194,7 +193,6 @@ function onOptionsKey(event: KeyboardEvent) {
             autocomplete="off"
             aria-label="Filter workers"
             :disabled="!!configuring"
-            v-tooltip="'Filter available workers'"
             class="min-w-0 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
             placeholder="find a worker…"
             @keydown="onListKey"
@@ -224,9 +222,7 @@ function onOptionsKey(event: KeyboardEvent) {
               :aria-selected="i === index"
               class="flex h-7 cursor-pointer items-center gap-3 px-3"
               :class="i === index ? 'bg-sunken' : 'hover:bg-sunken'"
-              v-tooltip="
-                needsInput(worker) ? `Configure ${worker.name} options` : `${verb} ${worker.name}`
-              "
+              v-tooltip="needsInput(worker) ? 'Set its options first' : undefined"
               @pointermove="index = i"
               @click="choose(worker)"
             >
@@ -239,7 +235,7 @@ function onOptionsKey(event: KeyboardEvent) {
                 :class="needsInput(worker) ? 'text-warning' : 'text-ink-muted'"
                 :aria-label="needsInput(worker) ? 'needs options' : 'has options'"
                 v-tooltip="
-                  needsInput(worker) ? 'Requires options first' : 'Configurable options available'
+                  needsInput(worker) ? 'Needs options before it can run' : 'Has options you can set'
                 "
               />
             </li>
@@ -261,8 +257,9 @@ function onOptionsKey(event: KeyboardEvent) {
             :key="option.key"
             class="flex gap-3 py-1.5"
             :class="option.type === 'textarea' ? 'items-start' : 'items-center'"
+            v-tooltip="option.description ?? ''"
           >
-            <span class="w-28 shrink-0 text-ink-muted" v-tooltip="option.description ?? ''"
+            <span class="w-28 shrink-0 text-ink-muted"
               >{{ option.label }}<span v-if="option.required" class="text-warning"> *</span></span
             >
             <input

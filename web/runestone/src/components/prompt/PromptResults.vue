@@ -76,17 +76,11 @@ const meta = (item: Item) => {
         v-tooltip="
           result.mkdir
             ? result.folderName
-              ? `Create folder '${result.folderName}'`
+              ? 'Create this folder'
               : 'Enter a folder name'
             : result.rm
-              ? `Delete folder '${result.item?.name}'`
-              : result.up ||
-                  result.here ||
-                  result.home ||
-                  result.prev ||
-                  result.item?.kind === 'folder'
-                ? `Navigate to folder ${result.label}`
-                : `Open file ${result.label}`
+              ? 'Delete this folder'
+              : undefined
         "
         @pointermove="emit('hover', i)"
         @click="emit('go', result)"
@@ -130,10 +124,7 @@ const meta = (item: Item) => {
         >
           new folder
         </span>
-        <span
-          v-if="result.caseRef"
-          class="tabular shrink-0 text-[11px] text-ink-muted"
-          v-tooltip="`The folder of case ${result.caseRef}`"
+        <span v-if="result.caseRef" class="tabular shrink-0 text-[11px] text-ink-muted"
           >case {{ result.caseRef }}</span
         >
         <span

@@ -38,6 +38,7 @@ import { loadWorkers, useWorkers } from '@/composables/useWorkers'
 import { stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import { everyGroup, everyTask, findTask, runStats } from '@/utils/workflow'
 import type { Task, Workflow } from '@/types/workflow'
+import { useItemsStore } from '@/stores/items'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
 import { runBlocker } from '@/utils/workflowSpec'
@@ -73,6 +74,11 @@ type View = 'tree' | 'graph'
 const view = useRemembered<View>('openrelik.workflow.view', 'tree')
 const open = ref(true)
 const fullscreen = ref(false)
+/** The folder's name, which is the workflow's. */
+const itemsStore = useItemsStore()
+const folderName = computed(
+  () => itemsStore.findItem(props.workflow.folderId)?.name ?? props.workflow.name,
+)
 
 const VIEWS: { value: View; label: string; icon: typeof ListTree }[] = [
   { value: 'tree', label: 'Tree', icon: ListTree },
@@ -244,16 +250,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
 
 <template>
   <section :class="{ 'border-b border-border': open }" aria-label="Workflow">
+    <!-- Right padding as the toolbar's, so the two rows of buttons share an edge. -->
     <div
-      class="flex h-7 items-center gap-2.5 border-b border-border bg-sunken pl-3"
-      :class="$slots.end ? 'pr-1' : 'pr-3'"
+      class="flex h-9 items-center gap-2.5 border-b border-border bg-sunken pl-3"
+      :class="$slots.end ? 'pr-1' : 'pr-2'"
     >
       <button
         type="button"
         class="flex size-4 cursor-pointer items-center justify-center text-ink-muted hover:text-ink"
         :aria-label="open ? 'Collapse workflow' : 'Expand workflow'"
         :aria-expanded="open"
-        v-tooltip="open ? `Collapse ${workflow.name}` : `Expand ${workflow.name}`"
+        v-tooltip="open ? 'Collapse' : 'Expand'"
         @click="open = !open"
       >
         <ChevronDown
@@ -265,13 +272,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
       </button>
       <WorkflowSummary :workflow="workflow" :stats="stats" />
       <span v-if="activity.saveError" role="alert" class="flex min-w-0 items-center gap-1.5">
-        <span class="truncate text-danger" v-tooltip="activity.saveError">not saved</span>
+        <span class="truncate text-danger" v-overflow-tooltip
+          >not saved: {{ activity.saveError }}</span
+        >
         <Button variant="ghost" size="row" @click="retrySave(workflow.folderId)">Retry</Button>
       </span>
       <span v-else-if="showSaving" class="text-ink-muted" aria-live="polite">saving…</span>
       <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
         <span class="truncate text-ink-secondary">{{ edit.label }}</span>
-        <Button variant="ghost" size="row" tooltip="Undo" @click="edit.undo()">Undo</Button>
+        <Button variant="ghost" size="row" @click="edit.undo()">Undo</Button>
       </span>
       <span v-if="savedTemplate" class="min-w-0 truncate text-ink-secondary" aria-live="polite"
         >Saved as template “{{ savedTemplate }}”</span
@@ -280,7 +289,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         v-if="activity.error"
         role="alert"
         class="min-w-0 truncate text-danger"
-        v-tooltip="activity.error"
+        v-overflow-tooltip
         >{{ activity.error }}</span
       >
 
@@ -302,7 +311,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
                 : 'text-ink-muted hover:bg-sunken hover:text-ink-secondary'
             "
             :aria-pressed="view === option.value"
-            v-tooltip="option.label"
             @click="((view = option.value), (open = true))"
           >
             <component :is="option.icon" :size="12" :stroke-width="1.5" aria-hidden="true" />
@@ -334,12 +342,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         </button>
 
         <template v-if="workflow.draft">
-          <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+          <span class="w-1.5 shrink-0" aria-hidden="true" />
           <Button
             variant="danger"
             size="row"
             :disabled="activity.running"
-            :tooltip="`Discard ${workflow.name}: delete the draft and its folder`"
+            tooltip="Deletes the draft and its folder"
             @click="emit('discard')"
           >
             <template #icon><Trash2 :size="11" :stroke-width="2" /></template>
@@ -349,7 +357,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             variant="primary"
             size="row"
             :disabled="!!blocker || activity.running"
-            :tooltip="blocker ?? `Run ${workflow.name}`"
+            :tooltip="blocker ?? undefined"
             @click="run"
           >
             <template #icon><Play :size="11" :stroke-width="2" /></template>
@@ -358,19 +366,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         </template>
         <!-- after a run: take it further as a new draft, or keep its shape -->
         <template v-else>
-          <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
-          <Button
-            size="row"
-            :tooltip="`Save ${workflow.name} as a template, to start new workflows from`"
-            @click="saveTemplate"
-          >
+          <span class="w-1.5 shrink-0" aria-hidden="true" />
+          <Button size="row" tooltip="A template to start new workflows from" @click="saveTemplate">
             <template #icon><Save :size="11" :stroke-width="2" /></template>
             Save as template
           </Button>
           <Button
             size="row"
             :disabled="copying"
-            :tooltip="`Copy ${workflow.name} into a new draft, on the same input files, to change and run again`"
+            tooltip="A new draft on the same input files, to change and run again"
             @click="copy"
           >
             <template #icon><Copy :size="11" :stroke-width="2" /></template>
@@ -416,13 +420,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         class="fixed inset-0 z-50 flex flex-col bg-canvas text-[12px]"
         role="dialog"
         aria-modal="true"
-        :aria-label="`${workflow.name} — flowchart`"
+        :aria-label="`${folderName} — flowchart`"
       >
         <div class="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3">
-          <WorkflowSummary :workflow="workflow" :stats="stats" />
+          <WorkflowSummary :workflow="workflow" :stats="stats" show-name />
           <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
             <span class="truncate text-ink-secondary">{{ edit.label }}</span>
-            <Button variant="ghost" size="row" tooltip="Undo" @click="edit.undo()">Undo</Button>
+            <Button variant="ghost" size="row" @click="edit.undo()">Undo</Button>
           </span>
           <div class="ml-auto flex items-center gap-1.5">
             <button
@@ -435,21 +439,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             >
               <component :is="groupToggle.icon" :size="13" :stroke-width="1.5" />
             </button>
-            <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+            <span class="w-1.5 shrink-0" aria-hidden="true" />
             <template v-if="workflow.draft">
               <Button
                 variant="primary"
                 size="row"
                 :disabled="!!blocker || activity.running"
-                :tooltip="blocker ?? `Run ${workflow.name}`"
+                :tooltip="blocker ?? undefined"
                 @click="run"
               >
                 <template #icon><Play :size="11" :stroke-width="2" /></template>
                 {{ showRunning ? 'Starting…' : 'Run workflow' }}
               </Button>
-              <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+              <span class="w-1.5 shrink-0" aria-hidden="true" />
             </template>
-            <Button size="row" tooltip="Exit full screen" @click="fullscreen = false">
+            <Button size="row" @click="fullscreen = false">
               <template #icon><Shrink :size="13" :stroke-width="1.5" /></template>
               Exit
             </Button>

@@ -89,13 +89,6 @@ const AI_FEATURES = [
                   type="button"
                   role="radio"
                   :aria-checked="settings.appearance.theme === theme.value"
-                  v-tooltip="
-                    theme.value === 'system'
-                      ? 'Follow system OS appearance'
-                      : theme.value === 'light'
-                        ? 'Always use light theme'
-                        : 'Always use dark theme'
-                  "
                   class="flex h-6 cursor-pointer items-center gap-1.5 rounded-(--radius-check) px-2.5 transition-colors duration-120 ease-(--ease-standard)"
                   :class="
                     settings.appearance.theme === theme.value
@@ -137,7 +130,6 @@ const AI_FEATURES = [
                   type="button"
                   role="radio"
                   :aria-checked="settings.explorer.pageSize === size"
-                  v-tooltip="`Show ${size} folders per page`"
                   class="tabular flex h-6 cursor-pointer items-center rounded-(--radius-check) px-2.5 transition-colors duration-120 ease-(--ease-standard)"
                   :class="
                     settings.explorer.pageSize === size
@@ -156,13 +148,7 @@ const AI_FEATURES = [
             </div>
 
             <div class="flex items-center gap-3 px-4 py-2.5">
-              <Switch
-                v-model="settings.explorer.showEmptyFiles"
-                label="Show empty files"
-                :tooltip="
-                  settings.explorer.showEmptyFiles ? 'Fold away empty files' : 'List empty files'
-                "
-              />
+              <Switch v-model="settings.explorer.showEmptyFiles" label="Show empty files" />
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-ink">Show empty files</p>
                 <p class="text-ink-muted">Files with no content; folded away by default</p>
@@ -181,11 +167,7 @@ const AI_FEATURES = [
             <p id="settings-ai" class="micro-label px-4 pt-2 pb-1">ai</p>
 
             <div class="flex items-center gap-3 px-4 py-2.5">
-              <Switch
-                v-model="settings.ai.enabled"
-                label="Enable AI features"
-                :tooltip="settings.ai.enabled ? 'Disable all AI features' : 'Enable AI features'"
-              />
+              <Switch v-model="settings.ai.enabled" label="Enable AI features" />
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-ink">Enable AI features</p>
                 <p class="text-ink-muted">Turns every AI feature below on or off</p>
@@ -206,13 +188,7 @@ const AI_FEATURES = [
                 type="checkbox"
                 class="accent-brand"
                 :disabled="!settings.ai.enabled"
-                v-tooltip="
-                  !settings.ai.enabled
-                    ? 'Requires master AI toggle enabled'
-                    : settings.ai[feature.key]
-                      ? `Disable ${feature.label}`
-                      : `Enable ${feature.label}`
-                "
+                v-tooltip="settings.ai.enabled ? undefined : 'Turn on AI features first'"
               />
               <span class="min-w-0 flex-1">
                 <span class="block text-ink">{{ feature.label }}</span>

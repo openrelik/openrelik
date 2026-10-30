@@ -11,6 +11,7 @@ import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useSettingsStore } from '@/stores/settings'
+import { promptPassesThrough } from '@/utils/keyboard'
 
 /**
  * Where you are, as a shell prompt: `/CLI Test Folder/evidence $ ▌`.
@@ -47,6 +48,8 @@ const input = ref<HTMLInputElement | null>(null)
 const focused = ref(false)
 const { line, index, query, cwdPath, scopePath, results, serverSearch, go, handleKey } = usePrompt()
 
+const dropdown = computed(() => focused.value && line.value.trim() !== '')
+
 /**
  * The prompt is focused by default, so it must not take the listing's keyboard
  * away. With an empty line these keys mean nothing to a prompt and everything
@@ -58,23 +61,8 @@ const { line, index, query, cwdPath, scopePath, results, serverSearch, go, handl
  * click on the path. Esc clears the line, then leaves the prompt — never the
  * page: on a file page the next Esc, the page's own, goes back to the folder.
  */
-const LISTING_KEYS = new Set([
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  'Enter',
-  ' ',
-  'Home',
-  'End',
-])
-
-const dropdown = computed(() => focused.value && line.value.trim() !== '')
-
 function onInputKey(event: KeyboardEvent) {
-  if (!line.value && LISTING_KEYS.has(event.key)) return
-  // ⌘⏎ runs a worker on the highlighted file; the prompt never uses it.
-  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') return
+  if (promptPassesThrough(event, line.value)) return
   event.stopPropagation()
   if (handleKey(event)) return
   if (event.key === 'Escape') {
@@ -264,7 +252,7 @@ function onBarClick(event: MouseEvent) {
             class="cursor-pointer rounded-(--radius-check) px-1 text-ink-muted hover:bg-surface hover:text-brand"
             :class="{ 'bg-surface text-brand': openAt === at }"
             :aria-label="`Folders in ${at < 0 ? 'root' : path[at]!.name}`"
-            v-tooltip="`Folders in ${at < 0 ? '/' : path[at]!.name}`"
+            v-tooltip="'Folders at this level'"
             aria-haspopup="menu"
             :aria-expanded="openAt === at"
             @click="toggle(at)"
@@ -322,7 +310,7 @@ function onBarClick(event: MouseEvent) {
               type="button"
               class="group/name flex min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-check) px-1 font-medium text-ink hover:bg-surface"
               :aria-label="`Rename ${path[at + 1]!.name}`"
-              v-tooltip="`Rename ${path[at + 1]!.name}`"
+              v-tooltip="'Rename'"
               @click="startRename"
             >
               <span class="truncate">{{ path[at + 1]!.name }}</span>
@@ -338,7 +326,6 @@ function onBarClick(event: MouseEvent) {
             v-else
             :to="`/folder/${path[at + 1]!.id}`"
             class="truncate text-ink-secondary hover:text-brand"
-            v-tooltip="`Navigate to ${path[at + 1]!.name}`"
             >{{ path[at + 1]!.name }}</RouterLink
           >
           <!-- Inside a case, which one stays in view at any depth; a click copies it. -->

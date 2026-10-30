@@ -370,7 +370,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             v-tooltip="
               history.back.length
                 ? `Back to 0x${offsetLabel(history.back.at(-1)!, width)}`
-                : 'Back ([): no jump yet'
+                : 'Back: no jump yet'
             "
             @click="stepBack"
           >
@@ -384,7 +384,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             v-tooltip="
               history.forward.length
                 ? `Forward to 0x${offsetLabel(history.forward.at(-1)!, width)}`
-                : 'Forward'
+                : 'Forward: no jump to return to'
             "
             @click="stepForward"
           >

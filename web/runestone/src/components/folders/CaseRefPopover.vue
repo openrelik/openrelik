@@ -120,19 +120,19 @@ function onKey(event: KeyboardEvent) {
         <Button
           size="row"
           :disabled="saving || !check.ok"
-          :tooltip="item.caseRef ? 'Change the case reference' : 'Make this the case folder'"
+          :tooltip="item.caseRef ? undefined : 'Make this the case folder'"
           @click="save"
         >
           Save
         </Button>
-        <Button variant="ghost" size="row" tooltip="Cancel" @click="close">Cancel</Button>
+        <Button variant="ghost" size="row" @click="close">Cancel</Button>
         <Button
           v-if="item.caseRef"
           variant="danger"
           size="row"
           class="ml-auto"
           :disabled="saving"
-          :tooltip="`Remove case ${item.caseRef} from this folder; the folder stays`"
+          :tooltip="{ text: 'Remove the case', detail: 'The folder stays' }"
           @click="clear"
         >
           Clear

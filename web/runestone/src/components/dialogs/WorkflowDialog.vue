@@ -219,7 +219,6 @@ function onKeydown(event: KeyboardEvent) {
             spellcheck="false"
             autocomplete="off"
             aria-label="Filter templates"
-            v-tooltip="'Filter available templates'"
             class="min-w-0 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
             placeholder="type a template or empty…"
             @keydown="onKeydown"
@@ -238,7 +237,6 @@ function onKeydown(event: KeyboardEvent) {
             :aria-selected="selectedIndex === 0"
             class="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
             :class="selectedIndex === 0 ? 'bg-sunken' : 'hover:bg-sunken'"
-            v-tooltip="'Create new empty workflow'"
             @pointermove="selectedIndex = 0"
             @click="select()"
           >
@@ -276,7 +274,6 @@ function onKeydown(event: KeyboardEvent) {
             :aria-selected="selectedIndex === (showEmpty ? i + 1 : i)"
             class="group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
             :class="selectedIndex === (showEmpty ? i + 1 : i) ? 'bg-sunken' : 'hover:bg-sunken'"
-            v-tooltip="`Start workflow from ${template.name} template`"
             @pointermove="selectedIndex = showEmpty ? i + 1 : i"
             @click="select(template.id)"
           >

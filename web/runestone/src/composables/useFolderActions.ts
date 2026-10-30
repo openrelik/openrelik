@@ -31,6 +31,7 @@ import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useAuthStore } from '@/stores/auth'
+import { useWorkflowsStore } from '@/stores/workflows'
 import { count } from '@/utils/format'
 
 export interface PendingFolder {
@@ -117,22 +118,44 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
   }
 }
 
+/**
+ * A folder and the workflow it holds share one name, owned by the folder: a
+ * rename of either is a rename of both. The two requests go out together; if
+ * the folder's fails, the workflow's is put back. If only the workflow's
+ * fails, the folder keeps its new name — the one every view shows — and the
+ * next rename brings the workflow along.
+ */
 async function renameFolder(id: number, name: string): Promise<boolean> {
   const itemsStore = useItemsStore()
   const item = itemsStore.findItem(id)
   if (!item || savingIds.has(id)) return false
   clearError()
 
+  const workflow = useWorkflowsStore().workflowOf(id)
+  const workflowId = item.workflowId ?? workflow?.id
   const previousName = item.name
+  const previousWorkflowName = workflow?.name
   item.name = name
+  if (workflow) workflow.name = name
   savingIds.add(id)
   try {
-    const folder = await api.folders.renameFolder(id, name)
-    itemsStore.upsertItems([mapFolderToItem(folder, folder.parent?.id ?? item.parent)])
+    const [folder, renamed] = await Promise.allSettled([
+      api.folders.renameFolder(id, name),
+      workflowId === undefined ? Promise.resolve(null) : api.workflows.rename(id, workflowId, name),
+    ])
+    if (folder.status === 'rejected') throw folder.reason
+    itemsStore.upsertItems([mapFolderToItem(folder.value, folder.value.parent?.id ?? item.parent)])
+    if (renamed.status === 'rejected' && workflow) workflow.name = previousWorkflowName!
     return true
   } catch (err: unknown) {
     const current = itemsStore.findItem(id)
     if (current) current.name = previousName
+    if (workflow && previousWorkflowName !== undefined) {
+      workflow.name = previousWorkflowName
+      if (workflowId !== undefined) {
+        api.workflows.rename(id, workflowId, previousWorkflowName).catch(() => {})
+      }
+    }
     error.value = `Could not rename “${previousName}”: ${errorMessage(err, 'request failed')}`
     return false
   } finally {

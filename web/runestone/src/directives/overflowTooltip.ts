@@ -1,11 +1,23 @@
 import type { Directive } from 'vue'
-import { hideTooltip, showTooltip, type TooltipInput } from '@/composables/useTooltip'
+import {
+  HIDE_GRACE,
+  hideTooltip,
+  isKeyboardFocus,
+  isTouch,
+  showTooltip,
+  type TooltipInput,
+} from '@/composables/useTooltip'
+
+/** Slower than a control's label: a name is read, not hunted for. */
+const OVERFLOW_DELAY = 500
 
 interface OverflowTooltipElement extends HTMLElement {
   _overflowTooltipValue?: TooltipInput
   _overflowTooltipListeners?: {
-    onPointerEnter: () => void
+    onPointerEnter: (event: PointerEvent) => void
     onPointerLeave: () => void
+    onFocusIn: (event: FocusEvent) => void
+    onFocusOut: () => void
   }
 }
 
@@ -17,6 +29,7 @@ function isTruncated(el: HTMLElement): boolean {
  * v-overflow-tooltip directive:
  * Only shows a tooltip if the element's text content is genuinely overflowing / truncated.
  * Prevents unnecessary visual noise on short strings while making clipped labels accessible.
+ * Keyboard focus on (or inside) the element reveals it too, at once.
  *
  * Usage:
  *   <span class="truncate" v-overflow-tooltip>{{ row.name }}</span>
@@ -26,26 +39,42 @@ export const vOverflowTooltip: Directive<OverflowTooltipElement, TooltipInput | 
   mounted(el, binding) {
     el._overflowTooltipValue = binding.value
 
-    const onPointerEnter = () => {
+    const reveal = (delay: number) => {
       if (!isTruncated(el)) return
 
       const text = el._overflowTooltipValue ?? (el.textContent || el.innerText || '').trim()
 
       if (text) {
-        showTooltip(el, text)
+        showTooltip(el, text, delay)
       }
     }
 
+    const onPointerEnter = (event: PointerEvent) => {
+      if (!isTouch(event)) reveal(OVERFLOW_DELAY)
+    }
+
     const onPointerLeave = () => {
+      hideTooltip(el, HIDE_GRACE)
+    }
+
+    const onFocusIn = (event: FocusEvent) => {
+      if (isKeyboardFocus(event)) reveal(0)
+    }
+
+    const onFocusOut = () => {
       hideTooltip(el)
     }
 
     el.addEventListener('pointerenter', onPointerEnter)
     el.addEventListener('pointerleave', onPointerLeave)
+    el.addEventListener('focusin', onFocusIn)
+    el.addEventListener('focusout', onFocusOut)
 
     el._overflowTooltipListeners = {
       onPointerEnter,
       onPointerLeave,
+      onFocusIn,
+      onFocusOut,
     }
   },
 
@@ -54,9 +83,12 @@ export const vOverflowTooltip: Directive<OverflowTooltipElement, TooltipInput | 
   },
 
   unmounted(el) {
+    hideTooltip(el)
     if (el._overflowTooltipListeners) {
       el.removeEventListener('pointerenter', el._overflowTooltipListeners.onPointerEnter)
       el.removeEventListener('pointerleave', el._overflowTooltipListeners.onPointerLeave)
+      el.removeEventListener('focusin', el._overflowTooltipListeners.onFocusIn)
+      el.removeEventListener('focusout', el._overflowTooltipListeners.onFocusOut)
       delete el._overflowTooltipListeners
     }
     delete el._overflowTooltipValue
