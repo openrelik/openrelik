@@ -107,7 +107,7 @@ function onHover(event: PointerEvent) {
     <div
       ref="page"
       tabindex="0"
-      class="relative min-h-0 flex-1 overflow-auto px-6 py-4 outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
+      class="relative min-h-0 flex-1 overflow-auto py-4 pr-24 pl-6 outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
       role="document"
       aria-label="Rendered Markdown"
       @pointerover="onHover"

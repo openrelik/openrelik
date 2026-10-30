@@ -12,8 +12,15 @@ import { parseMarkdown, type Align, type Block } from '@/utils/markdown'
  * Two looks, both within the type scale (no heading is larger than a card
  * title):
  * - `report`: read inside a sheet; headings as a card title or a label.
- * - `document`: a file read as a page, in a reading column; each block says
+ * - `document`: a file read as a page. Text keeps to a reading column
+ *   (90ch); tables and code size to their content and may take the pane's
+ *   width, so a wide table is not boxed into the column. Each block says
  *   which line of the source it starts on (`data-line`).
+ *
+ * Tables are rules, not a grid, like every table in the app: a sunken
+ * header row, a hairline under each row, and no cell borders. Code in a
+ * cell stays on one line (a hash is never broken), the table scrolling
+ * sideways instead.
  */
 const props = withDefaults(
   defineProps<{
@@ -28,6 +35,9 @@ const blocks = computed(() =>
   typeof props.source === 'string' ? parseMarkdown(props.source) : props.source,
 )
 const doc = computed(() => props.variant === 'document')
+/** Text blocks keep to the reading column; tables and code may grow past it. */
+const measure = computed(() => (doc.value ? 'max-w-[90ch]' : ''))
+const wide = computed(() => (doc.value ? 'w-fit max-w-full' : ''))
 
 const BULLETS = ['•', '◦', '▪']
 const ALIGN: Record<Exclude<Align, null>, string> = {
@@ -39,16 +49,17 @@ const alignOf = (align: Align) => (align ? ALIGN[align] : 'text-left')
 
 function headingClass(level: number): string {
   if (!doc.value) return level <= 2 ? 'card-title mt-2 text-ink' : 'micro-label mt-1'
-  if (level === 1) return 'mt-4 border-b border-border pb-1 text-[14px] font-semibold text-ink'
-  if (level === 2) return 'mt-3 text-[14px] font-semibold text-ink'
-  return 'mt-2 font-semibold text-ink'
+  if (level === 1)
+    return 'mt-4 max-w-[90ch] border-b border-border pb-1 text-[14px] font-semibold text-ink'
+  if (level === 2) return 'mt-3 max-w-[90ch] text-[14px] font-semibold text-ink'
+  return 'mt-2 max-w-[90ch] font-semibold text-ink'
 }
 </script>
 
 <template>
   <div
     class="flex flex-col text-[13px] leading-relaxed text-ink-secondary"
-    :class="doc ? 'max-w-[90ch] gap-3' : 'gap-2'"
+    :class="doc ? 'gap-3' : 'gap-2'"
   >
     <template v-for="(block, i) in blocks" :key="i">
       <component
@@ -62,7 +73,7 @@ function headingClass(level: number): string {
       <p
         v-else-if="block.type === 'paragraph'"
         class="wrap-break-word"
-        :class="{ 'markdown-block': doc }"
+        :class="[measure, { 'markdown-block': doc }]"
         :data-line="doc ? block.line : undefined"
       >
         <MarkdownInline :inlines="block.inlines" />
@@ -70,7 +81,7 @@ function headingClass(level: number): string {
       <ul
         v-else-if="block.type === 'list'"
         class="flex flex-col gap-0.5"
-        :class="{ 'markdown-block': doc }"
+        :class="[measure, { 'markdown-block': doc }]"
         :data-line="doc ? block.line : undefined"
       >
         <li
@@ -91,7 +102,7 @@ function headingClass(level: number): string {
       <blockquote
         v-else-if="block.type === 'quote'"
         class="border-l-2 border-border-strong pl-3 text-ink-muted"
-        :class="{ 'markdown-block': doc }"
+        :class="[measure, { 'markdown-block': doc }]"
         :data-line="doc ? block.line : undefined"
       >
         <MarkdownInline :inlines="block.inlines" />
@@ -99,7 +110,7 @@ function headingClass(level: number): string {
       <div
         v-else-if="block.type === 'code'"
         class="well flex flex-col gap-1 px-3 py-2"
-        :class="{ 'markdown-block': doc }"
+        :class="[wide, { 'markdown-block min-w-[min(100%,90ch)]': doc }]"
         :data-line="doc ? block.line : undefined"
       >
         <span v-if="block.lang" class="micro-label">{{ block.lang }}</span>
@@ -108,17 +119,18 @@ function headingClass(level: number): string {
       <hr
         v-else-if="block.type === 'rule'"
         class="border-border"
+        :class="measure"
         :data-line="doc ? block.line : undefined"
       />
       <div
         v-else-if="block.type === 'table'"
         class="overflow-x-auto"
-        :class="{ 'markdown-block': doc }"
+        :class="[wide, { 'markdown-block': doc }]"
         :data-line="doc ? block.line : undefined"
       >
-        <table class="border-collapse text-[12px]" :class="doc ? 'min-w-1/2' : 'w-full'">
+        <table class="border-collapse text-[12px]" :class="doc ? 'min-w-[45ch]' : 'w-full'">
           <thead>
-            <tr class="border-b border-border-strong">
+            <tr class="border-b border-border-strong bg-sunken">
               <th
                 v-for="(cell, j) in block.head"
                 :key="j"
@@ -134,7 +146,7 @@ function headingClass(level: number): string {
               <td
                 v-for="(cell, k) in row"
                 :key="k"
-                class="tabular px-2 py-1 align-top text-ink"
+                class="tabular px-2 py-1 align-top text-ink [&_code]:whitespace-nowrap"
                 :class="alignOf(block.align[k] ?? null)"
               >
                 <MarkdownInline :inlines="cell" />
