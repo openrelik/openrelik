@@ -13,6 +13,7 @@ import ShareDialog from '@/components/dialogs/ShareDialog.vue'
 import TaskReportDialog from '@/components/dialogs/TaskReportDialog.vue'
 import WorkflowDialog from '@/components/dialogs/WorkflowDialog.vue'
 import Tooltip from '@/components/base/Tooltip.vue'
+import LinkMenu from '@/components/markdown/LinkMenu.vue'
 
 useKeyboardShortcuts()
 </script>
@@ -34,4 +35,5 @@ useKeyboardShortcuts()
   <ConfirmDialog />
   <UploadQueuePanel />
   <Tooltip />
+  <LinkMenu />
 </template>

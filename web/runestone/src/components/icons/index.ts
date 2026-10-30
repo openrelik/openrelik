@@ -33,6 +33,7 @@ export {
   Download,
   Ellipsis,
   Expand,
+  ExternalLink,
   Eye,
   EyeOff,
   File,
