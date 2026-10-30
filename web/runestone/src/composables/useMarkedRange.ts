@@ -19,7 +19,7 @@
 
 import { onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 
-import { formatMark, markLabel, spanOf, type MarkKind, type Span } from '@/utils/marks'
+import { formatMark, markLabel, sameSpan, spanOf, type MarkKind, type Span } from '@/utils/marks'
 
 export interface UseMarkedRangeReturn {
   /** Where a ⇧-click or drag extends from. */
@@ -30,8 +30,11 @@ export interface UseMarkedRangeReturn {
   set: (next: Span | null) => void
   /** On a gutter item, which also carries `data-mark-from` / `data-mark-to` for drags. */
   onGutterDown: (event: PointerEvent, span: Span) => void
-  /** Copies a link to the mark; says what happened. */
-  copyLink: () => Promise<string>
+  /**
+   * Copies a link to the mark, or to `span` — one just set, which reaches the
+   * model only once the page's URL has followed; says what happened.
+   */
+  copyLink: (span?: Span | null) => Promise<string>
   /** The mark for people: `rows 12–40`. */
   label: () => string
 }
@@ -78,7 +81,7 @@ export function useMarkedRange(
     options.focus()
     const now = model.value
     // The one marked item, clicked again: unmarked.
-    if (!event.shiftKey && now?.from === span.from && now.to === span.to) {
+    if (!event.shiftKey && sameSpan(now, span)) {
       set(null)
       return
     }
@@ -98,7 +101,7 @@ export function useMarkedRange(
       from: Number(item.dataset.markFrom),
       to: Number(item.dataset.markTo),
     })
-    if (next.from !== model.value?.from || next.to !== model.value.to) set(next)
+    if (!sameSpan(next, model.value)) set(next)
   }
   const endDrag = () => (dragX = null)
   onMounted(() => {
@@ -112,13 +115,13 @@ export function useMarkedRange(
 
   const label = () => (model.value ? markLabel({ kind, ...model.value }) : '')
 
-  async function copyLink(): Promise<string> {
-    if (!model.value) return ''
+  async function copyLink(span: Span | null = model.value): Promise<string> {
+    if (!span) return ''
     const url = new URL(window.location.href)
-    url.hash = formatMark({ kind, ...model.value })
+    url.hash = formatMark({ kind, ...span })
     try {
       await navigator.clipboard.writeText(url.toString())
-      return `Copied a link to ${label()}`
+      return `Copied a link to ${markLabel({ kind, ...span })}`
     } catch {
       return 'Could not copy the link'
     }

@@ -66,7 +66,11 @@ const tableKind = computed(() => tableKindOf(props.file))
 /** The mark as one view sees it: its own kind, or nothing. */
 function markOf(kind: MarkKind) {
   return computed<Span | null>({
-    get: () => (mark.value?.kind === kind ? { from: mark.value.from, to: mark.value.to } : null),
+    get: () => {
+      if (mark.value?.kind !== kind) return null
+      const { from, to, fromCol, toCol } = mark.value
+      return { from, to, fromCol, toCol }
+    },
     set: (span) => (mark.value = span ? { kind, ...span } : null),
   })
 }

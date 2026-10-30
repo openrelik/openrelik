@@ -199,6 +199,12 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Marked text in the text viewer (`#L12C5-L14C20`): painted, not wrapped in
+     elements, so selecting text over it never has the rows cut from under it. */
+  ::highlight(text-mark) {
+    background-color: var(--color-warning-tint);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

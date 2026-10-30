@@ -14,8 +14,8 @@ import { useTextSearch } from '@/composables/useTextSearch'
 import { useTextStream } from '@/composables/useTextStream'
 import { useModalStore } from '@/stores/modals'
 import { formatSize } from '@/utils/format'
-import { parseLineRange, ROW_CHARS } from '@/utils/lines'
-import type { Span } from '@/utils/marks'
+import { parseLineRange, ROW_CHARS, shownOffset, sourceOffset } from '@/utils/lines'
+import { hasColumns, sameSpan, type Span } from '@/utils/marks'
 
 /**
  * A text file, line by line: read in the browser as it arrives (see
@@ -85,25 +85,32 @@ function rowOf(line: number, offset = 0) {
   return text.index().firstRow(line) + Math.floor(offset / ROW_CHARS)
 }
 
-watch(search.current, async (at) => {
+watch(search.current, (at) => {
   const hit = search.hits.value[at]
   if (!hit) return
   const row = rowOf(hit.line, hit.start)
   if (row < topRow.value || row >= topRow.value + visibleRows.value) {
     scrollTo(row - Math.floor(visibleRows.value / 3))
   }
-  // Sideways too, clear of the line numbers.
+  revealSideways(() => body.value?.querySelector('[data-hit="current"]'))
+})
+
+/** Scrolls sideways, once drawn, to bring what `target` finds clear of the line numbers. */
+async function revealSideways(
+  target: () => { getBoundingClientRect(): DOMRect } | null | undefined,
+) {
   await nextTick()
   const el = body.value
-  const mark = el?.querySelector<HTMLElement>('[data-hit="current"]')
+  const found = target()
   const gutter = el?.querySelector<HTMLElement>('[data-gutter]')
-  if (!el || !mark) return
+  if (!el || !found) return
   const box = el.getBoundingClientRect()
-  const hit2 = mark.getBoundingClientRect()
+  const at = found.getBoundingClientRect()
   const left = box.left + (gutter?.offsetWidth ?? 0)
-  if (hit2.left < left) el.scrollLeft -= left - hit2.left + 24
-  else if (hit2.right > box.right) el.scrollLeft += hit2.right - box.right + 24
-})
+  if (at.left < left) el.scrollLeft -= left - at.left + 24
+  else if (at.right > box.right)
+    el.scrollLeft += Math.min(at.left - left, at.right - box.right + 24)
+}
 
 function closeSearch() {
   query.value = ''
@@ -143,7 +150,13 @@ const rows = computed(() => {
     for (let i = first; i < last; i++) {
       rowHits.push({ start: hits[i]!.start, end: hits[i]!.end, current: i === current })
     }
-    out.push({ row, line, start: index.startOf(row), text: index.rowText(row), hits: rowHits })
+    out.push({
+      row,
+      line,
+      start: index.startOf(row),
+      text: index.rowText(row),
+      hits: rowHits,
+    })
   }
   return out
 })
@@ -151,30 +164,185 @@ const rows = computed(() => {
 const gutterChars = computed(() => Math.max(4, text.lineCount.value.toLocaleString('en-US').length))
 // --- marked lines: from the gutter, go-to, or a link ---
 
-/** A line to land on once it has been read (1-based). */
-const landing = ref<number | null>(null)
-function land(line: number) {
-  landing.value = line
+/** A line to land on once it has been read (1-based), and where in it. */
+const landing = ref<{ line: number; offset: number } | null>(null)
+function land(line: number, offset = 0) {
+  landing.value = { line, offset }
   text.readUntil(line)
   tryLand()
 }
 function tryLand() {
-  const line = landing.value
+  const at = landing.value
   // Not until measured: the landing leaves a third of the screen above it.
-  if (line === null || !bodyHeight.value) return
+  if (at === null || !bodyHeight.value) return
   const index = text.index()
-  if (index.lines.length < line && !text.done.value) return
+  if (index.lines.length < at.line && !text.done.value) return
   landing.value = null
-  const to = Math.min(line, index.lines.length) - 1
-  if (to >= 0) scrollTo(index.firstRow(to) - Math.floor(visibleRows.value / 3))
+  const to = Math.min(at.line, index.lines.length) - 1
+  if (to < 0) return
+  scrollTo(rowOf(to, at.offset) - Math.floor(visibleRows.value / 3))
+  if (at.offset) revealSideways(() => painted.ranges[0])
 }
 watch([text.version, text.done, bodyHeight], tryLand)
 
 const marks = useMarkedRange(range, 'line', {
-  land: (span) => land(span.from),
+  land: (span) => land(span.from, hasColumns(span) ? span.fromCol - 1 : 0),
   focus: () => body.value?.focus({ preventScroll: true }),
 })
 const inRange = (line: number) => marks.marked(line + 1)
+/** Whole lines are marked (not exact text): their rows take the tint. */
+const wholeLines = computed(() => !!range.value && !hasColumns(range.value))
+
+/**
+ * Marked text is painted over the rows on screen (`::highlight(text-mark)`),
+ * not cut into elements of its own: a selection made across it keeps the
+ * nodes it lies in. Without the Highlight API only the line numbers show it.
+ */
+const painted: { ranges: Range[]; highlight: Highlight | null } = {
+  ranges: [],
+  highlight: typeof CSS !== 'undefined' && 'highlights' in CSS ? new Highlight() : null,
+}
+/** The text node and offset at a position in a row's shown text. */
+function nodeAt(row: HTMLElement, shown: number): [Node, number] {
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
+  let last: Text | null = null
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    if (shown <= node.length) return [node, shown]
+    shown -= node.length
+    last = node
+  }
+  return last ? [last, last.length] : [row, 0]
+}
+function paintMark() {
+  const highlight = painted.highlight
+  painted.ranges = []
+  highlight?.clear()
+  const exact = range.value
+  if (!exact || !hasColumns(exact) || !body.value) return
+  const index = text.index()
+  for (const el of body.value.querySelectorAll<HTMLElement>('[data-row]')) {
+    const row = Number(el.dataset.row)
+    const n = index.lineOf(row) + 1
+    if (n < exact.from || n > exact.to) continue
+    const rowText = index.rowText(row)
+    const start = index.startOf(row)
+    const from = Math.max(0, (n === exact.from ? exact.fromCol - 1 : 0) - start)
+    const to = Math.min(rowText.length, n === exact.to ? exact.toCol - 1 - start : Infinity)
+    if (from >= to) continue
+    const stretch = document.createRange()
+    stretch.setStart(...nodeAt(el, shownOffset(rowText, from)))
+    stretch.setEnd(...nodeAt(el, shownOffset(rowText, to)))
+    painted.ranges.push(stretch)
+    highlight?.add(stretch)
+  }
+}
+watch([rows, range], paintMark, { flush: 'post' })
+onMounted(() => painted.highlight && CSS.highlights.set('text-mark', painted.highlight))
+onUnmounted(() => CSS.highlights?.delete('text-mark'))
+
+// --- exact text: the selection on screen, marked and linked ---
+
+/** Where a point of the selection is in the file: line (1-based) and caret column (1-based). */
+function pointOf(node: Node, offset: number): { line: number; col: number } | null {
+  const el = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>(
+    '[data-row]',
+  )
+  if (!el || !body.value?.contains(el)) return null
+  const row = Number(el.dataset.row)
+  const before = document.createRange()
+  before.setStart(el, 0)
+  before.setEnd(node, offset)
+  const index = text.index()
+  const at = index.startOf(row) + sourceOffset(index.rowText(row), before.toString().length)
+  return { line: index.lineOf(row) + 1, col: at + 1 }
+}
+
+/** The text selected on screen, as a place in the file: the mark, once let go of. */
+const selected = ref<Required<Span> | null>(null)
+function readSelection() {
+  const selection = window.getSelection()
+  const a = selection?.anchorNode && pointOf(selection.anchorNode, selection.anchorOffset)
+  const b = selection?.focusNode && pointOf(selection.focusNode, selection.focusOffset)
+  if (!selection || selection.isCollapsed || !a || !b) {
+    selected.value = null
+    return
+  }
+  const [start, end] = a.line < b.line || (a.line === b.line && a.col <= b.col) ? [a, b] : [b, a]
+  // A selection ending at the very start of a line ends with the line before.
+  if (end.col === 1 && end.line > start.line) {
+    end.line -= 1
+    end.col = (text.index().lines[end.line - 1]?.length ?? 0) + 1
+  }
+  selected.value =
+    start.line === end.line && start.col === end.col
+      ? null
+      : { from: start.line, fromCol: start.col, to: end.line, toCol: end.col }
+}
+onMounted(() => document.addEventListener('selectionchange', readSelection))
+onUnmounted(() => document.removeEventListener('selectionchange', readSelection))
+
+/** A press in the text, not yet let go of: the selection it makes is still moving. */
+let pressing = false
+/**
+ * Selected text becomes the mark when the press ends, as clicked line
+ * numbers do: the URL always links to what is selected.
+ */
+function onTextRelease() {
+  if (!pressing) return
+  pressing = false
+  // Read now: `selectionchange` comes late.
+  readSelection()
+  const span = selected.value
+  if (!span || sameSpan(span, range.value)) return
+  marks.set(span)
+  marks.anchor.value = span
+}
+onMounted(() => document.addEventListener('pointerup', onTextRelease))
+onUnmounted(() => document.removeEventListener('pointerup', onTextRelease))
+
+/** Marks the selected text, shows the mark in place of the selection, and copies a link to it. */
+async function markSelection() {
+  // Read now: \`selectionchange\` comes late, and \`m\` can come right after a drag.
+  readSelection()
+  const span = selected.value
+  if (!span) return
+  marks.set(span)
+  marks.anchor.value = span
+  // The mark shows once the selection's own highlight is gone.
+  window.getSelection()?.removeAllRanges()
+  say(await marks.copyLink(span))
+}
+
+/** Where in the file a point on screen is, for ⇧-click. */
+function pointAt(x: number, y: number): { line: number; col: number } | null {
+  const caret = document.caretPositionFromPoint?.(x, y)
+  if (caret) return pointOf(caret.offsetNode, caret.offset)
+  const range = document.caretRangeFromPoint?.(x, y)
+  return range ? pointOf(range.startContainer, range.startOffset) : null
+}
+
+/**
+ * ⇧-click in the text extends a mark of exact text to the click, from the
+ * mark's start: a selection longer than the screen can be marked, as the
+ * rows it began in are gone once scrolled away.
+ */
+function onTextShiftDown(event: PointerEvent) {
+  const now = range.value
+  if (!event.shiftKey || event.button !== 0 || !now || !hasColumns(now)) return
+  // A selection on screen extends itself.
+  if (selected.value) return
+  if ((event.target as HTMLElement).closest('[data-gutter]')) return
+  const point = pointAt(event.clientX, event.clientY)
+  if (!point) return
+  event.preventDefault()
+  const start = { line: now.from, col: now.fromCol }
+  const [a, b] =
+    point.line < start.line || (point.line === start.line && point.col < start.col)
+      ? [point, start]
+      : [start, point]
+  if (a.line === b.line && a.col === b.col) return
+  marks.set({ from: a.line, fromCol: a.col, to: b.line, toCol: b.col })
+}
 const lineSpan = (line: number) => ({ from: line + 1, to: line + 1 })
 
 /**
@@ -185,6 +353,8 @@ const lineSpan = (line: number) => ({ from: line + 1, to: line + 1 })
 let pressedInGutter = false
 function onTextPress(event: PointerEvent) {
   pressedInGutter = !!(event.target as HTMLElement).closest('[data-gutter]')
+  pressing = !pressedInGutter && event.button === 0
+  onTextShiftDown(event)
 }
 function onTextClick(event: MouseEvent) {
   // Where the press began, not where the click lands: a drag across line
@@ -234,9 +404,14 @@ function say(message: string) {
 }
 onUnmounted(() => clearTimeout(noticeTimer))
 
+/** The link button: to the selected text when there is some, else to the mark. */
 async function copyLink() {
-  say(await marks.copyLink())
+  if (selected.value) await markSelection()
+  else say(await marks.copyLink())
 }
+const linkLabel = computed(() =>
+  selected.value ? 'Copy a link to the selected text' : `Copy a link to ${marks.label()}`,
+)
 
 // --- keys ---
 
@@ -256,7 +431,11 @@ function onKey(event: KeyboardEvent) {
   if (move && !event.altKey) scrollTo(move())
   else if (!mod && event.key === ':') gotoInput.value?.focus()
   else if (!mod && event.key === '/') searchBar.value?.focus()
-  else if (event.key === 'Escape' && range.value) {
+  else if (!mod && event.key === 'm' && !window.getSelection()?.isCollapsed) void markSelection()
+  else if (event.key === 'Escape' && selected.value) {
+    // The selection goes first: what stays is its mark.
+    window.getSelection()?.removeAllRanges()
+  } else if (event.key === 'Escape' && range.value) {
     marks.set(null)
   } else return
   // The file page's keys (esc goes back) wait while the text has focus.
@@ -355,12 +534,14 @@ async function loadAll() {
       </span>
 
       <div class="ml-auto flex shrink-0 items-center gap-3">
+        <!-- mousedown kept from the page: pressing it must not clear the selection it links to -->
         <button
-          v-if="range"
+          v-if="range || selected"
           type="button"
           class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
-          :aria-label="`Copy a link to ${marks.label()}`"
-          v-tooltip="`Copy a link to ${marks.label()}`"
+          :aria-label="linkLabel"
+          v-tooltip="linkLabel"
+          @mousedown.prevent
           @click="copyLink"
         >
           <Copy :size="13" :stroke-width="1.5" />
@@ -420,7 +601,7 @@ async function loadAll() {
             v-for="row in rows"
             :key="row.row"
             class="flex h-5 items-center"
-            :class="{ 'bg-warning-tint': inRange(row.line) }"
+            :class="{ 'bg-warning-tint': wholeLines && inRange(row.line) }"
           >
             <span
               data-gutter
@@ -436,7 +617,13 @@ async function loadAll() {
               :data-mark-to="lineSpan(row.line).to"
               >{{ row.start === 0 ? (row.line + 1).toLocaleString('en-US') : '' }}</span
             >
-            <TextRow class="pr-6 text-ink" :text="row.text" :start="row.start" :hits="row.hits" />
+            <TextRow
+              class="pr-6 text-ink"
+              :row="row.row"
+              :text="row.text"
+              :start="row.start"
+              :hits="row.hits"
+            />
           </div>
         </div>
         <p v-if="!rows.length && text.done.value" class="px-3 py-3 text-ink-muted">Empty file.</p>

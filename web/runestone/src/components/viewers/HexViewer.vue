@@ -17,7 +17,7 @@ import {
   readings,
   toHex,
 } from '@/utils/bytes'
-import type { Span } from '@/utils/marks'
+import { sameSpan, type Span } from '@/utils/marks'
 
 /**
  * A file's bytes, sixteen to a row: offset, hex and text, for any file and
@@ -143,7 +143,11 @@ function onByteEnter(offset: number) {
   hovered.value = offset
   if (dragging) cursor.value = offset
 }
-const endDrag = () => (dragging = false)
+function endDrag() {
+  if (!dragging) return
+  dragging = false
+  markSelected()
+}
 onMounted(() => window.addEventListener('pointerup', endDrag))
 onUnmounted(() => window.removeEventListener('pointerup', endDrag))
 
@@ -215,9 +219,40 @@ const marks = useMarkedRange(mark, 'offset', {
 })
 /** The bytes of the row at `offset`. */
 const rowSpan = (offset: number) => ({ from: offset, to: Math.min(offset + ROW - 1, last.value) })
-async function copyLink() {
-  say(await marks.copyLink())
+/** More than one byte selected: `m`, or the link button, marks them. */
+const hasSelection = computed(() => selectionEnd.value > selectionStart.value)
+/**
+ * Selected bytes become the mark once the selection stops moving (the drag
+ * let go of, the ⇧-arrow released), as clicked offsets do: the URL always
+ * links to what is selected.
+ */
+function markSelected() {
+  if (!hasSelection.value) return
+  const span = { from: selectionStart.value, to: selectionEnd.value }
+  if (sameSpan(span, mark.value)) return
+  marks.set(span)
+  marks.anchor.value = span
 }
+
+/** Marks the selected bytes and copies a link to them. */
+async function markSelection() {
+  if (!hasSelection.value) return
+  const span = { from: selectionStart.value, to: selectionEnd.value }
+  marks.set(span)
+  marks.anchor.value = span
+  // The mark shows once the selection's own highlight is gone.
+  anchor.value = cursor.value
+  say(await marks.copyLink(span))
+}
+
+/** The link button: to the selected bytes when there are some, else to the mark. */
+async function copyLink() {
+  if (hasSelection.value) await markSelection()
+  else say(await marks.copyLink())
+}
+const linkLabel = computed(() =>
+  hasSelection.value ? 'Copy a link to the selected bytes' : `Copy a link to ${marks.label()}`,
+)
 
 // --- copy ---
 
@@ -267,6 +302,8 @@ function onKey(event: KeyboardEvent) {
     moveTo(move(), extend)
   } else if (mod && event.key.toLowerCase() === 'c') {
     copy(extend)
+  } else if (!mod && event.key === 'm' && hasSelection.value) {
+    void markSelection()
   } else if (!mod && event.key === 'o') {
     // `o` for offset: `g` is the app's prompt, everywhere.
     gotoInput.value?.focus()
@@ -351,11 +388,11 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         <span v-else-if="showLoading" class="text-ink-muted">reading bytes…</span>
         <div class="ml-auto flex items-center">
           <button
-            v-if="mark"
+            v-if="mark || hasSelection"
             type="button"
             class="mr-1 flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
-            :aria-label="`Copy a link to ${marks.label()}`"
-            v-tooltip="`Copy a link to ${marks.label()}`"
+            :aria-label="linkLabel"
+            v-tooltip="linkLabel"
             @click="copyLink"
           >
             <Copy :size="13" :stroke-width="1.5" />
@@ -419,6 +456,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         role="grid"
         aria-label="File bytes"
         @keydown="onKey"
+        @keyup="markSelected"
         @wheel="onWheel"
         @pointerdown.capture="pressedOnByte = false"
         @click="onGridClick"

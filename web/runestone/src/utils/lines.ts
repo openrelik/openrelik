@@ -93,6 +93,34 @@ export function parseLineRange(text: string): Span | null {
   return { from: Math.min(a, b), to: Math.max(a, b) }
 }
 
+/** How many characters `showControls` writes for one character. */
+function shownLength(char: string): number {
+  if (!/[\u0000-\u0008\u000a-\u001f\u007f-\u009f]/.test(char)) return 1
+  return char === '\r' || char === '\n' ? 2 : 4
+}
+
+/**
+ * Where in `text` a position in its shown form falls (`showControls` writes
+ * `\x00` for one character): a selection's place on screen, back in the
+ * file. A position inside a written-out character goes to its nearer edge.
+ */
+export function sourceOffset(text: string, shown: number): number {
+  let at = 0
+  for (let i = 0; i < text.length; i++) {
+    const length = shownLength(text[i]!)
+    if (shown < at + length) return shown - at < length / 2 ? i : i + 1
+    at += length
+  }
+  return text.length
+}
+
+/** Where a position in `text` falls in its shown form: the inverse of `sourceOffset`. */
+export function shownOffset(text: string, offset: number): number {
+  let at = 0
+  for (let i = 0; i < offset && i < text.length; i++) at += shownLength(text[i]!)
+  return at
+}
+
 /**
  * Control characters other than tab written out (`\x00`, `\r`), so a file
  * cannot move the text around it; tabs stay tabs.

@@ -10,8 +10,12 @@ import { rowSegments } from '@/utils/textSearch'
  *
  * A hit is outlined as well as tinted: marked lines share the tint, and
  * the outline keeps a hit visible inside them. The current hit is solid.
+ *
+ * The row says which it is (`data-row`): a selection in it is read back to
+ * a place in the file, and marked text is painted over it.
  */
 const props = defineProps<{
+  row: number
   text: string
   /** Where the row starts in its line. */
   start: number
@@ -23,7 +27,7 @@ const segments = computed(() => rowSegments(props.text, props.start, props.hits)
 </script>
 
 <template>
-  <span class="whitespace-pre"
+  <span class="whitespace-pre" :data-row="row"
     ><span
       v-for="(segment, i) in segments"
       :key="i"
