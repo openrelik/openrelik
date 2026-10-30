@@ -5,14 +5,9 @@ import HexViewer from '@/components/viewers/HexViewer.vue'
 import MarkdownViewer from '@/components/viewers/MarkdownViewer.vue'
 import TableViewer from '@/components/viewers/TableViewer.vue'
 import TextViewer from '@/components/viewers/TextViewer.vue'
-import { api } from '@/api'
-import { useDelayedFlag } from '@/composables/useDelayedFlag'
-import { useSystemConfig } from '@/composables/useSystemConfig'
 import type { Item } from '@/types/item'
-import { useSettingsStore } from '@/stores/settings'
-import { formatSize } from '@/utils/format'
 import type { Mark, MarkKind, Span } from '@/utils/marks'
-import { isMarkdown, previewOf, PREVIEW_MAX_BYTES, tableKindOf } from '@/utils/preview'
+import { isMarkdown, previewOf, tableKindOf } from '@/utils/preview'
 
 /**
  * A file's content, in as many ways as it can be shown:
@@ -24,15 +19,11 @@ import { isMarkdown, previewOf, PREVIEW_MAX_BYTES, tableKindOf } from '@/utils/p
  *   (`TableViewer`), at any size.
  * - **rendered**: Markdown, at any size, rendered in the app
  *   (`MarkdownViewer`): never HTML, links and images shown as text, so a
- *   file can neither act on the page nor reach out. HTML, for data types the
- *   server allows (`allowed_data_types_preview`), as the server renders it,
- *   in a sandboxed iframe — no scripts, no same-origin access, no navigation
- *   of the app. The server reads the whole file, so only HTML within the
- *   preview limit is asked for.
+ *   file can neither act on the page nor reach out. Nothing else is
+ *   rendered: HTML is shown as its source.
  * - **hex**: anything, a screen at a time (`HexViewer`).
  *
- * The first is the default: table, then rendered Markdown, then text; HTML
- * shows as text until asked for rendered. A link opens the view its mark
+ * The first is the default: table, then rendered Markdown, then text. A link opens the view its mark
  * is in: lines text, rows table, bytes hex — or rendered Markdown, which
  * marks the same lines, when the link says so (`prefer`).
  */
@@ -50,23 +41,8 @@ const emit = defineEmits<{
 /** What the file's link points at: the page keeps it in its URL. */
 const mark = defineModel<Mark | null>('mark', { default: null })
 
-const settings = useSettingsStore()
-const system = useSystemConfig()
-
 const preview = computed(() => previewOf(props.file))
 const markdown = computed(() => isMarkdown(props.file))
-
-/** HTML the server lets through unescaped, for this file's data type. */
-const htmlRenders = computed(
-  () =>
-    props.file.mime === 'text/html' &&
-    !!props.file.dataType &&
-    !!system.value.allowed_data_types_preview?.includes(props.file.dataType),
-)
-/** Rendered by the server, but too large for it to be asked. */
-const tooLargeToRender = computed(
-  () => htmlRenders.value && !markdown.value && preview.value.kind === 'too-large',
-)
 
 type View = 'table' | 'rendered' | 'text' | 'hex'
 const tableKind = computed(() => tableKindOf(props.file))
@@ -89,13 +65,11 @@ const offsetMark = markOf('offset')
 const views = computed<View[]>(() => {
   const kind = preview.value.kind
   if (kind === 'unknown') return []
-  const isText = kind === 'text' || kind === 'too-large'
-  const renders = kind === 'text'
+  const isText = kind === 'text'
   return [
     ...(tableKind.value ? (['table'] as const) : []),
     ...(isText && markdown.value ? (['rendered'] as const) : []),
     ...(isText ? (['text'] as const) : []),
-    ...(renders && htmlRenders.value && !markdown.value ? (['rendered'] as const) : []),
     'hex',
   ]
 })
@@ -135,27 +109,13 @@ const LABELS: Record<View, string> = {
   text: 'Text',
   hex: 'Hex',
 }
-/**
- * The tabs: every view, plus a rendered view the server would give but for
- * the file's size — shown, unavailable, with the reason, so the gap is
- * explained where it is noticed. Text is "Source" beside a rendered view.
- */
-const tabs = computed<{ view: View; label: string; reason?: string }[]>(() => {
-  const out: { view: View; label: string; reason?: string }[] = views.value.map((v) => ({
+/** The tabs: every view. Text is "Source" beside a rendered view. */
+const tabs = computed<{ view: View; label: string }[]>(() =>
+  views.value.map((v) => ({
     view: v,
     label: v === 'text' && views.value.includes('rendered') ? 'Source' : LABELS[v],
-  }))
-  if (tooLargeToRender.value) {
-    out.splice(Math.max(0, out.length - 1), 0, {
-      view: 'rendered',
-      label: LABELS.rendered,
-      reason: `Too large to render: over ${formatSize(PREVIEW_MAX_BYTES)}`,
-    })
-    const text = out.find((tab) => tab.view === 'text')
-    if (text) text.label = 'Source'
-  }
-  return out
-})
+  })),
+)
 
 /**
  * The file whose table, or text, has been opened: each stays mounted
@@ -178,21 +138,6 @@ function showSource(line: number) {
   mark.value = { kind: 'line', from: line, to: line }
   chosen.value = 'text'
 }
-
-/** The server's page, for HTML: Markdown is rendered here. */
-const src = computed(() =>
-  view.value === 'rendered' && !markdown.value
-    ? api.files.contentUrl(props.file.id, {
-        theme: settings.resolvedTheme,
-        unescaped: htmlRenders.value,
-      })
-    : undefined,
-)
-
-// Loading: until the page in the frame has loaded, each time it changes.
-const loaded = ref(false)
-watch(src, () => (loaded.value = false))
-const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
 </script>
 
 <template>
@@ -214,16 +159,12 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
           role="tab"
           class="-mb-px flex items-center border-b-2 px-2 transition-colors duration-120"
           :class="
-            tab.reason
-              ? 'cursor-default border-transparent text-ink-muted/50'
-              : view === tab.view
-                ? 'cursor-pointer border-brand text-ink'
-                : 'cursor-pointer border-transparent text-ink-muted hover:text-ink-secondary'
+            view === tab.view
+              ? 'cursor-pointer border-brand text-ink'
+              : 'cursor-pointer border-transparent text-ink-muted hover:text-ink-secondary'
           "
           :aria-selected="view === tab.view"
-          :aria-disabled="!!tab.reason || undefined"
-          v-tooltip="tab.reason"
-          @click="tab.reason || (chosen = tab.view)"
+          @click="chosen = tab.view"
         >
           {{ tab.label }}
         </button>
@@ -259,33 +200,12 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
     />
 
     <MarkdownViewer
-      v-else-if="view === 'rendered' && markdown"
+      v-else-if="view === 'rendered'"
       v-model:mark="lineMark"
       :file-id="file.id"
       :size="file.size ?? 0"
       @source="showSource"
     />
-
-    <!-- The server's page sets its content flush to the edge: the room is kept here. -->
-    <div v-else-if="view === 'rendered'" class="relative min-h-0 flex-1 bg-surface py-2 pl-3">
-      <!-- sandbox="": no scripts, forms, popups or same-origin access for the file's page -->
-      <iframe
-        :key="src"
-        :src="src"
-        sandbox=""
-        referrerpolicy="no-referrer"
-        :title="`Content of ${file.name}`"
-        class="block size-full border-0"
-        @load="loaded = true"
-      />
-      <p
-        v-if="!loaded"
-        class="absolute inset-0 bg-surface px-4 py-3 text-ink-muted"
-        aria-busy="true"
-      >
-        <span :class="{ invisible: !showLoading }">Loading content…</span>
-      </p>
-    </div>
 
     <p v-else-if="!view" class="px-4 py-3 text-ink-muted">Waiting for the file's type…</p>
   </div>

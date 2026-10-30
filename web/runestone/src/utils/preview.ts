@@ -1,20 +1,15 @@
 /**
- * What of a file can be shown as text, and what the server can render.
+ * What of a file can be shown as text.
  *
  * Text is read and shown in the browser, at any size (the text viewer), and
- * so is Markdown, rendered. The server renders HTML on its allow-list as a
- * page: it reads the whole file to do so, so only up to a size.
+ * so is Markdown, rendered. Nothing else is rendered: HTML is its source.
  */
-
-/** The server reads the whole file into its page: larger HTML is not rendered. */
-export const PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 
 /** Types that are text without saying so in their `text/` prefix. */
 const TEXT_MIMES = new Set(['application/json', 'application/javascript', 'application/x-ndjson'])
 
 export type Preview =
   | { kind: 'text' }
-  | { kind: 'too-large'; limit: number }
   | { kind: 'not-text' }
   /** The server has not said what the file is yet. */
   | { kind: 'unknown' }
@@ -23,10 +18,9 @@ export function isTextMime(mime: string): boolean {
   return mime.startsWith('text/') || TEXT_MIMES.has(mime)
 }
 
-export function previewOf(file: { mime?: string; size?: number }): Preview {
+export function previewOf(file: { mime?: string }): Preview {
   if (!file.mime) return { kind: 'unknown' }
   if (!isTextMime(file.mime)) return { kind: 'not-text' }
-  if ((file.size ?? 0) > PREVIEW_MAX_BYTES) return { kind: 'too-large', limit: PREVIEW_MAX_BYTES }
   return { kind: 'text' }
 }
 

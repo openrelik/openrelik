@@ -21,23 +21,6 @@ export interface ChunkParams {
 
 export const filesApi = {
   /**
-   * Deletes a file. Takes Owner on the file itself, which the server also
-   * grants through the folder it is in, and to whoever uploaded it.
-   */
-  /**
-   * Where the server renders a text file as an HTML page, for a sandboxed
-   * iframe: escaped text in a <pre> (Markdown rendered and sanitised), styled
-   * for `theme`. `unescaped` renders HTML as HTML, which the server allows
-   * only for data types on its preview allow-list. The server reads the whole
-   * file: only ask for files within the preview size limit.
-   */
-  contentUrl(fileId: number, options: { theme: 'light' | 'dark'; unescaped?: boolean }): string {
-    const params = new URLSearchParams({ theme: options.theme })
-    if (options.unescaped) params.set('unescaped', 'true')
-    return `${apiConfig.basePath}/files/${fileId}/content?${params}`
-  },
-
-  /**
    * Where the server streams a file as an attachment, for the browser to
    * download itself (see `useDownload`).
    */
@@ -87,6 +70,10 @@ export const filesApi = {
     return httpClient.get<FileDetail>(`/files/${fileId}`, options)
   },
 
+  /**
+   * Deletes a file. Takes Owner on the file itself, which the server also
+   * grants through the folder it is in, and to whoever uploaded it.
+   */
   deleteFile(fileId: number, options?: Pick<UploadOptions, 'signal'>): Promise<void> {
     return httpClient.delete<void>(`/files/${fileId}`, options)
   },
