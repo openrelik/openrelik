@@ -357,8 +357,9 @@ const menuPending = computed(() => {
   return roleId !== null && roleId !== undefined && roleOf(roleId) === undefined
 })
 
+/** Opens a row's menu; asked again for the row whose menu is open (its `⋯`), closes it. */
 function openMenu(item: Item, at: { x: number; y: number }) {
-  menu.value = { item, ...at }
+  menu.value = menu.value?.item.id === item.id ? null : { item, ...at }
 }
 
 // --- workflow & tasks ---

@@ -759,10 +759,12 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
           </td>
           <td class="tabular truncate px-2 text-ink-secondary">{{ stamp(row.modified) }}</td>
           <td class="pr-1">
-            <!-- On hover, on the cursor row, and while its menu is open; always reachable by Tab. -->
+            <!-- On hover, on the cursor row, and while its menu is open; always reachable by Tab.
+                 Not "outside" its menu: pressing it again closes the menu, not reopens it. -->
             <button
               type="button"
               :data-row-menu="row.id"
+              data-click-outside-ignore
               class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted group-hover:opacity-100 hover:bg-surface hover:text-ink focus-visible:opacity-100"
               :class="index === cursor || menuRowId === row.id ? 'opacity-100' : 'opacity-0'"
               :aria-label="`Actions for ${row.name}`"
