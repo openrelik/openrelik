@@ -33,16 +33,38 @@ const router = useRouter()
 const route = useRoute()
 
 /**
+ * What the URL says beyond the file: the mark and, for rendered Markdown,
+ * the view. Replaced, not pushed: marking is not a step to go back through.
+ * Changes in one tick are written once, together — each write starts from
+ * the URL as it is, and the router updates it only later.
+ */
+let pendingUrl: { hash: string; view: string | undefined } | null = null
+function writeUrl(change: Partial<{ hash: string; view: string | undefined }>) {
+  if (!pendingUrl) {
+    const view = route.query.view
+    pendingUrl = { hash: route.hash, view: typeof view === 'string' ? view : undefined }
+    void Promise.resolve().then(() => {
+      const { hash, view } = pendingUrl!
+      pendingUrl = null
+      const query = { ...route.query }
+      if (view) query.view = view
+      else delete query.view
+      router.replace({ query, hash })
+    })
+  }
+  Object.assign(pendingUrl, change)
+}
+
+/**
  * What the file's link points at — lines, rows or bytes — kept in the URL
- * (`#L12-L40`, `#R5`, `#0x1f3-0x2a0`) so a link opens on it. Replaced, not
- * pushed: marking is not a step to go back through.
+ * (`#L12-L40`, `#R5`, `#0x1f3-0x2a0`) so a link opens on it.
  */
 const mark = computed<Mark | null>({
   get: () => parseMark(route.hash),
-  set: (next) => {
-    router.replace({ query: route.query, hash: next ? formatMark(next) : '' })
-  },
+  set: (next) => writeUrl({ hash: next ? formatMark(next) : '' }),
 })
+/** The view a link asks for: rendered Markdown marks lines too, and says so (`?view=rendered`). */
+const preferView = computed(() => (route.query.view === 'rendered' ? 'rendered' : undefined))
 
 const itemsStore = useItemsStore()
 
@@ -91,6 +113,8 @@ const sideTab = computed<SideTab>({
 })
 function onView(view: typeof contentView.value) {
   contentView.value = view
+  // A link copied here opens here: in the rendered view, or the one its mark is in.
+  writeUrl({ view: view === 'rendered' ? 'rendered' : undefined })
   pinned.value = false
   chosenTab.value =
     view === 'hex' || (view === 'table' && rowSelected.value) ? 'inspector' : 'details'
@@ -178,7 +202,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- panes -->
     <div class="flex min-h-0 flex-1">
-      <FileContent v-model:mark="mark" :file="file" @view="onView" @row-selected="onRowSelected">
+      <FileContent
+        v-model:mark="mark"
+        :file="file"
+        :prefer="preferView"
+        @view="onView"
+        @row-selected="onRowSelected"
+      >
         <!-- the details closed: opened again from the spot the panel's own button had -->
         <template v-if="!showDetails" #end>
           <PanelToggle

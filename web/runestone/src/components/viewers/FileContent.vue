@@ -33,9 +33,14 @@ import { isMarkdown, previewOf, PREVIEW_MAX_BYTES, tableKindOf } from '@/utils/p
  *
  * The first is the default: table, then rendered Markdown, then text; HTML
  * shows as text until asked for rendered. A link opens the view its mark
- * is in: lines text, rows table, bytes hex.
+ * is in: lines text, rows table, bytes hex — or rendered Markdown, which
+ * marks the same lines, when the link says so (`prefer`).
  */
-const props = defineProps<{ file: Item }>()
+const props = defineProps<{
+  file: Item
+  /** The view a link asked for (`?view=rendered`), over the one its mark is in. */
+  prefer?: 'rendered'
+}>()
 const emit = defineEmits<{
   /** The view on screen, for the page's side panel to offer its tab. */
   view: [view: View | undefined]
@@ -96,18 +101,27 @@ const views = computed<View[]>(() => {
 })
 /** The view a mark is shown in. */
 const VIEW_OF: Record<MarkKind, View> = { line: 'text', row: 'table', offset: 'hex' }
-/** Picked by the user; a link picks the view of its mark. */
-const chosen = ref<View | null>(mark.value ? VIEW_OF[mark.value.kind] : null)
+/** Picked by the user; a link picks the view it asks for, or that of its mark. */
+const linked = () => props.prefer ?? (mark.value ? VIEW_OF[mark.value.kind] : null)
+const chosen = ref<View | null>(linked())
 watch(
   () => props.file.id,
-  () => (chosen.value = mark.value ? VIEW_OF[mark.value.kind] : null),
+  () => (chosen.value = linked()),
+)
+// A link to the same file that asks for a view opens it.
+watch(
+  () => props.prefer,
+  (prefer) => {
+    if (prefer) chosen.value = prefer
+  },
 )
 // A link to another kind of mark on the same file (only the hash changed)
 // opens its view; the views' own marks are always of their own kind.
+// Rendered Markdown marks lines too: a line mark leaves it where it is.
 watch(
   () => mark.value?.kind,
   (kind) => {
-    if (kind) chosen.value = VIEW_OF[kind]
+    if (kind && !(kind === 'line' && view.value === 'rendered')) chosen.value = VIEW_OF[kind]
   },
 )
 const view = computed<View | undefined>(() =>
@@ -246,6 +260,7 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
 
     <MarkdownViewer
       v-else-if="view === 'rendered' && markdown"
+      v-model:mark="lineMark"
       :file-id="file.id"
       :size="file.size ?? 0"
       @source="showSource"

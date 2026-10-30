@@ -15,7 +15,8 @@ import { parseMarkdown, type Align, type Block } from '@/utils/markdown'
  * - `document`: a file read as a page. Text keeps to a reading column
  *   (90ch); tables and code size to their content and may take the pane's
  *   width, so a wide table is not boxed into the column. Each block says
- *   which line of the source it starts on (`data-line`).
+ *   which lines of the source it spans (`data-line`, `data-end`), and the
+ *   blocks over `marked` lines are tinted, as marked lines are in the source.
  *
  * Tables are rules, not a grid, like every table in the app: a sunken
  * header row, a hairline under each row, and no cell borders. Code in a
@@ -27,8 +28,10 @@ const props = withDefaults(
     /** The markdown, or blocks already parsed from it. */
     source: string | Block[]
     variant?: 'report' | 'document'
+    /** Source lines marked (a document only): the blocks over them are tinted. */
+    marked?: { from: number; to: number } | null
   }>(),
-  { variant: 'report' },
+  { variant: 'report', marked: null },
 )
 
 const blocks = computed(() =>
@@ -46,6 +49,17 @@ const ALIGN: Record<Exclude<Align, null>, string> = {
   right: 'text-right',
 }
 const alignOf = (align: Align) => (align ? ALIGN[align] : 'text-left')
+
+/** A document block's source lines, and whether it is marked. */
+function attrs(block: Block) {
+  if (!doc.value) return {}
+  const m = props.marked
+  return {
+    'data-line': block.line,
+    'data-end': block.end,
+    'data-marked': (m && block.line <= m.to && block.end >= m.from) || undefined,
+  }
+}
 
 function headingClass(level: number): string {
   if (!doc.value) return level <= 2 ? 'card-title mt-2 text-ink' : 'micro-label mt-1'
@@ -66,7 +80,7 @@ function headingClass(level: number): string {
         :is="doc ? `h${block.level}` : 'p'"
         v-if="block.type === 'heading'"
         :class="headingClass(block.level)"
-        :data-line="doc ? block.line : undefined"
+        v-bind="attrs(block)"
       >
         <MarkdownInline :inlines="block.inlines" />
       </component>
@@ -74,7 +88,7 @@ function headingClass(level: number): string {
         v-else-if="block.type === 'paragraph'"
         class="wrap-break-word"
         :class="[measure, { 'markdown-block': doc }]"
-        :data-line="doc ? block.line : undefined"
+        v-bind="attrs(block)"
       >
         <MarkdownInline :inlines="block.inlines" />
       </p>
@@ -82,7 +96,7 @@ function headingClass(level: number): string {
         v-else-if="block.type === 'list'"
         class="flex flex-col gap-0.5"
         :class="[measure, { 'markdown-block': doc }]"
-        :data-line="doc ? block.line : undefined"
+        v-bind="attrs(block)"
       >
         <li
           v-for="(item, j) in block.items"
@@ -103,7 +117,7 @@ function headingClass(level: number): string {
         v-else-if="block.type === 'quote'"
         class="border-l-2 border-border-strong pl-3 text-ink-muted"
         :class="[measure, { 'markdown-block': doc }]"
-        :data-line="doc ? block.line : undefined"
+        v-bind="attrs(block)"
       >
         <MarkdownInline :inlines="block.inlines" />
       </blockquote>
@@ -111,7 +125,7 @@ function headingClass(level: number): string {
         v-else-if="block.type === 'code'"
         class="well flex flex-col gap-1 px-3 py-2"
         :class="[wide, { 'markdown-block min-w-[min(100%,90ch)]': doc }]"
-        :data-line="doc ? block.line : undefined"
+        v-bind="attrs(block)"
       >
         <span v-if="block.lang" class="micro-label">{{ block.lang }}</span>
         <pre class="overflow-x-auto text-[12px] text-ink">{{ block.text }}</pre>
@@ -120,13 +134,13 @@ function headingClass(level: number): string {
         v-else-if="block.type === 'rule'"
         class="border-border"
         :class="measure"
-        :data-line="doc ? block.line : undefined"
+        v-bind="attrs(block)"
       />
       <div
         v-else-if="block.type === 'table'"
         class="overflow-x-auto"
         :class="[wide, { 'markdown-block': doc }]"
-        :data-line="doc ? block.line : undefined"
+        v-bind="attrs(block)"
       >
         <table class="border-collapse text-[12px]" :class="doc ? 'min-w-[45ch]' : 'w-full'">
           <thead>
@@ -160,6 +174,19 @@ function headingClass(level: number): string {
 </template>
 
 <style scoped>
+/* Room each side for a marked block's tint, without moving its text. */
+[data-line]:not(.well) {
+  margin-inline: -0.5rem;
+  padding-inline: 0.5rem;
+}
+
+/* Marked, as marked lines are in the source: the marker-pen tint, a bar on the left. */
+[data-marked] {
+  background-color: var(--color-warning-tint);
+  box-shadow: inset 2px 0 0 var(--color-warning);
+  border-radius: 2px;
+}
+
 /* A long document lays out only what is near the screen. */
 .markdown-block {
   content-visibility: auto;

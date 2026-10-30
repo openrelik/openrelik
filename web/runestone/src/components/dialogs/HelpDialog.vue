@@ -124,6 +124,13 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
+    title: 'rendered markdown',
+    shortcuts: [
+      { keys: ['m'], does: 'Copy a link to the marked lines (select to mark)' },
+      { keys: ['esc'], does: 'Clear the selection, then the marked lines' },
+    ],
+  },
+  {
     title: 'hex view',
     shortcuts: [
       { keys: ['←', '→', '↑', '↓'], does: 'Move the cursor a byte or a row (⇧ selects)' },

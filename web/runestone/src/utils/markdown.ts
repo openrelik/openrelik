@@ -41,8 +41,10 @@ export interface ListItem {
   inlines: Inline[]
 }
 
-/** A block, and the line (1-based) it starts on in the source. */
-export type Block = { line: number } & (
+/** A block, and the lines (1-based, inclusive) it spans in the source. */
+export type Block = { line: number; end: number } & BlockBody
+
+export type BlockBody =
   | { type: 'heading'; level: number; inlines: Inline[] }
   | { type: 'paragraph'; inlines: Inline[] }
   | { type: 'list'; items: ListItem[] }
@@ -50,7 +52,6 @@ export type Block = { line: number } & (
   | { type: 'code'; text: string; lang: string }
   | { type: 'rule' }
   | { type: 'table'; head: Inline[][]; align: Align[]; rows: Inline[][][] }
-)
 
 /** Lines longer than this are not parsed inline: they stay plain text. */
 export const INLINE_MAX = 4000
@@ -165,7 +166,7 @@ export function parseMarkdown(source: string): Block[] {
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length)))
-  const blocks: Block[] = []
+  const blocks: ({ line: number } & BlockBody)[] = []
   let i = 0
   while (i < lines.length) {
     const line = lines[i]!
@@ -300,5 +301,10 @@ export function parseMarkdown(source: string): Block[] {
         : { type: 'paragraph', inlines: paragraphInlines(body), line: start },
     )
   }
-  return blocks
+  // A block ends where the next begins, less the blank lines between them.
+  return blocks.map((block, k) => {
+    let end = (blocks[k + 1]?.line ?? lines.length + 1) - 1
+    while (end > block.line && !lines[end - 1]!.trim()) end--
+    return { ...block, end }
+  })
 }
