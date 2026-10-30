@@ -50,6 +50,16 @@ export const canJoin = (group: TaskGroup): boolean =>
   !group.join && group.tasks.length > 1 && group.tasks.every((task) => !task.groups.length)
 
 /**
+ * Whether a join can follow all of these sibling groups at once (what runs on
+ * one task's output, or on the inputs): two or more of them, none with a join,
+ * nothing chained after any of their tasks. Adding one merges them into a
+ * single group first, its header; one free group alone is `canJoin`'s.
+ */
+export const canJoinAll = (groups: TaskGroup[]): boolean =>
+  groups.length > 1 &&
+  groups.every((group) => !group.join && group.tasks.every((task) => !task.groups.length))
+
+/**
  * Why these sibling groups cannot be merged into one, or null when they can.
  * Merging only changes what a join waits for, so it is refused exactly when
  * the merged group could not keep its join: two joins, or a join over tasks

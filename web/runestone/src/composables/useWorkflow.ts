@@ -34,6 +34,7 @@ import {
   allTasks,
   canChainAfter,
   canJoin,
+  canJoinAll,
   everyGroup,
   everyTask,
   findTask,
@@ -260,6 +261,11 @@ export type AddAt =
   | { beside: string }
   /** As the join of this group: after all of its tasks, on all their outputs. */
   | { join: string }
+  /**
+   * As the join of everything on this task's output, or the inputs' (null):
+   * its sibling groups merge into one, and the worker waits for all of them.
+   */
+  | { joinAll: string | null }
 
 /**
  * Adds `worker` to the draft. A join takes a free group (`canJoin`), and
@@ -297,10 +303,17 @@ export function addTask(
     const index = group ? group.tasks.findIndex((t) => t.id === at.beside) : -1
     if (!group || index === -1) return null
     group.tasks.splice(index + 1, 0, task)
-  } else {
+  } else if ('join' in at) {
     const group = everyGroup(workflow).find(({ group }) => group.id === at.join)?.group
     if (!group || !canJoin(group)) return null
     group.join = task
+  } else {
+    const owner = at.joinAll === null ? workflow : findTask(workflow, at.joinAll)
+    if (!owner || !canJoinAll(owner.groups)) return null
+    const [target, ...others] = owner.groups
+    for (const group of others) target!.tasks.push(...group.tasks)
+    owner.groups = [target!]
+    target!.join = task
   }
   scheduleSave(workflow)
   return task

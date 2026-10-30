@@ -14,7 +14,7 @@ import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
 import { lastRun, openAddToWorkflow, openRun, runError, type Anchor } from '@/composables/useRun'
-import { bytesOf, typeOf } from '@/utils/item'
+import { bytesOf, isEmptyFile, typeOf } from '@/utils/item'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useRootPagesStore } from '@/stores/rootPages'
@@ -46,6 +46,7 @@ import { everyTask, findTask, isActive } from '@/utils/workflow'
 import { useWorkflowsStore } from '@/stores/workflows'
 import type { Task } from '@/types/workflow'
 import { useModalStore } from '@/stores/modals'
+import { useSettingsStore } from '@/stores/settings'
 import { isTyping } from '@/utils/keyboard'
 
 /**
@@ -59,6 +60,7 @@ const route = useRoute()
 const router = useRouter()
 const modalStore = useModalStore()
 const itemsStore = useItemsStore()
+const settingsStore = useSettingsStore()
 const rootPagesStore = useRootPagesStore()
 const workflowsStore = useWorkflowsStore()
 
@@ -213,7 +215,7 @@ useAutoRefresh(({ force }) => loadHere({ force }))
 
 // Rows: the current top-level page in the server's order (newest created
 // first; it cannot be re-sorted across pages), or a folder's contents sorted here.
-const rows = computed(() => {
+const listed = computed(() => {
   if (!atRoot.value && !folder.value) return []
   const needle = filter.value.trim().toLowerCase()
   if (atRoot.value) {
@@ -240,6 +242,19 @@ const rows = computed(() => {
     .filter((item) => !needle || item.name.toLowerCase().includes(needle))
     .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1) || by[key](a, b) * dir)
 })
+
+/**
+ * Empty files folded away, unless the operator shows them or they are all
+ * there is: a folder of nothing but empty files still lists them.
+ */
+const hiddenEmpty = computed(() => {
+  if (settingsStore.settings.explorer.showEmptyFiles) return 0
+  const empty = listed.value.filter(isEmptyFile).length
+  return empty < listed.value.length ? empty : 0
+})
+const rows = computed(() =>
+  hiddenEmpty.value ? listed.value.filter((row) => !isEmptyFile(row)) : listed.value,
+)
 
 // In-row "creating…"/"saving…" wait a moment, so fast saves never flash one.
 // Loading and refreshing are shown by LoadState and the app-wide status bar.
@@ -277,6 +292,20 @@ const {
 } = useRowSelection(rows, bytesOf)
 
 const selectedItems = computed(() => rows.value.filter((row) => selected.value.has(row.id)))
+
+/** Shows or folds the empty files; the cursor stays on its row, and nothing hidden stays selected. */
+function toggleEmptyFiles() {
+  const here = rows.value[cursor.value]?.id
+  const explorer = settingsStore.settings.explorer
+  explorer.showEmptyFiles = !explorer.showEmptyFiles
+  if (!explorer.showEmptyFiles) {
+    const kept = new Set(rows.value.map((row) => row.id))
+    selected.value = new Set([...selected.value].filter((id) => kept.has(id)))
+  }
+  const at = rows.value.findIndex((row) => row.id === here)
+  if (at >= 0) cursor.value = at
+  else cursor.value = Math.min(cursor.value, Math.max(0, rows.value.length - 1))
+}
 
 // --- actions: the selection's in the toolbar, a row's in its menu ---
 
@@ -752,6 +781,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :selected-count="selectedItems.length"
       :selection-actions="selectionActions"
       :upload-blocked="uploadBlocked"
+      :may-rename="mayRename"
+      @rename="(id, name) => handleRename({ id, name })"
       @new-folder="startCreateFolder"
       @upload-files="pickedFiles"
       @clear-selection="clearSelection"
@@ -788,8 +819,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :uploads="uploadsHere"
           :is-drop-target="isDropTarget"
           :menu-row-id="menu?.item.id ?? null"
+          :hidden-empty="hiddenEmpty"
+          :empty-shown="settingsStore.settings.explorer.showEmptyFiles"
           v-on="dropHandlers"
           @menu="openMenu"
+          @toggle-empty="toggleEmptyFiles"
           @sort="sortBy"
           @toggle-all="toggleAll"
           @toggle="toggle"
@@ -883,6 +917,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :dirs-count="totals.dirs"
       :files-count="totals.files"
       :bytes-count="totals.bytes"
+      :hidden-empty-count="hiddenEmpty"
       :run-notice="runNotice"
       :producer="producer"
       :highlighted-row-name="rows[cursor]?.name"

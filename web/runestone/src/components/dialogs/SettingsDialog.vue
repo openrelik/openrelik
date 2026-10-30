@@ -154,6 +154,24 @@ const AI_FEATURES = [
                 <span class="text-brand">{{ settings.explorer.pageSize }}</span></code
               >
             </div>
+
+            <div class="flex items-center gap-3 px-4 py-2.5">
+              <Switch
+                v-model="settings.explorer.showEmptyFiles"
+                label="Show empty files"
+                :tooltip="
+                  settings.explorer.showEmptyFiles ? 'Fold away empty files' : 'List empty files'
+                "
+              />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-ink">Show empty files</p>
+                <p class="text-ink-muted">Files with no content; folded away by default</p>
+              </div>
+              <code class="tabular shrink-0 text-[11px] text-ink-muted"
+                >explorer.showEmptyFiles =
+                <span class="text-brand">{{ settings.explorer.showEmptyFiles }}</span></code
+              >
+            </div>
           </section>
 
           <hr class="my-2 border-border" />

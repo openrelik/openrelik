@@ -17,8 +17,15 @@ export const exactSize = (item: Item) => item.size ?? 0
 /** Bytes an item contributes to a listing's total: folders count for nothing. */
 export const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) : 0)
 
+/**
+ * A file with no bytes. Some workers write these when they find nothing; the
+ * UI keeps them, quietly. A file whose size is not known is not empty.
+ */
+export const isEmptyFile = (item: Item) => item.kind === 'file' && item.size === 0
+
 /** What the type column shows: the file's own type, or what the item is. */
 export const typeOf = (item: Item) =>
+  (isEmptyFile(item) ? 'empty' : undefined) ??
   item.mime ??
   item.dataType ??
   (item.kind === 'file' ? 'file:generic' : item.workflowId !== undefined ? 'workflow' : 'directory')

@@ -10,6 +10,8 @@ defineProps<{
   dirsCount: number
   filesCount: number
   bytesCount: number
+  /** Empty files folded out of the listing. */
+  hiddenEmptyCount?: number
   runNotice?: { folderId: number; label: string; parentId: number } | null
   producer?: Task
   highlightedRowName?: string
@@ -25,7 +27,8 @@ defineProps<{
   <StatusBar>
     <span class="tabular">
       {{ count(rowsCount, 'item') }} · {{ count(dirsCount, 'dir') }} ·
-      {{ count(filesCount, 'file') }} · {{ formatSize(bytesCount) }}
+      {{ count(filesCount, 'file') }} · {{ formatSize(bytesCount)
+      }}<template v-if="hiddenEmptyCount"> · {{ hiddenEmptyCount }} empty hidden</template>
     </span>
 
     <span v-if="runNotice" class="flex min-w-0 items-center gap-1.5 text-brand">

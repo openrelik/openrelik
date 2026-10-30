@@ -17,7 +17,7 @@ import UploadRow from '@/components/folders/UploadRow.vue'
 import type { PendingFolder } from '@/composables/useFolderActions'
 import type { Upload } from '@/composables/useUploadQueue'
 import type { QueryState } from '@/composables/useQueryCache'
-import { bytesOf, typeOf } from '@/utils/item'
+import { bytesOf, isEmptyFile, typeOf } from '@/utils/item'
 import { getUniqueFolderName } from '@/utils/item'
 import type { Item } from '@/types/item'
 import { runStats } from '@/utils/workflow'
@@ -64,6 +64,10 @@ const props = defineProps<{
   emptyNote?: string
   /** The row whose menu is open, if any: its button stays visible. */
   menuRowId?: number | null
+  /** Empty files folded away; a last row says how many and shows them. */
+  hiddenEmpty?: number
+  /** Empty files are listed by choice: the last row offers to fold them again. */
+  emptyShown?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -85,6 +89,8 @@ const emit = defineEmits<{
   cancelUpload: [key: string]
   retryUpload: [key: string]
   dismissUpload: [key: string]
+  /** Show or fold the empty files. */
+  toggleEmpty: []
 }>()
 
 const workflowsStore = useWorkflowsStore()
@@ -93,6 +99,13 @@ const workflowsStore = useWorkflowsStore()
 const MAX_UPLOAD_ROWS = 50
 const shownUploads = computed(() => (props.uploads ?? []).slice(0, MAX_UPLOAD_ROWS))
 const hiddenUploads = computed(() => Math.max(0, (props.uploads?.length ?? 0) - MAX_UPLOAD_ROWS))
+/** Empty files listed by choice, counted for the row that folds them again. */
+const shownEmpty = computed(() => {
+  if (!props.emptyShown) return 0
+  const empty = props.rows.filter((row) => isEmptyFile(row)).length
+  // A folder of nothing but empty files lists them either way: nothing to fold.
+  return empty < props.rows.length ? empty : 0
+})
 
 /** The row menu's width (`ItemMenu`, w-64): it opens leftwards from its button. */
 const MENU_WIDTH = 256
@@ -634,7 +647,8 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               <RouterLink
                 v-else
                 :to="rowPath(row)"
-                class="truncate text-ink select-none hover:underline"
+                class="truncate select-none hover:underline"
+                :class="isEmptyFile(row) ? 'text-ink-muted' : 'text-ink'"
                 draggable="false"
                 v-overflow-tooltip
                 @click.stop
@@ -661,7 +675,13 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
             <td class="px-2">
               <div class="flex items-center justify-end gap-2">
                 <span
-                  v-if="row.kind === 'file'"
+                  v-if="isEmptyFile(row)"
+                  class="select-none text-ink-muted"
+                  v-tooltip="'Empty file: 0 bytes'"
+                  >—</span
+                >
+                <span
+                  v-else-if="row.kind === 'file'"
                   class="tabular text-ink-secondary"
                   v-tooltip="`${bytesOf(row).toLocaleString('en-US')} bytes`"
                   >{{ formatSize(bytesOf(row)) }}</span
@@ -704,6 +724,27 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               @dblclick.stop
             >
               <Ellipsis :size="14" :stroke-width="1.5" />
+            </button>
+          </td>
+        </tr>
+
+        <tr v-if="hiddenEmpty || shownEmpty" class="h-7 select-none">
+          <td class="pl-3" />
+          <td class="px-2 text-ink-muted" :colspan="columns.length + 1">
+            <button
+              type="button"
+              class="tabular cursor-pointer hover:text-ink hover:underline"
+              :aria-pressed="!!emptyShown"
+              v-tooltip="
+                hiddenEmpty ? 'List files with no content' : 'Fold away files with no content'
+              "
+              @click="emit('toggleEmpty')"
+            >
+              {{
+                hiddenEmpty
+                  ? `${count(hiddenEmpty, 'empty file')} hidden · show`
+                  : `hide ${count(shownEmpty, 'empty file')}`
+              }}
             </button>
           </td>
         </tr>

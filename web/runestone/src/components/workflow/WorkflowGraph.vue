@@ -18,12 +18,14 @@ import { RouterLink } from 'vue-router'
 import Button from '@/components/base/Button.vue'
 
 import { useItemsStore } from '@/stores/items'
+import { isEmptyFile } from '@/utils/item'
 import { missingOptions } from '@/utils/worker'
 import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
 import {
   canJoin,
+  canJoinAll,
   everyGroup,
   groupOf,
   mergeProblem,
@@ -91,6 +93,22 @@ const emit = defineEmits<{
 }>()
 
 const itemsStore = useItemsStore()
+/** Outputs with no bytes, among those loaded: a worker that found nothing, said quietly. */
+const emptyOutputs = (task: Task) =>
+  task.outputs.filter((id) => {
+    const item = itemsStore.findItem(id)
+    return item && isEmptyFile(item)
+  }).length
+/** A node's second line: status unless it succeeded, time taken, "16 out (15 empty)". */
+function nodeFacts(task: Task): string {
+  const facts = task.status === 'success' ? [] : [STATUS_LABEL[task.status]]
+  if (task.duration !== undefined) facts.push(formatDuration(task.duration))
+  if (task.outputs.length) {
+    const empty = emptyOutputs(task)
+    facts.push(`${task.outputs.length} out${empty ? ` (${empty} empty)` : ''}`)
+  }
+  return facts.join(' · ')
+}
 
 const NODE_W = 196
 const NODE_H = 44
@@ -116,6 +134,11 @@ interface Node {
   ghost?: boolean
   /** A join: how many tasks it waits for. */
   waitsFor?: number
+  /**
+   * A draft's "after all" for siblings in separate groups (`canJoinAll`):
+   * adding there merges them into one group and joins it.
+   */
+  fan?: Node
   /** A large group drawn as one stacked card: the group it stands for. */
   /** A stacked card: the group it belongs to, with only the tasks it folds. */
   stack?: TaskGroup
@@ -139,6 +162,7 @@ const deepest = (node: Node): number =>
       ...members.map(deepest),
       join ? deepest(join) : 0,
     ]),
+    node.fan ? deepest(node.fan) : 0,
   )
 
 /** The nodes an edge into a join starts from: the last of each line. */
@@ -259,13 +283,18 @@ function stackSummary(group: TaskGroup) {
 
 const layout = computed(() => {
   // 1. The shape: which node goes in which column.
-  const shape = (task: Task, depth: number): Node => ({
-    key: task.id,
-    task,
-    depth,
-    top: 0,
-    groups: shapeGroups(task.groups, depth + 1),
-  })
+  const shape = (task: Task, depth: number): Node =>
+    withFan(
+      { key: task.id, task, depth, top: 0, groups: shapeGroups(task.groups, depth + 1) },
+      task.groups,
+    )
+  /** Siblings in separate groups get one "after all" for them all, after the deepest of them. */
+  const withFan = (node: Node, groups: TaskGroup[]): Node => {
+    if (!props.editable || !canJoinAll(groups)) return node
+    const column = Math.max(...node.groups.flatMap(({ members }) => members.map(deepest))) + 1
+    node.fan = { key: `${node.key}:join-all`, depth: column, top: 0, groups: [], ghost: true }
+    return node
+  }
   const shapeGroups = (groups: TaskGroup[], depth: number): GroupNode[] =>
     groups.map((group) => {
       // A stack folds the tasks with nothing after them into one card, below
@@ -288,7 +317,8 @@ const layout = computed(() => {
       // As in the original editor: a callback is offered after a free group (two
       // or more with nothing chained after them), and nothing is chained after
       // a group's tasks once it has one.
-      const ghost = !!props.editable && canJoin(group)
+      // Not when its siblings share one: that one joins them all.
+      const ghost = !!props.editable && canJoin(group) && !canJoinAll(groups)
       if (!group.join && !ghost) return { group, members }
       const column = Math.max(depth, ...members.map(deepest)) + 1
       const join: Node = ghost
@@ -297,12 +327,10 @@ const layout = computed(() => {
       return { group, members, join }
     })
 
-  const root: Node = {
-    key: 'input',
-    depth: 0,
-    top: PAD,
-    groups: shapeGroups(props.workflow.groups, 1),
-  }
+  const root: Node = withFan(
+    { key: 'input', depth: 0, top: PAD, groups: shapeGroups(props.workflow.groups, 1) },
+    props.workflow.groups,
+  )
 
   // 2. The heights: each column keeps where it is free from.
   // Per column: where its last block ends, and whether that block is a box.
@@ -323,7 +351,7 @@ const layout = computed(() => {
   const middleOf = (members: Node[]) => (members[0]!.top + members.at(-1)!.top + NODE_H) / 2
 
   /** A node's groups in the next column, as one stack level with `center` if there is room. */
-  const placeGroups = (groups: GroupNode[], column: number, center: number | null) => {
+  const placeGroups = (groups: GroupNode[], column: number, center: number | null, fan?: Node) => {
     if (!groups.length) return
     const blocks = groups.map(blockOf)
     const gaps = groups
@@ -339,11 +367,15 @@ const layout = computed(() => {
     })
     for (const group of groups) {
       for (const member of group.members)
-        placeGroups(member.groups, column + 1, member.top + NODE_H / 2)
+        placeGroups(member.groups, column + 1, member.top + NODE_H / 2, member.fan)
       if (!group.join) continue
       const join = group.join
       join.top = take(join.depth, middleOf(group.members) - NODE_H / 2, NODE_H)
-      placeGroups(join.groups, join.depth + 1, join.top + NODE_H / 2)
+      placeGroups(join.groups, join.depth + 1, join.top + NODE_H / 2, join.fan)
+    }
+    if (fan) {
+      const members = groups.flatMap((group) => group.members)
+      fan.top = take(fan.depth, middleOf(members) - NODE_H / 2, NODE_H)
     }
   }
   // The first tasks go level with the inputs where they can; when they are
@@ -351,7 +383,7 @@ const layout = computed(() => {
   // line between them runs straight.
   const span = inputSpan.value
   const pad = inputPad.value
-  placeGroups(root.groups, 1, PAD + pad + span / 2)
+  placeGroups(root.groups, 1, PAD + pad + span / 2, root.fan)
   const first = root.groups.flatMap((group) => group.members)
   root.top = Math.max(PAD + pad, first.length ? middleOf(first) - span / 2 : 0)
   bottom = Math.max(bottom, root.top + span + pad)
@@ -365,6 +397,7 @@ const layout = computed(() => {
       group.members.forEach(walk)
       if (group.join) walk(group.join)
     }
+    if (node.fan) nodes.push(node.fan)
   }
   walk(root)
 
@@ -649,23 +682,46 @@ const inputsBox = computed(() => {
   }
 })
 
-/** Where each free group's "after all" button goes, with a dashed line from its box. */
-const ghosts = computed(() =>
-  layout.value.groups
+/**
+ * Where each "after all" button goes: after a free group, with a dashed line
+ * from its box; or after siblings in separate groups, with a dashed line from
+ * each, so it shows what the worker would wait for.
+ */
+const ghosts = computed(() => [
+  ...layout.value.groups
     .filter(({ join }) => join?.ghost)
     .map((placed) => {
       const { group, members } = placed
       const join = placed.join!
       return {
         key: join.key,
-        groupId: group.id,
+        at: { join: group.id } as AddAt,
         count: group.tasks.length,
+        what: 'tasks in this group',
         left: x(join),
         top: y(join),
         link: `M ${x(members[0]!) + NODE_W + padOf(placed)} ${y(join) + NODE_H / 2} H ${x(join)}`,
       }
     }),
-)
+  ...layout.value.nodes
+    .filter((node) => node.fan)
+    .map((node) => {
+      const fan = node.fan!
+      const members = node.groups.flatMap((group) => group.members)
+      const tasks = node.groups.flatMap((group) => group.group.tasks)
+      return {
+        key: fan.key,
+        at: { joinAll: node.task?.id ?? null } as AddAt,
+        count: tasks.length,
+        what: `tasks after ${node.task?.name ?? 'the inputs'}`,
+        left: x(fan),
+        top: y(fan),
+        link: members
+          .map((member) => curve(outOf(member).x, outOf(member).y, x(fan), y(fan) + NODE_H / 2))
+          .join(' '),
+      }
+    }),
+])
 
 /**
  * The + that adds one more task to a group: on the bottom edge of its box, or
@@ -746,11 +802,15 @@ const EDGE: Record<TaskStatus, string> = {
 }
 /** A draft's edges: nothing is queued yet, so none is dashed as pending. */
 const DRAFT_EDGE = 'stroke-ink-muted/60'
-const RAIL: Record<TaskStatus, string> = {
-  success: 'border-l-success',
-  running: 'border-l-brand',
-  pending: 'border-l-idle',
-  failed: 'border-l-danger',
+/**
+ * A node's frame, when nothing selects it. Status is said by the icon and the
+ * edges; only a failure, the one state that asks for attention, tints the frame.
+ */
+const FRAME: Record<TaskStatus, string> = {
+  success: 'border-border-strong',
+  running: 'border-border-strong',
+  pending: 'border-border-strong',
+  failed: 'border-danger/50',
 }
 /** A stack's progress bar, one segment per status. */
 const BAR: Record<TaskStatus, string> = {
@@ -772,7 +832,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
     <div
       ref="viewport"
       @click="clickCanvas"
-      class="flex overflow-auto bg-canvas bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] bg-size-[14px_14px] bg-local"
+      class="flex overflow-auto bg-canvas bg-[radial-gradient(color-mix(in_oklab,var(--color-border)_45%,transparent)_1px,transparent_1px)] bg-size-[14px_14px] bg-local"
       :class="fill ? 'h-full' : ['min-h-72', { 'max-h-[70vh]': capped }]"
     >
       <!-- A small chart sits centred in the room it has (in the panel, only
@@ -981,16 +1041,15 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
             <button
               v-else-if="node.task"
               type="button"
-              class="absolute flex cursor-pointer flex-col justify-center gap-0.5 rounded-(--radius-card) border border-l-2 px-2.5 text-left transition-colors duration-120 ease-(--ease-standard)"
+              class="absolute flex cursor-pointer flex-col justify-center gap-0.5 rounded-(--radius-card) border px-2.5 text-left transition-colors duration-120 ease-(--ease-standard)"
               :class="[
-                RAIL[node.task.status],
                 // One background per state, never two: a base bg-surface would
                 // fight these on stylesheet order and win.
                 node.task.id === selectedId || isPicked(node.task.id)
                   ? 'border-brand bg-brand-selected'
                   : node.task.id === producerId
                     ? 'border-brand bg-brand-tint ring-2 ring-brand/40'
-                    : 'border-border-strong bg-surface hover:bg-sunken',
+                    : [FRAME[node.task.status], 'bg-surface hover:bg-sunken'],
                 node.task.status === 'pending' && !workflow.draft ? 'border-dashed' : '',
               ]"
               :style="{
@@ -1039,14 +1098,9 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 class="truncate text-[11px] text-warning"
                 >{{ needs(node.task) }}</span
               >
+              <!-- Success goes unsaid (the check says it), so the output counts fit. -->
               <span v-else-if="!workflow.draft" class="tabular truncate text-[11px] text-ink-muted">
-                {{ STATUS_LABEL[node.task.status] }}
-                <template v-if="node.task.duration !== undefined">
-                  · {{ formatDuration(node.task.duration) }}</template
-                >
-                <template v-if="node.task.outputs.length">
-                  · {{ node.task.outputs.length }} out</template
-                >
+                {{ nodeFacts(node.task) }}
               </span>
             </button>
 
@@ -1074,15 +1128,14 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               />
               <button
                 type="button"
-                class="relative flex h-full w-full cursor-pointer flex-col justify-center gap-0.5 overflow-hidden rounded-(--radius-card) border border-l-2 px-2.5 text-left"
+                class="relative flex h-full w-full cursor-pointer flex-col justify-center gap-0.5 overflow-hidden rounded-(--radius-card) border px-2.5 text-left"
                 :class="[
-                  RAIL[statusOf(node)],
                   // One background per state, as on task nodes.
                   holds(node.stack, selectedId)
                     ? 'border-brand bg-brand-selected'
                     : holds(node.stack, producerId)
                       ? 'border-brand bg-brand-tint ring-2 ring-brand/40'
-                      : 'border-border-strong bg-surface hover:bg-sunken',
+                      : [FRAME[statusOf(node)], 'bg-surface hover:bg-sunken'],
                 ]"
                 :aria-label="`${stackSummary(node.stack).name} ${stackSummary(node.stack).times}: ${stackSummary(node.stack).line}. Show all ${node.stack.tasks.length}`"
                 v-tooltip="stackTip(node.stack)"
@@ -1291,11 +1344,11 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               width: `${NODE_W}px`,
               height: `${NODE_H}px`,
             }"
-            :aria-label="`Add worker after all ${ghost.count} tasks in this group`"
+            :aria-label="`Add worker after all ${ghost.count} ${ghost.what}`"
             v-tooltip="
-              `Add a worker that runs once all ${ghost.count} tasks in this group have finished, on all their outputs`
+              `Add a worker that runs once all ${ghost.count} ${ghost.what} have finished, on all their outputs`
             "
-            @click.stop="emit('add', { join: ghost.groupId }, anchorOf($event))"
+            @click.stop="emit('add', ghost.at, anchorOf($event))"
           >
             <Plus :size="13" :stroke-width="1.5" class="shrink-0" />
             after all {{ ghost.count }}

@@ -19,6 +19,8 @@ const props = defineProps<{
   selectionActions?: ItemAction[]
   /** Why uploading is off here (an empty workflow folder), or nothing. */
   uploadBlocked?: string | null
+  /** Asked before the current folder's name turns into a field (see `PathBar`). */
+  mayRename?: (item: Item) => Promise<boolean>
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +28,8 @@ const emit = defineEmits<{
   /** Files the operator picked for upload. */
   uploadFiles: [files: File[]]
   clearSelection: []
+  /** The folder you are in, renamed from its name in the path. */
+  rename: [id: number, name: string]
 }>()
 
 const currentFolder = computed(() => props.crumbs.at(-1))
@@ -69,7 +73,12 @@ defineExpose({
 
 <template>
   <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-2 pl-3">
-    <PathBar :path="crumbs" :pending="pathPending" />
+    <PathBar
+      :path="crumbs"
+      :pending="pathPending"
+      :may-rename="mayRename"
+      @rename="(id, name) => emit('rename', id, name)"
+    />
 
     <!-- No filter at the root: the top-level list is found through the prompt. -->
     <div v-if="!atRoot" class="relative w-52 shrink-0">

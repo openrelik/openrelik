@@ -2,8 +2,10 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { Pencil } from '@/components/icons'
 import BrandLink from '@/components/layout/BrandLink.vue'
 import PromptResults from '@/components/prompt/PromptResults.vue'
+import { canRename, roleOf } from '@/composables/useFolderPermissions'
 import { registerPrompt, usePrompt } from '@/composables/usePrompt'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
@@ -24,6 +26,15 @@ const props = defineProps<{
   path: Item[]
   /** The path is not known yet (a folder opened by link is loading). */
   pending?: boolean
+  /**
+   * The folder you are in can be renamed from its name here; asked before the
+   * name turns into a field. Left out where the last segment is not the page's
+   * own folder (a file page, metrics).
+   */
+  mayRename?: (item: Item) => Promise<boolean>
+}>()
+const emit = defineEmits<{
+  rename: [id: number, name: string]
 }>()
 const route = useRoute()
 
@@ -98,6 +109,54 @@ watch(
   },
 )
 onUnmounted(() => unregister())
+
+// --- renaming the folder you are in ---------------------------------------------
+
+/** The current folder, when its name offers a rename: not where the role says no. */
+const renamable = computed(() => {
+  const last = props.path.at(-1)
+  if (!props.mayRename || last?.kind !== 'folder') return undefined
+  const role = roleOf(last.id)
+  return role === undefined || canRename(role) ? last : undefined
+})
+const renaming = ref(false)
+const newName = ref('')
+const nameInput = ref<HTMLInputElement | null>(null)
+// Inside the path's v-for, a plain ref would collect an array.
+const setNameInput = (el: unknown) => (nameInput.value = el as HTMLInputElement | null)
+
+async function startRename() {
+  const folder = renamable.value
+  if (!folder || !(await props.mayRename!(folder))) return
+  newName.value = folder.name
+  renaming.value = true
+  await nextTick()
+  nameInput.value?.focus()
+  nameInput.value?.select()
+}
+
+/** Enter or leaving the field saves; an empty or unchanged name keeps the old one. */
+function commitRename() {
+  if (!renaming.value) return
+  renaming.value = false
+  const folder = props.path.at(-1)
+  const name = newName.value.trim()
+  if (folder && name && name !== folder.name) emit('rename', folder.id, name)
+}
+
+function onNameKey(event: KeyboardEvent) {
+  // The listing's keys stay out of the field.
+  event.stopPropagation()
+  if (event.key === 'Enter') commitRename()
+  else if (event.key === 'Escape') renaming.value = false
+  else return
+  event.preventDefault()
+}
+
+watch(
+  () => route.fullPath,
+  () => (renaming.value = false),
+)
 
 // --- separator menus ------------------------------------------------------------
 
@@ -244,9 +303,37 @@ function onBarClick(event: MouseEvent) {
         </span>
 
         <template v-if="at + 1 < path.length">
-          <span v-if="at + 1 === path.length - 1" class="truncate font-medium text-ink">{{
-            path[at + 1]!.name
-          }}</span>
+          <template v-if="at + 1 === path.length - 1">
+            <!-- The folder you are in: its name is where it is renamed. -->
+            <input
+              v-if="renaming"
+              :ref="setNameInput"
+              v-model="newName"
+              type="text"
+              spellcheck="false"
+              :size="Math.max(8, newName.length + 1)"
+              class="h-6 max-w-full min-w-0 rounded-(--radius-check) border border-brand bg-surface px-1.5 font-medium text-ink outline-none"
+              :aria-label="`Rename ${path[at + 1]!.name}`"
+              @keydown="onNameKey"
+              @blur="commitRename"
+            />
+            <button
+              v-else-if="renamable"
+              type="button"
+              class="group/name flex min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-check) px-1 font-medium text-ink hover:bg-surface"
+              :aria-label="`Rename ${path[at + 1]!.name}`"
+              v-tooltip="`Rename ${path[at + 1]!.name}`"
+              @click="startRename"
+            >
+              <span class="truncate">{{ path[at + 1]!.name }}</span>
+              <Pencil
+                :size="11"
+                :stroke-width="1.5"
+                class="shrink-0 text-ink-muted opacity-0 group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
+              />
+            </button>
+            <span v-else class="truncate font-medium text-ink">{{ path[at + 1]!.name }}</span>
+          </template>
           <RouterLink
             v-else
             :to="`/folder/${path[at + 1]!.id}`"

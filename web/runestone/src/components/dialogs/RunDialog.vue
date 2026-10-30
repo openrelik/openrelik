@@ -37,7 +37,7 @@ const adding = computed(() => !!runTarget.value?.add)
 const placing = computed(() => {
   const add = runTarget.value?.add
   if (!add) return { header: 'run on', footer: '' }
-  if ('join' in add)
+  if ('join' in add || 'joinAll' in add)
     return {
       header: 'add after all of',
       footer: 'runs once they have all finished, on all their outputs',

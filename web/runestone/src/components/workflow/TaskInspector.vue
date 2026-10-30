@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { File, FileText, Merge, Plus, Trash2, X } from '@/components/icons'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
@@ -10,10 +10,11 @@ import { anchorOf, type Anchor } from '@/composables/useRun'
 import { openTaskReport } from '@/composables/useTaskReport'
 import { removeTask, setTaskOption, type AddAt } from '@/composables/useWorkflow'
 import { useItemsStore } from '@/stores/items'
-import { allTasks, canChainAfter, canJoin, groupOf } from '@/utils/workflow'
+import { allTasks, canChainAfter, canJoin, canJoinAll, groupOf } from '@/utils/workflow'
 import { useWorkflowsStore } from '@/stores/workflows'
 import type { FileReport, Task } from '@/types/workflow'
 import { count, formatDuration, formatSize } from '@/utils/format'
+import { isEmptyFile } from '@/utils/item'
 
 /**
  * One task: what it does, how it went, what it found, what it ran on and
@@ -46,8 +47,22 @@ const group = computed(() =>
 )
 /** Nothing is chained after a task in a group a join waits for. */
 const chainable = computed(() => !!workflow.value && canChainAfter(workflow.value, props.task.id))
-/** A callback after its group, as the flowchart offers. */
-const joinable = computed(() => !!group.value && canJoin(group.value))
+/**
+ * A callback after it and its siblings, as the flowchart offers: after its
+ * group, or after every task on the same output when they are in separate groups.
+ */
+const join = computed((): { at: AddAt; count: number } | null => {
+  if (!group.value) return null
+  const owner = placed.value?.parent ?? workflow.value
+  if (owner && canJoinAll(owner.groups))
+    return {
+      at: { joinAll: placed.value?.parent?.id ?? null },
+      count: owner.groups.flatMap((sibling) => sibling.tasks).length,
+    }
+  return canJoin(group.value)
+    ? { at: { join: group.value.id }, count: group.value.tasks.length }
+    : null
+})
 const allAfter = computed(() => allTasks(props.task.groups).length)
 
 /**
@@ -71,7 +86,10 @@ const reportsByFile = computed(
   () =>
     new Map<number, FileReport>(props.task.fileReports.map((report) => [report.fileId, report])),
 )
-/** Flagged files first, highest priority first; the rest as the server listed them. */
+/**
+ * Flagged files first, highest priority first; the rest as the server listed
+ * them; empty files last, since they hold nothing to look at.
+ */
 const outputs = computed(() =>
   props.task.outputs
     .map((id) => itemsStore.findItem(id))
@@ -80,7 +98,21 @@ const outputs = computed(() =>
       (a, b) =>
         (reportsByFile.value.get(b.id)?.priority ?? -1) -
         (reportsByFile.value.get(a.id)?.priority ?? -1),
-    ),
+    )
+    .sort((a, b) => Number(isEmptyFile(a)) - Number(isEmptyFile(b))),
+)
+/** More than a couple of empty files fold away behind one line. */
+const FOLD_EMPTY_OVER = 2
+const emptyCount = computed(() => outputs.value.filter(isEmptyFile).length)
+const showEmpty = ref(false)
+watch(
+  () => props.task.id,
+  () => (showEmpty.value = false),
+)
+const shownOutputs = computed(() =>
+  emptyCount.value > FOLD_EMPTY_OVER && !showEmpty.value
+    ? outputs.value.filter((file) => !isEmptyFile(file))
+    : outputs.value,
 )
 /** There is more to read than the summary shows. */
 const hasReport = computed(() => !!props.task.report || props.task.fileReports.length > 0)
@@ -192,10 +224,11 @@ function remove() {
       <section v-if="!editable" class="mt-3" aria-label="Outputs">
         <p class="micro-label pb-1">outputs</p>
         <ul v-if="outputs.length" class="flex flex-col">
-          <li v-for="file in outputs" :key="file.id">
+          <li v-for="file in shownOutputs" :key="file.id">
             <RouterLink
               :to="`/folder/${file.parent}/file/${file.id}`"
-              class="flex h-6 items-center gap-2 text-ink hover:text-brand"
+              class="flex h-6 items-center gap-2 hover:text-brand"
+              :class="isEmptyFile(file) ? 'text-ink-muted' : 'text-ink'"
             >
               <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
               <span class="truncate">{{ file.name }}</span>
@@ -207,7 +240,7 @@ function remove() {
               <span
                 class="tabular shrink-0 text-[11px] text-ink-muted"
                 :class="{ 'ml-auto': !reportsByFile.get(file.id) }"
-                >{{ formatSize(file.size ?? 0) }}</span
+                >{{ isEmptyFile(file) ? '—' : formatSize(file.size ?? 0) }}</span
               >
             </RouterLink>
             <p
@@ -217,6 +250,18 @@ function remove() {
             >
               {{ reportsByFile.get(file.id)!.summary }}
             </p>
+          </li>
+          <li v-if="emptyCount > FOLD_EMPTY_OVER">
+            <button
+              type="button"
+              class="flex h-6 cursor-pointer items-center gap-2 text-ink-muted hover:text-ink"
+              :aria-expanded="showEmpty"
+              @click="showEmpty = !showEmpty"
+            >
+              <span class="tabular pl-5">{{
+                showEmpty ? 'hide empty files' : `+${emptyCount} empty`
+              }}</span>
+            </button>
           </li>
         </ul>
         <p v-else class="text-ink-muted">
@@ -303,14 +348,14 @@ function remove() {
           Add worker beside
         </Button>
         <Button
-          v-if="joinable && group"
+          v-if="join"
           size="row"
           class="justify-center"
-          :tooltip="`Add a worker that runs once all ${group.tasks.length} tasks in this group have finished, on all their outputs`"
-          @click="emit('add', { join: group.id }, anchorOf($event))"
+          :tooltip="`Add a worker that runs once all ${join.count} tasks have finished, on all their outputs`"
+          @click="emit('add', join.at, anchorOf($event))"
         >
           <template #icon><Merge :size="13" :stroke-width="1.5" /></template>
-          Add worker after all {{ group.tasks.length }}
+          Add worker after all {{ join.count }}
         </Button>
         <Button
           variant="danger"

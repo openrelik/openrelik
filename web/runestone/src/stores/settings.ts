@@ -19,13 +19,15 @@ export interface Settings {
   }
   explorer: {
     pageSize: PageSize
+    /** Files with no bytes listed with the rest; by default they fold away. */
+    showEmptyFiles: boolean
   }
 }
 
 const DEFAULTS: Settings = {
   appearance: { theme: 'system' },
   ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
-  explorer: { pageSize: 40 },
+  explorer: { pageSize: 40, showEmptyFiles: false },
 }
 
 const STORAGE_KEY = 'openrelik.settings'

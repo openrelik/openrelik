@@ -5,6 +5,7 @@ import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import { useItemsStore } from '@/stores/items'
+import { isEmptyFile } from '@/utils/item'
 import { missingOptions } from '@/utils/worker'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
@@ -41,6 +42,12 @@ const emit = defineEmits<{
 }>()
 
 const itemsStore = useItemsStore()
+/** Outputs with no bytes, among those loaded. */
+const emptyOutputs = (task: Task) =>
+  task.outputs.filter((id) => {
+    const item = itemsStore.findItem(id)
+    return item && isEmptyFile(item)
+  }).length
 
 interface Line {
   key: string
@@ -358,7 +365,11 @@ const inputs = computed(() =>
               {{ row.task.duration === undefined ? '–' : formatDuration(row.task.duration) }}
             </td>
             <td class="tabular px-2 pr-3 text-right text-ink-muted">
-              <template v-if="row.task.outputs.length">{{ row.task.outputs.length }} out</template>
+              <template v-if="row.task.outputs.length"
+                >{{ row.task.outputs.length }} out<template v-if="emptyOutputs(row.task)">
+                  ({{ emptyOutputs(row.task) }} empty)</template
+                ></template
+              >
               <template v-else>–</template>
             </td>
           </tr>
