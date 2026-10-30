@@ -38,6 +38,16 @@ export function parseOffset(input: string): number | null {
   return Number.isSafeInteger(value) ? value : null
 }
 
+/** An offset, or a range of them as `0x1f3-0x2a0` (either form on each side); sorted. */
+export function parseOffsetRange(input: string): { from: number; to: number } | null {
+  const parts = input.split(/\s*[-–]\s*/)
+  if (parts.length > 2) return null
+  const a = parseOffset(parts[0]!)
+  const b = parts.length === 2 ? parseOffset(parts[1]!) : a
+  if (a === null || b === null) return null
+  return { from: Math.min(a, b), to: Math.max(a, b) }
+}
+
 export interface Reading {
   label: string
   value: string

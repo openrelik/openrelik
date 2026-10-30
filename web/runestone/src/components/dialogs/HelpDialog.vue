@@ -105,7 +105,10 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['/'], does: 'Filter rows: text in any cell, or column:value' },
       { keys: ['⌘C'], does: 'Copy the row (tab-separated, or the JSON line)' },
       { keys: ['f'], does: 'Full screen, and back (esc)' },
-      { keys: ['esc'], does: 'Clear the row selection, then leave full screen' },
+      {
+        keys: ['esc'],
+        does: 'Clear the row selection, then the marked rows, then leave full screen',
+      },
     ],
   },
   {
@@ -123,9 +126,10 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     shortcuts: [
       { keys: ['←', '→', '↑', '↓'], does: 'Move the cursor a byte or a row (⇧ selects)' },
       { keys: ['⌘↑', '⌘↓'], does: 'Start, end of the file' },
-      { keys: ['o'], does: 'Go to an offset (hex as 0x1f0, or decimal)' },
+      { keys: ['o'], does: 'Go to an offset (0x1f0, or decimal), or mark a range (0x1f0-0x2a0)' },
       { keys: ['[', ']'], does: 'Back, forward through jumps' },
       { keys: ['⌘C', '⇧⌘C'], does: 'Copy the selection as hex, as text' },
+      { keys: ['esc'], does: 'Clear the selection, then the marked bytes' },
     ],
   },
   {

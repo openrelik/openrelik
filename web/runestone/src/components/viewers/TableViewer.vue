@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Maximize, Minimize } from '@/components/icons'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Copy, Maximize, Minimize } from '@/components/icons'
 
 import TableDetail from '@/components/viewers/TableDetail.vue'
 import Button from '@/components/base/Button.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { confirmAction } from '@/composables/useConfirm'
+import { useMarkedRange } from '@/composables/useMarkedRange'
 import { MORE_BYTES, useTableStream } from '@/composables/useTableStream'
 import { escapeControls } from '@/utils/bytes'
 import { formatSize } from '@/utils/format'
+import type { Span } from '@/utils/marks'
 import type { TableKind } from '@/utils/preview'
 import { compareKeys, sortKey } from '@/utils/table'
 
@@ -27,6 +29,8 @@ import { compareKeys, sortKey } from '@/utils/table'
  * the whole window — nothing is read again or reset; Esc brings it back.
  */
 const props = defineProps<{ fileId: number; size: number; kind: TableKind }>()
+/** Marked rows (1-based, the row numbers): the page keeps them in its URL as `#R12-R40`. */
+const mark = defineModel<Span | null>('mark', { default: null })
 const emit = defineEmits<{
   /** A row was selected, or the selection cleared: the side panel follows. */
   rowSelected: [selected: boolean]
@@ -216,6 +220,54 @@ function moveTo(position: number) {
   else if (top + ROW_H > el.scrollTop + inner) el.scrollTop = top + ROW_H - inner
 }
 
+// --- marked rows: from the row numbers, or a link ---
+
+/** A row to land on once it has been read (0-based). */
+const landing = ref<number | null>(null)
+function land(span: Span) {
+  landing.value = span.from - 1
+  table.readUntil(span.from)
+  tryLand()
+}
+function tryLand() {
+  const index = landing.value
+  if (index === null || !viewHeight.value) return
+  if (rows.value.length <= index && !table.done.value) return
+  landing.value = null
+  if (index >= rows.value.length) return
+  // A row the filter hides is shown by clearing it.
+  if (!view.value.includes(index)) {
+    filterText.value = filter.value = ''
+    sort.value = null
+  }
+  // After the filter's own reset of the cursor.
+  void nextTick(() => {
+    const position = view.value.indexOf(index)
+    if (position < 0) return
+    cursor.value = position
+    scroller.value?.scrollTo({ top: position * ROW_H - Math.floor(viewHeight.value / 3) })
+  })
+}
+watch([rows, table.done, viewHeight], tryLand)
+
+const marks = useMarkedRange(mark, 'row', {
+  land,
+  focus: () => scroller.value?.focus({ preventScroll: true }),
+})
+const rowSpan = (index: number) => ({ from: index + 1, to: index + 1 })
+
+/** The press began on a row number: a drag that ends on a cell must not unmark. */
+let pressedInGutter = false
+function onPress(event: PointerEvent) {
+  pressedInGutter = !!(event.target as HTMLElement).closest('[data-gutter]')
+}
+/** A click on a row moves the cursor there, and unmarks the rows, as a click in the text view does. */
+function onRowClick(position: number) {
+  cursor.value = position
+  if (mark.value && !pressedInGutter) marks.set(null)
+  scroller.value?.focus({ preventScroll: true })
+}
+
 const notice = ref<string | null>(null)
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
 function say(text: string) {
@@ -224,6 +276,10 @@ function say(text: string) {
   noticeTimer = setTimeout(() => (notice.value = null), 2500)
 }
 onUnmounted(() => clearTimeout(noticeTimer))
+
+async function copyLink() {
+  say(await marks.copyLink())
+}
 
 async function copyRow() {
   if (selectedIndex.value === undefined) return
@@ -247,14 +303,15 @@ function toggleFullscreen() {
 }
 
 /**
- * While full screen, Esc belongs to the table: it clears the row, then
- * leaves full screen — never the file page behind it. Caught before the page
+ * While full screen, Esc belongs to the table: it clears the row, then the
+ * marked rows, then leaves full screen — never the file page behind it. Caught before the page
  * sees it; the filter's own Esc (clear the filter) is left alone.
  */
 function onFullscreenKey(event: KeyboardEvent) {
   if (!fullscreen.value || event.key !== 'Escape') return
   if (event.target === filterInput.value) return
   if (cursor.value !== null) cursor.value = null
+  else if (mark.value) marks.set(null)
   else fullscreen.value = false
   event.preventDefault()
   // Immediate: the file page listens on the window too, for Esc = back.
@@ -280,6 +337,7 @@ function onKey(event: KeyboardEvent) {
   else if (!mod && event.key === '/') filterInput.value?.focus()
   else if (!mod && event.key === 'f') toggleFullscreen()
   else if (event.key === 'Escape' && cursor.value !== null) cursor.value = null
+  else if (event.key === 'Escape' && mark.value) marks.set(null)
   else return
   event.preventDefault()
   event.stopPropagation()
@@ -335,7 +393,8 @@ async function loadAll() {
             class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted"
           >
             <span class="tabular truncate">
-              {{ rowsLabel }} · {{ columns.length }} columns
+              {{ rowsLabel }}<template v-if="mark"> · {{ marks.label() }}</template> ·
+              {{ columns.length }} columns
               <template v-if="kind !== 'jsonl'">
                 ·
                 {{
@@ -383,6 +442,16 @@ async function loadAll() {
               </Button>
             </span>
             <span v-if="sortedPartly" class="shrink-0 text-warning">sorted: rows read so far</span>
+            <button
+              v-if="mark"
+              type="button"
+              class="ml-auto flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+              :aria-label="`Copy a link to ${marks.label()}`"
+              v-tooltip="`Copy a link to ${marks.label()}`"
+              @click="copyLink"
+            >
+              <Copy :size="13" :stroke-width="1.5" />
+            </button>
             <input
               ref="filterInput"
               v-model="filterText"
@@ -391,7 +460,8 @@ async function loadAll() {
               autocomplete="off"
               placeholder="filter rows"
               aria-label="Filter rows: text, or column:value"
-              class="field ml-auto h-5 w-52 shrink-0 text-[11px]"
+              class="field h-5 w-52 shrink-0 text-[11px]"
+              :class="{ 'ml-auto': !mark }"
               v-tooltip="'Text in any cell, or column:value'"
               @keydown.esc.stop="((filterText = ''), scroller?.focus())"
               @keydown.enter.prevent="scroller?.focus()"
@@ -416,6 +486,7 @@ async function loadAll() {
             :aria-rowcount="view.length"
             aria-label="File rows"
             @scroll="onScroll"
+            @pointerdown.capture="onPress"
             @keydown="onKey"
           >
             <div :style="{ width: `${totalWidth}px` }">
@@ -464,17 +535,31 @@ async function loadAll() {
                   :class="
                     line.position === cursor
                       ? 'bg-brand-selected'
-                      : rows[line.index]?.error
-                        ? 'bg-danger-tint/40 hover:bg-sunken'
-                        : 'hover:bg-sunken'
+                      : marks.marked(line.index + 1)
+                        ? 'bg-warning-tint'
+                        : rows[line.index]?.error
+                          ? 'bg-danger-tint/40 hover:bg-sunken'
+                          : 'hover:bg-sunken'
                   "
                   :style="{ top: `${line.position * ROW_H}px`, height: `${ROW_H}px` }"
-                  @click="((cursor = line.position), scroller?.focus({ preventScroll: true }))"
+                  @click="onRowClick(line.position)"
                 >
+                  <!-- the row number: click, ⇧-click or drag to mark rows -->
                   <span
-                    class="sticky left-0 shrink-0 border-r border-border bg-inherit px-2 text-right leading-6 text-ink-muted"
-                    :class="line.position === cursor ? 'bg-brand-selected' : 'bg-surface'"
+                    class="sticky left-0 shrink-0 cursor-pointer border-r border-border px-2 text-right leading-6 select-none"
+                    :class="
+                      marks.marked(line.index + 1)
+                        ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
+                        : line.position === cursor
+                          ? 'bg-brand-selected text-ink-muted hover:text-ink-secondary'
+                          : 'bg-surface text-ink-muted hover:text-ink-secondary'
+                    "
                     :style="{ width: `${NUMBER_W * CH + 16}px` }"
+                    data-gutter
+                    @click.stop
+                    @pointerdown.stop="marks.onGutterDown($event, rowSpan(line.index))"
+                    :data-mark-from="rowSpan(line.index).from"
+                    :data-mark-to="rowSpan(line.index).to"
                     >{{ (line.index + 1).toLocaleString('en-US') }}</span
                   >
                   <span

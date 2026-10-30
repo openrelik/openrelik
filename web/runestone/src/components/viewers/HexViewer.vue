@@ -1,21 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight } from '@/components/icons'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ChevronLeft, ChevronRight, Copy } from '@/components/icons'
 
 import HexInspector from '@/components/viewers/HexInspector.vue'
 import { useByteChunks } from '@/composables/useByteChunks'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
+import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
 import {
   decodings,
   hex2,
   offsetLabel,
   offsetWidth,
-  parseOffset,
+  parseOffsetRange,
   printable,
   readings,
   toHex,
 } from '@/utils/bytes'
+import type { Span } from '@/utils/marks'
 
 /**
  * A file's bytes, sixteen to a row: offset, hex and text, for any file and
@@ -35,6 +37,8 @@ import {
  * nothing in a file is interpreted.
  */
 const props = defineProps<{ fileId: number; size: number }>()
+/** Marked bytes (offsets, inclusive): the page keeps them in its URL as `#0x1f3-0x2a0`. */
+const mark = defineModel<Span | null>('mark', { default: null })
 
 const ROW = 16
 const ROW_H = 20
@@ -101,6 +105,7 @@ watch(
     anchor.value = cursor.value = 0
     topRow.value = 0
     history.value = { back: [], forward: [] }
+    marks.anchor.value = null
   },
 )
 
@@ -116,11 +121,23 @@ function moveTo(offset: number, extend: boolean) {
 }
 
 let dragging = false
+/** The press began on a byte, without ⇧: its click unmarks (see `onGridClick`). */
+let pressedOnByte = false
 function onByteDown(event: PointerEvent, offset: number) {
   if (event.button !== 0) return
   grid.value?.focus({ preventScroll: true })
   dragging = true
+  pressedOnByte = !event.shiftKey
   moveTo(offset, event.shiftKey)
+}
+/**
+ * A plain click on a byte unmarks the bytes, as a click in the text view
+ * unmarks lines. A drag that selected bytes leaves them: the bytes can be
+ * selected and copied from inside a mark.
+ */
+function onGridClick() {
+  if (pressedOnByte && anchor.value === cursor.value && mark.value) marks.set(null)
+  pressedOnByte = false
 }
 function onByteEnter(offset: number) {
   hovered.value = offset
@@ -175,15 +192,31 @@ const gotoInput = ref<HTMLInputElement | null>(null)
 const gotoText = ref('')
 const gotoError = ref(false)
 function goTo() {
-  const offset = parseOffset(gotoText.value)
-  if (offset === null || offset > last.value) {
+  const span = parseOffsetRange(gotoText.value)
+  if (!span || span.from > last.value) {
     gotoError.value = true
     return
   }
   gotoError.value = false
   gotoText.value = ''
-  jump(offset)
+  const marked = { from: span.from, to: Math.min(span.to, last.value) }
+  marks.set(marked)
+  marks.anchor.value = marked
+  jump(marked.from)
   grid.value?.focus({ preventScroll: true })
+}
+
+// --- marked bytes: from the offsets, go-to, or a link ---
+
+const marks = useMarkedRange(mark, 'offset', {
+  // Once mounted and measured, so the landing has rows of context above it.
+  land: (span) => void nextTick(() => land(Math.min(span.from, last.value))),
+  focus: () => grid.value?.focus({ preventScroll: true }),
+})
+/** The bytes of the row at `offset`. */
+const rowSpan = (offset: number) => ({ from: offset, to: Math.min(offset + ROW - 1, last.value) })
+async function copyLink() {
+  say(await marks.copyLink())
 }
 
 // --- copy ---
@@ -243,6 +276,8 @@ function onKey(event: KeyboardEvent) {
     stepForward()
   } else if (event.key === 'Escape' && anchor.value !== cursor.value) {
     anchor.value = cursor.value
+  } else if (event.key === 'Escape' && mark.value) {
+    marks.set(null)
   } else {
     return
   }
@@ -287,6 +322,7 @@ const selectionDecodings = computed(() => decodings(decoded.value))
 function tone(offset: number) {
   if (selected(offset)) return 'bg-selection'
   if (hovered.value === offset) return 'bg-sunken'
+  if (marks.marked(offset)) return 'bg-warning-tint'
   return ''
 }
 const isCursor = (offset: number) => offset === cursor.value
@@ -303,6 +339,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           <template v-if="selectionEnd > selectionStart">
             · {{ (selectionEnd - selectionStart + 1).toLocaleString('en-US') }} bytes selected
           </template>
+          <template v-if="mark"> · {{ marks.label() }} marked</template>
           · {{ size.toLocaleString('en-US') }} bytes
         </span>
         <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{
@@ -313,6 +350,16 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         }}</span>
         <span v-else-if="showLoading" class="text-ink-muted">reading bytes…</span>
         <div class="ml-auto flex items-center">
+          <button
+            v-if="mark"
+            type="button"
+            class="mr-1 flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+            :aria-label="`Copy a link to ${marks.label()}`"
+            v-tooltip="`Copy a link to ${marks.label()}`"
+            @click="copyLink"
+          >
+            <Copy :size="13" :stroke-width="1.5" />
+          </button>
           <button
             type="button"
             class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
@@ -350,13 +397,13 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             spellcheck="false"
             autocomplete="off"
             placeholder="go to offset"
-            aria-label="Go to offset, hex (0x…) or decimal"
+            aria-label="Go to an offset, or a range as 0x1f0-0x2a0"
             class="field tabular h-5 w-36 text-[11px]"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
                 ? `Not an offset in this file (0 to 0x${last.toString(16)})`
-                : 'Hex as 0x1f0, or decimal'
+                : 'An offset (0x1f0, or decimal), or a range as 0x1f0-0x2a0'
             "
             @input="gotoError = false"
             @keydown.esc.stop="((gotoText = ''), grid?.focus())"
@@ -373,6 +420,8 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         aria-label="File bytes"
         @keydown="onKey"
         @wheel="onWheel"
+        @pointerdown.capture="pressedOnByte = false"
+        @click="onGridClick"
         @pointerleave="hovered = null"
       >
         <!-- A column: the body fills what the heads leave, whatever rows it holds, so
@@ -397,9 +446,20 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
 
           <div ref="body" class="min-h-0 flex-1 overflow-hidden">
             <div v-for="line in rows" :key="line.row" class="flex h-5 items-center">
-              <span class="shrink-0 px-3 text-ink-muted" :style="{ width: `${width + 3}ch` }">{{
-                offsetLabel(line.offset, width)
-              }}</span>
+              <!-- the row's offset: click, ⇧-click or drag to mark its bytes -->
+              <span
+                class="shrink-0 cursor-pointer px-3"
+                :class="
+                  marks.marked(line.offset, line.offset + ROW - 1)
+                    ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
+                    : 'text-ink-muted hover:text-ink-secondary'
+                "
+                :style="{ width: `${width + 3}ch` }"
+                @pointerdown="marks.onGutterDown($event, rowSpan(line.offset))"
+                :data-mark-from="rowSpan(line.offset).from"
+                :data-mark-to="rowSpan(line.offset).to"
+                >{{ offsetLabel(line.offset, width) }}</span
+              >
               <!-- hex -->
               <span class="flex shrink-0">
                 <span

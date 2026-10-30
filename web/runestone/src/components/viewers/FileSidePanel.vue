@@ -37,10 +37,17 @@ const panel = usePanelWidth('openrelik.file.sidePanelWidth', { initial: 416, min
   >
     <PanelResizeHandle :panel="panel" label="Resize the side panel" />
     <div class="flex h-7 shrink-0 items-stretch border-b border-border pr-1 pl-1">
-      <!-- tabs: the file's details, and the inspector of the viewer on screen -->
-      <div class="flex items-stretch" role="tablist" aria-label="Side panel">
+      <!-- tabs: the file's details, and the inspector of the viewer on screen.
+           Details alone is a title, not a tab: the same place and padding. -->
+      <h2
+        v-if="!inspector"
+        class="-mb-px flex items-center border-b-2 border-transparent px-2 text-ink"
+      >
+        Details
+      </h2>
+      <div v-else class="flex items-stretch" role="tablist" aria-label="Side panel">
         <button
-          v-for="option in (inspector ? ['details', 'inspector'] : ['details']) as SideTab[]"
+          v-for="option in ['details', 'inspector'] as SideTab[]"
           :key="option"
           type="button"
           role="tab"

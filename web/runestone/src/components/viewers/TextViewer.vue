@@ -8,18 +8,14 @@ import TextSearchBar from '@/components/viewers/TextSearchBar.vue'
 import { confirmAction } from '@/composables/useConfirm'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { MORE_BYTES } from '@/composables/useRangeText'
+import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
 import { useTextSearch } from '@/composables/useTextSearch'
 import { useTextStream } from '@/composables/useTextStream'
 import { useModalStore } from '@/stores/modals'
 import { formatSize } from '@/utils/format'
-import {
-  formatLineHash,
-  lineRangeLabel,
-  parseLineRange,
-  ROW_CHARS,
-  type LineRange,
-} from '@/utils/lines'
+import { parseLineRange, ROW_CHARS } from '@/utils/lines'
+import type { Span } from '@/utils/marks'
 
 /**
  * A text file, line by line: read in the browser as it arrives (see
@@ -41,7 +37,7 @@ const props = defineProps<{
   /** On screen: ⌘F belongs to this viewer rather than the browser. */
   active: boolean
 }>()
-const range = defineModel<LineRange | null>('lines', { default: null })
+const range = defineModel<Span | null>('mark', { default: null })
 
 const ROW_H = 20
 /** Past this, reading the rest asks first: the lines are held in this page's memory. */
@@ -143,30 +139,17 @@ const rows = computed(() => {
   for (let row = topRow.value; row < end; row++) {
     const line = index.lineOf(row)
     const [first, last] = search.active.value ? search.hitsOn(line) : [0, 0]
-    const marks = []
+    const rowHits = []
     for (let i = first; i < last; i++) {
-      marks.push({ start: hits[i]!.start, end: hits[i]!.end, current: i === current })
+      rowHits.push({ start: hits[i]!.start, end: hits[i]!.end, current: i === current })
     }
-    out.push({ row, line, start: index.startOf(row), text: index.rowText(row), hits: marks })
+    out.push({ row, line, start: index.startOf(row), text: index.rowText(row), hits: rowHits })
   }
   return out
 })
 
 const gutterChars = computed(() => Math.max(4, text.lineCount.value.toLocaleString('en-US').length))
-const inRange = (line: number) =>
-  !!range.value && line + 1 >= range.value.from && line + 1 <= range.value.to
-
-// --- line ranges: marked in the gutter, landed on from a link or go-to ---
-
-/** Where a ⇧-click or drag extends from (1-based). */
-const anchor = ref<number | null>(null)
-/** The range this viewer set itself: already on screen, nothing to land on. */
-let ownHash: string | null = null
-
-function mark(next: LineRange | null) {
-  ownHash = next && formatLineHash(next)
-  range.value = next
-}
+// --- marked lines: from the gutter, go-to, or a link ---
 
 /** A line to land on once it has been read (1-based). */
 const landing = ref<number | null>(null)
@@ -177,46 +160,22 @@ function land(line: number) {
 }
 function tryLand() {
   const line = landing.value
-  if (line === null) return
+  // Not until measured: the landing leaves a third of the screen above it.
+  if (line === null || !bodyHeight.value) return
   const index = text.index()
   if (index.lines.length < line && !text.done.value) return
   landing.value = null
   const to = Math.min(line, index.lines.length) - 1
   if (to >= 0) scrollTo(index.firstRow(to) - Math.floor(visibleRows.value / 3))
 }
-watch([text.version, text.done, visibleRows], tryLand)
+watch([text.version, text.done, bodyHeight], tryLand)
 
-watch(
-  () => range.value && formatLineHash(range.value),
-  (hash) => {
-    if (hash === ownHash || !range.value) return
-    anchor.value = range.value.from
-    land(range.value.from)
-  },
-  { immediate: true },
-)
-
-let dragging = false
-function onGutterDown(event: PointerEvent, line: number) {
-  if (event.button !== 0) return
-  event.preventDefault()
-  body.value?.focus({ preventScroll: true })
-  // The one marked line, clicked again: unmarked.
-  if (!event.shiftKey && range.value?.from === line && range.value.to === line) {
-    anchor.value = null
-    mark(null)
-    return
-  }
-  dragging = true
-  const from = event.shiftKey && range.value ? (anchor.value ?? range.value.from) : line
-  anchor.value = from
-  mark({ from: Math.min(from, line), to: Math.max(from, line) })
-}
-function onGutterEnter(line: number) {
-  if (!dragging || anchor.value === null) return
-  mark({ from: Math.min(anchor.value, line), to: Math.max(anchor.value, line) })
-}
-const endDrag = () => (dragging = false)
+const marks = useMarkedRange(range, 'line', {
+  land: (span) => land(span.from),
+  focus: () => body.value?.focus({ preventScroll: true }),
+})
+const inRange = (line: number) => marks.marked(line + 1)
+const lineSpan = (line: number) => ({ from: line + 1, to: line + 1 })
 
 /**
  * A plain click in the text, away from the line numbers, unmarks the lines.
@@ -232,18 +191,15 @@ function onTextClick(event: MouseEvent) {
   // numbers ends with a click on the row they share.
   if (!range.value || pressedInGutter || event.shiftKey || event.detail > 1) return
   if (!(window.getSelection()?.isCollapsed ?? true)) return
-  anchor.value = null
-  mark(null)
+  marks.set(null)
 }
-onMounted(() => window.addEventListener('pointerup', endDrag))
-onUnmounted(() => window.removeEventListener('pointerup', endDrag))
 
 watch(
   () => props.fileId,
   () => {
     scrollTo(0)
     if (body.value) body.value.scrollLeft = 0
-    anchor.value = null
+    marks.anchor.value = null
     landing.value = null
   },
 )
@@ -261,8 +217,8 @@ function goTo() {
   }
   gotoError.value = false
   gotoText.value = ''
-  anchor.value = next.from
-  mark(next)
+  marks.set(next)
+  marks.anchor.value = next
   land(next.from)
   body.value?.focus({ preventScroll: true })
 }
@@ -279,15 +235,7 @@ function say(message: string) {
 onUnmounted(() => clearTimeout(noticeTimer))
 
 async function copyLink() {
-  if (!range.value) return
-  const url = new URL(window.location.href)
-  url.hash = formatLineHash(range.value)
-  try {
-    await navigator.clipboard.writeText(url.toString())
-    say(`Copied a link to ${lineRangeLabel(range.value)}`)
-  } catch {
-    say('Could not copy the link')
-  }
+  say(await marks.copyLink())
 }
 
 // --- keys ---
@@ -309,8 +257,7 @@ function onKey(event: KeyboardEvent) {
   else if (!mod && event.key === ':') gotoInput.value?.focus()
   else if (!mod && event.key === '/') searchBar.value?.focus()
   else if (event.key === 'Escape' && range.value) {
-    anchor.value = null
-    mark(null)
+    marks.set(null)
   } else return
   // The file page's keys (esc goes back) wait while the text has focus.
   event.preventDefault()
@@ -367,7 +314,7 @@ async function loadAll() {
     <!-- status, go to, find -->
     <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
       <span class="tabular shrink-0">
-        {{ linesLabel }}<template v-if="range"> · {{ lineRangeLabel(range) }}</template>
+        {{ linesLabel }}<template v-if="range"> · {{ marks.label() }}</template>
       </span>
       <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{ notice }}</span>
       <span v-else-if="text.error.value" class="flex min-w-0 items-center gap-2">
@@ -412,8 +359,8 @@ async function loadAll() {
           v-if="range"
           type="button"
           class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
-          :aria-label="`Copy a link to ${lineRangeLabel(range)}`"
-          v-tooltip="`Copy a link to ${lineRangeLabel(range)}`"
+          :aria-label="`Copy a link to ${marks.label()}`"
+          v-tooltip="`Copy a link to ${marks.label()}`"
           @click="copyLink"
         >
           <Copy :size="13" :stroke-width="1.5" />
@@ -484,8 +431,9 @@ async function loadAll() {
                   : 'bg-surface text-ink-muted hover:text-ink-secondary'
               "
               :style="{ width: `calc(${gutterChars}ch + 1.5rem)` }"
-              @pointerdown="onGutterDown($event, row.line + 1)"
-              @pointerenter="onGutterEnter(row.line + 1)"
+              @pointerdown="marks.onGutterDown($event, lineSpan(row.line))"
+              :data-mark-from="lineSpan(row.line).from"
+              :data-mark-to="lineSpan(row.line).to"
               >{{ row.start === 0 ? (row.line + 1).toLocaleString('en-US') : '' }}</span
             >
             <TextRow class="pr-6 text-ink" :text="row.text" :start="row.start" :hits="row.hits" />

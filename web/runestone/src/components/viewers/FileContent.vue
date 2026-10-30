@@ -10,7 +10,7 @@ import { useSystemConfig } from '@/composables/useSystemConfig'
 import type { Item } from '@/types/item'
 import { useSettingsStore } from '@/stores/settings'
 import { formatSize } from '@/utils/format'
-import type { LineRange } from '@/utils/lines'
+import type { Mark, MarkKind, Span } from '@/utils/marks'
 import { isMarkdown, previewOf, PREVIEW_MAX_BYTES, tableKindOf } from '@/utils/preview'
 
 /**
@@ -29,7 +29,8 @@ import { isMarkdown, previewOf, PREVIEW_MAX_BYTES, tableKindOf } from '@/utils/p
  * - **hex**: anything, a screen at a time (`HexViewer`).
  *
  * The first is the default: table, then rendered Markdown, then text; HTML
- * shows as text until asked for rendered. A link to lines opens text.
+ * shows as text until asked for rendered. A link opens the view its mark
+ * is in: lines text, rows table, bytes hex.
  */
 const props = defineProps<{ file: Item }>()
 const emit = defineEmits<{
@@ -38,8 +39,8 @@ const emit = defineEmits<{
   /** The table's row selection, for the side panel to follow. */
   rowSelected: [selected: boolean]
 }>()
-/** The marked lines of the text view: the page keeps them in its URL. */
-const lines = defineModel<LineRange | null>('lines', { default: null })
+/** What the file's link points at: the page keeps it in its URL. */
+const mark = defineModel<Mark | null>('mark', { default: null })
 
 const settings = useSettingsStore()
 const system = useSystemConfig()
@@ -61,6 +62,17 @@ const tooLargeToRender = computed(
 
 type View = 'table' | 'rendered' | 'text' | 'hex'
 const tableKind = computed(() => tableKindOf(props.file))
+
+/** The mark as one view sees it: its own kind, or nothing. */
+function markOf(kind: MarkKind) {
+  return computed<Span | null>({
+    get: () => (mark.value?.kind === kind ? { from: mark.value.from, to: mark.value.to } : null),
+    set: (span) => (mark.value = span ? { kind, ...span } : null),
+  })
+}
+const lineMark = markOf('line')
+const rowMark = markOf('row')
+const offsetMark = markOf('offset')
 /** The ways this file can be shown, the first the default. */
 const views = computed<View[]>(() => {
   const kind = preview.value.kind
@@ -75,11 +87,21 @@ const views = computed<View[]>(() => {
     'hex',
   ]
 })
-/** Picked by the user; a link to lines picks text. */
-const chosen = ref<View | null>(lines.value ? 'text' : null)
+/** The view a mark is shown in. */
+const VIEW_OF: Record<MarkKind, View> = { line: 'text', row: 'table', offset: 'hex' }
+/** Picked by the user; a link picks the view of its mark. */
+const chosen = ref<View | null>(mark.value ? VIEW_OF[mark.value.kind] : null)
 watch(
   () => props.file.id,
-  () => (chosen.value = lines.value ? 'text' : null),
+  () => (chosen.value = mark.value ? VIEW_OF[mark.value.kind] : null),
+)
+// A link to another kind of mark on the same file (only the hash changed)
+// opens its view; the views' own marks are always of their own kind.
+watch(
+  () => mark.value?.kind,
+  (kind) => {
+    if (kind) chosen.value = VIEW_OF[kind]
+  },
 )
 const view = computed<View | undefined>(() =>
   chosen.value && views.value.includes(chosen.value) ? chosen.value : views.value[0],
@@ -148,9 +170,16 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-    <!-- The pane's tabs, styled as the side panel's: the header row reads as two panes. -->
+    <!-- The pane's tabs, styled as the side panel's: the header row reads as two panes.
+         One view is a title, not a tab: the same place and padding, nothing to pick. -->
     <div class="flex h-7 shrink-0 items-stretch border-b border-border px-1">
-      <div class="flex items-stretch" role="tablist" aria-label="Show the file as">
+      <h2
+        v-if="tabs.length === 1"
+        class="-mb-px flex items-center border-b-2 border-transparent px-2 text-ink"
+      >
+        {{ tabs[0]!.label }}
+      </h2>
+      <div v-else class="flex items-stretch" role="tablist" aria-label="Show the file as">
         <button
           v-for="tab in tabs"
           :key="tab.view"
@@ -184,17 +213,23 @@ const showLoading = useDelayedFlag(() => !!src.value && !loaded.value)
       :file-id="file.id"
       :size="file.size ?? 0"
       :kind="tableKind"
+      v-model:mark="rowMark"
       @row-selected="emit('rowSelected', $event)"
     />
     <TextViewer
       v-if="textFor === file.id"
       v-show="view === 'text'"
-      v-model:lines="lines"
+      v-model:mark="lineMark"
       :file-id="file.id"
       :size="file.size ?? 0"
       :active="view === 'text'"
     />
-    <HexViewer v-if="view === 'hex'" :file-id="file.id" :size="file.size ?? 0" />
+    <HexViewer
+      v-if="view === 'hex'"
+      v-model:mark="offsetMark"
+      :file-id="file.id"
+      :size="file.size ?? 0"
+    />
 
     <!-- The server's page sets its content flush to the edge: the room is kept here. -->
     <div v-else-if="view === 'rendered'" class="relative min-h-0 flex-1 bg-surface py-2 pl-3">

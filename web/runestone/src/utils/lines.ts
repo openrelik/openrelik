@@ -8,6 +8,7 @@
  */
 
 import { hex2 } from '@/utils/bytes'
+import type { Span } from '@/utils/marks'
 
 /** Characters a row holds at most; the rest of a longer line goes on below. */
 export const ROW_CHARS = 2000
@@ -79,31 +80,17 @@ export function createLineIndex(): LineIndex {
   }
 }
 
-/** Lines `from` to `to`, 1-based and inclusive, as people number them. */
-export interface LineRange {
-  from: number
-  to: number
-}
-
-/** `#L12`, `#L12-L40`, `12`, `12-40` or `12:40` as a range; null when it is none of those. */
-export function parseLineRange(text: string): LineRange | null {
+/**
+ * Lines typed into go-to: `12`, `12-40` or `12:40` (a leading `#L` is
+ * allowed), 1-based and sorted; null when it is none of those.
+ */
+export function parseLineRange(text: string): Span | null {
   const match = /^#?L?(\d+)(?:\s*[-:–]\s*L?(\d+))?$/i.exec(text.trim())
   if (!match) return null
   const a = Number(match[1])
   const b = match[2] === undefined ? a : Number(match[2])
   if (a < 1 || b < 1) return null
   return { from: Math.min(a, b), to: Math.max(a, b) }
-}
-
-/** The URL hash for a range: `#L12`, or `#L12-L40`. */
-export function formatLineHash(range: LineRange): string {
-  return range.from === range.to ? `#L${range.from}` : `#L${range.from}-L${range.to}`
-}
-
-/** A range for people: `line 12`, or `lines 12–40`. */
-export function lineRangeLabel(range: LineRange): string {
-  const n = (line: number) => line.toLocaleString('en-US')
-  return range.from === range.to ? `line ${n(range.from)}` : `lines ${n(range.from)}–${n(range.to)}`
 }
 
 /**

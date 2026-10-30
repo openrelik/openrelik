@@ -17,7 +17,7 @@ import StatusBar from '@/components/layout/StatusBar.vue'
 import { exactSize } from '@/utils/item'
 import { useItemsStore } from '@/stores/items'
 import { formatSize } from '@/utils/format'
-import { formatLineHash, parseLineRange, type LineRange } from '@/utils/lines'
+import { formatMark, parseMark, type Mark } from '@/utils/marks'
 import { isTyping } from '@/utils/keyboard'
 import { useModalStore } from '@/stores/modals'
 
@@ -33,13 +33,14 @@ const router = useRouter()
 const route = useRoute()
 
 /**
- * The text view's marked lines, kept in the URL (`#L12-L40`) so a link opens
- * on them. Replaced, not pushed: marking lines is not a step to go back through.
+ * What the file's link points at — lines, rows or bytes — kept in the URL
+ * (`#L12-L40`, `#R5`, `#0x1f3-0x2a0`) so a link opens on it. Replaced, not
+ * pushed: marking is not a step to go back through.
  */
-const lines = computed<LineRange | null>({
-  get: () => parseLineRange(route.hash),
-  set: (range) => {
-    router.replace({ query: route.query, hash: range ? formatLineHash(range) : '' })
+const mark = computed<Mark | null>({
+  get: () => parseMark(route.hash),
+  set: (next) => {
+    router.replace({ query: route.query, hash: next ? formatMark(next) : '' })
   },
 })
 
@@ -129,7 +130,8 @@ const KEYS: Record<string, () => void> = {
   w: openWorkflow,
   d: () => file.value && downloadFile(file.value.id, file.value.name),
   i: () => (showDetails.value = !showDetails.value),
-  Escape: back,
+  // The mark first (a link opened on it, nothing focused yet), then back.
+  Escape: () => (mark.value ? (mark.value = null) : back()),
 }
 
 function onKey(event: KeyboardEvent) {
@@ -176,7 +178,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- panes -->
     <div class="flex min-h-0 flex-1">
-      <FileContent v-model:lines="lines" :file="file" @view="onView" @row-selected="onRowSelected">
+      <FileContent v-model:mark="mark" :file="file" @view="onView" @row-selected="onRowSelected">
         <!-- the details closed: opened again from the spot the panel's own button had -->
         <template v-if="!showDetails" #end>
           <PanelToggle

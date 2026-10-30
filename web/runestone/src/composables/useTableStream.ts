@@ -58,6 +58,8 @@ export interface UseTableStreamReturn {
   loadMore: () => void
   /** Reads the rest of the file. */
   loadAll: () => void
+  /** Reads on until row `row` (1-based) has arrived, or the file ends. */
+  readUntil: (row: number) => void
   /** Stops reading; what is read stays, and more can be loaded later. */
   stop: () => void
 }
@@ -144,6 +146,11 @@ export function useTableStream(
     error: computed(() => reader.value?.error.value ?? null),
     loadMore: () => reader.value?.loadMore(),
     loadAll: () => reader.value?.loadAll(),
+    readUntil: (row) => {
+      // The parser hands on whole rows only.
+      const arrived = () => rows.value.length >= row
+      if (!arrived()) reader.value?.read(0, arrived)
+    },
     stop: () => reader.value?.stop(),
   }
 }
