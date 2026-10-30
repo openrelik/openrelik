@@ -1,7 +1,32 @@
 /* Console design system — Tailwind v4 entry stylesheet */
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
+
+/* IBM Plex Mono, served from this app (public/fonts/ibm-plex-mono): IBM's
+   own release files, unmodified, with their licence (SIL OFL 1.1, OFL.txt)
+   beside them. Never a font service: the page makes no request outside its
+   own server, and what a file shows cannot make it ask one. */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono/IBMPlexMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono/IBMPlexMono-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono/IBMPlexMono-SemiBold.woff2') format('woff2');
+}
 
 @theme {
   /* Typography — one face. There is no sans/mono split any more, so both names
