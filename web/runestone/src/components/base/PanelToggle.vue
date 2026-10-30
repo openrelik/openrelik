@@ -20,7 +20,7 @@ defineEmits<{ toggle: [] }>()
     type="button"
     class="flex size-5 shrink-0 cursor-pointer items-center justify-center self-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink"
     :aria-label="open ? `Hide ${name}` : `Show ${name}`"
-    v-tooltip="open ? `Hide ${name} (i)` : `Show ${name} (i)`"
+    v-tooltip="open ? `Hide ${name}` : `Show ${name}`"
     @click="$emit('toggle')"
   >
     <component :is="open ? PanelRightClose : PanelRightOpen" :size="13" :stroke-width="1.5" />

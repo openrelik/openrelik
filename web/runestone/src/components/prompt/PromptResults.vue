@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import KeyHint from '@/components/base/KeyHint.vue'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import type { PromptResult } from '@/composables/usePrompt'
@@ -77,17 +76,17 @@ const meta = (item: Item) => {
         v-tooltip="
           result.mkdir
             ? result.folderName
-              ? `Create folder '${result.folderName}' (⏎)`
+              ? `Create folder '${result.folderName}'`
               : 'Enter a folder name'
             : result.rm
-              ? `Delete folder '${result.item?.name}' (⏎)`
+              ? `Delete folder '${result.item?.name}'`
               : result.up ||
                   result.here ||
                   result.home ||
                   result.prev ||
                   result.item?.kind === 'folder'
-                ? `Navigate to folder ${result.label} (⏎)`
-                : `Open file ${result.label} (⏎)`
+                ? `Navigate to folder ${result.label}`
+                : `Open file ${result.label}`
         "
         @pointermove="emit('hover', i)"
         @click="emit('go', result)"
@@ -132,7 +131,13 @@ const meta = (item: Item) => {
           new folder
         </span>
         <span
-          v-if="result.remote"
+          v-if="result.caseRef"
+          class="tabular shrink-0 text-[11px] text-ink-muted"
+          v-tooltip="`The folder of case ${result.caseRef}`"
+          >case {{ result.caseRef }}</span
+        >
+        <span
+          v-else-if="result.remote"
           class="shrink-0 text-[11px] text-ink-muted"
           v-tooltip="'Found by the server search; not opened yet in this session'"
           >server</span
@@ -159,15 +164,5 @@ const meta = (item: Item) => {
         </template>
       </li>
     </ul>
-
-    <div
-      class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
-    >
-      <KeyHint keys="↑↓" label="select" />
-      <KeyHint keys="tab" label="complete" />
-      <KeyHint keys="⏎" label="go" />
-      <KeyHint keys="^U" label="clear" />
-      <KeyHint keys="esc" label="close" class="ml-auto" />
-    </div>
   </div>
 </template>

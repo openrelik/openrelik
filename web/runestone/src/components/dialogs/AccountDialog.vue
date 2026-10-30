@@ -3,7 +3,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Copy, KeyRound, LogOut, Plus, Trash2, TriangleAlert, User, X } from '@/components/icons'
 
 import Button from '@/components/base/Button.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import { errorMessage, type ApiKeyRecord } from '@/api'
 import {
@@ -186,7 +185,7 @@ const user = computed(() => auth.user)
             type="button"
             class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
             aria-label="Close account"
-            v-tooltip="'Close (esc)'"
+            v-tooltip="'Close'"
             @click="close"
           >
             <X :size="14" :stroke-width="1.5" />
@@ -359,7 +358,6 @@ const user = computed(() => auth.user)
             <template #icon><LogOut :size="12" :stroke-width="1.5" /></template>
             Sign out
           </Button>
-          <KeyHint keys="esc" label="close" class="ml-auto" />
         </div>
       </div>
     </div>

@@ -80,6 +80,31 @@ export const foldersApi = {
   },
 
   /**
+   * The folder of a case. The server normalizes `caseRef` itself, and answers
+   * 404 both for no such case and for one the user cannot see.
+   */
+  getCaseFolder(caseRef: string, options?: CallOptions): Promise<FolderDetail> {
+    // References may contain "/": the server reads the rest of the path, so
+    // each part is encoded on its own.
+    const path = caseRef.split('/').map(encodeURIComponent).join('/')
+    return httpClient.get<FolderDetail>(`/folders/case/${path}`, options)
+  },
+
+  /**
+   * Makes a top-level folder the folder of a case, or changes its reference.
+   * Editors, owners and admins may. 409 when another folder has the case: the
+   * detail names that folder if the user can see it.
+   */
+  setCaseRef(folderId: number, caseRef: string): Promise<FolderDetail> {
+    return httpClient.put<FolderDetail>(`/folders/${folderId}/case`, { case_ref: caseRef })
+  },
+
+  /** Removes a folder's case reference; the folder stays, the reference is free. */
+  clearCaseRef(folderId: number): Promise<void> {
+    return httpClient.delete<void>(`/folders/${folderId}/case`)
+  },
+
+  /**
    * Renames a folder.
    */
   renameFolder(folderId: number, displayName: string): Promise<FolderDetail> {

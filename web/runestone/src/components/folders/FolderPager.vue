@@ -49,7 +49,7 @@ const pageWidth = computed(() => String(props.lastPage).length * 2 + 'page  of '
       <Button
         size="row"
         :disabled="!hasPrev"
-        tooltip="Previous page (PgUp)"
+        tooltip="Previous page"
         aria-label="Previous page"
         @click="emit('prev')"
       >
@@ -65,7 +65,7 @@ const pageWidth = computed(() => String(props.lastPage).length * 2 + 'page  of '
       <Button
         size="row"
         :disabled="!hasNext"
-        tooltip="Next page (PgDn)"
+        tooltip="Next page"
         aria-label="Next page"
         @click="emit('next')"
       >

@@ -28,6 +28,8 @@ export interface Folder {
   selectable?: boolean
   file_count?: number
   folder_count?: number
+  /** Top-level folders only: the case this folder is the folder of, normalized ("ir-2024/007"). */
+  case_ref?: string | null
 }
 
 /** One page of the top-level folder list (GET /folders/all/), newest created first. */
@@ -194,11 +196,25 @@ export interface WorkflowTaskRecord {
   /** Celery state: PENDING, RECEIVED, STARTED, PROGRESS, SUCCESS, FAILURE, REVOKED, … */
   status_short: string | null
   status_detail?: string | null
+  /** What a running worker says it is doing, e.g. "40%" or a stage. */
+  status_progress?: string | null
   /** Seconds. */
   runtime?: number | null
   error_exception?: string | null
+  error_traceback?: string | null
   created_at?: string
   output_files?: { id: number; display_name: string; is_deleted?: boolean }[] | null
+  /** The worker's findings for the whole task. */
+  task_report?: ReportRecord | null
+  /** The worker's findings per file, for files it flagged. */
+  file_reports?: (ReportRecord & { file?: { id: number; display_name: string } | null })[] | null
+}
+
+/** A worker's report: priority 0–100, higher matters more (80 critical, 40 high, 20 medium, 10 low, 5 info). */
+export interface ReportRecord {
+  summary?: string
+  priority?: number
+  markdown?: string
 }
 
 /** A workflow with its spec and task records (every workflow endpoint answers with this). */

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Monitor, Moon, Sun, X } from '@/components/icons'
 
-import KeyHint from '@/components/base/KeyHint.vue'
 import Switch from '@/components/base/Switch.vue'
 import { settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
 import { PAGE_SIZES } from '@/stores/settings'
@@ -62,7 +61,7 @@ const AI_FEATURES = [
             type="button"
             class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
             aria-label="Close settings"
-            v-tooltip="'Close (esc)'"
+            v-tooltip="'Close'"
             @click="close"
           >
             <X :size="14" :stroke-width="1.5" />
@@ -213,7 +212,6 @@ const AI_FEATURES = [
           class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[11px] text-ink-muted"
         >
           <span>changes apply immediately</span>
-          <KeyHint keys="esc" label="close" class="ml-auto" />
         </div>
       </div>
     </div>

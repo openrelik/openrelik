@@ -1,13 +1,18 @@
+<script setup lang="ts">
+import { RouterLink } from 'vue-router'
+</script>
+
 <template>
   <!--
-    The status bar's first segment, the way tmux opens its status line with the
-    session name in a block of colour. It sits flush against the bar's left
-    edge, so the parent's own padding is cancelled with a negative margin.
+    The path bar's first segment and the way home: the root every path starts
+    from, so it stands where a drive icon would.
   -->
-  <span
-    class="-ml-3 flex h-full shrink-0 items-center gap-1.5 bg-brand-tint pr-2.5 pl-3 font-semibold text-brand"
+  <RouterLink
+    to="/"
+    class="flex shrink-0 items-center hover:opacity-80"
+    aria-label="All folders"
+    v-tooltip="'All folders'"
   >
-    <img src="/logo-light-round.png" alt="" class="size-3" />
-    openrelik
-  </span>
+    <img src="/logo-light-round.png" alt="" class="size-3.5" />
+  </RouterLink>
 </template>

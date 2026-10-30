@@ -70,7 +70,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['⌘A'], does: 'Select all' },
       { keys: ['⌘⏎', 'r'], does: 'Run a worker on the highlighted or selected files' },
       { keys: ['w'], does: 'Create a workflow on the highlighted or selected files' },
-      { keys: ['i'], does: 'Show or hide the inspector' },
+      { keys: ['⇧F10', '≣'], does: 'Actions for the highlighted row (also right-click, or ⋯)' },
       { keys: ['/'], does: 'Filter this folder' },
       { keys: ['⇧R'], does: 'Refresh this folder from the server' },
       { keys: ['u'], does: 'Upload files here (or drop them on the listing)' },
@@ -149,7 +149,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
             type="button"
             class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
             aria-label="Close help"
-            v-tooltip="'Close (esc)'"
+            v-tooltip="'Close'"
             @click="close"
           >
             <X :size="14" :stroke-width="1.5" />

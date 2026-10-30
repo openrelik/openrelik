@@ -109,7 +109,7 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
             type="button"
             class="flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-brand"
             :aria-label="`Go to offset ${reading.value}`"
-            v-tooltip="`Go to 0x${reading.offset!.toString(16)} (back with [)`"
+            v-tooltip="`Go to 0x${reading.offset!.toString(16)}`"
             @click="emit('jump', reading.offset!)"
           >
             <CornerDownRight :size="11" :stroke-width="1.75" />

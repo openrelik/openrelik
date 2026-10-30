@@ -333,7 +333,7 @@ const inputs = computed(() =>
                         : 'opacity-0 group-hover:opacity-100',
                     ]"
                     :aria-label="`Remove ${row.task.name}`"
-                    v-tooltip="`Remove ${row.task.name} (del)`"
+                    v-tooltip="`Remove ${row.task.name}`"
                     @click.stop="emit('remove', row.task.id)"
                   >
                     <X :size="10" :stroke-width="2" />

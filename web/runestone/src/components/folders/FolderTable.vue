@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   CornerLeftUp,
+  Ellipsis,
   File,
   Folder,
   Workflow as WorkflowIcon,
@@ -40,7 +41,6 @@ const props = defineProps<{
   tracing: boolean
   parentPath: string
   parentName: string
-  maxBytes: number
   filter: string
   /** Load state of this listing: drives loading, failure and empty messages. */
   listing: QueryState
@@ -62,6 +62,8 @@ const props = defineProps<{
   actionError?: string | null
   /** What an empty folder says instead of inviting uploads (a workflow folder). */
   emptyNote?: string
+  /** The row whose menu is open, if any: its button stays visible. */
+  menuRowId?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -70,6 +72,8 @@ const emit = defineEmits<{
   toggle: [id: number]
   rowClick: [event: MouseEvent, index: number]
   open: [item: Item]
+  /** A row's menu, asked for at a point on screen (its button, or a right-click). */
+  menu: [item: Item, at: { x: number; y: number }]
   pick: [index: number]
   goUp: []
   createFolder: [name: string]
@@ -90,19 +94,22 @@ const MAX_UPLOAD_ROWS = 50
 const shownUploads = computed(() => (props.uploads ?? []).slice(0, MAX_UPLOAD_ROWS))
 const hiddenUploads = computed(() => Math.max(0, (props.uploads?.length ?? 0) - MAX_UPLOAD_ROWS))
 
+/** The row menu's width (`ItemMenu`, w-64): it opens leftwards from its button. */
+const MENU_WIDTH = 256
+
 // --- Inline New Folder Creation (Finder style) ---
 const isCreating = ref(false)
 const newFolderName = ref('')
 const newFolderInput = ref<HTMLInputElement | null>(null)
 let cancelling = false
 
-const defaultBaseName = computed(() => (props.atRoot ? 'Untitled case' : 'Untitled folder'))
+const DEFAULT_FOLDER_NAME = 'Untitled folder'
 
 async function startCreateFolder() {
   isCreating.value = true
   cancelling = false
   const existingNames = props.rows.map((r) => r.name)
-  newFolderName.value = getUniqueFolderName(defaultBaseName.value, existingNames)
+  newFolderName.value = getUniqueFolderName(DEFAULT_FOLDER_NAME, existingNames)
   await nextTick()
   newFolderInput.value?.focus()
   newFolderInput.value?.select()
@@ -114,7 +121,7 @@ function commitNewFolder() {
     return
   }
   if (!isCreating.value) return
-  const name = newFolderName.value.trim() || defaultBaseName.value
+  const name = newFolderName.value.trim() || DEFAULT_FOLDER_NAME
   isCreating.value = false
   emit('createFolder', name)
 }
@@ -201,61 +208,9 @@ function onRenameKeydown(event: KeyboardEvent) {
   }
 }
 
-// --- Long-Press on Release Detection (Finder style) ---
-const LONG_PRESS_THRESHOLD_MS = 400
-let pointerDownTime = 0
-let pointerDownPos = { x: 0, y: 0 }
-let wasDragged = false
-
-function onLabelPointerDown(event: PointerEvent, row: Item, index: number) {
-  pointerDownTime = 0
-  wasDragged = false
-
-  // Only consider long-press if this row is already selected
-  const isAlreadySelected =
-    props.cursor === index || (props.selected.has(row.id) && props.selected.size === 1)
-  if (!isAlreadySelected) return
-
-  pointerDownTime = Date.now()
-  pointerDownPos = { x: event.clientX, y: event.clientY }
-}
-
-function onLabelPointerMove(event: PointerEvent) {
-  if (!pointerDownTime) return
-  const dx = Math.abs(event.clientX - pointerDownPos.x)
-  const dy = Math.abs(event.clientY - pointerDownPos.y)
-  if (dx > 4 || dy > 4) {
-    wasDragged = true
-    pointerDownTime = 0
-  }
-}
-
-function onLabelPointerUp(event: PointerEvent, row: Item) {
-  if (pointerDownTime > 0 && !wasDragged) {
-    const elapsed = Date.now() - pointerDownTime
-    pointerDownTime = 0
-
-    // User held down and now released: activate rename if held >= 500ms
-    if (elapsed >= LONG_PRESS_THRESHOLD_MS) {
-      event.preventDefault()
-      event.stopPropagation()
-      startRename(row)
-      return
-    }
-  }
-  pointerDownTime = 0
-  wasDragged = false
-}
-
-function onLabelPointerCancel() {
-  pointerDownTime = 0
-  wasDragged = false
-}
-
-function onRowDblClick(row: Item) {
-  pointerDownTime = 0
-  wasDragged = false
-  emit('open', row)
+/** A row's own page: its name links there, so it opens in a click or a new tab. */
+function rowPath(row: Item): string {
+  return row.kind === 'folder' ? `/folder/${row.id}` : `/folder/${row.parent}/file/${row.id}`
 }
 
 function onWindowPointerDown(event: PointerEvent) {
@@ -274,6 +229,32 @@ onUnmounted(() => {
   window.removeEventListener('pointerdown', onWindowPointerDown)
 })
 
+// --- Row menus ---
+const root = ref<HTMLElement | null>(null)
+
+/** A row's `⋯` button, for anchoring its menu or flashing what it did. */
+function menuButton(id: number): HTMLElement | null {
+  return root.value?.querySelector<HTMLElement>(`[data-row-menu="${id}"]`) ?? null
+}
+
+/** The menu acts on its row, so the cursor moves there first: you see which. */
+function openMenu(row: Item, index: number, x: number, y: number) {
+  emit('pick', index)
+  emit('menu', row, { x, y })
+}
+
+function openMenuAtButton(row: Item, index: number, button: HTMLElement) {
+  const rect = button.getBoundingClientRect()
+  openMenu(row, index, rect.right - MENU_WIDTH, rect.bottom + 4)
+}
+
+/** From the keyboard: the cursor row's menu, at its button. */
+function openMenuFor(index: number) {
+  const row = props.rows[index]
+  const button = row && menuButton(row.id)
+  if (row && button) openMenuAtButton(row, index, button)
+}
+
 defineExpose({
   startCreateFolder,
   isCreating,
@@ -281,6 +262,8 @@ defineExpose({
   cancelRename,
   commitRename,
   renamingId,
+  menuButton,
+  openMenuFor,
 })
 
 const UP = -1
@@ -314,18 +297,33 @@ const WORKFLOW_SAYS: Record<WorkflowState, string> = {
   failed: 'failed',
 }
 
-const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
+type Column = { key: SortKey | 'case'; label: string; align?: 'right' }
+
+const COLUMNS: Column[] = [
   { key: 'name', label: 'name' },
   { key: 'size', label: 'size', align: 'right' },
   { key: 'type', label: 'type' },
   { key: 'owner', label: 'owner' },
   { key: 'modified', label: 'modified (utc)' },
 ]
+/**
+ * The top level holds only folders, which have no size and one type: those
+ * columns would say the same on every row. A top-level folder can be a case's,
+ * so its reference takes their place.
+ */
+const ROOT_COLUMNS: Column[] = [
+  { key: 'name', label: 'name' },
+  { key: 'case', label: 'case' },
+  { key: 'owner', label: 'owner' },
+  { key: 'modified', label: 'modified (utc)' },
+]
+const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
 </script>
 
 <template>
   <!-- The inset ring marks a file drag without changing the layout. -->
   <div
+    ref="root"
     class="min-w-0 flex-1 overflow-auto"
     :class="{ 'ring-1 ring-brand ring-inset': isDropTarget }"
   >
@@ -335,11 +333,15 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
       <colgroup>
         <col class="w-8" />
         <col />
-        <col class="w-44" />
-        <col class="w-44" />
+        <template v-if="atRoot"><col class="w-44" /></template>
+        <template v-else>
+          <col class="w-44" />
+          <col class="w-44" />
+        </template>
         <col class="w-20" />
         <col class="w-40" />
-        <col v-if="$slots.end" class="w-7" />
+        <!-- each row's menu -->
+        <col class="w-8" />
       </colgroup>
       <thead class="sticky top-0 z-[1] bg-surface">
         <tr class="h-7 shadow-[inset_0_-1px_0_var(--color-border)]">
@@ -348,14 +350,14 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               type="checkbox"
               class="accent-brand align-middle"
               aria-label="Select all"
-              v-tooltip="allSelected ? 'Deselect all rows (x)' : 'Select all rows (x)'"
+              v-tooltip="allSelected ? 'Deselect all rows' : 'Select all rows'"
               :checked="allSelected"
               :disabled="!rows.length"
               @change="emit('toggleAll')"
             />
           </th>
           <th
-            v-for="column in COLUMNS"
+            v-for="column in columns"
             :key="column.key"
             class="px-2 font-normal"
             :class="{ 'text-right': column.align === 'right' }"
@@ -388,7 +390,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
                     : `Sorted by ${column.label} descending (click to invert)`
                   : `Sort by ${column.label}`
               "
-              @click="emit('sort', column.key)"
+              @click="emit('sort', column.key as SortKey)"
             >
               {{ column.label }}
               <component
@@ -399,10 +401,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               />
             </button>
           </th>
-          <!-- the page's control for its side panel (show), at the far right -->
-          <th v-if="$slots.end" class="pr-1">
-            <div class="flex justify-end"><slot name="end" /></div>
-          </th>
+          <th><span class="sr-only">actions</span></th>
         </tr>
       </thead>
       <tbody>
@@ -442,7 +441,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               }}</span>
             </div>
           </td>
-          <td colspan="4" />
+          <td colspan="5" />
         </tr>
 
         <!-- Inline New Folder Row (Finder style) -->
@@ -475,12 +474,16 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               />
             </div>
           </td>
-          <td class="px-2 text-right">
-            <span class="select-none text-ink-muted">—</span>
-          </td>
-          <td class="truncate px-2 text-ink-muted">inode/directory</td>
+          <td v-if="atRoot" class="px-2"><span class="select-none text-ink-muted">—</span></td>
+          <template v-else>
+            <td class="px-2 text-right">
+              <span class="select-none text-ink-muted">—</span>
+            </td>
+            <td class="truncate px-2 text-ink-muted">directory</td>
+          </template>
           <td class="px-2" />
           <td class="tabular truncate px-2 text-ink-secondary">just now</td>
+          <td />
         </tr>
 
         <!-- Files on their way to the server. A large drop is thousands of
@@ -497,7 +500,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
 
         <tr v-if="hiddenUploads" class="h-7 border-b border-border/60 select-none">
           <td class="pl-3" />
-          <td class="px-2 text-ink-muted" colspan="5">
+          <td class="px-2 text-ink-muted" :colspan="columns.length + 1">
             and {{ count(hiddenUploads, 'more file') }} uploading —
             <button
               type="button"
@@ -536,7 +539,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               <span class="truncate text-ink-secondary">{{ pending.name }}/</span>
             </div>
           </td>
-          <td class="px-2 text-right">
+          <td v-if="!atRoot" class="px-2 text-right">
             <span class="select-none text-ink-muted">—</span>
           </td>
           <td class="truncate px-2 text-ink-muted">
@@ -544,10 +547,11 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
               creating…
             </span>
-            <template v-else>inode/directory</template>
+            <template v-else>{{ atRoot ? '—' : 'directory' }}</template>
           </td>
           <td class="px-2" />
           <td class="tabular truncate px-2 text-ink-secondary">just now</td>
+          <td />
         </tr>
 
         <tr
@@ -555,7 +559,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
           :key="row.id"
           :data-row="index"
           v-scroll-into-view="index === cursor && !hasTask"
-          class="h-7 cursor-default border-b border-border/60 select-none"
+          class="group h-7 cursor-default border-b border-border/60 select-none"
           :class="[
             selected.has(row.id) ? 'bg-brand-selected' : 'hover:bg-sunken',
             tracing
@@ -571,7 +575,8 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
           :data-output="produced.has(row.id) || undefined"
           :aria-selected="selected.has(row.id)"
           @click="emit('rowClick', $event, index)"
-          @dblclick="onRowDblClick(row)"
+          @dblclick="emit('open', row)"
+          @contextmenu.prevent="openMenu(row, index, $event.clientX, $event.clientY)"
           @pointerenter="emit('hover', row)"
           @pointerleave="emit('hover', null)"
         >
@@ -626,39 +631,20 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
                 @keydown="onRenameKeydown"
                 @blur="commitRename"
               />
-              <span
+              <RouterLink
                 v-else
-                class="truncate text-ink select-none"
+                :to="rowPath(row)"
+                class="truncate text-ink select-none hover:underline"
+                draggable="false"
                 v-overflow-tooltip
-                @pointerdown="onLabelPointerDown($event, row, index)"
-                @pointermove="onLabelPointerMove"
-                @pointerup="onLabelPointerUp($event, row)"
-                @pointercancel="onLabelPointerCancel"
+                @click.stop
+                @dblclick.stop
               >
                 {{ row.name }}{{ row.kind === 'folder' ? '/' : '' }}
-              </span>
+              </RouterLink>
             </div>
           </td>
-          <td class="px-2">
-            <div class="flex items-center justify-end gap-2">
-              <template v-if="row.kind === 'file'">
-                <span class="tabular text-ink-secondary">{{ formatSize(bytesOf(row)) }}</span>
-                <span class="h-1 w-12 shrink-0 bg-border" aria-hidden="true">
-                  <span
-                    class="block h-full bg-ink-muted/60"
-                    :style="{ width: `${Math.max(2, (bytesOf(row) / maxBytes) * 100)}%` }"
-                  />
-                </span>
-              </template>
-              <span
-                v-else
-                class="select-none text-ink-muted"
-                v-tooltip="'Folder size not calculated'"
-                >—</span
-              >
-            </div>
-          </td>
-          <td class="truncate px-2 text-ink-muted">
+          <td v-if="atRoot" class="truncate px-2">
             <span
               v-if="showPending && (savingIds?.has(row.id) || deletingIds?.has(row.id))"
               class="inline-flex items-center gap-1.5 text-brand"
@@ -666,12 +652,60 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
               <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
               {{ deletingIds?.has(row.id) ? 'deleting…' : 'saving…' }}
             </span>
-            <template v-else>{{ typeOf(row) }}</template>
+            <span v-else-if="row.caseRef" class="tabular text-ink-secondary" v-overflow-tooltip>{{
+              row.caseRef
+            }}</span>
+            <span v-else class="select-none text-ink-muted">—</span>
           </td>
+          <template v-else>
+            <td class="px-2">
+              <div class="flex items-center justify-end gap-2">
+                <span
+                  v-if="row.kind === 'file'"
+                  class="tabular text-ink-secondary"
+                  v-tooltip="`${bytesOf(row).toLocaleString('en-US')} bytes`"
+                  >{{ formatSize(bytesOf(row)) }}</span
+                >
+                <span
+                  v-else
+                  class="select-none text-ink-muted"
+                  v-tooltip="'Folder size not calculated'"
+                  >—</span
+                >
+              </div>
+            </td>
+            <td class="truncate px-2 text-ink-muted">
+              <span
+                v-if="showPending && (savingIds?.has(row.id) || deletingIds?.has(row.id))"
+                class="inline-flex items-center gap-1.5 text-brand"
+              >
+                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                {{ deletingIds?.has(row.id) ? 'deleting…' : 'saving…' }}
+              </span>
+              <template v-else>{{ typeOf(row) }}</template>
+            </td>
+          </template>
           <td class="px-2">
             <UserAvatar :name="row.owner" :username="row.ownerUsername" :src="row.ownerAvatar" />
           </td>
           <td class="tabular truncate px-2 text-ink-secondary">{{ stamp(row.modified) }}</td>
+          <td class="pr-1">
+            <!-- On hover, on the cursor row, and while its menu is open; always reachable by Tab. -->
+            <button
+              type="button"
+              :data-row-menu="row.id"
+              class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted group-hover:opacity-100 hover:bg-surface hover:text-ink focus-visible:opacity-100"
+              :class="index === cursor || menuRowId === row.id ? 'opacity-100' : 'opacity-0'"
+              :aria-label="`Actions for ${row.name}`"
+              aria-haspopup="menu"
+              :aria-expanded="menuRowId === row.id"
+              v-tooltip="'Actions'"
+              @click.stop="openMenuAtButton(row, index, $event.currentTarget as HTMLElement)"
+              @dblclick.stop
+            >
+              <Ellipsis :size="14" :stroke-width="1.5" />
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>

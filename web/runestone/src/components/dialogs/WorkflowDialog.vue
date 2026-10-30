@@ -3,7 +3,6 @@ import { Pencil, Plus, Trash2, Workflow } from '@/components/icons'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import KeyHint from '@/components/base/KeyHint.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import { errorMessage } from '@/api'
 import { confirmAction } from '@/composables/useConfirm'
@@ -239,7 +238,7 @@ function onKeydown(event: KeyboardEvent) {
             :aria-selected="selectedIndex === 0"
             class="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
             :class="selectedIndex === 0 ? 'bg-sunken' : 'hover:bg-sunken'"
-            v-tooltip="'Create new empty workflow (⏎)'"
+            v-tooltip="'Create new empty workflow'"
             @pointermove="selectedIndex = 0"
             @click="select()"
           >
@@ -277,7 +276,7 @@ function onKeydown(event: KeyboardEvent) {
             :aria-selected="selectedIndex === (showEmpty ? i + 1 : i)"
             class="group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
             :class="selectedIndex === (showEmpty ? i + 1 : i) ? 'bg-sunken' : 'hover:bg-sunken'"
-            v-tooltip="`Start workflow from ${template.name} template (⏎)`"
+            v-tooltip="`Start workflow from ${template.name} template`"
             @pointermove="selectedIndex = showEmpty ? i + 1 : i"
             @click="select(template.id)"
           >
@@ -322,7 +321,7 @@ function onKeydown(event: KeyboardEvent) {
                 type="button"
                 class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
                 :aria-label="`Rename ${template.name}`"
-                v-tooltip="'Rename (F2)'"
+                v-tooltip="'Rename'"
                 @click.stop="startRename(template)"
               >
                 <Pencil :size="12" :stroke-width="1.5" />
@@ -332,7 +331,7 @@ function onKeydown(event: KeyboardEvent) {
                 type="button"
                 class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-danger-tint hover:text-danger"
                 :aria-label="`Delete ${template.name}`"
-                v-tooltip="'Delete template (⌘⌫)'"
+                v-tooltip="'Delete template'"
                 @click.stop="removeTemplate(template)"
               >
                 <Trash2 :size="12" :stroke-width="1.5" />
@@ -367,17 +366,6 @@ function onKeydown(event: KeyboardEvent) {
         >
           {{ error ?? templatesError }}
         </p>
-
-        <!-- Footer with hints -->
-        <div
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
-        >
-          <KeyHint keys="↑↓" label="move" />
-          <KeyHint keys="⏎" label="select" />
-          <KeyHint v-if="current" keys="F2" label="rename" />
-          <KeyHint v-if="current && ownsTemplate(current)" keys="⌘⌫" label="delete" />
-          <KeyHint keys="esc" label="close" />
-        </div>
       </div>
     </div>
   </Teleport>

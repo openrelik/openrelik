@@ -4,7 +4,6 @@ import { Maximize, Minimize } from '@/components/icons'
 
 import TableDetail from '@/components/viewers/TableDetail.vue'
 import Button from '@/components/base/Button.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { confirmAction } from '@/composables/useConfirm'
 import { MORE_BYTES, useTableStream } from '@/composables/useTableStream'
@@ -392,7 +391,7 @@ async function loadAll() {
               type="text"
               spellcheck="false"
               autocomplete="off"
-              placeholder="filter rows (/)"
+              placeholder="filter rows"
               aria-label="Filter rows: text, or column:value"
               class="field ml-auto h-5 w-52 shrink-0 text-[11px]"
               v-tooltip="'Text in any cell, or column:value'"
@@ -403,7 +402,7 @@ async function loadAll() {
               type="button"
               class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
               :aria-label="fullscreen ? 'Exit full screen' : 'Full screen'"
-              v-tooltip="fullscreen ? 'Exit full screen (esc)' : 'Full screen (f)'"
+              v-tooltip="fullscreen ? 'Exit full screen' : 'Full screen'"
               @click="toggleFullscreen"
             >
               <component :is="fullscreen ? Minimize : Maximize" :size="13" :stroke-width="1.5" />
@@ -502,10 +501,6 @@ async function loadAll() {
           <div
             class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
           >
-            <KeyHint keys="↑↓" label="rows" />
-            <KeyHint keys="/" label="filter" />
-            <KeyHint keys="⌘C" label="copy row" />
-            <KeyHint keys="f" label="full screen" />
             <span>click a column to sort</span>
           </div>
         </div>

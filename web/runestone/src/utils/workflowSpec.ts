@@ -11,6 +11,7 @@
 
 import type {
   SpecNode,
+  ReportRecord,
   SpecTask,
   TaskConfigOption,
   WorkflowSpec,
@@ -18,7 +19,7 @@ import type {
 } from '@/api/types'
 import { mapOption, missingOptions } from '@/utils/worker'
 import { allTasks } from '@/utils/workflow'
-import type { Task, TaskGroup, TaskStatus } from '@/types/workflow'
+import type { Report, Task, TaskGroup, TaskStatus } from '@/types/workflow'
 import { hexId } from '@/utils/id'
 
 /** What runs on the inputs, or on a task's output. */
@@ -81,6 +82,12 @@ const STATUS: Record<string, TaskStatus> = {
 
 const hex = (uuid: string) => uuid.replaceAll('-', '').toLowerCase()
 
+/** A report with something in it, or undefined: the server sends empty ones as defaults. */
+function reportOf(raw: ReportRecord | null | undefined): Report | undefined {
+  if (!raw || (!raw.summary && !raw.markdown)) return undefined
+  return { summary: raw.summary ?? '', priority: raw.priority ?? 0, markdown: raw.markdown ?? '' }
+}
+
 /**
  * The spec's tasks, with the status, timing and outputs of the server's task
  * records matched by uuid. Tasks without a record have not been queued.
@@ -104,7 +111,18 @@ export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRe
       started: record?.created_at,
       duration: record?.runtime ?? undefined,
       outputs: (record?.output_files ?? []).filter((file) => !file.is_deleted).map((f) => f.id),
+      progress: record?.status_progress || record?.status_detail || undefined,
       error: record?.error_exception ?? undefined,
+      traceback: record?.error_traceback ?? undefined,
+      report: reportOf(record?.task_report),
+      fileReports: (record?.file_reports ?? [])
+        .flatMap((raw) => {
+          const report = reportOf(raw)
+          return report && raw.file
+            ? [{ ...report, fileId: raw.file.id, fileName: raw.file.display_name }]
+            : []
+        })
+        .sort((a, b) => b.priority - a.priority),
       options,
       config: Object.fromEntries(options.map((option) => [option.key, option.default])),
       groups: fromList(node.tasks ?? []),

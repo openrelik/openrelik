@@ -1,7 +1,8 @@
-import { computed, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { refreshAll } from '@/composables/useAutoRefresh'
+import { findCaseFolder } from '@/composables/useCaseRef'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderSearch } from '@/composables/useFolderSearch'
 import { folderKeys } from '@/composables/useFolderLoader'
@@ -11,6 +12,7 @@ import type { Item } from '@/types/item'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useModalStore } from '@/stores/modals'
 import { useSettingsStore } from '@/stores/settings'
+import { normalizeCaseRef } from '@/utils/caseRef'
 import { matchPath } from '@/utils/match'
 
 export interface PromptResult {
@@ -35,6 +37,8 @@ export interface PromptResult {
   rm?: boolean
   /** Found by the server search, not among the loaded folders: its path is unknown. */
   remote?: boolean
+  /** The folder of the case the line names: an exact match on its reference. */
+  caseRef?: string
 }
 
 /** Paths are shown and matched from the root of the whole instance. */
@@ -167,6 +171,45 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     return rest
   })
   const serverSearch = useFolderSearch(() => serverTerm.value)
+
+  /**
+   * A line that is a case reference is also looked up as one, from anywhere:
+   * references are what operators copy out of the case system, and the server
+   * search matches names only. Waits for a typing pause, like the search.
+   */
+  const caseTerm = computed(() => {
+    if (isCommand.value || query.value.length < 2) return null
+    const check = normalizeCaseRef(query.value)
+    return check.ok ? check.value : null
+  })
+  const caseFolderId = ref<number | null>(null)
+  let caseTimer: ReturnType<typeof setTimeout> | undefined
+  let caseController: AbortController | null = null
+  watch(caseTerm, (term) => {
+    clearTimeout(caseTimer)
+    caseController?.abort()
+    caseFolderId.value = null
+    if (!term) return
+    caseTimer = setTimeout(() => {
+      const controller = (caseController = new AbortController())
+      findCaseFolder(term, controller.signal)
+        .then((id) => {
+          if (!controller.signal.aborted) caseFolderId.value = id
+        })
+        .catch(() => {
+          // No case match; the name search still answers.
+        })
+    }, 250)
+  })
+  onScopeDispose(() => {
+    clearTimeout(caseTimer)
+    caseController?.abort()
+  })
+  const caseResult = computed<PromptResult | null>(() => {
+    const item = caseFolderId.value === null ? undefined : itemsStore.findItem(caseFolderId.value)
+    if (!item?.caseRef) return null
+    return { item, path: pathOf(item), label: pathOf(item), hits: [], caseRef: item.caseRef }
+  })
 
   const results = computed<PromptResult[]>(() => {
     const raw = line.value
@@ -314,7 +357,9 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
             remote: true,
           }))
       : []
-    return [...local, ...remote].slice(0, 50)
+    const byCase = caseResult.value
+    const matches = [...local, ...remote].filter((result) => result.item?.id !== byCase?.item?.id)
+    return (byCase ? [byCase, ...matches] : matches).slice(0, 50)
   })
 
   watch(results, () => (index.value = 0))

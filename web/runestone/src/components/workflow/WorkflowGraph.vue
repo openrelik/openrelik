@@ -16,7 +16,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 
 import { useItemsStore } from '@/stores/items'
 import { missingOptions } from '@/utils/worker'
@@ -1139,7 +1138,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               "
               :style="{ left: `${x(node) + NODE_W - 8}px`, top: `${y(node) - 8}px` }"
               :aria-label="`Remove ${node.task.name}`"
-              v-tooltip="`Remove ${node.task.name} (del)`"
+              v-tooltip="`Remove ${node.task.name}`"
               @pointerenter="hovered = node.task.id"
               @pointerleave="hovered = null"
               @click.stop="emit('remove', node.task.id)"
@@ -1220,7 +1219,6 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
             >
               Split into new group
             </Button>
-            <KeyHint keys="esc" label="cancel" />
           </div>
 
           <!-- groups picked with ⌘/⇧-click on their boxes: merge them into one -->
@@ -1256,7 +1254,6 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
             >
               Merge groups
             </Button>
-            <KeyHint keys="esc" label="cancel" class="shrink-0" />
           </div>
 
           <!-- one more in a group: shown while one of its tasks is hovered or selected -->

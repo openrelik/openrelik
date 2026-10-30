@@ -19,7 +19,6 @@ import WorkflowGraph from '@/components/workflow/WorkflowGraph.vue'
 import WorkflowSummary from '@/components/workflow/WorkflowSummary.vue'
 import WorkflowTree from '@/components/workflow/WorkflowTree.vue'
 import Button from '@/components/base/Button.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useRemembered } from '@/composables/useRemembered'
 import { openAddToWorkflow, type Anchor } from '@/composables/useRun'
@@ -272,7 +271,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
       <span v-else-if="showSaving" class="text-ink-muted" aria-live="polite">saving…</span>
       <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
         <span class="truncate text-ink-secondary">{{ edit.label }}</span>
-        <Button variant="ghost" size="row" tooltip="Undo (⌘Z)" @click="edit.undo()">Undo</Button>
+        <Button variant="ghost" size="row" tooltip="Undo" @click="edit.undo()">Undo</Button>
       </span>
       <span v-if="savedTemplate" class="min-w-0 truncate text-ink-secondary" aria-live="polite"
         >Saved as template “{{ savedTemplate }}”</span
@@ -327,9 +326,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           type="button"
           class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-canvas hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
           aria-label="Full-screen flowchart"
-          v-tooltip="
-            view === 'graph' ? 'Full-screen flowchart (f)' : 'Full screen (flowchart only)'
-          "
+          v-tooltip="view === 'graph' ? 'Full-screen flowchart' : 'Full screen (flowchart only)'"
           :disabled="view !== 'graph'"
           @click="enterFullscreen"
         >
@@ -352,7 +349,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             variant="primary"
             size="row"
             :disabled="!!blocker || activity.running"
-            :tooltip="blocker ?? `Run ${workflow.name} (⇧⏎)`"
+            :tooltip="blocker ?? `Run ${workflow.name}`"
             @click="run"
           >
             <template #icon><Play :size="11" :stroke-width="2" /></template>
@@ -425,9 +422,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           <WorkflowSummary :workflow="workflow" :stats="stats" />
           <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
             <span class="truncate text-ink-secondary">{{ edit.label }}</span>
-            <Button variant="ghost" size="row" tooltip="Undo (⌘Z)" @click="edit.undo()"
-              >Undo</Button
-            >
+            <Button variant="ghost" size="row" tooltip="Undo" @click="edit.undo()">Undo</Button>
           </span>
           <div class="ml-auto flex items-center gap-1.5">
             <button
@@ -446,7 +441,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
                 variant="primary"
                 size="row"
                 :disabled="!!blocker || activity.running"
-                :tooltip="blocker ?? `Run ${workflow.name} (⇧⏎)`"
+                :tooltip="blocker ?? `Run ${workflow.name}`"
                 @click="run"
               >
                 <template #icon><Play :size="11" :stroke-width="2" /></template>
@@ -454,7 +449,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
               </Button>
               <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
             </template>
-            <Button size="row" tooltip="Exit full screen (esc)" @click="fullscreen = false">
+            <Button size="row" tooltip="Exit full screen" @click="fullscreen = false">
               <template #icon><Shrink :size="13" :stroke-width="1.5" /></template>
               Exit
             </Button>
@@ -490,10 +485,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
         >
           <span>click a task to inspect it</span>
-          <span class="ml-auto flex items-center gap-3">
-            <KeyHint keys="esc" :label="selectedId ? 'close task' : 'exit'" />
-            <KeyHint keys="f" label="toggle full screen" />
-          </span>
         </div>
       </div>
     </Teleport>

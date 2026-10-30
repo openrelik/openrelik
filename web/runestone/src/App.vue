@@ -10,6 +10,7 @@ import HelpDialog from '@/components/dialogs/HelpDialog.vue'
 import RunDialog from '@/components/dialogs/RunDialog.vue'
 import SettingsDialog from '@/components/dialogs/SettingsDialog.vue'
 import ShareDialog from '@/components/dialogs/ShareDialog.vue'
+import TaskReportDialog from '@/components/dialogs/TaskReportDialog.vue'
 import WorkflowDialog from '@/components/dialogs/WorkflowDialog.vue'
 import Tooltip from '@/components/base/Tooltip.vue'
 
@@ -29,6 +30,7 @@ useKeyboardShortcuts()
   <RunDialog />
   <WorkflowDialog />
   <ShareDialog />
+  <TaskReportDialog />
   <ConfirmDialog />
   <UploadQueuePanel />
   <Tooltip />

@@ -35,11 +35,6 @@ const { state } = useTooltip()
       role="tooltip"
     >
       <span>{{ state.text }}</span>
-      <kbd
-        v-if="state.keys"
-        class="rounded border border-canvas/25 bg-canvas/15 px-1 py-0.2 text-[10px] leading-3 font-normal text-canvas/90"
-        >{{ state.keys }}</kbd
-      >
     </div>
   </Transition>
 </template>

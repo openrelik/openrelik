@@ -129,8 +129,8 @@ Status accents are **never displayed as solid, saturated blocks of color**. Soli
 ### The Single-Family Rule
 The console employs a single typeface across the entire interface:
 ```css
---font-sans: 'JetBrains Mono', ui-monospace, monospace;
---font-mono: 'JetBrains Mono', ui-monospace, monospace;
+--font-sans: 'IBM Plex Mono', ui-monospace, monospace;
+--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 ```
 There is no sans-serif/monospace split. Because everything renders in the same monospace family, labels, tabular metrics, hashes, and inputs align naturally to consistent horizontal and vertical character grids.
 
@@ -249,8 +249,8 @@ Every primary console view conforms to a three-tier vertical architecture:
 - **Tier 1: Top Bar (`h-10` / 40px)**: Anchors current location, breadcrumbs, search/filter fields, and view-level actions.
 - **Tier 2: Work Area (`flex-1 min-h-0`)**: Edge-to-edge multi-pane flex layout.
   - *Primary Pane*: Expands flexibly (`min-w-0 flex-1`) with internal scroll containment.
-  - *Context Inspector Pane*: Fixed width (`w-64 shrink-0 border-l border-border max-xl:hidden`). Immediately reflects the active cursor item without requiring navigation to a separate page.
-- **Tier 3: Grounding Status Bar (`h-7` / 28px)**: Anchored to the bottom (`bg-sunken border-t border-border`). Displays item counts, aggregated selections, background job indicators, and global keyboard shortcut reminders (`KeyHint`).
+  - *Side Pane*: Only where it shows what the primary pane cannot — a file's details beside its viewer, the task picked in a workflow chart. Fixed width (`w-64 shrink-0 border-l border-border max-xl:hidden`), resizable by its left edge. A folder listing has none: a pane that repeats a row's own columns earns no width.
+- **Tier 3: Grounding Status Bar (`h-7` / 28px)**: Anchored to the bottom (`bg-sunken border-t border-border`). Displays item counts, aggregated selections and background job indicators. No keyboard shortcut reminders: see §11.
 
 ### 3. Scroll Containment & Positioning Context
 - Never rely on window-level scrolling for data listings. The outer shell remains locked, while the table body scrolls with `overflow-y-auto`.
@@ -368,6 +368,7 @@ Compact status tag representing an entity's operational state:
 ```html
 <span class="badge border border-brand/40 bg-brand-tint text-brand">queued</span>
 ```
+*Exception — identifiers:* a badge holding an id rather than a state (a case reference in the path bar) is neutral, `border-border-strong bg-sunken text-ink-secondary`, because hue means status and an id is not one.
 
 ---
 
@@ -448,11 +449,12 @@ Data tables are the core workhorse of the technical console.
    - **Selected Rows**: Highlighted with `bg-brand-selected` and checked checkbox.
    - **Hover**: Subtle row feedback with `hover:bg-sunken`.
 5. **Selection Ergonomics**:
-   - Single click sets cursor and inspects.
+   - Single click on the row sets cursor and inspects; the name is a link that opens the item (⌘/middle-click: new tab).
    - `Shift + Click` or `Shift + Arrow` performs continuous range selection.
    - `Space` toggles the active row's checkbox.
    - `⌘A` / `^A` toggles select-all across all visible rows.
 6. **Owner Avatars (`UserAvatar`)**: Ownership is a mark, not a name. An 18px disc in a fixed-width column carries the owner's profile picture, or the first letter of their display name on `bg-sunken` when the server has none (and when the picture fails to load). The avatar is the **one round element** in a system of near-square geometry (§4): it stands for a person rather than a control, and roundness is what says so at 18px. It is also **monochrome**: hue in this console means status, and an owner is not a status. The username rides on `v-tooltip`, with the same text in `aria-label`, so the column stays one glyph wide and never pushes the timestamp around.
+7. **Columns Earn Their Place**: A column that says the same on every row goes. The top-level list holds only folders, so it drops `size` and `type`; in their place a `case` column shows each folder's case reference (`—` for none) in grey `.tabular` text, lined up for scanning. Inside a case, the path bar keeps the reference in view after the top-level folder's name; a row's menu sets, changes and clears it.
 
 ---
 
@@ -476,7 +478,7 @@ To prevent DOM bloat and garbage collection lag, tooltips do not instantiate ind
 - **Warmup & Cooldown Delay**:
   - *Cold hover*: 250ms initial delay before appearing.
   - *Warm hover (moving between sibling controls)*: Instant 0ms transition within a 500ms window.
-- **Automatic Shortcut Parsing**: Tooltip strings such as `"Filter (/)"` or `"Settings (⌘,)"` automatically extract the parenthetical shortcut into miniature `<kbd>` badges.
+- **Plain Text Only**: A tooltip says what the control does, nothing more: no shortcut in parentheses, no keycap.
 - **Viewport Clamping**: Tooltip coordinates automatically clamp to viewport boundaries, flipping from top to bottom or shifting horizontally to prevent clipping.
 
 ---
@@ -498,6 +500,9 @@ Escape               Dismiss filter, cancel rename, or close top modal
 ?                    Open keyboard shortcuts help sheet
 ```
 
+### Shortcuts Are Not Advertised
+Keyboard shortcuts work everywhere, but the interface does not hint at them: no `KeyHint` footers, no keycaps in inputs or buttons, no `(esc)` in tooltips. Hints on every surface are noise for the operator who already knows the keys and clutter for the one who never will. The Help dialog (`?`) is the one place that lists them, and the only user of `KeyHint`.
+
 ### The `isTyping()` Guard
 Global keyboard shortcuts must never hijack typing when a user is actively editing a form control. All global key listeners evaluate `isTyping(event)`:
 - Returns `true` if the event target is a text input, textarea, or content-editable container.
@@ -517,7 +522,13 @@ Renaming entities in tables and trees adheres to the macOS Finder ergonomic inte
 
 ### Symmetrical Activation Pattern
 Interaction targets adhere to symmetrical behaviors:
-- **Files & Folders**: Single-click focuses the row and populates the inspector. Double-click or pressing `Enter`/`l` activates/opens the item symmetrically.
+- **Files & Folders**: Single-click on the row moves the cursor to it. Clicking the name, double-clicking the row, or pressing `Enter`/`l` opens the item. Rename is `F2` or Rename in the row's menu; there is no press-and-hold.
+
+### Actions Live on Rows
+What can be done to rows comes from one list (`useItemActions`) and shows in two places, never in a side panel:
+- **The row menu**: a `⋯` button at the row's end (shown on hover and on the cursor row), right-click, or `⇧F10` / the menu key. Its header names the row with what the columns leave out — id and created. Destructive actions sit last, after a separator.
+- **The selection bar**: while rows are selected, the toolbar's own buttons make way for `N selected`, the actions that apply to all of them (one primary at most, Delete as `danger`), and a clear button.
+An action the operator's role does not allow is not shown, in either place.
 - **Workflow & Container Titles**: Inline click-to-edit allows rapid renaming of container titles without opening heavy modal dialogs. The update is scoped strictly to the target entity.
 
 ---

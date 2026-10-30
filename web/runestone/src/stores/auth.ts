@@ -8,6 +8,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, errorMessage, readSession, removeSession, writeSession, type User } from '@/api'
 import { forgetRoles } from '@/composables/useFolderPermissions'
+import { clearCaseLookups } from '@/composables/useCaseRef'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
 import { clearUploads } from '@/composables/useUploadQueue'
 import { clearQueryCache } from '@/composables/useQueryCache'
@@ -48,6 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
       useRootPagesStore().clearRootPages()
       useWorkflowsStore().forgetWorkflows()
       clearFolderSearch()
+      clearCaseLookups()
       forgetRoles()
       // Bytes must not keep flowing on a session that just ended.
       clearUploads()

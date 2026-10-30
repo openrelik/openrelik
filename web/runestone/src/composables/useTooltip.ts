@@ -4,7 +4,6 @@ export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right'
 
 export interface TooltipOptions {
   text: string
-  keys?: string
   placement?: TooltipPlacement
 }
 
@@ -13,7 +12,6 @@ export type TooltipInput = string | TooltipOptions
 interface TooltipState {
   visible: boolean
   text: string
-  keys?: string
   x: number
   y: number
   placement: TooltipPlacement
@@ -22,7 +20,6 @@ interface TooltipState {
 const state = reactive<TooltipState>({
   visible: false,
   text: '',
-  keys: undefined,
   x: 0,
   y: 0,
   placement: 'top',
@@ -34,18 +31,8 @@ let cooldownTimer: ReturnType<typeof setTimeout> | null = null
 let isWarm = false
 let currentTarget: HTMLElement | null = null
 
-// Parses labels like "Settings (⌘,)" or "Close (esc)" into { text: "Settings", keys: "⌘," }
-const SHORTCUT_REGEX = /^(.*)\s+\(([^)]+)\)$/
-
 export function parseTooltip(input: TooltipInput): TooltipOptions {
-  if (typeof input === 'string') {
-    const match = SHORTCUT_REGEX.exec(input)
-    if (match && match[1] && match[2]) {
-      return { text: match[1], keys: match[2] }
-    }
-    return { text: input }
-  }
-  return input
+  return typeof input === 'string' ? { text: input } : input
 }
 
 export function showTooltip(target: HTMLElement, input: TooltipInput) {
@@ -67,7 +54,7 @@ export function showTooltip(target: HTMLElement, input: TooltipInput) {
   showTimer = setTimeout(() => {
     if (currentTarget !== target) return
 
-    const { text, keys, placement: explicitPlacement } = parseTooltip(input)
+    const { text, placement: explicitPlacement } = parseTooltip(input)
     if (!text) return
 
     const rect = target.getBoundingClientRect()
@@ -89,7 +76,6 @@ export function showTooltip(target: HTMLElement, input: TooltipInput) {
     const clampedX = Math.max(16, Math.min(window.innerWidth - 16, x))
 
     state.text = text
-    state.keys = keys
     state.x = clampedX
     state.y = y
     state.placement = placement
@@ -105,10 +91,9 @@ export function showTooltip(target: HTMLElement, input: TooltipInput) {
  */
 export function updateTooltip(target: HTMLElement, input: TooltipInput) {
   if (currentTarget !== target || !state.visible) return
-  const { text, keys } = parseTooltip(input)
+  const { text } = parseTooltip(input)
   if (!text) return
   state.text = text
-  state.keys = keys
 }
 
 /**
@@ -134,7 +119,6 @@ export function flashTooltip(target: HTMLElement, text: string, duration = 1500)
   const clampedX = Math.max(16, Math.min(window.innerWidth - 16, x))
 
   state.text = text
-  state.keys = undefined
   state.x = clampedX
   state.y = y
   state.placement = placement

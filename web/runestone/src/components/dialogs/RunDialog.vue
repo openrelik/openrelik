@@ -2,7 +2,6 @@
 import { Settings2 } from '@/components/icons'
 import { computed, reactive, ref, watch } from 'vue'
 
-import KeyHint from '@/components/base/KeyHint.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import { runTarget, startRun } from '@/composables/useRun'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
@@ -226,9 +225,7 @@ function onOptionsKey(event: KeyboardEvent) {
               class="flex h-7 cursor-pointer items-center gap-3 px-3"
               :class="i === index ? 'bg-sunken' : 'hover:bg-sunken'"
               v-tooltip="
-                needsInput(worker)
-                  ? `Configure ${worker.name} options (⏎)`
-                  : `${verb} ${worker.name} (⏎)`
+                needsInput(worker) ? `Configure ${worker.name} options` : `${verb} ${worker.name}`
               "
               @pointermove="index = i"
               @click="choose(worker)"
@@ -242,9 +239,7 @@ function onOptionsKey(event: KeyboardEvent) {
                 :class="needsInput(worker) ? 'text-warning' : 'text-ink-muted'"
                 :aria-label="needsInput(worker) ? 'needs options' : 'has options'"
                 v-tooltip="
-                  needsInput(worker)
-                    ? 'Requires options first (tab)'
-                    : 'Configurable options available (tab)'
+                  needsInput(worker) ? 'Requires options first' : 'Configurable options available'
                 "
               />
             </li>
@@ -305,24 +300,13 @@ function onOptionsKey(event: KeyboardEvent) {
         </div>
 
         <div
+          v-if="configuring ? missing.length : !popover"
           class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
         >
-          <template v-if="!configuring">
-            <KeyHint keys="⏎" :label="verb.toLowerCase()" />
-            <KeyHint keys="tab" label="options" />
-            <KeyHint keys="↑↓" label="select" />
-            <span v-if="!popover" class="ml-auto">{{
-              adding ? placing.footer : `one task over ${runTarget.label}, in a new folder`
-            }}</span>
-            <KeyHint keys="esc" label="cancel" :class="{ 'ml-auto': popover }" />
-          </template>
-          <template v-else>
-            <KeyHint
-              keys="⏎"
-              :label="missing.length ? `fill in ${missing.join(', ')}` : verb.toLowerCase()"
-            />
-            <KeyHint keys="esc" label="back" class="ml-auto" />
-          </template>
+          <span v-if="configuring">fill in {{ missing.join(', ') }}</span>
+          <span v-else>{{
+            adding ? placing.footer : `one task over ${runTarget.label}, in a new folder`
+          }}</span>
         </div>
       </div>
     </div>

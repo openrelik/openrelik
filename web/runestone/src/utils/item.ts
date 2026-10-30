@@ -21,11 +21,7 @@ export const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) 
 export const typeOf = (item: Item) =>
   item.mime ??
   item.dataType ??
-  (item.kind === 'file'
-    ? 'file:generic'
-    : item.workflowId !== undefined
-      ? 'workflow'
-      : 'inode/directory')
+  (item.kind === 'file' ? 'file:generic' : item.workflowId !== undefined ? 'workflow' : 'directory')
 
 const MAGIC: Record<string, string> = {
   'text/plain': 'ASCII text',

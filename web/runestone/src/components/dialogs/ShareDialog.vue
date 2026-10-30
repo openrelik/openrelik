@@ -2,7 +2,6 @@
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { ChevronDown, User, Users, X } from '@/components/icons'
 import Button from '@/components/base/Button.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import type { DirectoryUser, GroupRecord } from '@/api'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
@@ -243,7 +242,7 @@ function onKeydown(event: KeyboardEvent) {
             type="button"
             class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
             aria-label="Close dialog"
-            v-tooltip="'Close (esc)'"
+            v-tooltip="'Close'"
             @click="close"
           >
             <X :size="14" :stroke-width="1.5" />
@@ -512,22 +511,18 @@ function onKeydown(event: KeyboardEvent) {
               v-if="mayShare"
               variant="primary"
               :disabled="saving || !dirty"
-              :tooltip="dirty ? 'Save who has access (⏎)' : 'Nothing changed yet'"
+              :tooltip="dirty ? 'Save who has access' : 'Nothing changed yet'"
               @click="save"
             >
               {{ showSaving ? 'Saving…' : 'Save' }}
             </Button>
             <Button
               variant="secondary"
-              :tooltip="mayShare ? 'Cancel and discard changes (esc)' : 'Close (esc)'"
+              :tooltip="mayShare ? 'Cancel and discard changes' : 'Close'"
               @click="close"
             >
               {{ mayShare ? 'Cancel' : 'Close' }}
             </Button>
-          </div>
-          <div class="flex items-center gap-3 text-[11px] text-ink-muted">
-            <KeyHint v-if="mayShare" keys="⏎" label="save" />
-            <KeyHint keys="esc" :label="mayShare ? 'cancel' : 'close'" />
           </div>
         </div>
       </div>

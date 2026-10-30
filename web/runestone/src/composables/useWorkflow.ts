@@ -282,6 +282,7 @@ export function addTask(
     description: worker.description,
     status: 'pending',
     outputs: [],
+    fileReports: [],
     options: worker.options,
     config: { ...config },
     groups: [],

@@ -16,7 +16,7 @@ The runtime footprint is intentionally minimal (~5 dependencies). Before reachin
 
 ### Design System Compliance
 Every new UI element must conform to [`docs/design-system.md`](file:///Users/jbn/s/projects/test-ui/docs/design-system.md):
-- **Typography**: Single monospace face (`JetBrains Mono`). Use the 4-step type scale (`.card-title` 14px, body 13px, `.micro-label` 12px lowercase with `tracking-[0.06em]`, badge/keycap 11px).
+- **Typography**: Single monospace face (`IBM Plex Mono`). Use the 4-step type scale (`.card-title` 14px, body 13px, `.micro-label` 12px lowercase with `tracking-[0.06em]`, badge/keycap 11px).
 - **Numbers & Dates**: Always apply `.tabular` (`tabular-nums`) to dynamic numbers, timestamps, and sizes to eliminate layout shift.
 - **Buttons**: Exactly 5 variants (`primary` [max 1 per screen], `brand`, `secondary`, `danger` [never solid], `ghost`) and 2 heights (`default` 32px, `row` 24px).
 - **Geometry**: Near-square corners (`4px` sheets/cards, `3px` controls, `2px` badges/checkboxes). No pill shapes.
@@ -89,13 +89,13 @@ The codebase follows a strict separation of concerns:
 ### Layer Responsibilities
 
 #### 1. Views (`src/views/`)
-- Coordinate top-level layout panes: Top Bar $\rightarrow$ Multi-Pane Workspace (List + Inspector) $\rightarrow$ Status Bar.
+- Coordinate top-level layout panes: Top Bar $\rightarrow$ Workspace (List, plus a side pane where one earns its place) $\rightarrow$ Status Bar.
 - Bind route params (`id`, query strings) to data sources and composables.
 - Do not manipulate low-level DOM or implement raw algorithms directly in views; delegate to composables and child components.
 
 #### 2. Components (`src/components/`)
 - Categorized into focused subdirectories:
-  - `base/`: Reusable primitive components (`Button.vue`, `Switch.vue`, `KeyHint.vue`, `KeyValueRow.vue`, `Tooltip.vue`).
+  - `base/`: Reusable primitive components (`Button.vue`, `Switch.vue`, `KeyHint.vue` (Help dialog only), `KeyValueRow.vue`, `Tooltip.vue`).
   - `layout/`: Shell layout structures (`PathBar.vue`, `StatusBar.vue`, `BrandLink.vue`).
   - `dialogs/`: Modal sheets (`SettingsDialog.vue`, `HelpDialog.vue`, `ShareDialog.vue`, `RunDialog.vue`).
   - Domain-specific folders (e.g. `folders/`, `workflow/`, `prompt/`).

@@ -406,8 +406,8 @@ async function enqueueDrop(parent: number | null, entries: FileSystemEntry[]): P
   else if (parent === null && dropped.loose.length) {
     notes.push(
       dropped.loose.length === 1
-        ? '1 loose file needs a case folder'
-        : `${dropped.loose.length} loose files need a case folder`,
+        ? '1 loose file needs a folder'
+        : `${dropped.loose.length} loose files need a folder`,
     )
   }
 

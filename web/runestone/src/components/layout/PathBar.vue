@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { HardDrive } from '@/components/icons'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import BrandLink from '@/components/layout/BrandLink.vue'
 import PromptResults from '@/components/prompt/PromptResults.vue'
 import { registerPrompt, usePrompt } from '@/composables/usePrompt'
 import { useItemsStore } from '@/stores/items'
@@ -16,9 +16,9 @@ import { useSettingsStore } from '@/stores/settings'
  * The path stays a row of links — every folder name goes there, and every `/`
  * opens the list of folders inside the segment to its left, the one you came
  * through marked. After the `$` you can type: the folder's contents drop down,
- * typing searches the case, Tab completes, Enter goes. Going into a folder
- * keeps the prompt focused with an empty line, so you can keep walking the way
- * you would with `cd`.
+ * typing searches every folder and finds a case by its reference, Tab
+ * completes, Enter goes. Going into a folder keeps the prompt focused with an
+ * empty line, so you can keep walking the way you would with `cd`.
  */
 const props = defineProps<{
   path: Item[]
@@ -184,14 +184,7 @@ function onBarClick(event: MouseEvent) {
   >
     <!-- the path: links, and a menu behind every slash -->
     <div class="flex max-w-[65%] min-w-0 shrink items-center">
-      <RouterLink
-        to="/"
-        class="mr-4 shrink-0 text-ink-muted hover:text-ink"
-        aria-label="Root"
-        v-tooltip="'All folders'"
-      >
-        <HardDrive :size="13" :stroke-width="1.5" />
-      </RouterLink>
+      <BrandLink class="mr-4" />
       <span
         v-if="pending && !path.length"
         class="text-ink-muted"
@@ -261,6 +254,16 @@ function onBarClick(event: MouseEvent) {
             v-tooltip="`Navigate to ${path[at + 1]!.name}`"
             >{{ path[at + 1]!.name }}</RouterLink
           >
+          <!-- Inside a case, which one stays in view at any depth; a click copies it. -->
+          <span
+            v-if="at === -1 && path[0]!.caseRef"
+            v-copy-to-clipboard="{
+              text: path[0]!.caseRef,
+              hint: `Case ${path[0]!.caseRef} (click to copy)`,
+            }"
+            class="badge tabular ml-1.5 shrink-0 cursor-pointer border-border-strong bg-sunken text-ink-secondary hover:text-ink data-[copied=true]:text-success"
+            >{{ path[0]!.caseRef }}</span
+          >
         </template>
       </template>
     </div>
@@ -285,11 +288,6 @@ function onBarClick(event: MouseEvent) {
       @blur="focused = false"
       @keydown="onInputKey"
     />
-    <kbd
-      v-if="!focused"
-      class="pointer-events-none mr-1 shrink-0 rounded-(--radius-check) border border-border-strong px-1 text-[10px] leading-4 text-ink-muted"
-      >g</kbd
-    >
 
     <!-- what the prompt would print -->
     <PromptResults

@@ -6,9 +6,9 @@ import FolderPager from '@/components/folders/FolderPager.vue'
 import FolderStatusBar from '@/components/folders/FolderStatusBar.vue'
 import FolderTable, { type SortKey } from '@/components/folders/FolderTable.vue'
 import FolderToolbar from '@/components/folders/FolderToolbar.vue'
-import ItemInspector from '@/components/folders/ItemInspector.vue'
+import CaseRefPopover from '@/components/folders/CaseRefPopover.vue'
+import ItemMenu from '@/components/folders/ItemMenu.vue'
 import PanelResizeHandle from '@/components/base/PanelResizeHandle.vue'
-import PanelToggle from '@/components/base/PanelToggle.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
@@ -24,9 +24,10 @@ import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { useFolderLoader } from '@/composables/useFolderLoader'
+import { useItemActions } from '@/composables/useItemActions'
 import { usePanelWidth } from '@/composables/usePanelWidth'
-import { useRemembered } from '@/composables/useRemembered'
-import { canDeleteItem, useFolderPermissions } from '@/composables/useFolderPermissions'
+import { roleOf, useFolderPermissions } from '@/composables/useFolderPermissions'
+import { flashTooltip } from '@/composables/useTooltip'
 import { useFolderPrefetch } from '@/composables/useFolderPrefetch'
 import { useDropZone } from '@/composables/useDropZone'
 import { useUploadPanel } from '@/composables/useUploadPanel'
@@ -44,13 +45,14 @@ import {
 import { everyTask, findTask, isActive } from '@/utils/workflow'
 import { useWorkflowsStore } from '@/stores/workflows'
 import type { Task } from '@/types/workflow'
-import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
 import { isTyping } from '@/utils/keyboard'
 
 /**
- * A two-pane explorer: what is here (listing) and what the highlighted thing
- * is (inspector), under a path bar that doubles as the prompt for moving.
+ * The explorer: what is here, under a path bar that doubles as the prompt for
+ * moving. What can be done to rows is on the rows (their menu) and, for a
+ * selection, in the toolbar. A workflow folder adds its chart, and the task
+ * picked in it opens in a side panel.
  */
 const props = defineProps<{ id?: string }>()
 const route = useRoute()
@@ -75,15 +77,8 @@ const crumbs = computed(() => (folder.value ? itemsStore.pathTo(folder.value.id)
 const filter = ref('')
 const toolbar = ref<InstanceType<typeof FolderToolbar> | null>(null)
 const table = ref<InstanceType<typeof FolderTable> | null>(null)
-const inspector = ref<InstanceType<typeof ItemInspector> | null>(null)
-/** The inspector column's width: dragged by its left edge, remembered, as on the file page. */
+/** The task panel's width: dragged by its left edge, remembered, as on the file page. */
 const inspectorPanel = usePanelWidth('openrelik.folder.inspectorWidth', { initial: 256, min: 220 })
-/**
- * The inspector column, shown or hidden (`i`), remembered. Its toggle sits at
- * the right end of the top row either way: the inspector's header while it is
- * open, the workflow's header or the listing's heading row while it is closed.
- */
-const showInspector = useRemembered('openrelik.folder.inspector', true)
 
 /** Newest first, so what was just made (a folder, a workflow, an upload) is on top. */
 const defaultSort = (): { key: SortKey; dir: 1 | -1 } =>
@@ -150,7 +145,7 @@ const uploadBlocked = computed(() =>
 /** Queues files for this folder; at the root there is no folder to put them in. */
 function uploadFiles(files: File[]) {
   if (folderId.value === undefined) {
-    dropRefusal.value = 'Files are uploaded into a case folder — open one first.'
+    dropRefusal.value = 'Files are uploaded into a folder — open one first.'
     return
   }
   if (uploadBlocked.value) {
@@ -256,7 +251,6 @@ const showPending = useDelayedFlag(
     uploadsHere.value.length > 0,
 )
 
-const maxBytes = computed(() => Math.max(1, ...rows.value.map(bytesOf)))
 const totals = computed(() => ({
   dirs: rows.value.filter((row) => row.kind === 'folder').length,
   files: rows.value.filter((row) => row.kind === 'file').length,
@@ -284,48 +278,61 @@ const {
 
 const selectedItems = computed(() => rows.value.filter((row) => selected.value.has(row.id)))
 
-const selectedFiles = computed(() =>
-  rows.value.filter((row) => row.kind === 'file' && selected.value.has(row.id)),
-)
+// --- actions: the selection's in the toolbar, a row's in its menu ---
 
-const focused = computed(() => {
-  if (selectedItems.value.length === 1) {
-    return selectedItems.value[0]!
-  }
-  return rows.value[cursor.value] ?? folder.value
-})
+/** The row whose menu is open, and where. */
+const menu = ref<{ item: Item; x: number; y: number } | null>(null)
+/** The top-level folder whose case is being set, and where its sheet opens. */
+const caseSheet = ref<{ item: Item; x: number; y: number } | null>(null)
 
 /**
- * What Delete would act on: the selection when several items are selected,
- * otherwise the item in the inspector.
+ * Roles for whatever an action may touch next: the selection, the open menu's
+ * row and the cursor row (so its menu opens complete). A folder is judged by
+ * its own role, a file by the folder it is in.
  */
-const deleteTargets = computed<Item[]>(() => {
-  const items = selectedItems.value.length > 1 ? selectedItems.value : [focused.value]
-  return items.filter((item): item is Item => !!item)
+useFolderPermissions(() => {
+  const items = [...selectedItems.value, menu.value?.item, rows.value[cursor.value]]
+  return [
+    ...new Set(
+      items
+        .map((item) => (item?.kind === 'folder' ? item.id : item?.parent))
+        .filter((id): id is number => id !== null && id !== undefined),
+    ),
+  ]
 })
-/** A folder is judged by its own role, a file by the folder it is in. */
-const deleteRoleIds = computed(() => [
-  ...new Set(
-    deleteTargets.value
-      .map((item) => (item.kind === 'folder' ? item.id : item.parent))
-      .filter((id): id is number => id !== null),
-  ),
-])
-// Keeps those roles loaded; Delete stays hidden until they are known.
-useFolderPermissions(() => deleteRoleIds.value)
-const viewerName = computed(() => {
-  const viewer = useAuthStore().user
-  return viewer?.display_name || viewer?.username
+
+const { actionsFor } = useItemActions({
+  folder: () => folder.value,
+  open,
+  rename: (item) => startRenameItem(item.id),
+  remove: deleteItems,
+  editCase: (item) => {
+    const at = menu.value ?? { x: 200, y: 120 }
+    caseSheet.value = { item, x: at.x, y: at.y }
+  },
+  copyId: (item) => {
+    navigator.clipboard?.writeText(String(item.id)).then(
+      () => {
+        const button = table.value?.menuButton(item.id)
+        if (button) flashTooltip(button, `Copied id ${item.id}`)
+      },
+      () => {},
+    )
+  },
 })
-const canDeleteAll = computed(
-  () =>
-    deleteTargets.value.length > 0 &&
-    deleteTargets.value.every((item) => canDeleteItem(item, viewerName.value)),
-)
-// Rename acts on the folder in the inspector; it shows for owners and editors.
-const { canRenameAll: canRenameFocused } = useFolderPermissions(() =>
-  focused.value?.kind === 'folder' ? [focused.value.id] : [],
-)
+
+const selectionActions = computed(() => actionsFor(selectedItems.value))
+const menuActions = computed(() => (menu.value ? actionsFor([menu.value.item]) : []))
+/** The menu's row is judged by a role not loaded yet: some actions are still to come. */
+const menuPending = computed(() => {
+  const item = menu.value?.item
+  const roleId = item?.kind === 'folder' ? item.id : item?.parent
+  return roleId !== null && roleId !== undefined && roleOf(roleId) === undefined
+})
+
+function openMenu(item: Item, at: { x: number; y: number }) {
+  menu.value = { item, ...at }
+}
 
 // --- workflow & tasks ---
 // The folder's workflow loads alongside its listing, and polls while it runs.
@@ -530,12 +537,10 @@ async function handleCreateFolder(name: string) {
   if (idx >= 0) cursor.value = idx
 }
 
-/** F2: the row under the cursor, or — none, in an empty folder or on ".." — the folder itself, in the inspector. */
+/** F2: the row under the cursor. The folder you are in is renamed from its parent. */
 function startRenameCurrent() {
   const item = rows.value[cursor.value]
   if (item) table.value?.startRename(item)
-  else if (focused.value?.id === folder.value?.id && canRenameFocused.value)
-    inspector.value?.rename()
 }
 
 /**
@@ -588,7 +593,8 @@ function handleRename({ id, name }: { id: number; name: string }) {
 
 // --- keyboard navigation ---
 const KEYS: Record<string, () => void> = {
-  i: () => (showInspector.value = !showInspector.value),
+  // The keyboard's menu key: the cursor row's menu, at its button.
+  ContextMenu: () => table.value?.openMenuFor(cursor.value),
   ArrowDown: () => (cursor.value = Math.min(rows.value.length - 1, cursor.value + 1)),
   ArrowUp: () => (cursor.value = Math.max(atRoot.value ? 0 : UP, cursor.value - 1)),
   Home: () => (cursor.value = 0),
@@ -649,8 +655,9 @@ function leavePrompt() {
 }
 
 function onKey(event: KeyboardEvent) {
-  // If a modal dialog is currently open, let it handle its own input
-  if (modalStore.hasActiveModal) return
+  // If a modal dialog is currently open, let it handle its own input. A key it
+  // already handled (the Esc that just closed it) must not act here as well.
+  if (modalStore.hasActiveModal || event.defaultPrevented) return
 
   if (isTyping(event)) {
     if (event.target === toolbar.value?.filterInput) {
@@ -681,6 +688,12 @@ function onKey(event: KeyboardEvent) {
       runPicker()
       event.preventDefault()
     }
+    return
+  }
+
+  if (event.shiftKey && event.key === 'F10') {
+    table.value?.openMenuFor(cursor.value)
+    event.preventDefault()
     return
   }
 
@@ -736,10 +749,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :crumbs="crumbs"
       :path-pending="pathPending"
       :at-root="atRoot"
-      :selected-files="selectedFiles"
+      :selected-count="selectedItems.length"
+      :selection-actions="selectionActions"
       :upload-blocked="uploadBlocked"
       @new-folder="startCreateFolder"
       @upload-files="pickedFiles"
+      @clear-selection="clearSelection"
     />
 
     <!-- panes -->
@@ -761,7 +776,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :tracing="tracing"
           :parent-path="parentPath"
           :parent-name="parentName"
-          :max-bytes="maxBytes"
           :filter="filter"
           :listing="listing"
           :pending-folders="pendingHere"
@@ -773,7 +787,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :empty-note="emptyNote"
           :uploads="uploadsHere"
           :is-drop-target="isDropTarget"
+          :menu-row-id="menu?.item.id ?? null"
           v-on="dropHandlers"
+          @menu="openMenu"
           @sort="sortBy"
           @toggle-all="toggleAll"
           @toggle="toggle"
@@ -790,14 +806,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           @retry-upload="uploads.retry"
           @dismiss-upload="uploads.dismiss"
         >
-          <template v-if="!showInspector && !workflow" #end>
-            <PanelToggle
-              :open="false"
-              name="inspector"
-              class="max-xl:hidden"
-              @toggle="showInspector = true"
-            />
-          </template>
           <template #workflow>
             <WorkflowPanel
               v-if="workflow"
@@ -807,16 +815,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               @select="selectTask"
               @discard="discard"
               @copied="router.push(`/folder/${$event}`)"
-            >
-              <template v-if="!showInspector" #end>
-                <PanelToggle
-                  :open="false"
-                  name="inspector"
-                  class="max-xl:hidden"
-                  @toggle="showInspector = true"
-                />
-              </template>
-            </WorkflowPanel>
+            />
             <LoadState
               v-else-if="folder?.workflowId !== undefined"
               class="border-b border-border"
@@ -841,51 +840,42 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         />
       </div>
 
-      <!-- the inspector column: one width, dragged by its left edge, for the item or the task -->
+      <!-- the task picked in the workflow chart: one width, dragged by its left edge -->
       <div
-        v-if="showInspector && ((task && workflow) || focused)"
+        v-if="task && workflow"
         class="relative flex shrink-0 flex-col border-l border-border max-xl:hidden"
         :style="{ width: `${inspectorPanel.width.value}px` }"
       >
-        <PanelResizeHandle :panel="inspectorPanel" label="Resize the inspector" />
+        <PanelResizeHandle :panel="inspectorPanel" label="Resize the task panel" />
         <TaskInspector
-          v-if="task && workflow"
           :task="task"
           :folder-id="workflow.folderId"
           :editable="workflow.draft"
           class="min-h-0 flex-1"
           @close="taskId = null"
           @add="openAdd"
-        >
-          <template #end>
-            <PanelToggle open name="inspector" @toggle="showInspector = false" />
-          </template>
-        </TaskInspector>
-        <ItemInspector
-          v-else-if="focused"
-          ref="inspector"
-          :item="focused"
-          :current="focused.id === folder?.id"
-          :producer="producer?.name"
-          :selected-files="selectedFiles"
-          :selected-items="selectedItems"
-          :can-delete="canDeleteAll"
-          :can-rename="canRenameFocused"
-          class="min-h-0 flex-1"
-          @open="open(itemsStore.findItem($event))"
-          @run-more="runPicker"
-          @clear-selection="clearSelection"
-          @toggle-item="toggle"
-          @rename="startRenameItem"
-          @rename-to="handleRename"
-          @delete="deleteItems"
-        >
-          <template #end>
-            <PanelToggle open name="inspector" @toggle="showInspector = false" />
-          </template>
-        </ItemInspector>
+        />
       </div>
     </div>
+
+    <ItemMenu
+      v-if="menu"
+      :key="menu.item.id"
+      :item="menu.item"
+      :actions="menuActions"
+      :pending="menuPending"
+      :x="menu.x"
+      :y="menu.y"
+      @close="menu = null"
+    />
+    <CaseRefPopover
+      v-if="caseSheet"
+      :key="caseSheet.item.id"
+      :item="caseSheet.item"
+      :x="caseSheet.x"
+      :y="caseSheet.y"
+      @close="caseSheet = null"
+    />
 
     <!-- status bar -->
     <FolderStatusBar

@@ -14,7 +14,6 @@ import { useFolderLoader } from '@/composables/useFolderLoader'
 import { useRemembered } from '@/composables/useRemembered'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import StatusBar from '@/components/layout/StatusBar.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import { exactSize } from '@/utils/item'
 import { useItemsStore } from '@/stores/items'
 import { formatSize } from '@/utils/format'
@@ -121,7 +120,8 @@ const KEYS: Record<string, () => void> = {
 }
 
 function onKey(event: KeyboardEvent) {
-  if (modalStore.hasActiveModal) return
+  // A key a dialog already handled (the Esc that just closed it) must not act here as well.
+  if (modalStore.hasActiveModal || event.defaultPrevented) return
   if (isTyping(event) || event.altKey || event.metaKey || event.ctrlKey) return
   const action = KEYS[event.key]
   if (!action) return
@@ -153,7 +153,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <Button
           variant="secondary"
           size="row"
-          :tooltip="`Create workflow for ${file.name} (w)`"
+          :tooltip="`Create workflow for ${file.name}`"
           @click="openWorkflow"
         >
           <template #icon><Workflow :size="13" :stroke-width="1.5" /></template>
@@ -162,7 +162,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <Button
           variant="primary"
           size="row"
-          :tooltip="`Download ${file.name} (d)`"
+          :tooltip="`Download ${file.name}`"
           @click="downloadFile(file.id, file.name)"
         >
           <template #icon><Download :size="13" :stroke-width="1.5" /></template>
@@ -198,12 +198,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <!-- status bar -->
     <StatusBar>
       <span class="tabular">{{ file.mime }} · {{ formatSize(bytes) }}</span>
-      <template #hints>
-        <KeyHint keys="w" label="workflow" />
-        <KeyHint keys="d" label="download" />
-        <KeyHint keys="i" label="side panel" />
-        <KeyHint keys="esc" label="back to folder" />
-      </template>
     </StatusBar>
   </section>
 </template>

@@ -120,5 +120,6 @@ const failed = computed(() => props.upload.status === 'failed')
         </Button>
       </div>
     </td>
+    <td />
   </tr>
 </template>

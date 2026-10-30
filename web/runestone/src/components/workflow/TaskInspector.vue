@@ -1,24 +1,26 @@
 <script setup lang="ts">
-import { File, Merge, Plus, Trash2, X } from '@/components/icons'
+import { File, FileText, Merge, Plus, Trash2, X } from '@/components/icons'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
+import PriorityBadge from '@/components/reports/PriorityBadge.vue'
 import Button from '@/components/base/Button.vue'
-import KeyValueRow from '@/components/base/KeyValueRow.vue'
 import { anchorOf, type Anchor } from '@/composables/useRun'
+import { openTaskReport } from '@/composables/useTaskReport'
 import { removeTask, setTaskOption, type AddAt } from '@/composables/useWorkflow'
 import { useItemsStore } from '@/stores/items'
-import { workerShortName } from '@/utils/worker'
 import { allTasks, canChainAfter, canJoin, groupOf } from '@/utils/workflow'
 import { useWorkflowsStore } from '@/stores/workflows'
-import type { Task } from '@/types/workflow'
-import { count, formatDuration, formatSize, stamp } from '@/utils/format'
+import type { FileReport, Task } from '@/types/workflow'
+import { count, formatDuration, formatSize } from '@/utils/format'
 
 /**
- * One task, in full: what it runs, where, how it went, and what it made. In a
- * draft its options can be changed (saved as they are typed) and it can be
- * removed, with the tasks after it.
+ * One task: what it does, how it went, what it found, what it ran on and
+ * made, and what it ran with. What the chart already says (its place, what
+ * comes next) and the plumbing (its uuid, queue, Celery module) are left out.
+ * In a draft its options can be changed (saved as they are typed) and it can
+ * be removed, with the tasks after it.
  */
 const props = defineProps<{
   task: Task
@@ -36,31 +38,64 @@ const emit = defineEmits<{
 const itemsStore = useItemsStore()
 const workflowsStore = useWorkflowsStore()
 
-/** What runs on its output: how many tasks, in how many groups. */
-const next = computed(() => {
-  const { groups } = props.task
-  const tasks = groups.reduce((sum, group) => sum + group.tasks.length, 0)
-  if (!tasks) return ''
-  return groups.length > 1
-    ? `${count(tasks, 'task')} in ${groups.length} groups`
-    : count(tasks, 'task')
-})
 const workflow = computed(() => workflowsStore.workflowOf(props.folderId))
+const placed = computed(() => workflow.value && groupOf(workflow.value, props.task.id))
 /** Its group, when it is one of the group's tasks rather than its join. */
-const group = computed(() => {
-  const placed = workflow.value && groupOf(workflow.value, props.task.id)
-  return placed && placed.group.join?.id !== props.task.id ? placed.group : undefined
-})
+const group = computed(() =>
+  placed.value && placed.value.group.join?.id !== props.task.id ? placed.value.group : undefined,
+)
 /** Nothing is chained after a task in a group a join waits for. */
 const chainable = computed(() => !!workflow.value && canChainAfter(workflow.value, props.task.id))
 /** A callback after its group, as the flowchart offers. */
 const joinable = computed(() => !!group.value && canJoin(group.value))
 const allAfter = computed(() => allTasks(props.task.groups).length)
-const outputs = computed(() =>
-  props.task.outputs.map((id) => itemsStore.findItem(id)).filter((item) => item !== undefined),
+
+/**
+ * What it ran on: the workflow's input files, or the outputs of the task
+ * before it — of every task in its group, for a join.
+ */
+const ranOn = computed(() => {
+  const where = placed.value
+  if (!where || !workflow.value) return null
+  if (where.group.join?.id === props.task.id) {
+    const names = where.group.tasks.map((task) => task.name)
+    return { from: `the outputs of ${names.join(', ')}`, files: [] }
+  }
+  if (where.parent) return { from: `the outputs of ${where.parent.name}`, files: [] }
+  return { from: null, files: workflow.value.inputs }
+})
+/** Input files live in the folder the workflow folder is in. */
+const inputsFolder = computed(() => itemsStore.findItem(props.folderId)?.parent)
+
+const reportsByFile = computed(
+  () =>
+    new Map<number, FileReport>(props.task.fileReports.map((report) => [report.fileId, report])),
 )
+/** Flagged files first, highest priority first; the rest as the server listed them. */
+const outputs = computed(() =>
+  props.task.outputs
+    .map((id) => itemsStore.findItem(id))
+    .filter((item) => item !== undefined)
+    .sort(
+      (a, b) =>
+        (reportsByFile.value.get(b.id)?.priority ?? -1) -
+        (reportsByFile.value.get(a.id)?.priority ?? -1),
+    ),
+)
+/** There is more to read than the summary shows. */
+const hasReport = computed(() => !!props.task.report || props.task.fileReports.length > 0)
 /** Options with a value, for a task that has run: what it ran with. */
 const used = computed(() => props.task.options.filter((o) => props.task.config[o.key]))
+
+/** How long it took, or has taken so far; nothing before it starts. */
+const timing = computed(() => {
+  const { duration, status } = props.task
+  if (duration === undefined || props.editable) return null
+  const took = formatDuration(duration)
+  if (status === 'running') return `running for ${took}`
+  if (status === 'failed') return `failed after ${took}`
+  return `ran for ${took}`
+})
 
 function setOption(key: string, value: string) {
   setTaskOption(props.folderId, props.task.id, key, value)
@@ -80,44 +115,114 @@ function remove() {
         type="button"
         class="ml-auto flex size-5 cursor-pointer items-center justify-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink"
         aria-label="Close task"
-        v-tooltip="'Close (esc)'"
+        v-tooltip="'Close'"
         @click="$emit('close')"
       >
         <X :size="12" :stroke-width="1.5" />
       </button>
-      <!-- the page's control for the whole panel (hide), at the far right -->
-      <slot name="end" />
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
       <p class="font-semibold text-ink">{{ task.name }}</p>
-      <div class="mt-1.5">
+      <p v-if="task.description" class="mt-0.5 text-ink-muted">{{ task.description }}</p>
+      <div class="mt-2 flex min-w-0 items-center gap-2">
         <TaskStatusBadge :status="workflow?.draft ? 'draft' : task.status" />
+        <span
+          v-if="task.status === 'running' && task.progress"
+          class="tabular truncate text-[11px] text-ink-muted"
+          v-overflow-tooltip
+          >{{ task.progress }}</span
+        >
       </div>
 
-      <p
-        v-if="task.error"
-        class="mt-2.5 border border-danger/40 bg-danger-tint px-2 py-1.5 text-danger"
-      >
-        {{ task.error }}
-      </p>
+      <!-- What went wrong: the exception, and the traceback behind it for whoever debugs it. -->
+      <div v-if="task.error" class="mt-2.5 border border-danger/40 bg-danger-tint px-2 py-1.5">
+        <p class="wrap-break-word text-danger">{{ task.error }}</p>
+        <details v-if="task.traceback" class="mt-1 text-[11px]">
+          <summary class="cursor-pointer text-danger/80 hover:text-danger">traceback</summary>
+          <pre
+            v-copy-to-clipboard="{ text: task.traceback, hint: 'Click to copy the traceback' }"
+            class="mt-1 max-h-60 cursor-pointer overflow-auto bg-surface px-2 py-1.5 text-ink-secondary"
+            >{{ task.traceback }}</pre>
+        </details>
+      </div>
 
-      <dl class="mt-2 divide-y divide-border">
-        <KeyValueRow label="id" :value="task.id" />
-        <KeyValueRow label="queue" :value="workerShortName(task.queue)" />
-        <KeyValueRow label="started">
-          <span class="tabular">{{ task.started ? stamp(task.started) : '–' }}</span>
-        </KeyValueRow>
-        <KeyValueRow label="duration">
-          <span class="tabular">{{
-            task.duration === undefined ? '–' : formatDuration(task.duration)
-          }}</span>
-        </KeyValueRow>
-        <KeyValueRow label="next" :value="next" />
-      </dl>
+      <!-- What it found: the summary here, the full report in a sheet of its own. -->
+      <section v-if="hasReport" class="mt-3" aria-label="Report">
+        <p class="micro-label pb-1">report</p>
+        <div v-if="task.report" class="flex items-start gap-2">
+          <PriorityBadge :priority="task.report.priority" />
+          <p class="line-clamp-3 min-w-0 text-ink">{{ task.report.summary }}</p>
+        </div>
+        <p v-if="task.fileReports.length" class="text-ink-muted" :class="{ 'mt-1': task.report }">
+          {{ count(task.fileReports.length, 'file') }} flagged
+        </p>
+        <Button
+          size="row"
+          class="mt-2 w-full justify-center"
+          :tooltip="`Read what ${task.name} found`"
+          @click="openTaskReport(task, folderId)"
+        >
+          <template #icon><FileText :size="13" :stroke-width="1.5" /></template>
+          Open report
+        </Button>
+      </section>
 
-      <p class="micro-label mt-3 pb-1">module</p>
-      <p class="well px-2 py-1.5 text-[12px] break-all text-ink-secondary">{{ task.module }}</p>
+      <section v-if="ranOn && !editable" class="mt-3" aria-label="Ran on">
+        <p class="micro-label pb-1">ran on</p>
+        <p v-if="ranOn.from" class="text-ink-secondary">{{ ranOn.from }}</p>
+        <ul v-else class="flex flex-col">
+          <li v-for="input in ranOn.files" :key="input.id">
+            <RouterLink
+              v-if="inputsFolder !== undefined && inputsFolder !== null"
+              :to="`/folder/${inputsFolder}/file/${input.id}`"
+              class="flex h-6 items-center gap-2 text-ink hover:text-brand"
+            >
+              <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+              <span class="truncate">{{ input.name }}</span>
+            </RouterLink>
+            <span v-else class="flex h-6 items-center gap-2 text-ink">
+              <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+              <span class="truncate">{{ input.name }}</span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section v-if="!editable" class="mt-3" aria-label="Outputs">
+        <p class="micro-label pb-1">outputs</p>
+        <ul v-if="outputs.length" class="flex flex-col">
+          <li v-for="file in outputs" :key="file.id">
+            <RouterLink
+              :to="`/folder/${file.parent}/file/${file.id}`"
+              class="flex h-6 items-center gap-2 text-ink hover:text-brand"
+            >
+              <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+              <span class="truncate">{{ file.name }}</span>
+              <PriorityBadge
+                v-if="reportsByFile.get(file.id)"
+                :priority="reportsByFile.get(file.id)!.priority"
+                class="ml-auto"
+              />
+              <span
+                class="tabular shrink-0 text-[11px] text-ink-muted"
+                :class="{ 'ml-auto': !reportsByFile.get(file.id) }"
+                >{{ formatSize(file.size ?? 0) }}</span
+              >
+            </RouterLink>
+            <p
+              v-if="reportsByFile.get(file.id)?.summary"
+              class="truncate pb-1 pl-5 text-[11px] text-ink-muted"
+              v-overflow-tooltip
+            >
+              {{ reportsByFile.get(file.id)!.summary }}
+            </p>
+          </li>
+        </ul>
+        <p v-else class="text-ink-muted">
+          {{ task.status === 'pending' || task.status === 'running' ? 'Not yet.' : 'None.' }}
+        </p>
+      </section>
 
       <template v-if="editable && task.options.length">
         <p class="micro-label mt-3 pb-1">options</p>
@@ -176,37 +281,12 @@ function remove() {
         </dl>
       </template>
 
-      <p class="micro-label mt-3 pb-1">outputs</p>
-      <ul v-if="outputs.length" class="flex flex-col">
-        <li v-for="file in outputs" :key="file.id">
-          <RouterLink
-            :to="`/folder/${file.parent}/file/${file.id}`"
-            class="flex h-6 items-center gap-2 text-ink hover:text-brand"
-          >
-            <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
-            <span class="truncate">{{ file.name }}</span>
-            <span class="tabular ml-auto shrink-0 text-[11px] text-ink-muted">{{
-              formatSize(file.size ?? 0)
-            }}</span>
-          </RouterLink>
-        </li>
-      </ul>
-      <p v-else class="text-ink-muted">
-        {{
-          editable
-            ? 'Once it runs.'
-            : task.status === 'pending' || task.status === 'running'
-              ? 'Not yet.'
-              : 'None.'
-        }}
-      </p>
-
       <div v-if="editable" class="mt-3 flex flex-col gap-1.5">
         <Button
           v-if="chainable"
           size="row"
           class="justify-center"
-          :tooltip="`Add worker after ${task.name} (a)`"
+          :tooltip="`Add worker after ${task.name}`"
           @click="emit('add', { after: task.id }, anchorOf($event))"
         >
           <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
@@ -247,6 +327,13 @@ function remove() {
           Remove
         </Button>
       </div>
+    </div>
+
+    <div
+      v-if="timing"
+      class="tabular flex h-7 shrink-0 items-center border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
+    >
+      {{ timing }}
     </div>
   </aside>
 </template>

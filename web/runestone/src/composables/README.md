@@ -102,12 +102,11 @@ Lightweight bridge composable controlling the visibility of the keyboard shortcu
 
 ### `useTooltip`
 
-Central coordinator for application-wide floating tooltips and keyboard shortcut hints.
+Central coordinator for application-wide floating tooltips.
 
 - Singleton reactive state: Drives a single top-layer `<Tooltip />` element in `App.vue`, avoiding DOM wrapper overhead across controls.
 - Warmup and cooldown: Implements grouped tooltip ergonomics (250ms cold initial delay, 0ms instant delay when moving between adjacent controls within 500ms).
 - Smart positioning & edge clamping: Automatically computes top/bottom/left/right placement relative to targets with viewport edge bounds clamping.
-- Shortcut extraction: Parses shortcut strings formatted like `"Settings (⌘,)"` or `"Close (esc)"` into label text and miniature `<kbd>` keycap badges automatically.
 - Dismissal: Handles blur, click, window scroll, and global `Escape` events to dismiss immediately according to WCAG 1.4.13 standards.
 
 ### `useQueryCache`

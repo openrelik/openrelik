@@ -27,8 +27,16 @@ const route = useRoute()
     <div class="flex min-h-0 flex-1 flex-col items-center justify-center p-6 text-center">
       <div class="card flex max-w-md flex-col items-center gap-3">
         <AlertCircle :size="32" :stroke-width="1.5" class="text-danger" />
-        <h1 class="card-title text-base">Page Not Found</h1>
-        <p class="text-ink-muted">
+        <h1 class="card-title text-base">
+          {{ route.name === 'case' ? 'Case Not Found' : 'Page Not Found' }}
+        </h1>
+        <!-- The server answers the same for no such case and a case you cannot see. -->
+        <p v-if="route.name === 'case'" class="text-ink-muted">
+          No folder for case
+          <code class="well py-0.5 text-brand">{{ route.params.ref }}</code> that you have access
+          to.
+        </p>
+        <p v-else class="text-ink-muted">
           The requested path <code class="well py-0.5 text-brand">{{ route.fullPath }}</code> does
           not exist.
         </p>

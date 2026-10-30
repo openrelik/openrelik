@@ -31,13 +31,34 @@ export interface Task {
   duration?: number
   /** File ids produced, in the workflow folder. */
   outputs: number[]
+  /** While running: what the worker says it is doing ("40%", a stage). */
+  progress?: string
   error?: string
+  /** The full Python traceback behind `error`. */
+  traceback?: string
+  /** The worker's findings for the whole task. */
+  report?: Report
+  /** The worker's findings per file, highest priority first. */
+  fileReports: FileReport[]
   /** What the worker can be configured with. */
   options: WorkerOption[]
   /** The values chosen, by option key. */
   config: Record<string, string>
   /** What runs on its output. */
   groups: TaskGroup[]
+}
+
+/** A worker's findings: a one-line summary, and markdown for the rest. */
+export interface Report {
+  summary: string
+  /** 0–100, higher matters more: 80 critical, 40 high, 20 medium, 10 low, 5 info. */
+  priority: number
+  markdown: string
+}
+
+export interface FileReport extends Report {
+  fileId: number
+  fileName: string
 }
 
 /** Tasks that run side by side, and what waits for all of them. */

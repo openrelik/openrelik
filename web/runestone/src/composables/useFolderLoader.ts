@@ -31,6 +31,8 @@ export const folderKeys = {
   subfolders: (id: number) => `folder:${id}:subfolders`,
   files: (id: number) => `folder:${id}:files`,
   role: (id: number) => `folder:${id}:role`,
+  /** Which folder a case is, by its normalized reference. */
+  case: (ref: string) => `case:${ref}`,
 }
 
 /**
@@ -49,6 +51,7 @@ export function mapFolderToItem(folder: Folder, parent: number | null = null): I
     created: folder.created_at ?? folder.updated_at ?? new Date().toISOString(),
     modified: folder.updated_at ?? folder.created_at ?? new Date().toISOString(),
     workflowId: folder.workflows?.[0]?.id,
+    caseRef: folder.case_ref || undefined,
   }
 }
 

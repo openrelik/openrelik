@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 
-import BrandLink from '@/components/layout/BrandLink.vue'
 import SettingsTrigger from '@/components/layout/SettingsTrigger.vue'
 import { LogOut, Upload, User as UserIcon } from '@/components/icons'
 import { refreshAll } from '@/composables/useAutoRefresh'
@@ -31,7 +30,6 @@ const { status: connection } = useConnection()
     class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
     role="status"
   >
-    <BrandLink />
     <slot />
     <!-- Right-aligned group: notices grow leftwards and move nothing. -->
     <span class="ml-auto flex items-center gap-3">
@@ -67,9 +65,6 @@ const { status: connection } = useConnection()
           :class="network === 'idle' ? 'bg-success' : 'animate-pulse bg-warning'"
           aria-hidden="true"
         />
-      </span>
-      <span v-if="$slots.hints" class="flex items-center gap-3 max-md:hidden">
-        <slot name="hints" />
       </span>
 
       <!-- Always here, so the queue is somewhere to go back to, not a notice
@@ -109,7 +104,7 @@ const { status: connection } = useConnection()
       type="button"
       class="cursor-pointer rounded-(--radius-check) px-1 text-ink-muted hover:bg-surface hover:text-ink"
       :class="{ '-mr-3': !authStore.isAuthenticated }"
-      v-tooltip="'Keyboard shortcuts (?)'"
+      v-tooltip="'Keyboard shortcuts'"
       @click="helpOpen = true"
     >
       help

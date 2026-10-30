@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight } from '@/components/icons'
 
 import HexInspector from '@/components/viewers/HexInspector.vue'
-import KeyHint from '@/components/base/KeyHint.vue'
 import { useByteChunks } from '@/composables/useByteChunks'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import {
@@ -370,7 +369,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             aria-label="Back to where the last jump left from"
             v-tooltip="
               history.back.length
-                ? `Back to 0x${offsetLabel(history.back.at(-1)!, width)} ([)`
+                ? `Back to 0x${offsetLabel(history.back.at(-1)!, width)}`
                 : 'Back ([): no jump yet'
             "
             @click="stepBack"
@@ -384,8 +383,8 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             aria-label="Forward again"
             v-tooltip="
               history.forward.length
-                ? `Forward to 0x${offsetLabel(history.forward.at(-1)!, width)} (])`
-                : 'Forward (])'
+                ? `Forward to 0x${offsetLabel(history.forward.at(-1)!, width)}`
+                : 'Forward'
             "
             @click="stepForward"
           >
@@ -399,7 +398,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             type="text"
             spellcheck="false"
             autocomplete="off"
-            placeholder="go to offset (o)"
+            placeholder="go to offset"
             aria-label="Go to offset, hex (0x…) or decimal"
             class="field tabular h-5 w-36 text-[11px]"
             :class="{ 'border-danger': gotoError }"
@@ -520,17 +519,6 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             @pointerup="grab = null"
           />
         </div>
-      </div>
-
-      <div
-        class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
-      >
-        <KeyHint keys="↑↓←→" label="move" />
-        <KeyHint keys="⇧" label="select" />
-        <KeyHint keys="o" label="go to offset" />
-        <KeyHint keys="[ ]" label="back / forward" />
-        <KeyHint keys="⌘C" label="copy hex" />
-        <KeyHint keys="⇧⌘C" label="copy text" />
       </div>
     </div>
 

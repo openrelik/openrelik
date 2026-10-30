@@ -20,6 +20,8 @@ export interface Item {
   dataType?: string
   /** Folders only: the workflow that owns this folder. */
   workflowId?: number
+  /** Top-level folders only: the case this is the folder of, as the server normalized it. */
+  caseRef?: string
   /** Files only, once their details are loaded; empty strings until the server has hashed it. */
   hashes?: Hashes
   /** Files only, once their details are loaded: libmagic's description of the content. */
