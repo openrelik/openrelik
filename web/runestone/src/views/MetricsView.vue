@@ -91,7 +91,7 @@ onUnmounted(() => clearInterval(timer))
 <template>
   <section class="flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[12px]">
     <!-- toolbar: path · the period and how often to read -->
-    <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-2 pl-3">
+    <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
       <PathBar :path="[]" />
       <span class="shrink-0 font-medium text-ink">metrics</span>
       <div class="ml-auto flex shrink-0 items-center gap-2">
