@@ -14,10 +14,15 @@ import type { Item } from '@/types/item'
  * Teleport to `#file-side-bytes` / `#file-side-row`; this panel only decides
  * where on screen they are. It stays mounted while hidden, so those targets
  * are always there for the viewers to reach.
+ *
+ * Hiding slides it out past the right edge, at its own width so nothing in
+ * it reflows; the page beside it grows into the room as it goes.
  */
 export type SideTab = 'details' | 'inspector'
 
 defineProps<{
+  /** Shown, or slid away (hidden, and out of the tab order). */
+  open: boolean
   file: Item
   /** What the inspector shows, for the viewer on screen; none (text) means no inspector tab. */
   inspector: 'bytes' | 'row' | null
@@ -31,8 +36,10 @@ const panel = usePanelWidth('openrelik.file.sidePanelWidth', { initial: 416, min
 
 <template>
   <aside
-    class="relative flex shrink-0 flex-col border-l border-border max-xl:hidden"
-    :style="{ width: `${panel.width.value}px` }"
+    class="relative flex shrink-0 flex-col border-l border-border transition-[margin-right,visibility] duration-200 ease-(--ease-standard) max-xl:hidden"
+    :class="{ invisible: !open }"
+    :style="{ width: `${panel.width.value}px`, marginRight: open ? 0 : `-${panel.width.value}px` }"
+    :inert="!open"
     aria-label="Side panel"
   >
     <PanelResizeHandle :panel="panel" label="Resize the side panel" />

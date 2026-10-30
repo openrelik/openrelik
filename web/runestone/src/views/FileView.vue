@@ -201,7 +201,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     </div>
 
     <!-- panes -->
-    <div class="flex min-h-0 flex-1">
+    <!-- overflow hidden: the side panel slides out past the right edge -->
+    <div class="flex min-h-0 flex-1 overflow-hidden">
       <FileContent
         v-model:mark="mark"
         :file="file"
@@ -220,9 +221,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </template>
       </FileContent>
 
-      <!-- always mounted (hidden when closed): the viewers send their panels into it -->
+      <!-- always mounted (slid away when closed): the viewers send their panels into it -->
       <FileSidePanel
-        v-show="showDetails"
+        :open="showDetails"
         v-model="sideTab"
         :file="file"
         :inspector="inspector"
