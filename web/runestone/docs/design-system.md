@@ -552,7 +552,7 @@ What can be done to rows comes from one list (`useItemActions`) and shows in two
 An action the operator's role does not allow is not shown, in either place.
 
 ### The Folder Toolbar
-Without a selection, the toolbar's buttons come in two groups, set apart by space: what acts on the folder itself (Share), then what adds to it (Upload, the view's primary in a plain folder; New folder). New folder keeps the right edge and its label at the top level and in every folder, so nothing moves under the mouse. An empty listing offers the same add actions in its empty line, as secondary row buttons.
+Without a selection, the toolbar's buttons come in two groups, set apart by space: what acts on the folder itself (Share), then what adds to it (New folder; Upload, the view's primary in a plain folder). The page's primary action keeps the right edge on every page (New folder at the top level, Upload in a folder, Download on a file), so the primary never moves under the mouse. An empty listing offers the same add actions in its empty line, as secondary row buttons.
 - **Workflow & Container Titles**: Inline click-to-edit allows rapid renaming of container titles without opening heavy modal dialogs. The update is scoped strictly to the target entity.
 
 ---

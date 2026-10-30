@@ -97,8 +97,9 @@ defineExpose({
     </div>
 
     <!--
-      The folder itself (Share), then what adds to it (Upload, New). New keeps the
-      right edge at the root and in every folder, so it never moves under the mouse.
+      The folder itself (Share), then what adds to it (New, Upload). The page's
+      primary action keeps the right edge on every page — New at the root, Upload
+      in a folder, Download on a file — so it never moves under the mouse.
     -->
     <div v-else class="flex shrink-0 items-center gap-1.5">
       <!-- Sharing and uploads happen inside a folder. -->
@@ -108,20 +109,21 @@ defineExpose({
           Share
         </Button>
         <span class="w-1.5 shrink-0" aria-hidden="true" />
-        <Button
-          :variant="uploadLeads ? 'primary' : 'secondary'"
-          size="row"
-          :disabled="!!uploadBlocked"
-          :tooltip="uploadBlocked || undefined"
-          @click="pickFiles"
-        >
-          <template #icon><Upload :size="13" :stroke-width="1.5" /></template>
-          Upload
-        </Button>
       </template>
       <Button :variant="atRoot ? 'primary' : 'secondary'" size="row" @click="emit('newFolder')">
         <template #icon><FolderPlus :size="13" :stroke-width="1.5" /></template>
         New folder
+      </Button>
+      <Button
+        v-if="!atRoot"
+        :variant="uploadLeads ? 'primary' : 'secondary'"
+        size="row"
+        :disabled="!!uploadBlocked"
+        :tooltip="uploadBlocked || undefined"
+        @click="pickFiles"
+      >
+        <template #icon><Upload :size="13" :stroke-width="1.5" /></template>
+        Upload
       </Button>
     </div>
 
