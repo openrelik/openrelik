@@ -113,7 +113,7 @@ Central coordinator for application-wide floating tooltips.
 
 Module-scoped record of which server listings are loaded and when. The data itself lives in the normalized Pinia stores (`stores/items.ts`, `stores/rootPages.ts`, `stores/workflows.ts`); fetchers write into them.
 
-- `ensure(key, fetcher)`: fresh keys (30 s) cost no request, stale keys resolve at once and refresh in the background, and concurrent callers share one request. A request is aborted only when every caller waiting for it has left.
+- `ensure(key, fetcher)`: fresh keys (30 s) cost no request, stale keys resolve at once and refresh in the background, and concurrent callers share one request. A request is aborted only when every caller waiting for it has left. A request that was aborted, or started before its key was invalidated, is never joined: the next `ensure()` starts a new one (otherwise a caller that leaves and comes straight back, or a refresh asked for just after an invalidate, would get an outdated answer or none).
 - Per-key state (`idle` → `loading` → `success` | `error`, plus `isFetching` and `error`). A key that has loaded stays `success` while refreshing or after a failed refresh.
 - `markFresh` for data known without asking (a new folder is empty), `invalidate`, and `clearQueryCache` on sign-out.
 

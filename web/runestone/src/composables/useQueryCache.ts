@@ -18,6 +18,12 @@
  * the same key share one request. A request is aborted only once every
  * caller waiting for it has gone away.
  *
+ * A request is never joined once it can no longer give the answer asked
+ * for: one already aborted (a caller leaving and coming straight back, as
+ * `load()` does), or one started before its key was invalidated (its answer
+ * may predate the change). The next `ensure()` starts a new request instead,
+ * and only the newest request writes the key's state.
+ *
  * Module-scoped so every view shares one cache; `clearQueryCache()` on
  * sign-out so the next operator never sees the previous one's data.
  */
@@ -49,7 +55,10 @@ interface Entry extends QueryState {
   fetchedAt: number
   promise: Promise<void> | null
   controller: AbortController | null
-  waiters: number
+  /** Bumped by `invalidate()`. */
+  generation: number
+  /** The generation the request in flight was started at. */
+  requestGeneration: number
 }
 
 export type Fetcher = (signal: AbortSignal) => Promise<void>
@@ -84,7 +93,8 @@ function entryFor(key: string): Entry {
     ...IDLE,
     promise: null,
     controller: null,
-    waiters: 0,
+    generation: 0,
+    requestGeneration: 0,
   })
   entry = entries.get(key)!
   evictOldest()
@@ -98,17 +108,27 @@ function evictOldest(): void {
   }
 }
 
+/**
+ * How many callers wait for each request, by its controller: per request, not
+ * per key, as a superseded request's callers leave after a newer one started.
+ */
+const waiters = new WeakMap<AbortController, number>()
+
 const isAbort = (err: unknown): boolean => err instanceof DOMException && err.name === 'AbortError'
 
 function start(entry: Entry, fetcher: Fetcher): void {
   const controller = new AbortController()
   entry.controller = controller
   entry.isFetching = true
-  entry.waiters = 0
+  waiters.set(controller, 0)
+  entry.requestGeneration = entry.generation
   if (entry.status !== 'success') entry.status = 'loading'
+  // A newer request took over: this one's outcome no longer speaks for the key.
+  const current = () => entry.controller === controller
 
   const promise = fetcher(controller.signal)
     .then(() => {
+      if (!current()) return
       entry.status = 'success'
       entry.fetchedAt = Date.now()
       entry.error = null
@@ -117,16 +137,18 @@ function start(entry: Entry, fetcher: Fetcher): void {
     .catch((err: unknown) => {
       if (isAbort(err) || controller.signal.aborted) {
         // Nobody wanted it any more: back to what we had.
-        if (entry.status === 'loading') entry.status = entry.fetchedAt ? 'success' : 'idle'
+        if (current() && entry.status === 'loading')
+          entry.status = entry.fetchedAt ? 'success' : 'idle'
         return
       }
+      if (!current()) throw err
       entry.error = errorMessage(err, 'Request failed')
       entry.errorStatus = err instanceof ApiError ? err.status : null
       if (entry.status !== 'success') entry.status = 'error'
       throw err
     })
     .finally(() => {
-      if (entry.controller === controller) {
+      if (current()) {
         entry.promise = null
         entry.controller = null
         entry.isFetching = false
@@ -141,14 +163,14 @@ function start(entry: Entry, fetcher: Fetcher): void {
 function join(entry: Entry, signal?: AbortSignal): Promise<void> {
   const promise = entry.promise!
   const controller = entry.controller!
-  entry.waiters++
+  waiters.set(controller, (waiters.get(controller) ?? 0) + 1)
 
   return new Promise<void>((resolve, reject) => {
     let settled = false
     const leave = (): boolean => {
       if (settled) return false
       settled = true
-      entry.waiters--
+      waiters.set(controller, (waiters.get(controller) ?? 1) - 1)
       return true
     }
 
@@ -156,7 +178,7 @@ function join(entry: Entry, signal?: AbortSignal): Promise<void> {
       'abort',
       () => {
         if (!leave()) return
-        if (entry.waiters === 0 && entry.controller === controller) controller.abort()
+        if (!waiters.get(controller)) controller.abort()
         resolve()
       },
       { once: true },
@@ -181,8 +203,15 @@ export function ensure(key: string, fetcher: Fetcher, options: EnsureOptions = {
   // A failed refresh counts as stale, so it is retried as soon as anyone asks again.
   const fresh = entry.status === 'success' && !entry.error && Date.now() - entry.fetchedAt < staleMs
 
-  if (!entry.promise) {
-    if (fresh && !options.force) return Promise.resolve()
+  // Aborted, or asked before the key was invalidated: its answer will not do.
+  const outdated =
+    !!entry.promise &&
+    (entry.controller!.signal.aborted || entry.requestGeneration !== entry.generation)
+
+  if (!entry.promise || outdated) {
+    if (fresh && !options.force && !outdated) return Promise.resolve()
+    // A superseded request still running is left to finish for its own
+    // callers; it no longer touches the key's state.
     start(entry, fetcher)
   }
   return join(entry, options.signal)
@@ -211,6 +240,7 @@ export function invalidate(keyOrPrefix: string): void {
   for (const [key, entry] of entries) {
     if (key === keyOrPrefix || (keyOrPrefix.endsWith(':') && key.startsWith(keyOrPrefix))) {
       entry.fetchedAt = 0
+      entry.generation++
     }
   }
 }
