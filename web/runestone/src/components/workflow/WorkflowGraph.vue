@@ -806,11 +806,16 @@ const EDGE: Record<TaskStatus, string> = {
 /** A draft's edges: nothing is queued yet, so none is dashed as pending. */
 const DRAFT_EDGE = 'stroke-ink-muted/60'
 /**
- * A node's frame, when nothing selects it. Status is said by the icon and the
- * edges; only a failure, the one state that asks for attention, tints the frame.
+ * A node's frame, when nothing selects it. A finished state tints the frame, so
+ * the outcome reads across the graph without finding each icon: success green,
+ * failure red. Running and pending keep the plain frame (the icon says them).
+ * Half-strength green vanishes on the white light-theme panel, so there the
+ * frame takes the graphic success tone (--color-success-icon, 3.45:1) in full,
+ * doubled by a 1px inset shadow: a wider border would move the node's text.
  */
 const FRAME: Record<TaskStatus, string> = {
-  success: 'border-border-strong',
+  success:
+    'border-success/50 in-data-[theme=light]:border-success-icon in-data-[theme=light]:shadow-[inset_0_0_0_1px_var(--color-success-icon)]',
   running: 'border-border-strong',
   pending: 'border-border-strong',
   failed: 'border-danger/50',
