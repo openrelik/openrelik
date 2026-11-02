@@ -531,7 +531,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-model="newFolderName"
                 type="text"
                 spellcheck="false"
-                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 text-[12px] font-medium text-ink shadow-sm outline-none"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[12px] font-medium text-ink shadow-sm outline-none"
                 aria-label="New folder name"
                 @keydown="onNewFolderKeydown"
                 @blur="commitNewFolder"
@@ -600,7 +600,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 class="shrink-0 fill-current text-brand-icon"
                 aria-hidden="true"
               />
-              <span class="truncate text-ink-secondary">{{ pending.name }}/</span>
+              <span class="truncate font-mono text-ink-secondary">{{ pending.name }}/</span>
             </div>
           </td>
           <td v-if="!atRoot" class="px-2 text-right">
@@ -687,7 +687,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-model="renamingName"
                 type="text"
                 spellcheck="false"
-                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 text-[12px] font-medium text-ink shadow-sm outline-none"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[12px] font-medium text-ink shadow-sm outline-none"
                 :aria-label="`Rename ${row.name}`"
                 @click.stop
                 @dblclick.stop
@@ -697,7 +697,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               <RouterLink
                 v-else
                 :to="rowPath(row)"
-                class="truncate select-none hover:underline"
+                class="truncate font-mono select-none hover:underline"
                 :class="isEmptyFile(row) ? 'text-ink-muted' : 'text-ink'"
                 draggable="false"
                 v-overflow-tooltip

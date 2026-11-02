@@ -40,7 +40,7 @@ const fields = computed(() =>
     <dl class="divide-y divide-border px-3">
       <div v-for="field in fields" :key="field.name" class="py-2">
         <dt class="micro-label truncate normal-case" v-overflow-tooltip>{{ field.name }}</dt>
-        <dd class="mt-0.5">
+        <dd class="mt-0.5 font-mono">
           <span v-if="field.text === ''" class="text-ink-muted">–</span>
           <pre
             v-else-if="field.nested"

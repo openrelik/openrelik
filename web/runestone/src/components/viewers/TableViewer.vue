@@ -481,7 +481,7 @@ async function loadAll() {
           <div
             ref="scroller"
             tabindex="0"
-            class="tabular relative min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
+            class="tabular relative min-h-0 flex-1 overflow-auto font-mono outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
             role="grid"
             :aria-rowcount="view.length"
             aria-label="File rows"

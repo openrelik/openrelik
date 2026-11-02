@@ -28,10 +28,36 @@
   src: url('/fonts/ibm-plex-mono/IBMPlexMono-SemiBold.woff2') format('woff2');
 }
 
+/* IBM Plex Sans, Plex Mono's companion, from IBM's own release and under the
+   same licence (public/fonts/ibm-plex-sans). Same rule: served from here only. */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans/IBMPlexSans-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans/IBMPlexSans-SemiBold.woff2') format('woff2');
+}
+
 @theme {
-  /* Typography — one face. There is no sans/mono split any more, so both names
-     resolve to the same family and every utility already written still works. */
-  --font-sans: 'IBM Plex Mono', ui-monospace, monospace;
+  /* Typography — two faces from one family. The interface and prose are set in
+     Plex Sans; `font-mono` marks data: what an operator copies, compares
+     character by character or lines up (file contents, names, hashes, paths,
+     IDs). `code`, `pre` and `kbd` are mono already. */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   /* Neutrals */
@@ -212,7 +238,7 @@
 
 @layer base {
   html {
-    @apply bg-canvas text-ink font-mono antialiased;
+    @apply bg-canvas text-ink font-sans antialiased;
     /* Native controls follow: the date picker, the select arrow and the
        scrollbars all render dark instead of punching white holes in the page.
        Light mode overrides this above; dark stays the value written here
@@ -233,8 +259,9 @@
     border-radius: 2px;
   }
 
-  /* Figures must not jitter. In a fixed-width face they already line up, but
-     the lining forms still differ from the proportional ones in some faces. */
+  /* Figures must not jitter. Plex Sans sets proportional figures by default,
+     so a changing count or size would nudge what follows it; mono figures
+     already line up, and the class costs nothing there. */
   .tabular {
     font-variant-numeric: tabular-nums;
   }
@@ -256,8 +283,8 @@
 }
 
 @layer components {
-  /* Section and column labels. Lower case: uppercase in a fixed-width face
-     shouts, and the tracking alone is enough to set a label apart. */
+  /* Section and column labels. Lower case: uppercase shouts, and the tracking
+     alone is enough to set a label apart. */
   .micro-label {
     @apply text-ink-muted font-medium;
     font-size: 12px;

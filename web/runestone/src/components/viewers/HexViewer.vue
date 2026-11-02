@@ -435,7 +435,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             autocomplete="off"
             placeholder="go to offset"
             aria-label="Go to an offset, or a range as 0x1f0-0x2a0"
-            class="field tabular h-5 w-36 text-[11px]"
+            class="field tabular h-5 w-36 font-mono text-[11px]"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
@@ -452,7 +452,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
       <div
         ref="grid"
         tabindex="0"
-        class="relative flex min-h-0 flex-1 overflow-hidden outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
+        class="relative flex min-h-0 flex-1 overflow-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
         role="grid"
         aria-label="File bytes"
         @keydown="onKey"

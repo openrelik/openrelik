@@ -19,7 +19,7 @@ withDefaults(
     <dt class="micro-label shrink-0">{{ label }}</dt>
     <dd
       :class="[
-        'min-w-0 text-ink',
+        'min-w-0 font-mono text-ink',
         stacked ? 'tabular mt-0.5 break-all select-all' : 'text-right break-all',
       ]"
     >

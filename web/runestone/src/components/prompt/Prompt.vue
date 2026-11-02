@@ -63,7 +63,7 @@ function onInputKey(event: KeyboardEvent) {
             aria-label="Find a folder or file"
             aria-controls="prompt-results"
             :aria-activedescendant="`prompt-${index}`"
-            class="min-w-0 flex-1 bg-transparent pl-1 text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
+            class="min-w-0 flex-1 bg-transparent pl-1 font-mono text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
             placeholder="cd, or type to find…"
             @keydown="onInputKey"
           />

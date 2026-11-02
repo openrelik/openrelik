@@ -226,7 +226,7 @@ function onBarClick(event: MouseEvent) {
 <template>
   <div
     ref="bar"
-    class="relative flex h-7 min-w-0 flex-1 cursor-text items-center pr-1"
+    class="relative flex h-7 min-w-0 flex-1 cursor-text items-center pr-1 font-mono"
     @click="onBarClick"
   >
     <!-- the path: links, and a menu behind every slash -->

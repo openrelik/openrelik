@@ -132,13 +132,15 @@ Status accents are **never displayed as solid, saturated blocks of color**. Soli
 
 ## §3. Typography & Numerical Discipline
 
-### The Single-Family Rule
-The console employs a single typeface across the entire interface:
+### One Family, Two Faces
+The console is set in IBM Plex: **Plex Sans** for the interface and prose, **Plex Mono** for data. Both are self-hosted from `public/fonts/` (never a font service) and designed as a pair, so the mix reads as one system.
 ```css
---font-sans: 'IBM Plex Mono', ui-monospace, monospace;
---font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+--font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;  /* the page */
+--font-mono: 'IBM Plex Mono', ui-monospace, monospace;             /* data: `font-mono` */
 ```
-There is no sans-serif/monospace split. Because everything renders in the same monospace family, labels, tabular metrics, hashes, and inputs align naturally to consistent horizontal and vertical character grids.
+*Rule: Mono if the operator might copy it, compare it character by character, or line it up.* That is file contents (the text, hex and table viewers, which are laid out in character widths and must be mono), file and folder names, paths and the path bar's prompt, hashes, IDs, offsets, case references, detail values (`KeyValueRow`), code and specs (`code`, `pre` and `kbd` are mono already), and inputs that take any of these. Everything else (headings, labels, buttons, menus, dialogs, help, status and error messages, rendered Markdown prose) is Sans.
+
+Why the split: monospace reads more slowly as running text and takes about a fifth more width, which costs most in reports, dialogs and narrow columns. In evidence, though, telling `0`/`O` and `1`/`l`/`I` apart and comparing a hash by eye is the job, so data keeps the fixed-width face.
 
 ### The 4-Step Type Scale
 To prevent visual clutter, the typography scale is restricted to **exactly four sizes**:
@@ -168,12 +170,12 @@ Badge / Kbd    11px      500 (Med)   1.45          .badge, KeyHints, metadata ta
    The foundation of the console. Applied to `body` globally. Used in data rows, descriptions, and inputs.
 3. **Micro-Label (`12px`, weight 500, `letter-spacing: 0.06em`)**  
    Used for table column headers, form field labels, and property keys.
-   *Rule: Always write micro-labels in lowercase.* Monospace text in all-caps shouts; the letter-spacing (`0.06em`) and muted tone (`--color-ink-muted`) distinguish the label without shouting.
+   *Rule: Always write micro-labels in lowercase.* All-caps shouts; the letter-spacing (`0.06em`) and muted tone (`--color-ink-muted`) distinguish the label without shouting.
 4. **Badge / Footnote (`11px`, weight 500, `line-height: 1.45`)**  
    Used in status badges, status bar items, and keycap shortcut hints.
 
 ### Numerical Zero-Jitter (`.tabular`)
-Any component displaying dynamic numbers, counters, sizes, file hashes, or timestamps **must** apply `.tabular`:
+Any component displaying dynamic numbers, counters, sizes, file hashes, or timestamps **must** apply `.tabular`. Plex Sans sets proportional figures by default, so without it a changing number moves what follows it:
 ```css
 .tabular {
   font-variant-numeric: tabular-nums;

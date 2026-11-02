@@ -23,7 +23,7 @@ Before reaching for `npm install`:
 
 ### Design System Compliance
 Every new UI element must conform to [`docs/design-system.md`](docs/design-system.md):
-- **Typography**: Single monospace face (`IBM Plex Mono`, self-hosted from `public/fonts/`; never load fonts from a third-party service). Use the 4-step type scale (`.card-title` 14px, body 13px, `.micro-label` 12px lowercase with `tracking-[0.06em]`, badge/keycap 11px).
+- **Typography**: IBM Plex Sans for the interface, IBM Plex Mono (`font-mono`) for data: anything the operator copies, compares character by character or lines up (file contents, names, paths, hashes, IDs). Both self-hosted from `public/fonts/`; never load fonts from a third-party service. Use the 4-step type scale (`.card-title` 14px, body 13px, `.micro-label` 12px lowercase with `tracking-[0.06em]`, badge/keycap 11px).
 - **Numbers & Dates**: Always apply `.tabular` (`tabular-nums`) to dynamic numbers, timestamps, and sizes to eliminate layout shift.
 - **Buttons**: Exactly 5 variants (`primary` [max 1 per screen], `brand`, `secondary`, `danger` [never solid], `ghost`) and 2 heights (`default` 32px, `row` 24px).
 - **Geometry**: Near-square corners (`4px` sheets/cards, `3px` controls, `2px` badges/checkboxes). No pill shapes.

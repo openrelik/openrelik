@@ -555,7 +555,7 @@ async function loadAll() {
             autocomplete="off"
             placeholder="go to line"
             aria-label="Go to a line, or a range as 12-40"
-            class="field tabular h-5 w-28 text-[11px]"
+            class="field tabular h-5 w-28 font-mono text-[11px]"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
@@ -588,7 +588,7 @@ async function loadAll() {
       <div
         ref="body"
         tabindex="0"
-        class="min-w-0 flex-1 overflow-x-auto overflow-y-hidden outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
+        class="min-w-0 flex-1 overflow-x-auto overflow-y-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-brand/40 focus-visible:ring-inset"
         role="region"
         aria-label="File text"
         @keydown="onKey"

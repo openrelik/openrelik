@@ -91,7 +91,7 @@ function onKey(event: KeyboardEvent) {
         spellcheck="false"
         autocomplete="off"
         placeholder="e.g. IR-2024/007"
-        class="field h-7 w-full"
+        class="field h-7 w-full font-mono"
         :aria-invalid="!!text && !check.ok"
         :readonly="saving"
       />

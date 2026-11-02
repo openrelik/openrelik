@@ -62,7 +62,7 @@ function onKey(event: KeyboardEvent) {
         autocomplete="off"
         placeholder="find"
         aria-label="Find in the file"
-        class="field h-5 w-52 pr-14 text-[11px]"
+        class="field h-5 w-52 pr-14 font-mono text-[11px]"
         :class="{ 'border-danger': error }"
         v-tooltip="error ?? 'Find in the lines read'"
         @keydown="onKey"
