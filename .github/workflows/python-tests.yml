@@ -5,6 +5,7 @@
 #   library in libs/, every project that depends on it, tested against the
 #   library's working copy ("from source"). A change to this workflow runs all.
 # - push to main and Run workflow: all projects, as locked.
+# mcp has no tests yet; it gets a start-up check instead.
 #
 # The workflow always runs, so its gate job "Python Unit Tests passed" can be a
 # required check; the test jobs are skipped when nothing relevant changed.
@@ -118,12 +119,13 @@ jobs:
       - name: Install the dependencies (as locked)
         run: uv sync --locked --all-groups
 
-      # mcp has no tests yet: check that it imports and builds.
-      - name: Check that the MCP server imports and builds
+      # mcp has no tests yet: check that it starts the way its image runs it
+      # (uv run src/main.py; it isn't an installed package).
+      - name: Check that the MCP server starts
         if: matrix.project == 'mcp'
         run: |
-          uv run --locked python -c 'import openrelik_mcp_server'
-          uv build
+          PYTHONPATH=src uv run --locked python -c 'import openrelik_mcp_server, main'
+          uv run --locked src/main.py --help
 
       - name: Run the tests
         if: matrix.project != 'mcp'
