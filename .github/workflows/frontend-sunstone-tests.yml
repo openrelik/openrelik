@@ -1,13 +1,13 @@
-# Lints, tests and builds the Sunstone web UI (web/sunstone). Each UI under
+# Lints, tests and builds the sunstone web UI (web/sunstone). Each UI under
 # web/<codename>/ has its own workflow, because their test setups differ.
 #
 # - pull request: when a file under web/sunstone/ or this workflow changed.
 # - push to main and Run workflow: always.
 #
-# The workflow always runs, so its gate job "Frontend Unit Tests [Sunstone]
+# The workflow always runs, so its gate job "Frontend Unit Tests [sunstone]
 # passed" can be a required check; the test job is skipped when nothing
 # relevant changed.
-name: Frontend Unit Tests [Sunstone]
+name: Frontend Unit Tests [sunstone]
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
   test:
     needs: changes
     if: needs.changes.outputs.run == 'true'
-    name: Sunstone
+    name: sunstone
     runs-on: ubuntu-24.04
     permissions:
       contents: read # check out the repository
@@ -86,7 +86,7 @@ jobs:
         run: yarn run build
 
   passed:
-    name: Frontend Unit Tests [Sunstone] passed
+    name: Frontend Unit Tests [sunstone] passed
     needs: [changes, test]
     if: always()
     runs-on: ubuntu-24.04
