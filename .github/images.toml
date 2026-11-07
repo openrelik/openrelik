@@ -1,0 +1,64 @@
+# Every Docker image the project publishes to ghcr.io/openrelik.
+#
+# .github/workflows/images.yml builds them with .github/scripts/images.py: on a push to
+# main, the images whose context changed are built and pushed as `latest` (and
+# the short commit ID); "Run workflow" builds all of them or the ones named.
+# The check on every pull request fails if a Dockerfile in the repository is
+# neither an image here nor listed under [not-published].
+#
+# Each image: name (ghcr.io/openrelik/<name>), dockerfile, context (the build
+# context; changes under it rebuild the image), optional extra-tags.
+
+# Platform images: server, mediator, metrics, importers, the web UI.
+[[platform]]
+name = "openrelik-server"
+dockerfile = "server/Dockerfile"
+context = "server"
+
+[[platform]]
+name = "openrelik-mediator"
+dockerfile = "server/src/mediator/Dockerfile"
+context = "server"
+
+[[platform]]
+name = "openrelik-metrics"
+dockerfile = "server/src/metrics/Dockerfile"
+context = "server"
+
+[[platform]]
+name = "openrelik-gcp-importer"
+dockerfile = "server/src/importers/gcp/Dockerfile"
+context = "server"
+
+# The default web UI, under the codename-free name (see web/README.md).
+[[platform]]
+name = "openrelik-ui"
+dockerfile = "web/sunstone/Dockerfile"
+context = "web/sunstone"
+
+[[mcp]]
+name = "openrelik-mcp-server"
+dockerfile = "mcp/docker/Dockerfile"
+context = "mcp"
+extra-tags = ["main"]   # the old repository tagged pushes to main as "main"
+
+# First-party workers: every workers/<name>/Dockerfile is the image
+# openrelik-worker-<name>, with workers/<name> as its context.
+[workers]
+discover = "workers/*/Dockerfile"
+
+# Additional builds of a worker: same Dockerfile, other build arguments and tag.
+[[workers.variants]]
+worker = "plaso"
+tag = "latest-staging"
+build-args = { PPA_TRACK = "staging" }
+
+[[workers.variants]]
+worker = "extraction"
+tag = "latest-staging"
+build-args = { PPA_TRACK = "staging" }
+
+# Dockerfiles that deliberately have no published image, with the reason.
+[not-published]
+"server/src/tasks/hashing/Dockerfile" = "not published so far; decide whether it becomes an image"
+"workers/yara/Dockerfile.fraken" = "standalone build of the fraken-x scanner; not published so far"

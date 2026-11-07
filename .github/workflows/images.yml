@@ -1,0 +1,126 @@
+# Builds and pushes the Docker images listed in .github/images.toml.
+#
+# - push to main: the images whose context changed, tagged `latest` and with
+#   the short commit ID. A first push (or a force push) builds all of them.
+# - Run workflow (workflow_dispatch): all images, or the ones named.
+# - pull requests: only checks that every Dockerfile is listed in .github/images.toml.
+#
+# Release builds from tags (v*, mcp-v*, worker-<name>-v*) are added with the
+# release tooling.
+name: Images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      images:
+        description: 'Images to build: "all", or names separated by spaces (e.g. openrelik-server openrelik-worker-strings)'
+        required: true
+        default: all
+
+permissions: {}
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  select:
+    name: Select images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check that every Dockerfile is listed
+        run: python3 .github/scripts/images.py check
+
+      - name: Select the images to build
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          REQUESTED: ${{ inputs.images }}
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+        run: |
+          case "$EVENT" in
+            pull_request)
+              echo "matrix=[]" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            push)
+              if [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+                which=(--all)
+              else
+                git diff --name-only "$BEFORE" "$SHA" > "$RUNNER_TEMP/changed.txt"
+                which=(--changed "$RUNNER_TEMP/changed.txt")
+              fi
+              ;;
+            workflow_dispatch)
+              if [[ "$REQUESTED" == all ]]; then
+                which=(--all)
+              else
+                which=()
+                for name in $REQUESTED; do which+=(--only "$name"); done
+              fi
+              ;;
+          esac
+          matrix="$(python3 .github/scripts/images.py matrix --registry "$REGISTRY" --sha "${SHA::7}" "${which[@]}")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | python3 -c 'import json, sys; [print(r["label"]) for r in json.load(sys.stdin)]'
+
+  build:
+    needs: select
+    if: needs.select.outputs.matrix != '[]'
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read      # check out the repository
+      packages: write     # push the image to ghcr.io
+      attestations: write # store the build provenance attestation
+      id-token: write     # sign the attestation (Sigstore)
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build_args }}
+          push: true
+          tags: ${{ matrix.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=${{ matrix.name }}
+
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ matrix.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
