@@ -7,7 +7,7 @@
 #
 # Release builds from tags (v*, mcp-v*, worker-<name>-v*) are added with the
 # release tooling.
-name: Images
+name: Build Docker Images
 
 on:
   push:
