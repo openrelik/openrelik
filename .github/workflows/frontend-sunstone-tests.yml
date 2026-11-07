@@ -1,0 +1,102 @@
+# Lints, tests and builds the Sunstone web UI (web/sunstone). Each UI under
+# web/<codename>/ has its own workflow, because their test setups differ.
+#
+# - pull request: when a file under web/sunstone/ or this workflow changed.
+# - push to main and Run workflow: always.
+#
+# The workflow always runs, so its gate job "Frontend Unit Tests [Sunstone]
+# passed" can be a required check; the test job is skipped when nothing
+# relevant changed.
+name: Frontend Unit Tests [Sunstone]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: frontend-sunstone-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Check for changes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    outputs:
+      run: ${{ steps.changes.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check for changes in web/sunstone
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "$EVENT" != pull_request ]] ||
+             git diff --name-only "$BASE...$HEAD" |
+               grep -qE '^(web/sunstone/|\.github/workflows/frontend-sunstone-tests\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No changes in web/sunstone."
+          fi
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    name: Sunstone
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    defaults:
+      run:
+        working-directory: web/sunstone
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: web/sunstone/yarn.lock
+
+      - name: Install the dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        run: yarn run lint:check
+
+      - name: Run the tests
+        run: yarn run test
+
+      - name: Build
+        run: yarn run build
+
+  passed:
+    name: Frontend Unit Tests [Sunstone] passed
+    needs: [changes, test]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Check the results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          if [[ " $RESULTS " == *" failure "* || " $RESULTS " == *" cancelled "* ]]; then
+            exit 1
+          fi

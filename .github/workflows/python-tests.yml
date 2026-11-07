@@ -1,0 +1,157 @@
+# Runs the unit tests of every Python project: each directory with a
+# pyproject.toml (server, mcp, libs/*, workers/*).
+#
+# - pull request: the projects with a changed file, plus, for a changed
+#   library in libs/, every project that depends on it, tested against the
+#   library's working copy ("from source"). A change to this workflow runs all.
+# - push to main and Run workflow: all projects, as locked.
+#
+# The workflow always runs, so its gate job "Python Unit Tests passed" can be a
+# required check; the test jobs are skipped when nothing relevant changed.
+name: Python Unit Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: python-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  select:
+    name: Select projects
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select the projects to test
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mapfile -t projects < <(git ls-files 'pyproject.toml' '*/pyproject.toml' | xargs -n1 dirname | sort)
+          changed="$RUNNER_TEMP/changed.txt"
+          if [[ "$EVENT" == pull_request ]]; then
+            git diff --name-only "$BASE...$HEAD" > "$changed"
+          else
+            : > "$changed"
+          fi
+          rows=()
+          if [[ "$EVENT" != pull_request ]] || grep -qx '.github/workflows/python-tests.yml' "$changed"; then
+            for p in "${projects[@]}"; do rows+=("$p|"); done
+          else
+            for p in "${projects[@]}"; do
+              if grep -q "^$p/" "$changed"; then rows+=("$p|"); fi
+            done
+            # A changed library is also tested in every project that depends on
+            # it, against the library's working copy.
+            for lib in "${projects[@]}"; do
+              [[ "$lib" == libs/* ]] && grep -q "^$lib/" "$changed" || continue
+              name="$(sed -nE 's/^name = "([^"]+)".*/\1/p' "$lib/pyproject.toml" | head -n 1)"
+              for p in "${projects[@]}"; do
+                if [[ "$p" != "$lib" ]] && grep -q "\"${name}[^a-z0-9_-]" "$p/pyproject.toml"; then
+                  rows+=("$p|$lib")
+                fi
+              done
+            done
+          fi
+          matrix="$(printf '%s\n' ${rows[@]+"${rows[@]}"} | jq -cRn '[inputs | select(length > 0) | split("|")
+            | {project: .[0], lib: .[1],
+               label: (.[0] + (if .[1] == "" then "" else " (with " + .[1] + " from source)" end))}]')"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          jq -r '.[].label' <<<"$matrix"
+
+  test:
+    needs: select
+    if: needs.select.outputs.matrix != '[]'
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The disk image tests mount images through nbd and crack test hashes.
+      - name: Install the system packages of worker-common
+        if: matrix.project == 'libs/worker-common'
+        run: |
+          sudo modprobe nbd
+          sudo apt-get update -q
+          sudo apt-get install -y -q qemu-utils john hashcat
+
+      - name: Install the system packages of the workers
+        if: startsWith(matrix.project, 'workers/')
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libsnappy-dev
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: ${{ matrix.project }}/uv.lock
+
+      - name: Install the dependencies (as locked)
+        run: uv sync --locked --all-groups
+
+      # mcp has no tests yet: check that it imports and builds.
+      - name: Check that the MCP server imports and builds
+        if: matrix.project == 'mcp'
+        run: |
+          uv run --locked python -c 'import openrelik_mcp_server'
+          uv build
+
+      - name: Run the tests
+        if: matrix.project != 'mcp'
+        env:
+          PROJECT: ${{ matrix.project }}
+          LIB: ${{ matrix.lib }}
+        run: |
+          if [[ "$PROJECT" == server ]]; then
+            export OPENRELIK_SERVER_SETTINGS=./settings_example.toml REDIS_URL=redis://test:1234
+          fi
+          if [[ -n "$LIB" ]]; then
+            uv run --locked --with-editable "$GITHUB_WORKSPACE/$LIB" pytest -ra
+          else
+            uv run --locked pytest -ra
+          fi
+
+  passed:
+    name: Python Unit Tests passed
+    needs: [select, test]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Check the results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          if [[ " $RESULTS " == *" failure "* || " $RESULTS " == *" cancelled "* ]]; then
+            exit 1
+          fi
