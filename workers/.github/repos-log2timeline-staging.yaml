@@ -1,2 +1,0 @@
-workers/plaso: 'workers/plaso/**'
-workers/extraction: 'workers/extraction/**'
