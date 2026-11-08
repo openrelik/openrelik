@@ -4,7 +4,9 @@
 # - pull request: the projects with a changed file, plus, for a changed
 #   library in libs/, every project that depends on it, tested against the
 #   library's working copy ("from source"). A change to this workflow runs all.
-# - push to main and Run workflow: all projects, as locked.
+# - push to main or a release branch (release/*), and Run workflow: all
+#   projects, as locked. Release branches are pushed directly (fixes are
+#   cherry-picked onto them), so the push is where they get tested.
 # mcp has no tests yet; it gets a start-up check instead.
 #
 # The workflow always runs, so its gate job "Python Unit Tests passed" can be a
@@ -13,7 +15,7 @@ name: Python Unit Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/*"]
   pull_request:
   workflow_dispatch:
 

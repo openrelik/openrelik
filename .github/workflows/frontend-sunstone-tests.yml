@@ -2,7 +2,7 @@
 # web/<codename>/ has its own workflow, because their test setups differ.
 #
 # - pull request: when a file under web/sunstone/ or this workflow changed.
-# - push to main and Run workflow: always.
+# - push to main or a release branch (release/*), and Run workflow: always.
 #
 # The workflow always runs, so its gate job "Frontend Unit Tests [sunstone]
 # passed" can be a required check; the test job is skipped when nothing
@@ -11,7 +11,7 @@ name: Frontend Unit Tests [sunstone]
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/*"]
   pull_request:
   workflow_dispatch:
 
