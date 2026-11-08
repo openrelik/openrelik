@@ -21,6 +21,20 @@ repository with its full history; the old repositories are archived.
 | libs/worker-common   | shared library for workers            | openrelik-workers     |
 | deploy               | production deployment                 | openrelik-deploy      |
 
+## Test coverage
+
+Coverage of `main` from the unit tests in CI. The coverage of each project
+(each worker and library) is on
+[Codecov](https://app.codecov.io/gh/openrelik/openrelik/flags). mcp has no
+tests yet.
+
+| Directory    | Coverage |
+| ------------ | -------- |
+| server       | [![server coverage](https://codecov.io/gh/openrelik/openrelik/graph/badge.svg?branch=main&component=server)](https://app.codecov.io/gh/openrelik/openrelik/tree/main/server) |
+| workers      | [![workers coverage](https://codecov.io/gh/openrelik/openrelik/graph/badge.svg?branch=main&component=workers)](https://app.codecov.io/gh/openrelik/openrelik/tree/main/workers) |
+| libs         | [![libs coverage](https://codecov.io/gh/openrelik/openrelik/graph/badge.svg?branch=main&component=libs)](https://app.codecov.io/gh/openrelik/openrelik/tree/main/libs) |
+| web/sunstone | [![web/sunstone coverage](https://codecov.io/gh/openrelik/openrelik/graph/badge.svg?branch=main&component=web-sunstone)](https://app.codecov.io/gh/openrelik/openrelik/tree/main/web/sunstone) |
+
 ## License
 
 Apache License 2.0, see [LICENSE](LICENSE).
