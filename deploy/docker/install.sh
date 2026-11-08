@@ -23,11 +23,12 @@ echo -e "\033[38;5;87m   ████  ██     ██████ ██  █
 echo ""
 
 # Version configuration, newest first. RELEASES are minors released from the
-# monorepo (0.18): the installer uses the newest platform release of the minor
-# (the tag v0.18.Z holds the deployment files and the server together), whose
-# config.env runs the 0.18 images, so `docker compose pull` later picks up new
-# 0.18.x patches. LEGACY_RELEASES predate the monorepo and install from the
-# archived openrelik-deploy and openrelik-server repositories.
+# monorepo (0.18): the installer downloads the deployment files and the
+# server's settings from the release branch release/0.18, which holds the
+# newest 0.18.Z platform release. Its config.env runs the 0.18 images, so
+# `docker compose pull` later picks up new 0.18.x patches. LEGACY_RELEASES
+# predate the monorepo and install from the archived openrelik-deploy and
+# openrelik-server repositories.
 MONOREPO="openrelik/openrelik"
 RELEASES=()
 LEGACY_RELEASES=("0.7.0" "0.6.0")
@@ -85,16 +86,9 @@ else
   if [[ "${SELECTED_RELEASE}" == "latest" ]]; then
     MONOREPO_REF="refs/heads/main"
   else
-    # The newest platform release of the minor: v<minor>.<highest patch>.
-    RELEASE_TAG="$(curl -fsSL "https://api.github.com/repos/${MONOREPO}/git/matching-refs/tags/v${SELECTED_RELEASE}." \
-      | grep -oE '"refs/tags/v[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' | sed 's#^refs/tags/##' \
-      | sort -t. -k3,3n | tail -n 1)"
-    if [[ -z "${RELEASE_TAG}" ]]; then
-      echo -e "\033[1;31m ⚠️  Error: Couldn't find a release of ${SELECTED_RELEASE} on github.com/${MONOREPO}.\033[0m\n"
-      exit 1
-    fi
-    echo -e "  \033[1;32m→ Using the deployment files of ${RELEASE_TAG}\033[0m\n"
-    MONOREPO_REF="refs/tags/${RELEASE_TAG}"
+    # Every platform release of the minor is made on its release branch, so
+    # the branch holds the newest one (no GitHub API call, no rate limit).
+    MONOREPO_REF="refs/heads/release/${SELECTED_RELEASE}"
   fi
   BASE_DEPLOY_URL="https://raw.githubusercontent.com/${MONOREPO}/${MONOREPO_REF}/deploy/docker"
   BASE_SERVER_URL="https://raw.githubusercontent.com/${MONOREPO}/${MONOREPO_REF}/server"

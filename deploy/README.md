@@ -19,8 +19,10 @@ install gets the newest patches with `docker compose pull`; set a full version
 
 `RELEASES` in `install.sh` lists minors (`0.18`). For a minor, the installer
 downloads the compose file, config and the server's `settings_example.toml`
-from its newest platform release tag (`v0.18.Z`), so they always belong
-together.
+from the release branch `release/0.18`, which holds the newest `0.18.Z`
+platform release, so they always belong together. It needs no GitHub API call
+(no account, no rate limit). Push a fix on the release branch together with
+its release commit, as anything on the branch is what new installs get.
 
 Releases from before the monorepo (0.7.0, 0.6.0) are listed in
 `LEGACY_RELEASES` and install from the archived `openrelik-deploy` and
