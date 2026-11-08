@@ -551,7 +551,7 @@ wheels = [
 
 [[package]]
 name = "openrelik-ai-common"
-version = "0.18.0.dev0"
+version = "0.18.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic", extra = ["vertex"] },
