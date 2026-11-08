@@ -11,7 +11,10 @@ the minor's X.Y.0 release. The rules:
   web/*/package.json equal VERSION; on a release branch they're on its minor
   (each has its own patch releases).
 - every libs/*/pyproject.toml and mcp/pyproject.toml have VERSION's MAJOR.MINOR.
-- mcp depends on openrelik-python-client~=X.Y.N of VERSION's minor.
+- mcp depends on openrelik-python-client, and its and the server's library
+  dependencies are ~=X.Y.N of VERSION's minor; on main during a minor's
+  development a previous minor is a warning, as that minor's libraries are
+  published at its release.
 - the server's and every worker's dependencies on the libraries in libs/ use
   ~=X.Y.N; a worker's MAJOR.MINOR equals that of its libraries.
 - a worker not on VERSION's minor yet is a warning.
@@ -120,13 +123,26 @@ def main():
     mcp = pyproject(mcp_file)
     if minor(mcp["version"]) != platform:
         report("error", mcp_file, f"version {mcp['version']} isn't on VERSION's minor {platform_name}")
+    # The libraries of a new minor are published at its release, so during its
+    # development on main the server and mcp still use the previous minor's.
+    def platform_dependency(path, name, specifier):
+        dependency = compatible_minor(specifier)
+        if not dependency:
+            report("error", path, f"{name}{specifier} isn't ~=X.Y.N")
+        elif tuple(map(int, dependency)) > tuple(map(int, platform)):
+            report("error", path, f"{name}{specifier} is newer than VERSION's minor {platform_name}")
+        elif dependency != platform:
+            level = "warning" if development else "error"
+            report(level, path, f"{name}{specifier} isn't on VERSION's minor {platform_name} yet")
+
     client = dict(library_dependencies(mcp, libraries)).get("openrelik-python-client")
-    if client is None or compatible_minor(client) != platform:
-        report("error", mcp_file, f"doesn't depend on openrelik-python-client~={platform_name}.N")
+    if client is None:
+        report("error", mcp_file, "doesn't depend on openrelik-python-client")
+    else:
+        platform_dependency(mcp_file, "openrelik-python-client", client)
 
     for name, specifier in library_dependencies(server, libraries):
-        if compatible_minor(specifier) != platform:
-            report("error", server_file, f"{name}{specifier} isn't ~={platform_name}.N")
+        platform_dependency(server_file, name, specifier)
 
     for worker_file in sorted(ROOT.glob("workers/*/pyproject.toml")):
         worker = pyproject(worker_file)
