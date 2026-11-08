@@ -37,4 +37,4 @@ sql_app.db
 .idea/
 .vscode/
 .DS_Store
-*.swp
+*.sw?
