@@ -4,7 +4,7 @@
 [![Python Unit Tests](https://github.com/openrelik/openrelik/actions/workflows/python-tests.yml/badge.svg?branch=main)](https://github.com/openrelik/openrelik/actions/workflows/python-tests.yml?query=branch%3Amain)
 [![Frontend Unit Tests [sunstone]](https://github.com/openrelik/openrelik/actions/workflows/frontend-sunstone-tests.yml/badge.svg?branch=main)](https://github.com/openrelik/openrelik/actions/workflows/frontend-sunstone-tests.yml?query=branch%3Amain)
 [![Version Check](https://github.com/openrelik/openrelik/actions/workflows/version-check.yml/badge.svg?branch=main)](https://github.com/openrelik/openrelik/actions/workflows/version-check.yml?query=branch%3Amain)
-[![Coverage](https://img.shields.io/codecov/c/github/openrelik/openrelik/main?label=coverage)](https://app.codecov.io/gh/openrelik/openrelik/tree/main)
+[![Test Coverage](https://img.shields.io/codecov/c/github/openrelik/openrelik/main?label=Test%20Coverage)](https://app.codecov.io/gh/openrelik/openrelik/tree/main)
 [![server coverage](https://img.shields.io/codecov/c/github/openrelik/openrelik/main?component=server&label=server%20coverage)](https://app.codecov.io/gh/openrelik/openrelik/tree/main/server)
 [![workers coverage](https://img.shields.io/codecov/c/github/openrelik/openrelik/main?component=workers&label=workers%20coverage)](https://app.codecov.io/gh/openrelik/openrelik/tree/main/workers)
 [![libs coverage](https://img.shields.io/codecov/c/github/openrelik/openrelik/main?component=libs&label=libs%20coverage)](https://app.codecov.io/gh/openrelik/openrelik/tree/main/libs)
