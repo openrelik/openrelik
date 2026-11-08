@@ -37,8 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RELEASE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 LIBRARIES = ["common", "ai-common", "worker-common", "python-client"]
 IMAGE_VERSION_RE = re.compile(
-    r"^(OPENRELIK_(?:VERSION|SERVER_VERSION|UI_VERSION|MEDIATOR_VERSION|METRICS_VERSION"
-    r"|WORKER_[A-Z0-9_]+_VERSION))=.*$",
+    r"^(OPENRELIK_(?:VERSION|WORKER_[A-Z0-9_]+_VERSION))=.*$",
     re.MULTILINE,
 )
 

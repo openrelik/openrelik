@@ -2,7 +2,7 @@ services:
   # -- Core services -----------------------------------------------------------------------
   openrelik-server:
     container_name: openrelik-server
-    image: ghcr.io/openrelik/openrelik-server:${OPENRELIK_SERVER_VERSION}
+    image: ghcr.io/openrelik/openrelik-server:${OPENRELIK_VERSION}
     restart: always
     environment:
       - SQLALCHEMY_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@openrelik-postgres/${POSTGRES_DB}
@@ -19,7 +19,7 @@ services:
 
   openrelik-ui:
     container_name: openrelik-ui
-    image: ghcr.io/openrelik/openrelik-ui:${OPENRELIK_UI_VERSION}
+    image: ghcr.io/openrelik/openrelik-ui:${OPENRELIK_VERSION}
     restart: always
     environment:
       - OPENRELIK_SERVER_URL=${OPENRELIK_SERVER_URL}
@@ -32,7 +32,7 @@ services:
   # It uses the mediator/monitor.py script to monitor Celery tasks and update the database accordingly.
   openrelik-mediator:
     container_name: openrelik-mediator
-    image: ghcr.io/openrelik/openrelik-mediator:${OPENRELIK_MEDIATOR_VERSION}
+    image: ghcr.io/openrelik/openrelik-mediator:${OPENRELIK_VERSION}
     restart: always
     environment:
       - SQLALCHEMY_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@openrelik-postgres/${POSTGRES_DB}
@@ -49,7 +49,7 @@ services:
   # to automatically save task related metrics.
   openrelik-metrics:
       container_name: openrelik-metrics
-      image: ghcr.io/openrelik/openrelik-metrics:${OPENRELIK_METRICS_VERSION}
+      image: ghcr.io/openrelik/openrelik-metrics:${OPENRELIK_VERSION}
       restart: always
       environment:
         - REDIS_URL=redis://openrelik-redis:6379

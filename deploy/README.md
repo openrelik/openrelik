@@ -10,11 +10,17 @@ This is not an official Google product (experimental or otherwise), it is just c
 (image versions), `prometheus.yml` and `install.sh`.
 
 On `main`, `config.env` uses the `latest` images; that is what the installer's
-"bleeding edge" option installs. A release pins the image versions in
-`config.env` on the release commit and tags it `v<version>`. The installer
+"bleeding edge" option installs. A platform release (`dev/release.py platform
+0.18.0`) sets `config.env` on the release commit to the minor, `0.18`, for the
+platform (`OPENRELIK_VERSION`) and every worker, and tags it `v0.18.0`. The
+images' `0.18` tags follow the newest `0.18.x` release of each image, so an
+install gets the newest patches with `docker compose pull`; set a full version
+(`0.18.0`) to pin one.
+
+`RELEASES` in `install.sh` lists minors (`0.18`). For a minor, the installer
 downloads the compose file, config and the server's `settings_example.toml`
-from that tag, so they always belong together. Add the version to `RELEASES`
-in `install.sh` on `main` to offer it.
+from its newest platform release tag (`v0.18.Z`), so they always belong
+together.
 
 Releases from before the monorepo (0.7.0, 0.6.0) are listed in
 `LEGACY_RELEASES` and install from the archived `openrelik-deploy` and
