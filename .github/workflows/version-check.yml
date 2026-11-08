@@ -1,0 +1,34 @@
+# Checks that the versions in the repository follow the versioning rules
+# (scripts/check-versions): the server and web UIs equal VERSION, the libraries
+# and mcp are on its minor, and consumers depend on the libraries with ~=X.Y.N.
+#
+# It's one fast job that always runs, so "Version Check" itself can be the
+# required check.
+name: Version Check
+
+on:
+  push:
+    branches: [main, "release/*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: version-check-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Version Check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ubuntu-24.04 comes with Python 3.12 (the script needs tomllib, 3.11+).
+      - name: Check the versions
+        run: python3 scripts/check-versions
