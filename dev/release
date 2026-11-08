@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Prepare a release: set the versions, commit and tag. It never pushes.
+
+Usage (Python 3.11+, uv on PATH, a clean worktree):
+
+  dev/release platform 0.18.0       on release/0.18
+  dev/release lib common 0.18.1     libs/<name>: common, ai-common, worker-common, python-client
+  dev/release mcp 0.18.1
+  dev/release worker yara 0.18.3    workers/<name>
+  dev/release dev 0.19.0            on main, after the release of 0.18.0
+
+platform X.Y.Z sets VERSION, server/pyproject.toml and web/*/package.json to
+X.Y.Z, and the image versions in deploy/docker/config.env to the minor X.Y (so
+an install gets the newest patch of every component). For X.Y.0 it also sets
+mcp to X.Y.0, adds X.Y to RELEASES in deploy/docker/install.sh, and tags every
+library and worker that is at X.Y.0 and not tagged yet. Commit "Release X.Y.Z",
+tag vX.Y.Z (and mcp-vX.Y.0, <lib>-vX.Y.0, worker-<name>-vX.Y.0).
+
+lib, mcp and worker set that project's version, commit and tag
+<lib>-v<version>, mcp-v<version> or worker-<name>-v<version>.
+
+dev X.Y.0 moves main to the next minor: VERSION, server, web UIs, libraries and
+mcp to X.Y.0.dev0 (X.Y.0-dev in package.json), and adds the minor just
+released to RELEASES in install.sh. It commits, without a tag.
+
+Every change of a version runs uv lock in that project, and every release runs
+dev/check-versions before committing.
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+RELEASE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+LIBRARIES = ["common", "ai-common", "worker-common", "python-client"]
+IMAGE_VERSION_RE = re.compile(
+    r"^(OPENRELIK_(?:VERSION|SERVER_VERSION|UI_VERSION|MEDIATOR_VERSION|METRICS_VERSION"
+    r"|WORKER_[A-Z0-9_]+_VERSION))=.*$",
+    re.MULTILINE,
+)
+
+
+def fail(message):
+    sys.exit(f"release: {message}")
+
+
+def git(*args, capture=False):
+    result = subprocess.run(["git", *args], cwd=ROOT, check=True, text=True, capture_output=capture)
+    return result.stdout.strip() if capture else None
+
+
+def parse(version):
+    match = RELEASE_RE.match(version)
+    if not match:
+        fail(f"{version!r} isn't a release version X.Y.Z")
+    return tuple(int(part) for part in match.groups())
+
+
+def project_version(path):
+    match = re.search(r'(?m)^version = "([^"]*)"', path.read_text())
+    if not match:
+        fail(f"no version in {path.relative_to(ROOT)}")
+    return match.group(1)
+
+
+def set_pyproject_version(path, version):
+    text = path.read_text()
+    path.write_text(re.sub(r'(?m)^version = "[^"]*"', f'version = "{version}"', text, count=1))
+    subprocess.run(["uv", "lock", "--quiet"], cwd=path.parent, check=True)
+    return [path, path.parent / "uv.lock"]
+
+
+def set_package_version(path, version):
+    text = path.read_text()
+    path.write_text(re.sub(r'"version": "[^"]*"', f'"version": "{version}"', text, count=1))
+    return [path]
+
+
+def tag_exists(tag):
+    return bool(git("tag", "--list", tag, capture=True))
+
+
+def check_new(prefix, version):
+    """Fail if the tag exists or the version isn't above every released one."""
+    tag = f"{prefix}{version}"
+    if tag_exists(tag):
+        fail(f"tag {tag} exists already")
+    released = []
+    for existing in git("tag", "--list", f"{prefix}*", capture=True).splitlines():
+        match = RELEASE_RE.match(existing[len(prefix):])
+        if match:
+            released.append(tuple(int(part) for part in match.groups()))
+    if released and parse(version) <= max(released):
+        fail(f"{tag} isn't above the newest release {prefix}{'.'.join(map(str, max(released)))}")
+    return tag
+
+
+def platform_files(version, npm_version):
+    files = [ROOT / "VERSION"]
+    (ROOT / "VERSION").write_text(version + "\n")
+    files += set_pyproject_version(ROOT / "server" / "pyproject.toml", version)
+    for package in sorted(ROOT.glob("web/*/package.json")):
+        files += set_package_version(package, npm_version)
+    return files
+
+
+def add_release(minor):
+    """Add a minor to the front of RELEASES in install.sh."""
+    path = ROOT / "deploy" / "docker" / "install.sh"
+    text = path.read_text()
+    match = re.search(r"(?m)^RELEASES=\((.*)\)$", text)
+    if not match:
+        fail("no RELEASES=(...) in deploy/docker/install.sh")
+    releases = re.findall(r'"([^"]+)"', match.group(1))
+    if minor not in releases:
+        releases.insert(0, minor)
+    line = "RELEASES=(" + " ".join(f'"{r}"' for r in releases) + ")"
+    path.write_text(text[: match.start()] + line + text[match.end():])
+    return [path]
+
+
+def release_platform(version):
+    major, minor, patch = parse(version)
+    minor_name = f"{major}.{minor}"
+    tags = [check_new("v", version)]
+    files = platform_files(version, version)
+
+    config = ROOT / "deploy" / "docker" / "config.env"
+    config.write_text(IMAGE_VERSION_RE.sub(lambda m: f"{m.group(1)}={minor_name}", config.read_text()))
+    files.append(config)
+
+    if patch == 0:
+        tags.append(check_new("mcp-v", version))
+        files += set_pyproject_version(ROOT / "mcp" / "pyproject.toml", version)
+        files += add_release(minor_name)
+        for name in LIBRARIES:
+            pyproject = ROOT / "libs" / name / "pyproject.toml"
+            if project_version(pyproject) == version and not tag_exists(f"{name}-v{version}"):
+                tags.append(f"{name}-v{version}")
+        for pyproject in sorted(ROOT.glob("workers/*/pyproject.toml")):
+            name = pyproject.parent.name
+            if project_version(pyproject) == version and not tag_exists(f"worker-{name}-v{version}"):
+                tags.append(f"worker-{name}-v{version}")
+
+    branch = git("branch", "--show-current", capture=True)
+    if branch != f"release/{minor_name}":
+        print(f"note: on {branch}, not release/{minor_name}")
+    return files, f"Release {version}", tags
+
+
+def release_project(directory, prefix, version, label):
+    pyproject = directory / "pyproject.toml"
+    if not pyproject.exists():
+        fail(f"no {pyproject.relative_to(ROOT)}")
+    tag = check_new(prefix, version)
+    return set_pyproject_version(pyproject, version), f"Release {label} {version}", [tag]
+
+
+def start_development(version):
+    major, minor, patch = parse(version)
+    if patch != 0:
+        fail("dev takes the next minor, X.Y.0")
+    current = (ROOT / "VERSION").read_text().strip()
+    current_match = re.match(r"^(\d+)\.(\d+)\.\d+", current)
+    if not current_match or (major, minor) <= tuple(map(int, current_match.groups())):
+        fail(f"{version} isn't a minor above VERSION {current}")
+    files = platform_files(f"{version}.dev0", f"{version}-dev")
+    for pyproject in [*sorted(ROOT.glob("libs/*/pyproject.toml")), ROOT / "mcp" / "pyproject.toml"]:
+        files += set_pyproject_version(pyproject, f"{version}.dev0")
+    released = f"{current_match.group(1)}.{current_match.group(2)}"
+    if tag_exists(f"v{released}.0"):
+        files += add_release(released)
+    else:
+        print(f"note: v{released}.0 isn't tagged, so {released} isn't added to RELEASES")
+    return files, f"Start {major}.{minor} development", []
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("platform").add_argument("version")
+    lib = commands.add_parser("lib")
+    lib.add_argument("name", choices=LIBRARIES)
+    lib.add_argument("version")
+    commands.add_parser("mcp").add_argument("version")
+    worker = commands.add_parser("worker")
+    worker.add_argument("name")
+    worker.add_argument("version")
+    commands.add_parser("dev").add_argument("version")
+    args = parser.parse_args()
+
+    if git("status", "--porcelain", capture=True):
+        fail("the worktree isn't clean")
+    parse(args.version)
+
+    if args.command == "platform":
+        files, message, tags = release_platform(args.version)
+    elif args.command == "lib":
+        package = re.search(r'(?m)^name = "([^"]*)"', (ROOT / "libs" / args.name / "pyproject.toml").read_text())
+        files, message, tags = release_project(ROOT / "libs" / args.name, f"{args.name}-v", args.version, package.group(1))
+    elif args.command == "mcp":
+        files, message, tags = release_project(ROOT / "mcp", "mcp-v", args.version, "the MCP server")
+    elif args.command == "worker":
+        files, message, tags = release_project(ROOT / "workers" / args.name, f"worker-{args.name}-v", args.version, f"worker {args.name}")
+    else:
+        files, message, tags = start_development(args.version)
+
+    check = subprocess.run([sys.executable, str(ROOT / "dev" / "check-versions")], cwd=ROOT)
+    if check.returncode != 0:
+        git("checkout", "--", *[str(f) for f in files])
+        fail("dev/check-versions failed; the changes are reverted")
+
+    git("add", "--", *[str(f) for f in files])
+    git("commit", "--quiet", "-m", message)
+    for tag in tags:
+        git("tag", "-a", tag, "-m", f"{message} ({tag})")
+    branch = git("branch", "--show-current", capture=True)
+    print(f"\ncommitted: {message}")
+    if tags:
+        print("tagged:    " + " ".join(tags))
+    print("\nNothing is pushed. Check the commit (git show), then push:")
+    print(f"  git push origin {branch}" + "".join(f" {tag}" for tag in tags))
+
+
+if __name__ == "__main__":
+    main()
