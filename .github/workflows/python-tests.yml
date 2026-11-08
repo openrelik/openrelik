@@ -9,6 +9,11 @@
 #   cherry-picked onto them), so the push is where they get tested.
 # mcp has no tests yet; it gets a start-up check instead.
 #
+# The coverage of the as-locked runs (not the "from source" ones) is uploaded
+# to Codecov, one flag per project. A pull request that doesn't run a project
+# keeps that project's last result (carryforward, .github/codecov.yml). A
+# failed upload doesn't fail the tests.
+#
 # The workflow always runs, so its gate job "Python Unit Tests passed" can be a
 # required check; the test jobs are skipped when nothing relevant changed.
 name: Python Unit Tests
@@ -141,8 +146,26 @@ jobs:
           if [[ -n "$LIB" ]]; then
             uv run --locked --with-editable "$GITHUB_WORKSPACE/$LIB" pytest -ra
           else
-            uv run --locked pytest -ra
+            uv run --locked pytest -ra --cov --cov-report=xml
           fi
+
+      # One Codecov flag per project: its path, with "-" for "/".
+      - name: Name the Codecov flag
+        if: matrix.project != 'mcp' && matrix.lib == ''
+        id: flag
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: echo "flag=${PROJECT//\//-}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the coverage to Codecov
+        if: matrix.project != 'mcp' && matrix.lib == ''
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ matrix.project }}/coverage.xml
+          flags: ${{ steps.flag.outputs.flag }}
+          disable_search: true
+          fail_ci_if_error: false
 
   passed:
     name: Python Unit Tests passed

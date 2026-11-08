@@ -59,7 +59,8 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      reporter: ["text", "json", "html"],
+      include: ["src/**/*.{js,vue}"],
+      reporter: ["text", "json", "html", "lcov"],
     },
     onConsoleLog(log) {
       if (log.includes("AbortError")) return false;

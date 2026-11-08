@@ -4,6 +4,10 @@
 # - pull request: when a file under web/sunstone/ or this workflow changed.
 # - push to main or a release branch (release/*), and Run workflow: always.
 #
+# The coverage is uploaded to Codecov (flag web-sunstone). A pull request that
+# doesn't run the tests keeps the last result (carryforward,
+# .github/codecov.yml). A failed upload doesn't fail the tests.
+#
 # The workflow always runs, so its gate job "Frontend Unit Tests [sunstone]
 # passed" can be a required check; the test job is skipped when nothing
 # relevant changed.
@@ -80,7 +84,16 @@ jobs:
         run: yarn run lint:check
 
       - name: Run the tests
-        run: yarn run test
+        run: yarn run test:coverage
+
+      - name: Upload the coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: web/sunstone/coverage/lcov.info
+          flags: web-sunstone
+          disable_search: true
+          fail_ci_if_error: false
 
       - name: Build
         run: yarn run build

@@ -29,6 +29,7 @@ dist/
 .mypy_cache/
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 
 # Local development

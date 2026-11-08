@@ -4,6 +4,7 @@
 [![Python Unit Tests](https://github.com/openrelik/openrelik/actions/workflows/python-tests.yml/badge.svg?branch=main)](https://github.com/openrelik/openrelik/actions/workflows/python-tests.yml?query=branch%3Amain)
 [![Frontend Unit Tests [sunstone]](https://github.com/openrelik/openrelik/actions/workflows/frontend-sunstone-tests.yml/badge.svg?branch=main)](https://github.com/openrelik/openrelik/actions/workflows/frontend-sunstone-tests.yml?query=branch%3Amain)
 [![Version Check](https://github.com/openrelik/openrelik/actions/workflows/version-check.yml/badge.svg?branch=main)](https://github.com/openrelik/openrelik/actions/workflows/version-check.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/openrelik/openrelik/graph/badge.svg?branch=main)](https://app.codecov.io/gh/openrelik/openrelik/tree/main)
 
 Every component of OpenRelik in one repository. Each was imported from its own
 repository with its full history; the old repositories are archived.
