@@ -146,6 +146,20 @@ replace_in_file() {
   fi
 }
 
+# Downloads a file, or stops the installation: curl -f fails on an HTTP error
+# (e.g. 404) instead of saving the error page as the file. The 'openrelik'
+# directory was created by this run, so it's removed to allow a retry.
+download() {
+  local url="$1"
+  local file="$2"
+  if ! curl -fsSL "${url}" -o "${file}"; then
+    echo -e "\n\033[1;31m ⚠️  Error: Couldn't download ${url}\033[0m"
+    echo -e "     Check your network connection and try again.\n"
+    cd .. && rm -rf ./openrelik
+    exit 1
+  fi
+}
+
 # Setup variables
 echo -e "\033[1;34m[1/8] Setting up variables...\033[0m\c"
 STORAGE_PATH="\/usr\/share\/openrelik\/data\/artifacts"
@@ -167,10 +181,10 @@ cd ./openrelik
 
 # Fetch installation files
 echo -e "\033[1;34m[3/8] Downloading configuration files...\033[0m\c"
-curl -s ${BASE_DEPLOY_URL}/${CONFIG_ENV_FILE} > config.env
-curl -s ${BASE_DEPLOY_URL}/${COMPOSE_FILE} > docker-compose.yml
-curl -s ${BASE_DEPLOY_URL}/prometheus.yml > prometheus.yml
-curl -s ${BASE_SERVER_URL}/settings_example.toml > settings.toml
+download "${BASE_DEPLOY_URL}/${CONFIG_ENV_FILE}" config.env
+download "${BASE_DEPLOY_URL}/${COMPOSE_FILE}" docker-compose.yml
+download "${BASE_DEPLOY_URL}/prometheus.yml" prometheus.yml
+download "${BASE_SERVER_URL}/settings_example.toml" settings.toml
 echo -e "\r\033[1;32m[3/8] Downloading configuration files... Done\033[0m"
 
 # Replace placeholder values in settings.toml
