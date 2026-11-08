@@ -1,5 +1,5 @@
 # Checks that the versions in the repository follow the versioning rules
-# (scripts/check-versions): the server and web UIs equal VERSION, the libraries
+# (dev/check-versions.py): the server and web UIs equal VERSION, the libraries
 # and mcp are on its minor, and consumers depend on the libraries with ~=X.Y.N.
 #
 # It's one fast job that always runs, so "Version Check" itself can be the
@@ -31,4 +31,4 @@ jobs:
 
       # ubuntu-24.04 comes with Python 3.12 (the script needs tomllib, 3.11+).
       - name: Check the versions
-        run: python3 scripts/check-versions
+        run: python3 dev/check-versions.py
