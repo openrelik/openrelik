@@ -1,14 +1,14 @@
 [project]
 name = "openrelik-worker-dfindexeddb"
-version = "2026.01.20"
+version = "0.18.0"
 description = "Parse and analyze indexeddb/leveldb files."
 authors = [{ name = "sydp@google.com" }]
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.12,<4.0"
 readme = "README.md"
 
 dependencies = [
     "celery[redis]>=5.4.0,<6",
-    "openrelik-worker-common>=0.16.1",
+    "openrelik-worker-common~=0.18.0",
     "dfindexeddb[plugins]>=20251109,<20251110",
 ]
 

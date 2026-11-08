@@ -1,13 +1,13 @@
 [project]
 name = "openrelik-worker-cloud-logs"
-version = "0.1.0"
+version = "0.18.0"
 description = "OpenRelik worker to process Cloud provider logs."
 authors = [{ name = "roshan maskey", email = "roshanmaskey@gmail.com" }]
-requires-python = "<4.0,>=3.11"
+requires-python = ">=3.12,<4.0"
 readme = "README.md"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
-    "openrelik-worker-common>=0.17.1,<1.0.0",
+    "openrelik-worker-common~=0.18.0",
     "orjson>=3.10.16,<4",
 ]
 

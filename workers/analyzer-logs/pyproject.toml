@@ -3,11 +3,11 @@ name = "openrelik-worker-analyzer-logs"
 version = "2026.01.14"
 description = "SSH login analyzer"
 authors = [{ name = "Slobodan Popović", email = "spop@google.com" }]
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.12,<4.0"
 readme = "README.md"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
-    "openrelik-worker-common>=0.17.1",
+    "openrelik-worker-common~=0.18.0",
     "pandas>=2.2.3,<3",
     "pyparsing>=3.2.0,<4",
     "debugpy>=1.8.7,<2",

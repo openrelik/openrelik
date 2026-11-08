@@ -3,12 +3,12 @@ name = "openrelik-worker-strings"
 version = "0.3.0"
 description = "Extract strings from files"
 authors = [{ name = "Johan Berggren", email = "jberggren@gmail.com" }]
-requires-python = ">=3.11,<4"
+requires-python = ">=3.12,<4.0"
 readme = "README.md"
 license = "Apache 2.0"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
-    "openrelik-worker-common>=0.17.1",
+    "openrelik-worker-common~=0.18.0",
     "openrelik-common>=0.7.7",
 ]
 

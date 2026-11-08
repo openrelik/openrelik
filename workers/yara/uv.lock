@@ -652,16 +652,16 @@ wheels = [
 
 [[package]]
 name = "openrelik-worker-common"
-version = "0.17.6"
+version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "debugpy" },
     { name = "redis" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/5b/34e6c98c10324b01d6448459ae91f49346463a36811ec28772de36a8ecaf/openrelik_worker_common-0.17.6.tar.gz", hash = "sha256:223fc315d69bc1d306de39f52fe4c095c5e4d0e13a5d7454e6f4d599f677ef13", size = 79327, upload-time = "2026-07-22T00:42:00.664Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/5e/16a6633b6d3d6314c8d9cb05d037a6c2359532d2b4452b575ba91a2672ed/openrelik_worker_common-0.18.0.tar.gz", hash = "sha256:ce4c6798f11bc29aa069a0023093595e1c9dc74b6eb08c5e13b4f27212f8d0ce", size = 78660, upload-time = "2026-11-08T13:39:54.727Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/73/63/b750e005d322fb4764f13f52cfadb334775a8e24de2da39ee343d2625a96/openrelik_worker_common-0.17.6-py3-none-any.whl", hash = "sha256:9eb8fbd9928da361dd587b44f52ace28e1731867e41228015bddfc666e93027d", size = 26992, upload-time = "2026-07-22T00:41:59.495Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/60/aa846e37e5e9a36bab1baf38c6cb8d89c0d91e0b68fdfc3c2ddada1f9616/openrelik_worker_common-0.18.0-py3-none-any.whl", hash = "sha256:df606a503dca30d2c9dd16482d76c675106f6bbf9b366ff5ae9a8f3e0848d183", size = 27119, upload-time = "2026-11-08T13:39:53.446Z" },
 ]
 
 [[package]]
@@ -686,7 +686,7 @@ test = [
 requires-dist = [
     { name = "celery", extras = ["redis"], specifier = ">=5.4.0,<6" },
     { name = "openrelik-common", specifier = ">=0.7.0,<1.0.0" },
-    { name = "openrelik-worker-common", specifier = ">=0.17.3,<1.0.0" },
+    { name = "openrelik-worker-common", specifier = "~=0.18.0" },
 ]
 
 [package.metadata.requires-dev]

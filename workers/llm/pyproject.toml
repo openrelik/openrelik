@@ -1,14 +1,14 @@
 [project]
 name = "openrelik-worker-llm"
-version = "0.1.0"
+version = "0.18.0"
 description = "OpenRelik LLM Worker"
 authors = [{ name = "Benjamin Koffel", email = "benjaminkoffel@gmail.com" }]
 requires-python = ">=3.12,<4"
 readme = "README.md"
 dependencies = [
     "celery[redis]>=5.3.6,<6",
-    "openrelik-worker-common>=0.17.0",
-    "openrelik-ai-common>=0.5.0",
+    "openrelik-worker-common~=0.18.0",
+    "openrelik-ai-common~=0.18.0",
     "debugpy>=1.8.7,<2",
 ]
 

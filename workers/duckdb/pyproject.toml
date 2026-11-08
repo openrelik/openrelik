@@ -2,11 +2,11 @@
 authors = [
     {name = "YOUR NAME", email = "email@example.com"},
 ]
-requires-python = "<4.0,>=3.11"
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "celery[redis]<6.0.0,>=5.4.0",
     "openrelik-common>=0.7.7,<1.0.0",
-    "openrelik-worker-common<1.0.0,>=0.16.0",
+    "openrelik-worker-common~=0.18.0",
 ]
 name = "openrelik-worker-duckdb"
 version = "0.1.0"

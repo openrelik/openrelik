@@ -1,14 +1,14 @@
 [project]
 name = "openrelik-worker-floss"
-version = "0.2.4"
+version = "0.18.0"
 description = "Worker to run FLARE Obfuscated String Solver"
 authors = [{ name = "Juan Leaniz", email = "juan.leaniz@gmail.com" }]
-requires-python = "<4.0,>=3.11"
+requires-python = ">=3.12,<4.0"
 readme = "README.md"
 
 dependencies = [
     "celery[redis]>=5.4.0,<6",
-    "openrelik-worker-common>=0.17.1,<0.18",
+    "openrelik-worker-common~=0.18.0",
     "flare-floss>=3.1.1,<4",
 ]
 
