@@ -10,6 +10,7 @@ Usage (Python 3.11+, uv on PATH, a clean worktree):
   dev/release.py mcp 0.18.1
   dev/release.py worker yara 0.18.3    workers/<name>
   dev/release.py dev 0.19.0            on main, after the release of 0.18.0
+  dev/release.py tag [<commit>]        after merging a release pull request
 
 Every component has its own patch releases; a minor is released for all of
 them together. Installs follow the minor (0.18), so they get the newest patch
@@ -32,9 +33,17 @@ released to RELEASES in install.sh. It commits, without a tag.
 
 Every change of a version runs uv lock in that project, and every release runs
 dev/check-versions.py before committing.
+
+Tags: on a release branch (release/*, pushed directly) a release is tagged
+right away. On any other branch it goes through a pull request, which may be
+squash-merged into a new commit, so it isn't tagged: after the merge, run
+dev/release.py tag on the merged commit (default HEAD; git pull first). It tags
+every component whose version that commit changed to a release version X.Y.Z
+and that isn't tagged yet, reading the versions from the commit itself.
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -190,6 +199,58 @@ def start_development(version):
     return files, f"Start {major}.{minor} development", []
 
 
+def show(commit, path):
+    """A file's content at a commit, or None if it doesn't exist there."""
+    result = subprocess.run(["git", "show", f"{commit}:{path}"], cwd=ROOT, text=True, capture_output=True)
+    return result.stdout if result.returncode == 0 else None
+
+
+def version_at(commit, path):
+    text = show(commit, path)
+    if text is None:
+        return None
+    if path == "VERSION":
+        return text.strip()
+    if path.endswith(".json"):
+        return json.loads(text).get("version")
+    match = re.search(r'(?m)^version = "([^"]*)"', text)
+    return match.group(1) if match else None
+
+
+def components(commit):
+    """(tag prefix, manifest, label) of every released component at a commit."""
+    found = [("v", "VERSION", "the platform"), ("server-v", "server/pyproject.toml", "the server"),
+             ("ui-v", "web/sunstone/package.json", "the UI"), ("mcp-v", "mcp/pyproject.toml", "the MCP server")]
+    found += [(f"{name}-v", f"libs/{name}/pyproject.toml", f"library {name}") for name in LIBRARIES]
+    paths = git("ls-tree", "--name-only", f"{commit}:workers", capture=True).splitlines()
+    found += [(f"worker-{name}-v", f"workers/{name}/pyproject.toml", f"worker {name}")
+              for name in paths if show(commit, f"workers/{name}/pyproject.toml") is not None]
+    return found
+
+
+def tag_commit(commit):
+    sha = git("rev-parse", "--verify", f"{commit}^{{commit}}", capture=True)
+    parent = git("rev-parse", "--verify", f"{sha}^1", capture=True)
+    tags = []
+    for prefix, manifest, label in components(sha):
+        version = version_at(sha, manifest)
+        if not version or not RELEASE_RE.match(version) or version == version_at(parent, manifest):
+            continue
+        tag = f"{prefix}{version}"
+        if tag_exists(tag):
+            print(f"note: {tag} exists already")
+            continue
+        git("tag", "-a", tag, "-m", f"Release {label} {version} ({tag})", sha)
+        tags.append(tag)
+    if not tags:
+        fail(f"{sha[:7]} changes no version to an untagged release X.Y.Z; nothing to tag")
+    print(f"tagged {sha[:7]}: " + " ".join(tags))
+    print("\nNothing is pushed. Push the tags (at most three at a time; GitHub starts no")
+    print("workflow for tags pushed more than three at once):")
+    for start in range(0, len(tags), 3):
+        print("  git push origin " + " ".join(tags[start:start + 3]))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -204,7 +265,12 @@ def main():
     worker.add_argument("name")
     worker.add_argument("version")
     commands.add_parser("dev").add_argument("version")
+    commands.add_parser("tag").add_argument("commit", nargs="?", default="HEAD")
     args = parser.parse_args()
+
+    if args.command == "tag":
+        tag_commit(args.commit)
+        return
 
     if git("status", "--porcelain", capture=True):
         fail("the worktree isn't clean")
@@ -233,14 +299,21 @@ def main():
 
     git("add", "--", *[str(f) for f in files])
     git("commit", "--quiet", "-m", message)
-    for tag in tags:
-        git("tag", "-a", tag, "-m", f"{message} ({tag})")
     branch = git("branch", "--show-current", capture=True)
     print(f"\ncommitted: {message}")
+    if tags and not branch.startswith("release/"):
+        # A pull request may be squash-merged into a new commit: tag after the merge.
+        print("not tagged: on a branch for a pull request (" + " ".join(tags) + ")")
+        print("\nNothing is pushed. Check the commit (git show), push the branch and open a")
+        print("pull request. After it's merged, tag the merged commit and push the tags:")
+        print(f"  git push origin {branch}")
+        print("  git switch main && git pull && dev/release.py tag")
+        return
+    for tag in tags:
+        git("tag", "-a", tag, "-m", f"{message} ({tag})")
     if tags:
         print("tagged:    " + " ".join(tags))
-    print("\nNothing is pushed. Check the commit (git show), then push the branch")
-    print("(or, on main, open a pull request and push the tags after merging it):")
+    print("\nNothing is pushed. Check the commit (git show), then push:")
     print(f"  git push origin {branch}")
     # GitHub starts no workflow for tags pushed more than three at a time.
     for start in range(0, len(tags), 3):
