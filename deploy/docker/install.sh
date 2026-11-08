@@ -30,7 +30,7 @@ echo ""
 # LEGACY_RELEASES predate the monorepo and install from the archived
 # openrelik-deploy and openrelik-server repositories.
 MONOREPO="openrelik/openrelik"
-RELEASES=()
+RELEASES=("0.18")
 LEGACY_RELEASES=("0.7.0" "0.6.0")
 ALL_RELEASES=(${RELEASES[@]+"${RELEASES[@]}"} "${LEGACY_RELEASES[@]}")
 LATEST_RELEASE="${ALL_RELEASES[0]}"

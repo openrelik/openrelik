@@ -1,6 +1,6 @@
 [project]
 name = "openrelik-worker-common"
-version = "0.18.0"
+version = "0.19.0.dev0"
 description = "Common utilities for OpenRelik workers"
 authors = [
     {name = "Johan Berggren", email = "jberggren@gmail.com"},
