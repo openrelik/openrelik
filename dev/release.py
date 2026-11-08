@@ -221,8 +221,12 @@ def main():
     print(f"\ncommitted: {message}")
     if tags:
         print("tagged:    " + " ".join(tags))
-    print("\nNothing is pushed. Check the commit (git show), then push:")
-    print(f"  git push origin {branch}" + "".join(f" {tag}" for tag in tags))
+    print("\nNothing is pushed. Check the commit (git show), then push the branch")
+    print("(or, on main, open a pull request and push the tags after merging it):")
+    print(f"  git push origin {branch}")
+    # GitHub starts no workflow for tags pushed more than three at a time.
+    for start in range(0, len(tags), 3):
+        print("  git push origin " + " ".join(tags[start:start + 3]))
 
 
 if __name__ == "__main__":

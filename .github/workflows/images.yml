@@ -5,16 +5,21 @@
 #   merged pull request) builds nothing. The push event is used rather than
 #   the pull request's "closed" event, whose token can't push packages for pull
 #   requests from forks.
+# - release tag (made by dev/release.py): v0.18.0 builds the platform images,
+#   mcp-v0.18.0 the MCP server, worker-<name>-v0.18.0 that worker. They're
+#   tagged 0.18.0 and the floating minor tag 0.18 (unless a newer 0.18.x of that
+#   component is released already); `latest` isn't moved.
 # - Run workflow (workflow_dispatch): all images, or the ones named.
 # - pull requests: only checks that every Dockerfile is listed in .github/images.toml.
 #
-# Release builds from tags (v*, mcp-v*, worker-<name>-v*) are added with the
-# release tooling.
+# GitHub starts no workflow for tags pushed more than three at a time, so push
+# release tags in groups of at most three (dev/release.py prints the commands).
 name: Build Docker Images
 
 on:
   push:
     branches: [main]
+    tags: ["v*", "mcp-v*", "worker-*-v*"]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -51,6 +56,8 @@ jobs:
         id: select
         env:
           EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
           BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
           REQUESTED: ${{ inputs.images }}
@@ -58,6 +65,12 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [[ "$EVENT" == push && "$REF_TYPE" == tag ]]; then
+            matrix="$(python3 .github/scripts/images.py matrix --registry "$REGISTRY" --tag "$REF_NAME")"
+            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+            echo "$matrix" | python3 -c 'import json, sys; [print(r["label"]) for r in json.load(sys.stdin)]'
+            exit 0
+          fi
           case "$EVENT" in
             pull_request)
               echo "matrix=[]" >> "$GITHUB_OUTPUT"

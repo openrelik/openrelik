@@ -11,12 +11,22 @@
       them, those whose context contains a path listed in <file> (one per
       line, as from git diff --name-only), or the ones named.
 
+  images.py matrix --registry ghcr.io/openrelik --tag <git tag>
+      The release build of a git tag: v0.18.0 builds the platform images,
+      mcp-v0.18.0 the MCP server, worker-<name>-v0.18.0 that worker (not its
+      variants); a library tag (common-v*, worker-common-v*, ...) builds
+      nothing. Each image is tagged 0.18.0, and also 0.18 if 0.18.0 is the
+      highest released 0.18.x of that component, so rebuilding an older
+      release doesn't move the minor tag back. Fails if the tag's version
+      isn't the version in the component's manifest.
+
 Run by .github/workflows/images.yml. Needs Python 3.11 or newer (tomllib).
 """
 import argparse
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -96,8 +106,72 @@ def check():
     print(f".github/images.toml: {len(names)} images ({len(builds)} builds), every Dockerfile listed")
 
 
+LIBRARY_TAG = re.compile(r"^(common|ai-common|worker-common|python-client)-v")
+RELEASE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+
+
+def manifest_version(path):
+    with open(os.path.join(ROOT, path), "rb") as f:
+        return tomllib.load(f)["project"]["version"]
+
+
+def released(prefix):
+    """The X.Y.Z versions of the git tags <prefix>X.Y.Z, as tuples."""
+    out = subprocess.run(["git", "-C", ROOT, "tag", "--list", f"{prefix}*"], capture_output=True,
+                         text=True, check=True).stdout.split()
+    return [tuple(map(int, m.groups())) for t in out if (m := RELEASE.match(t[len(prefix):]))]
+
+
+def release(builds, tag):
+    """The builds of a release tag, and the image tags to push."""
+    if LIBRARY_TAG.match(tag):
+        return [], []
+    if m := re.match(r"^v(.+)$", tag):
+        prefix, version = "v", m.group(1)
+        with open(os.path.join(ROOT, "VERSION")) as f:
+            expected, manifest = f.read().strip(), "VERSION"
+        selected = [b for b in builds if b["group"] == "platform"]
+    elif m := re.match(r"^mcp-v(.+)$", tag):
+        prefix, version = "mcp-v", m.group(1)
+        manifest = "mcp/pyproject.toml"
+        expected = manifest_version(manifest)
+        selected = [b for b in builds if b["group"] == "mcp"]
+    elif m := re.match(r"^worker-([a-z0-9-]+)-v(.+)$", tag):
+        prefix, version = f"worker-{m.group(1)}-v", m.group(2)
+        manifest = f"workers/{m.group(1)}/pyproject.toml"
+        if not os.path.exists(os.path.join(ROOT, manifest)):
+            sys.exit(f"{tag}: there's no worker {m.group(1)!r}")
+        expected = manifest_version(manifest)
+        selected = [b for b in builds if b["name"] == f"openrelik-worker-{m.group(1)}" and not b["suffix"]]
+    else:
+        sys.exit(f"{tag} isn't a release tag (v*, mcp-v*, worker-<name>-v*)")
+    parsed = RELEASE.match(version)
+    if not parsed:
+        sys.exit(f"{tag}: {version!r} isn't a release version X.Y.Z")
+    if version != expected:
+        sys.exit(f"{tag}: the version is {version}, but {manifest} says {expected}")
+    current = tuple(map(int, parsed.groups()))
+    same_minor = [r for r in released(prefix) if r[:2] == current[:2]]
+    tags = [version]
+    if current >= max(same_minor, default=current):
+        tags.append(f"{current[0]}.{current[1]}")
+    else:
+        newest = ".".join(map(str, max(same_minor)))
+        print(f"{prefix}{newest} is newer; {current[0]}.{current[1]} isn't moved", file=sys.stderr)
+    return selected, tags
+
+
 def matrix(args):
     builds = images(load())
+    if args.tag:
+        selected, tags = release(builds, args.tag)
+        rows = [dict(name=b["name"], image=f"{args.registry}/{b['name']}", dockerfile=b["dockerfile"],
+                     context=b["context"],
+                     tags="\n".join(f"{args.registry}/{b['name']}:{t}" for t in tags),
+                     build_args="", label=f"{b['name']} ({', '.join(tags)})")
+                for b in selected]
+        print(json.dumps(rows))
+        return
     if args.all:
         selected = builds
     elif args.only:
@@ -126,10 +200,13 @@ sub = parser.add_subparsers(dest="command", required=True)
 sub.add_parser("check")
 m = sub.add_parser("matrix")
 m.add_argument("--registry", required=True)
-m.add_argument("--sha", required=True)
+m.add_argument("--sha")
 which = m.add_mutually_exclusive_group(required=True)
+which.add_argument("--tag", metavar="TAG")
 which.add_argument("--all", action="store_true")
 which.add_argument("--changed", metavar="FILE")
 which.add_argument("--only", action="append", metavar="NAME")
 args = parser.parse_args()
+if args.command == "matrix" and not args.tag and not args.sha:
+    parser.error("--sha is needed unless --tag is given")
 check() if args.command == "check" else matrix(args)

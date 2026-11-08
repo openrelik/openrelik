@@ -1,0 +1,92 @@
+# Publishes a library in libs/ to PyPI when its release tag is pushed:
+# common-v*, ai-common-v*, worker-common-v*, python-client-v* (made by
+# dev/release.py). The tag's version must equal the version in the library's
+# pyproject.toml.
+#
+# Publishing uses PyPI trusted publishing: each project on PyPI trusts this
+# workflow (openrelik/openrelik, release-pypi.yml) in the environment "pypi".
+# Only the publish job gets an OIDC token, and no PyPI token is stored.
+#
+# GitHub starts no workflow for tags pushed more than three at a time, so push
+# release tags in groups of at most three (dev/release.py prints the commands).
+name: Publish Python Packages
+
+on:
+  push:
+    tags: ["common-v*", "ai-common-v*", "worker-common-v*", "python-client-v*"]
+
+permissions: {}
+
+concurrency:
+  group: release-pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ github.ref_name }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    outputs:
+      package: ${{ steps.library.outputs.package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag against the library's version
+        id: library
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^(common|ai-common|worker-common|python-client)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::$TAG isn't a library release tag <library>-vX.Y.Z"
+            exit 1
+          fi
+          library="${BASH_REMATCH[1]}" version="${BASH_REMATCH[2]}"
+          read -r package manifest < <(python3 -c 'import sys, tomllib
+          p = tomllib.load(open(sys.argv[1], "rb"))["project"]
+          print(p["name"], p["version"])' "libs/$library/pyproject.toml")
+          if [[ "$version" != "$manifest" ]]; then
+            echo "::error::$TAG: libs/$library/pyproject.toml says $manifest"
+            exit 1
+          fi
+          echo "Publishing $package $version from libs/$library"
+          echo "library=$library" >> "$GITHUB_OUTPUT"
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+
+      - name: Build the sdist and wheel
+        env:
+          LIBRARY: ${{ steps.library.outputs.library }}
+        run: uv build --directory "libs/$LIBRARY" --out-dir "$GITHUB_WORKSPACE/dist"
+
+      - name: Store the distributions
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish ${{ github.ref_name }} to PyPI
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.build.outputs.package }}/
+    permissions:
+      id-token: write # trusted publishing (and the PEP 740 attestations)
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
