@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11, <4.0"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -890,45 +890,10 @@ wheels = [
 ]
 
 [[package]]
-name = "openrelik-worker-common"
-version = "0.17.2"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version < '3.12'",
-]
-dependencies = [
-    { name = "debugpy" },
-    { name = "redis" },
-    { name = "structlog" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/78/42b28399845ec7cd2556119f4faded7be8ba2c4b48294a910c4af8470040/openrelik_worker_common-0.17.2.tar.gz", hash = "sha256:4cd6eef0e2fe0cb351f32a93f3bb7656161cda18db463a5007fec73ce0493b29", size = 19515, upload-time = "2026-04-28T07:49:06.37Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/dd/ed3b3ff56b896bbe6c80fe08c12a2c07bb5b0b75eedeefe7bf3207b8ed9f/openrelik_worker_common-0.17.2-py3-none-any.whl", hash = "sha256:9b45c11edac6165f077958af89bffcb740de1dc65b475918dc4d821f4d40efe1", size = 25653, upload-time = "2026-04-28T07:49:04.86Z" },
-]
-
-[[package]]
-name = "openrelik-worker-common"
-version = "0.17.6"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.14'",
-    "python_full_version == '3.13.*'",
-    "python_full_version == '3.12.*'",
-]
-dependencies = [
-    { name = "debugpy" },
-    { name = "redis" },
-    { name = "structlog" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/5b/34e6c98c10324b01d6448459ae91f49346463a36811ec28772de36a8ecaf/openrelik_worker_common-0.17.6.tar.gz", hash = "sha256:223fc315d69bc1d306de39f52fe4c095c5e4d0e13a5d7454e6f4d599f677ef13", size = 79327, upload-time = "2026-07-22T00:42:00.664Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/73/63/b750e005d322fb4764f13f52cfadb334775a8e24de2da39ee343d2625a96/openrelik_worker_common-0.17.6-py3-none-any.whl", hash = "sha256:9eb8fbd9928da361dd587b44f52ace28e1731867e41228015bddfc666e93027d", size = 26992, upload-time = "2026-07-22T00:41:59.495Z" },
-]
-
-[[package]]
-name = "openrelik-worker-template"
+name = "openrelik-worker-analyzer-logs"
 version = "2026.1.14"
 source = { virtual = "." }
+default-groups = []
 dependencies = [
     { name = "celery", extra = ["redis"] },
     { name = "debugpy" },
@@ -963,6 +928,42 @@ test = [
     { name = "freezegun" },
     { name = "pytest", specifier = ">=9.0.3,<10" },
     { name = "pytest-cov" },
+]
+
+[[package]]
+name = "openrelik-worker-common"
+version = "0.17.2"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.12'",
+]
+dependencies = [
+    { name = "debugpy" },
+    { name = "redis" },
+    { name = "structlog" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c4/78/42b28399845ec7cd2556119f4faded7be8ba2c4b48294a910c4af8470040/openrelik_worker_common-0.17.2.tar.gz", hash = "sha256:4cd6eef0e2fe0cb351f32a93f3bb7656161cda18db463a5007fec73ce0493b29", size = 19515, upload-time = "2026-04-28T07:49:06.37Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/dd/ed3b3ff56b896bbe6c80fe08c12a2c07bb5b0b75eedeefe7bf3207b8ed9f/openrelik_worker_common-0.17.2-py3-none-any.whl", hash = "sha256:9b45c11edac6165f077958af89bffcb740de1dc65b475918dc4d821f4d40efe1", size = 25653, upload-time = "2026-04-28T07:49:04.86Z" },
+]
+
+[[package]]
+name = "openrelik-worker-common"
+version = "0.17.6"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
+]
+dependencies = [
+    { name = "debugpy" },
+    { name = "redis" },
+    { name = "structlog" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/5b/34e6c98c10324b01d6448459ae91f49346463a36811ec28772de36a8ecaf/openrelik_worker_common-0.17.6.tar.gz", hash = "sha256:223fc315d69bc1d306de39f52fe4c095c5e4d0e13a5d7454e6f4d599f677ef13", size = 79327, upload-time = "2026-07-22T00:42:00.664Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/63/b750e005d322fb4764f13f52cfadb334775a8e24de2da39ee343d2625a96/openrelik_worker_common-0.17.6-py3-none-any.whl", hash = "sha256:9eb8fbd9928da361dd587b44f52ace28e1731867e41228015bddfc666e93027d", size = 26992, upload-time = "2026-07-22T00:41:59.495Z" },
 ]
 
 [[package]]

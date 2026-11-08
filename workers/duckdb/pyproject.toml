@@ -8,7 +8,7 @@ dependencies = [
     "openrelik-common>=0.7.7,<1.0.0",
     "openrelik-worker-common<1.0.0,>=0.16.0",
 ]
-name = "openrelik-worker-TEMPLATE-WORKER-NAME"
+name = "openrelik-worker-duckdb"
 version = "0.1.0"
 description = "Description of the worker"
 readme = "README.md"

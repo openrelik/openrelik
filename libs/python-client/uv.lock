@@ -319,7 +319,7 @@ wheels = [
 
 [[package]]
 name = "openrelik-python-client"
-version = "0.5.0"
+version = "0.18.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "requests" },

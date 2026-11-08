@@ -1,6 +1,6 @@
 [project]
 name = "openrelik-python-client"
-version = "0.5.0"
+version = "0.18.0.dev0"
 description = "API client that automatically handles token refresh"
 authors = [{name = "Johan Berggren", email = "jberggren@gmail.com"}]
 license = {text = "Apache-2.0"}

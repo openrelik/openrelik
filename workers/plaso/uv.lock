@@ -665,7 +665,7 @@ wheels = [
 ]
 
 [[package]]
-name = "openrelik-worker-extraction"
+name = "openrelik-worker-plaso"
 version = "0.5.0"
 source = { virtual = "." }
 default-groups = []

@@ -1,6 +1,6 @@
 [project]
 name = "openrelik-server"
-version = "0.7.0"
+version = "0.18.0.dev0"
 description = "Digital Forensic Workflow System"
 authors = [{name = "Johan Berggren", email = "jberggren@gmail.com"}]
 license = {text = "Apache-2.0"}
