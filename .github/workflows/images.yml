@@ -5,10 +5,12 @@
 #   merged pull request) builds nothing. The push event is used rather than
 #   the pull request's "closed" event, whose token can't push packages for pull
 #   requests from forks.
-# - release tag (made by dev/release.py): v0.18.0 builds the platform images,
-#   mcp-v0.18.0 the MCP server, worker-<name>-v0.18.0 that worker. They're
-#   tagged 0.18.0 and the floating minor tag 0.18 (unless a newer 0.18.x of that
-#   component is released already); `latest` isn't moved.
+# - release tag (made by dev/release.py): server-v0.18.1 builds the images
+#   from server/ (server, mediator, metrics, gcp-importer), ui-v0.18.1 the web
+#   UI, mcp-v0.18.1 the MCP server, worker-<name>-v0.18.1 that worker. They're
+#   tagged 0.18.1 and the floating minor tag 0.18 (unless a newer 0.18.x of that
+#   component is released already); `latest` isn't moved. The platform tag
+#   v0.18.0 builds nothing itself: a minor release tags every component.
 # - Run workflow (workflow_dispatch): all images, or the ones named.
 # - pull requests: only checks that every Dockerfile is listed in .github/images.toml.
 #
@@ -19,7 +21,7 @@ name: Build Docker Images
 on:
   push:
     branches: [main]
-    tags: ["v*", "mcp-v*", "worker-*-v*"]
+    tags: ["server-v*", "ui-v*", "mcp-v*", "worker-*-v*"]
   pull_request:
   workflow_dispatch:
     inputs:

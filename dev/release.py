@@ -3,21 +3,28 @@
 
 Usage (Python 3.11+, uv on PATH, a clean worktree):
 
-  dev/release.py platform 0.18.0       on release/0.18
+  dev/release.py platform 0.18.0       a minor release, on release/0.18
+  dev/release.py server 0.18.1         server/ (server, mediator, metrics, gcp-importer)
+  dev/release.py ui 0.18.1             web/sunstone (the image openrelik-ui)
   dev/release.py lib common 0.18.1     libs/<name>: common, ai-common, worker-common, python-client
   dev/release.py mcp 0.18.1
   dev/release.py worker yara 0.18.3    workers/<name>
   dev/release.py dev 0.19.0            on main, after the release of 0.18.0
 
-platform X.Y.Z sets VERSION, server/pyproject.toml and web/*/package.json to
-X.Y.Z, and the image versions in deploy/docker/config.env to the minor X.Y (so
-an install gets the newest patch of every component). For X.Y.0 it also sets
-mcp to X.Y.0, adds X.Y to RELEASES in deploy/docker/install.sh, and tags every
-library and worker that is at X.Y.0 and not tagged yet. Commit "Release X.Y.Z",
-tag vX.Y.Z (and mcp-vX.Y.0, <lib>-vX.Y.0, worker-<name>-vX.Y.0).
+Every component has its own patch releases; a minor is released for all of
+them together. Installs follow the minor (0.18), so they get the newest patch
+of every component.
 
-lib, mcp and worker set that project's version, commit and tag
-<lib>-v<version>, mcp-v<version> or worker-<name>-v<version>.
+platform X.Y.0 sets VERSION, server/pyproject.toml, web/*/package.json and mcp
+to X.Y.0, the image versions in deploy/docker/config.env to the minor X.Y, and
+adds X.Y to RELEASES in deploy/docker/install.sh. Commit "Release X.Y.0", tag
+vX.Y.0 (the platform release; it builds nothing itself), server-vX.Y.0,
+ui-vX.Y.0, mcp-vX.Y.0, and <lib>-vX.Y.0 / worker-<name>-vX.Y.0 for every
+library and worker at X.Y.0 that isn't tagged yet.
+
+server, ui, lib, mcp and worker set that component's version, commit and tag
+server-v<version>, ui-v<version>, <lib>-v<version>, mcp-v<version> or
+worker-<name>-v<version>.
 
 dev X.Y.0 moves main to the next minor: VERSION, server, web UIs, libraries and
 mcp to X.Y.0.dev0 (X.Y.0-dev in package.json), and adds the minor just
@@ -123,31 +130,37 @@ def add_release(minor):
 
 def release_platform(version):
     major, minor, patch = parse(version)
+    if patch != 0:
+        fail("platform releases a minor (X.Y.0); release a patch with server, ui, mcp, lib or worker")
     minor_name = f"{major}.{minor}"
-    tags = [check_new("v", version)]
+    tags = [check_new(prefix, version) for prefix in ("v", "server-v", "ui-v", "mcp-v")]
     files = platform_files(version, version)
+    files += set_pyproject_version(ROOT / "mcp" / "pyproject.toml", version)
 
     config = ROOT / "deploy" / "docker" / "config.env"
     config.write_text(IMAGE_VERSION_RE.sub(lambda m: f"{m.group(1)}={minor_name}", config.read_text()))
     files.append(config)
+    files += add_release(minor_name)
 
-    if patch == 0:
-        tags.append(check_new("mcp-v", version))
-        files += set_pyproject_version(ROOT / "mcp" / "pyproject.toml", version)
-        files += add_release(minor_name)
-        for name in LIBRARIES:
-            pyproject = ROOT / "libs" / name / "pyproject.toml"
-            if project_version(pyproject) == version and not tag_exists(f"{name}-v{version}"):
-                tags.append(f"{name}-v{version}")
-        for pyproject in sorted(ROOT.glob("workers/*/pyproject.toml")):
-            name = pyproject.parent.name
-            if project_version(pyproject) == version and not tag_exists(f"worker-{name}-v{version}"):
-                tags.append(f"worker-{name}-v{version}")
+    for name in LIBRARIES:
+        pyproject = ROOT / "libs" / name / "pyproject.toml"
+        if project_version(pyproject) == version and not tag_exists(f"{name}-v{version}"):
+            tags.append(f"{name}-v{version}")
+    for pyproject in sorted(ROOT.glob("workers/*/pyproject.toml")):
+        name = pyproject.parent.name
+        if project_version(pyproject) == version and not tag_exists(f"worker-{name}-v{version}"):
+            tags.append(f"worker-{name}-v{version}")
 
     branch = git("branch", "--show-current", capture=True)
     if branch != f"release/{minor_name}":
         print(f"note: on {branch}, not release/{minor_name}")
     return files, f"Release {version}", tags
+
+
+def release_ui(version):
+    tag = check_new("ui-v", version)
+    files = set_package_version(ROOT / "web" / "sunstone" / "package.json", version)
+    return files, f"Release the UI {version}", [tag]
 
 
 def release_project(directory, prefix, version, label):
@@ -181,6 +194,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("platform").add_argument("version")
+    commands.add_parser("server").add_argument("version")
+    commands.add_parser("ui").add_argument("version")
     lib = commands.add_parser("lib")
     lib.add_argument("name", choices=LIBRARIES)
     lib.add_argument("version")
@@ -197,6 +212,10 @@ def main():
 
     if args.command == "platform":
         files, message, tags = release_platform(args.version)
+    elif args.command == "server":
+        files, message, tags = release_project(ROOT / "server", "server-v", args.version, "the server")
+    elif args.command == "ui":
+        files, message, tags = release_ui(args.version)
     elif args.command == "lib":
         package = re.search(r'(?m)^name = "([^"]*)"', (ROOT / "libs" / args.name / "pyproject.toml").read_text())
         files, message, tags = release_project(ROOT / "libs" / args.name, f"{args.name}-v", args.version, package.group(1))

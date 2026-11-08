@@ -12,13 +12,15 @@
       line, as from git diff --name-only), or the ones named.
 
   images.py matrix --registry ghcr.io/openrelik --tag <git tag>
-      The release build of a git tag: v0.18.0 builds the platform images,
-      mcp-v0.18.0 the MCP server, worker-<name>-v0.18.0 that worker (not its
-      variants); a library tag (common-v*, worker-common-v*, ...) builds
-      nothing. Each image is tagged 0.18.0, and also 0.18 if 0.18.0 is the
-      highest released 0.18.x of that component, so rebuilding an older
-      release doesn't move the minor tag back. Fails if the tag's version
-      isn't the version in the component's manifest.
+      The release build of a git tag: server-v0.18.1 builds the images from
+      server/ (server, mediator, metrics, gcp-importer), ui-v0.18.1 the web UI
+      (web/sunstone), mcp-v0.18.1 the MCP server, worker-<name>-v0.18.1 that
+      worker (not its variants). The platform tag v0.18.0 and the library tags
+      (common-v*, worker-common-v*, ...) build nothing. Each image is tagged
+      0.18.1, and also 0.18 if 0.18.1 is the highest released 0.18.x of that
+      component, so rebuilding an older release doesn't move the minor tag
+      back. Fails if the tag's version isn't the version in the component's
+      manifest.
 
 Run by .github/workflows/images.yml. Needs Python 3.11 or newer (tomllib).
 """
@@ -106,12 +108,24 @@ def check():
     print(f".github/images.toml: {len(names)} images ({len(builds)} builds), every Dockerfile listed")
 
 
-LIBRARY_TAG = re.compile(r"^(common|ai-common|worker-common|python-client)-v")
+# Tags that build no image: libraries (published to PyPI) and the platform
+# release v0.18.0, which marks a minor; its images come from the server-v and
+# ui-v tags made with it.
+NO_IMAGES = re.compile(r"^((common|ai-common|worker-common|python-client)-v|v\d)")
 RELEASE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+
+# Platform components released on their own: tag prefix -> (manifest, context
+# of its images in .github/images.toml).
+PLATFORM = {
+    "server": ("server/pyproject.toml", "server"),
+    "ui": ("web/sunstone/package.json", "web/sunstone"),
+}
 
 
 def manifest_version(path):
     with open(os.path.join(ROOT, path), "rb") as f:
+        if path.endswith(".json"):
+            return json.load(f)["version"]
         return tomllib.load(f)["project"]["version"]
 
 
@@ -124,30 +138,28 @@ def released(prefix):
 
 def release(builds, tag):
     """The builds of a release tag, and the image tags to push."""
-    if LIBRARY_TAG.match(tag):
+    if NO_IMAGES.match(tag):
         return [], []
-    if m := re.match(r"^v(.+)$", tag):
-        prefix, version = "v", m.group(1)
-        with open(os.path.join(ROOT, "VERSION")) as f:
-            expected, manifest = f.read().strip(), "VERSION"
-        selected = [b for b in builds if b["group"] == "platform"]
+    if (m := re.match(r"^(server|ui)-v(.+)$", tag)):
+        prefix, version = f"{m.group(1)}-v", m.group(2)
+        manifest, context = PLATFORM[m.group(1)]
+        selected = [b for b in builds if b["group"] == "platform" and b["context"] == context]
     elif m := re.match(r"^mcp-v(.+)$", tag):
         prefix, version = "mcp-v", m.group(1)
         manifest = "mcp/pyproject.toml"
-        expected = manifest_version(manifest)
         selected = [b for b in builds if b["group"] == "mcp"]
     elif m := re.match(r"^worker-([a-z0-9-]+)-v(.+)$", tag):
         prefix, version = f"worker-{m.group(1)}-v", m.group(2)
         manifest = f"workers/{m.group(1)}/pyproject.toml"
         if not os.path.exists(os.path.join(ROOT, manifest)):
             sys.exit(f"{tag}: there's no worker {m.group(1)!r}")
-        expected = manifest_version(manifest)
         selected = [b for b in builds if b["name"] == f"openrelik-worker-{m.group(1)}" and not b["suffix"]]
     else:
-        sys.exit(f"{tag} isn't a release tag (v*, mcp-v*, worker-<name>-v*)")
+        sys.exit(f"{tag} isn't a release tag (server-v*, ui-v*, mcp-v*, worker-<name>-v*)")
     parsed = RELEASE.match(version)
     if not parsed:
         sys.exit(f"{tag}: {version!r} isn't a release version X.Y.Z")
+    expected = manifest_version(manifest)
     if version != expected:
         sys.exit(f"{tag}: the version is {version}, but {manifest} says {expected}")
     current = tuple(map(int, parsed.groups()))

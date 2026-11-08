@@ -24,11 +24,11 @@ echo ""
 
 # Version configuration, newest first. RELEASES are minors released from the
 # monorepo (0.18): the installer downloads the deployment files and the
-# server's settings from the release branch release/0.18, which holds the
-# newest 0.18.Z platform release. Its config.env runs the 0.18 images, so
-# `docker compose pull` later picks up new 0.18.x patches. LEGACY_RELEASES
-# predate the monorepo and install from the archived openrelik-deploy and
-# openrelik-server repositories.
+# server's settings from the release branch release/0.18. Its config.env runs
+# the 0.18 images, which follow the newest 0.18.x release of each component,
+# so `docker compose pull` later picks up new patches.
+# LEGACY_RELEASES predate the monorepo and install from the archived
+# openrelik-deploy and openrelik-server repositories.
 MONOREPO="openrelik/openrelik"
 RELEASES=()
 LEGACY_RELEASES=("0.7.0" "0.6.0")
@@ -86,8 +86,8 @@ else
   if [[ "${SELECTED_RELEASE}" == "latest" ]]; then
     MONOREPO_REF="refs/heads/main"
   else
-    # Every platform release of the minor is made on its release branch, so
-    # the branch holds the newest one (no GitHub API call, no rate limit).
+    # The release branch holds the minor's newest deployment files and server
+    # settings (no GitHub API call, no rate limit).
     MONOREPO_REF="refs/heads/release/${SELECTED_RELEASE}"
   fi
   BASE_DEPLOY_URL="https://raw.githubusercontent.com/${MONOREPO}/${MONOREPO_REF}/deploy/docker"

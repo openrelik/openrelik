@@ -4,9 +4,12 @@
 Usage: dev/check-versions.py   (from anywhere in the repository; Python 3.11+)
 
 VERSION at the root is the platform version; on main it carries a dev suffix
-(0.18.0.dev0, written 0.18.0-dev in package.json). The rules:
+(0.18.0.dev0, written 0.18.0-dev in package.json); on a release branch it's
+the minor's X.Y.0 release. The rules:
 
-- server/pyproject.toml and every web/*/package.json equal VERSION.
+- on main (VERSION with a dev suffix), server/pyproject.toml and every
+  web/*/package.json equal VERSION; on a release branch they're on its minor
+  (each has its own patch releases).
 - every libs/*/pyproject.toml and mcp/pyproject.toml have VERSION's MAJOR.MINOR.
 - mcp depends on openrelik-python-client~=X.Y.N of VERSION's minor.
 - the server's and every worker's dependencies on the libraries in libs/ use
@@ -95,15 +98,22 @@ def main():
     platform_name = ".".join(platform)
     npm_version = re.sub(r"\.dev\d+$", "-dev", version)
 
+    # On main (VERSION with a dev suffix) the server and web UIs equal VERSION;
+    # on a release branch each has its own patch releases of VERSION's minor.
+    development = version != re.sub(r"\.dev\d+$", "", version)
     server_file = ROOT / "server" / "pyproject.toml"
     server = pyproject(server_file)
-    if server["version"] != version:
+    if development and server["version"] != version:
         report("error", server_file, f"version {server['version']} isn't VERSION {version}")
+    elif not development and minor(server["version"]) != platform:
+        report("error", server_file, f"version {server['version']} isn't on VERSION's minor {platform_name}")
 
     for package_file in sorted(ROOT.glob("web/*/package.json")):
         package_version = json.loads(package_file.read_text()).get("version")
-        if package_version != npm_version:
+        if development and package_version != npm_version:
             report("error", package_file, f"version {package_version} isn't {npm_version} (VERSION {version})")
+        elif not development and minor(package_version or "") != platform:
+            report("error", package_file, f"version {package_version} isn't on VERSION's minor {platform_name}")
 
     libraries = {}
     for library_file in sorted(ROOT.glob("libs/*/pyproject.toml")):

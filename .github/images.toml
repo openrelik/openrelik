@@ -2,9 +2,9 @@
 #
 # .github/workflows/images.yml builds them with .github/scripts/images.py: on a push to
 # main, the images whose context changed are built and pushed as `latest` (and
-# the short commit ID); a release tag (v*, mcp-v*, worker-<name>-v*) builds that
-# release, tagged 0.18.0 and 0.18; "Run workflow" builds all of them or the
-# ones named.
+# the short commit ID); a release tag (server-v*, ui-v*, mcp-v*,
+# worker-<name>-v*) builds that component's release, tagged 0.18.1 and 0.18;
+# "Run workflow" builds all of them or the ones named.
 # The check on every pull request fails if a Dockerfile in the repository is
 # neither an image here nor listed under [not-published].
 #
