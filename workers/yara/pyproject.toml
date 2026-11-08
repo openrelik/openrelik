@@ -1,6 +1,6 @@
 [project]
 name = "openrelik-worker-yara"
-version = "0.1.0"
+version = "0.18.0"
 description = "Scan a local directory using Fraken-X"
 authors = [
     { name = "Thomas Chopitea", email = "tomchop@gmail.com" },
@@ -11,7 +11,7 @@ readme = "README.md"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
     "openrelik-worker-common~=0.18.0",
-    "openrelik-common>=0.7.0,<1.0.0",
+    "openrelik-common~=0.18.0",
 ]
 
 [dependency-groups]
