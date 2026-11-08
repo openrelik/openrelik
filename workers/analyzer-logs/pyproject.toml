@@ -1,6 +1,6 @@
 [project]
 name = "openrelik-worker-analyzer-logs"
-version = "2026.01.14"
+version = "0.18.0"
 description = "SSH login analyzer"
 authors = [{ name = "Slobodan Popović", email = "spop@google.com" }]
 requires-python = ">=3.12,<4.0"
@@ -11,7 +11,7 @@ dependencies = [
     "pandas>=2.2.3,<3",
     "pyparsing>=3.2.0,<4",
     "debugpy>=1.8.7,<2",
-    "openrelik-common>=0.7.0",
+    "openrelik-common~=0.18.0",
 ]
 
 [dependency-groups]

@@ -5,11 +5,11 @@ authors = [
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "celery[redis]<6.0.0,>=5.4.0",
-    "openrelik-common>=0.7.7,<1.0.0",
+    "openrelik-common~=0.18.0",
     "openrelik-worker-common~=0.18.0",
 ]
 name = "openrelik-worker-duckdb"
-version = "0.1.0"
+version = "0.18.0"
 description = "Description of the worker"
 readme = "README.md"
 

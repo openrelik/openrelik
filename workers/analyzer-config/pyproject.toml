@@ -1,6 +1,6 @@
 [project]
 name = "openrelik-worker-analyzer-config"
-version = "0.2.0"
+version = "0.18.0"
 description = "Analyze config files"
 authors = [{ name = "Ramses de Beer", email = "ramsesdebeer@gmail.com" }]
 requires-python = ">=3.12,<4"
@@ -10,7 +10,7 @@ dependencies = [
     "openrelik-worker-common~=0.18.0",
     "debugpy>=1.8.7,<2",
     "openrelik-ai-common~=0.18.0",
-    "openrelik-common>=0.7.0",
+    "openrelik-common~=0.18.0",
 ]
 
 [dependency-groups]

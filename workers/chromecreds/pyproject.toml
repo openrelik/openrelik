@@ -1,13 +1,13 @@
 [project]
 name = "openrelik-worker-chromecreds"
-version = "0.1.0"
+version = "0.18.0"
 description = "Extracts and analyses stored Chrome credentials"
 authors = [{ name = "Fry", email = "fryx0r@gmail.com" }]
 requires-python = ">=3.12,<4"
 readme = "README.md"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
-    "openrelik-common>=0.7.7,<1.0.0",
+    "openrelik-common~=0.18.0",
     "openrelik-worker-common~=0.18.0",
 ]
 

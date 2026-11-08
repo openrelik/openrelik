@@ -633,7 +633,7 @@ redis = [
 
 [[package]]
 name = "openrelik-common"
-version = "0.7.9"
+version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "billiard" },
@@ -645,9 +645,9 @@ dependencies = [
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/81/4b/b726771f35fb896c93257d69c65790c23b269a0df623e0a23f99726a2402/openrelik_common-0.7.9.tar.gz", hash = "sha256:1b083ee6471cafe9bd47b3b5587c4d72e4c9776e637c3f294e204572382949ce", size = 8370, upload-time = "2026-04-15T08:50:58.887Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/ec/0fb3ad0042f4d1de97fadc60cbba108a56c6b91d80c20345a1614d0cf727/openrelik_common-0.18.0.tar.gz", hash = "sha256:7a95b2d73dbae17fdf4e93a566ca549bd94efcfa1f0922ec128184ae578622a9", size = 70988, upload-time = "2026-11-08T14:35:23.869Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/35/be021f3dc6fd9fe20bc7103b287f71b7715f3ae5fe1ee684f85b09dd04f1/openrelik_common-0.7.9-py3-none-any.whl", hash = "sha256:9f63a085e030b1b1aa773f399685e120f287e3b5f5ceb724be9f7104067a6ee9", size = 9674, upload-time = "2026-04-15T08:50:57.689Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/5a/e013d6ab7b805998bdac95973217e9142eab8cea6eda6c4f799f9b764e5b/openrelik_common-0.18.0-py3-none-any.whl", hash = "sha256:2d65866bf7441290f304e3ae0f6542e324ff15a0612d511c89a018d1250e5456", size = 9881, upload-time = "2026-11-08T14:35:22.281Z" },
 ]
 
 [[package]]
@@ -666,7 +666,7 @@ wheels = [
 
 [[package]]
 name = "openrelik-worker-photorec"
-version = "2025.1.21"
+version = "0.18.0"
 source = { virtual = "." }
 default-groups = ["test"]
 dependencies = [
@@ -687,7 +687,7 @@ test = [
 requires-dist = [
     { name = "celery", extras = ["redis"], specifier = ">=5.4.0,<6" },
     { name = "debugpy", specifier = ">=1.8.7,<2" },
-    { name = "openrelik-common", specifier = ">=0.7.5" },
+    { name = "openrelik-common", specifier = "~=0.18.0" },
     { name = "openrelik-worker-common", specifier = "~=0.18.0" },
 ]
 

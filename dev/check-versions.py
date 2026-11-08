@@ -16,9 +16,6 @@ the minor's X.Y.0 release. The rules:
   ~=X.Y.N; a worker's MAJOR.MINOR equals that of its libraries.
 - a worker not on VERSION's minor yet is a warning.
 - every libs/*/LICENSE is identical to the root LICENSE.
-
-Until every consumer is moved to the 0.18 libraries, the dependency rules are
-warnings (CONSUMER_RULES_ARE_ERRORS).
 """
 
 import json
@@ -27,9 +24,6 @@ import re
 import sys
 import tomllib
 from pathlib import Path
-
-# Set to True in the PR that moves the server, mcp and the workers to ~=0.18.0.
-CONSUMER_RULES_ARE_ERRORS = False
 
 ROOT = Path(__file__).resolve().parent.parent
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(\.dev\d+)?$")
@@ -52,9 +46,6 @@ def report(level, path, message):
     else:
         print(f"{level}: {relative}{': ' if path else ''}{message}")
 
-
-def consumer_rule(path, message):
-    report("error" if CONSUMER_RULES_ARE_ERRORS else "warning", path, message)
 
 
 def normalize(name):
@@ -131,23 +122,23 @@ def main():
         report("error", mcp_file, f"version {mcp['version']} isn't on VERSION's minor {platform_name}")
     client = dict(library_dependencies(mcp, libraries)).get("openrelik-python-client")
     if client is None or compatible_minor(client) != platform:
-        consumer_rule(mcp_file, f"doesn't depend on openrelik-python-client~={platform_name}.N")
+        report("error", mcp_file, f"doesn't depend on openrelik-python-client~={platform_name}.N")
 
     for name, specifier in library_dependencies(server, libraries):
         if compatible_minor(specifier) != platform:
-            consumer_rule(server_file, f"{name}{specifier} isn't ~={platform_name}.N")
+            report("error", server_file, f"{name}{specifier} isn't ~={platform_name}.N")
 
     for worker_file in sorted(ROOT.glob("workers/*/pyproject.toml")):
         worker = pyproject(worker_file)
         worker_minor = minor(worker["version"])
         dependencies = dict(library_dependencies(worker, libraries))
         if "openrelik-worker-common" not in dependencies:
-            consumer_rule(worker_file, "doesn't depend on openrelik-worker-common")
+            report("error", worker_file, "doesn't depend on openrelik-worker-common")
         for name, specifier in dependencies.items():
             if not compatible_minor(specifier):
-                consumer_rule(worker_file, f"{name}{specifier} isn't ~=X.Y.N")
+                report("error", worker_file, f"{name}{specifier} isn't ~=X.Y.N")
             elif compatible_minor(specifier) != worker_minor:
-                consumer_rule(worker_file, f"{name}{specifier} isn't on the worker's minor ({worker['version']})")
+                report("error", worker_file, f"{name}{specifier} isn't on the worker's minor ({worker['version']})")
         if worker_minor != platform:
             report("warning", worker_file, f"version {worker['version']} isn't on the platform minor {platform_name} yet")
 

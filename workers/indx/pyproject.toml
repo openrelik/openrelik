@@ -6,11 +6,11 @@ requires-python = ">=3.12,<4.0"
 dependencies = [
     "celery[redis]<6.0.0,>=5.4.0",
     "dfdatetime>=20260730",
-    "openrelik-common>=0.7.5",
+    "openrelik-common~=0.18.0",
     "openrelik-worker-common~=0.18.0",
 ]
 name = "openrelik-worker-indx"
-version = "0.1.0"
+version = "0.18.0"
 description = "NTFS directory index ($I30 / INDX) parser and slack carver"
 readme = "README.md"
 
