@@ -518,10 +518,11 @@ for human review. It's private. Nothing gets posted, and nothing of it is commit
 1. **Checks**. Run the tests and formatters of each component the change touches (see
    their `AGENTS.md`), and run the stack with the change for what the tests don't
    cover.
-2. **Review**. Follow the `review` skill (`.agents/skills/review/SKILL.md`), on `git
-   diff main` (committed and uncommitted), against the spec or the issue. Use an agent
-   that didn't write the code, in a fresh session and ideally on another model. The
-   agent that wrote it would check its intentions instead of the diff.
+2. **Review in clean context**. The review pass must always run in a subagent with a
+   completely clean context (or a fresh session), without the conversation history of the
+   implementation. The agent that wrote the code would check its intentions instead of
+   the diff. The subagent receives only the review rubric from
+   `.agents/skills/review/SKILL.md`, the spec or issue, and the diff.
 3. **Fix or dismiss** each finding. A dismissed finding gets its reason written down,
    so the next round doesn't raise it again. Then review again, and keep going until a
    round finds no Must fix and no Should fix findings.
@@ -551,12 +552,12 @@ git push -u origin code/bulk-tags
 gh pr create --title "Bulk tags" --body-file ../../.private/bulk-tags/pr.md
 ```
 
-**With the skill** (`review`): `/review` in the change's worktree. Run it in a fresh
-session if you can, so the agent running it isn't the one that wrote the code. It hands
-the review itself to a separate agent that has none of the conversation, or tells you
-to start a fresh session if it can't. Every round gets recorded, and the change isn't
-called ready while a Must fix or Should fix finding is open. Last comes a draft of
-`.private/<slug>/pr.md`. Pushing and opening the PR wait for your go-ahead.
+**With the skill** (`review`): `/review` in the change's worktree. The skill always
+launches a subagent with a clean context to perform the review (or tells you to run in
+a fresh session if subagents are unsupported). It records every round, coordinates fixes
+with you, and ensures the change isn't called ready while a Must fix or Should fix
+finding is open. Last comes a draft of `.private/<slug>/pr.md`. Pushing and opening the
+PR wait for your go-ahead.
 
 ## Approval and merge
 

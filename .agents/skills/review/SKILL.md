@@ -13,8 +13,26 @@ Order of importance: correct, safe, forensic integrity, holds under load, tested
 Lean still matters: every extra line must be read, tested, and maintained.
 This is a report the user asked for, so give it in full. Lists findings, changes no code.
 
-To avoid author bias during development, have an agent without the implementation
-conversation (ideally a fresh session or different model) perform the review pass.
+## Clean Context Requirement (MANDATORY)
+
+The agent that wrote or discussed the code reviews what it meant to write, not what was
+actually written. **Reviews must always run in a subagent with a completely clean context.**
+
+- **Never review in the current conversation**: The orchestrating agent manages the workflow
+  (runs checks, records rounds, coordinates fixes with the user), but it **must not** perform
+  the code review pass itself within the implementation conversation.
+- **Always launch a subagent**: Use `invoke_subagent` (or the harness equivalent) to launch an
+  independent reviewer agent. Pass the subagent **ONLY**:
+  1. The review rubric and instructions from this skill;
+  2. The basis (spec or issue) and the diff (`git diff main` or `gh pr diff <number>`);
+  3. Previously dismissed findings from earlier rounds with their one-line reasons;
+  4. Paths to touched files and repository root.
+  **Never pass** the implementation chat history, prior agent thinking, or developer rationale.
+- **No subagent capability?** If the environment cannot spawn a subagent, stop immediately and
+  tell the user to run `/review` in a fresh, clean session. Never bypass this requirement by
+  reviewing inline.
+
+---
 
 ## 1. Understand first
 
@@ -131,27 +149,34 @@ you checked.
 ## 5. Workflow
 
 ### When reviewing locally before opening a PR
-1. Record each review round in `.private/<slug>/review.md` in the main checkout: the date,
-   checks run and results, and findings.
-2. Fix or dismiss findings with the user: a dismissed finding gets a one-line reason so
-   subsequent rounds don't re-raise it.
-3. Review again in rounds until there are **no Must fix and no Should fix** findings.
-4. **Ready**:
+1. **Checks**: Run tests and formatters of touched components. A failing check is a Must fix.
+2. **Subagent review**: Launch a fresh subagent with clean context, giving it only this skill's
+   rubric, the spec or issue, the diff (`git diff main`), and dismissed findings from earlier
+   rounds.
+3. **Record round**: Write the subagent's review in `.private/<slug>/review.md` in the main checkout:
+   the date, checks run, and findings.
+4. **Fix or dismiss**: Address findings with the user. Each dismissed finding gets a one-line reason
+   recorded so future rounds don't re-raise it.
+5. **Repeat**: Re-run the subagent in clean context until there are **no Must fix and no Should fix**
+   findings.
+6. **Ready**:
    - Spec tasks are ticked and spec matches code;
    - Regression test exists for bugfix with commit message (symptom, cause, fix);
    - Branch is rebased on main (`./devctl worktree sync`) and checks pass;
    - Clean tree: no debug output, no commented-out code, no untracked files.
-5. Draft PR description from `dev/templates/pr.md` into `.private/<slug>/pr.md`. Summarize
-   critical findings (Must fix and Should fix) and how each was resolved.
-6. Push and open the PR (`gh pr create --body-file .private/<slug>/pr.md`) only after
+7. **Draft PR**: Write PR description from `dev/templates/pr.md` into `.private/<slug>/pr.md`,
+   summarizing critical findings (Must fix and Should fix) and how each was resolved.
+8. **Open PR**: Push and open the PR (`gh pr create --body-file .private/<slug>/pr.md`) only after
    the user's explicit go-ahead.
 
 ### When reviewing an open PR
-1. Write the review to `.private/<slug>/review-<number>.md` in the main checkout. Show it to
-   the user.
-2. Post it to GitHub only after the user's explicit go-ahead:
+1. **Subagent review**: Gather PR info (`gh pr view <number> --comments`, `gh pr diff <number>`).
+   Launch a subagent with clean context containing only the review rubric, spec/issue, and PR diff.
+2. **Record review**: Write the review to `.private/<slug>/review-<number>.md` in the main checkout.
+   Show it to the user.
+3. **Post to GitHub**: Only after the user's explicit go-ahead:
    ```bash
    gh pr comment <number> --body-file .private/<slug>/review-<number>.md
    ```
    and tick "Review" on the tracking issue if present.
-3. Agents never approve or merge PRs. Every PR requires human approval.
+4. **Human approval**: Agents never approve or merge PRs. Every PR requires human approval.
