@@ -91,7 +91,7 @@ The whole process at a glance. The sections below have the details.
          └─────────────────┬───────────────┘
                            ▼
               [self-review]   private, in .private/<slug>/, in rounds
-                              until no blockers and no majors
+                              until no Must fix and no Should fix findings
                            │
                            ▼
               code PR, "Closes #issue", with the self-review's summary
@@ -529,7 +529,7 @@ committed. The PR review still happens, and it stays the safety net.
    agent that wrote it would check its intentions instead of the diff.
 3. **Fix or dismiss** each finding. A dismissed finding gets its reason written down,
    so the next round doesn't raise it again. Then review again, and keep going until a
-   round finds no blockers and no majors.
+   round finds no Must fix and no Should fix findings.
 4. **Ready**. The spec's tasks are ticked and the spec matches the code. The branch is
    rebased on main (`./devctl worktree sync`). The commits say what and why with `Refs
    #<issue>`, and a bugfix has its regression test and its commit message. Nothing is
@@ -538,8 +538,8 @@ committed. The PR review still happens, and it stays the safety net.
 The rounds go in `.private/<slug>/self-review.md` in the main checkout, which is
 gitignored and outlives the worktree. Then open the PR, ready for review, with its
 description from the `pr.md` template. It says what the change does and why, and sums
-up the self-review in plain English, covering the critical findings (blockers and
-majors) and how each was fixed, or why it was left. That summary tells the final
+up the self-review in plain English, covering the critical findings (Must fix and
+Should fix) and how each was fixed, or why it was left. That summary tells the final
 reviewer where the change was weak and what to check again. The record itself stays
 private.
 
@@ -552,7 +552,7 @@ git diff main > ../../.private/bulk-tags/diff.patch
 #   $basis the spec or the issue, $context the diff; give it to a fresh agent
 #   session, ideally another model, with the dismissed findings of earlier rounds
 #   record the round in .private/bulk-tags/self-review.md; fix or dismiss each finding
-#   again, until a round has no blockers and no majors
+#   again, until a round has no Must fix and no Should fix findings
 ./devctl worktree sync                         # rebase on main, then the checks again
 #   write .private/bulk-tags/pr.md from dev/templates/pr.md
 git push -u origin code/bulk-tags
@@ -563,7 +563,7 @@ gh pr create --title "Bulk tags" --body-file ../../.private/bulk-tags/pr.md
 a fresh session if you can, so the agent running it isn't the one that wrote the code.
 It hands the review itself to a separate agent that has none of the conversation, or
 tells you to start a fresh session if it can't. Every round gets recorded, and the
-change isn't called ready while a blocker or a major is open. Last comes a draft of
+change isn't called ready while a Must fix or Should fix finding is open. Last comes a draft of
 `.private/<slug>/pr.md`. Pushing and opening the PR wait for your go-ahead.
 
 ## Final review and merge

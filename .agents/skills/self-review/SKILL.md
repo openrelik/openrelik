@@ -1,6 +1,6 @@
 ---
 name: self-review
-description: Review an OpenRelik change locally before its PR is opened, in rounds, until it has no blockers or majors; private, nothing is posted. Use for "self-review", "review my change before the PR", "is this ready for a PR", or /self-review.
+description: Review an OpenRelik change locally before its PR is opened, in rounds, until it has no Must fix or Should fix findings; private, nothing is posted. Use for "self-review", "review my change before the PR", "is this ready for a PR", or /self-review.
 ---
 
 # Self-review
@@ -36,7 +36,7 @@ You run the checks, fix, and keep the record.
 2. **Checks**: run the tests and formatters of each component the change touches, as
    their `AGENTS.md` says (`server/`, `web/sunstone/`, `workers/`, and `uv run pytest` in
    a library). Where the tests don't reach, try it on the stack (`./devctl stack up -w
-   <slug>`). A failing check is a blocker.
+   <slug>`). A failing check is a Must fix.
 3. **Review**: by the brief, `dev/templates/review.md` (fill in `$branch` as
    `code/<slug>`, `$base` as `main`, `$basis`, and `$context` with
    `git diff main`, which includes uncommitted changes). The reviewer reads the
@@ -46,7 +46,7 @@ You run the checks, fix, and keep the record.
    and their results, and the review. Then, for each finding, with the user: fix it,
    or dismiss it with a one-line reason. Write down which.
 5. **Again**: review the change as it is now, in a new round, until one finds no
-   blockers and no majors. Minors and nits are the developer's call.
+   Must fix and no Should fix findings. Nice to have findings are the developer's call.
 6. **Ready**, before the PR:
    - the spec's tasks are ticked, and the spec matches the code (update it where the
      code had to differ);
@@ -60,10 +60,10 @@ You run the checks, fix, and keep the record.
 7. **Report** to the user: the rounds, what was fixed, what was dismissed and why,
    and whether it's ready.
 8. **PR description**: draft it from `dev/templates/pr.md`: what the change does and
-   why, and under "Self-review", the blockers and majors in plain English, one line
-   each: what was wrong and how it was fixed, or why it was left. No minors or nits,
-   no file-by-file detail, no round numbers, and no model or tool names. Write it to
-   `.private/<slug>/pr.md` and show it to the user. Opening the PR is theirs to
+   why, and under "Self-review", the Must fix and Should fix findings in plain English,
+   one line each: what was wrong and how it was fixed, or why it was left. No Nice to
+   have findings, no file-by-file detail, no round numbers, and no model or tool names.
+   Write it to `.private/<slug>/pr.md` and show it to the user. Opening the PR is theirs to
    decide; push and `gh pr create --body-file <main checkout>/.private/<slug>/pr.md`
    only after their go-ahead. When the PR is open for a feature: if the work started
    with this PR (small feature), replace the issue's body now (step 8 of "Start it" in

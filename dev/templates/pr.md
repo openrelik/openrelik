@@ -5,6 +5,6 @@ Closes #$issue
 
 ## Self-review
 
-The self-review's critical findings (blockers and majors) and what was done about
+The self-review's critical findings (Must fix and Should fix) and what was done about
 them, in plain English: one line each, what was wrong and how it was fixed, or why it
-was left. "No blockers or majors found." if there were none.
+was left. "No Must fix or Should fix findings found." if there were none.
