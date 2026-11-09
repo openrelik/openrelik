@@ -255,7 +255,7 @@ def release() -> None:
 @pass_repo
 def platform(repo: Repo, version: str) -> None:
     """Prepare a platform minor release (X.Y.0) on a release branch."""
-    release_module.release_platform(repo.root, version)
+    release_module.release_platform(repo.resolve_checkout(), version)
 
 
 @release.command()
@@ -263,7 +263,7 @@ def platform(repo: Repo, version: str) -> None:
 @pass_repo
 def server(repo: Repo, version: str) -> None:
     """Prepare a server release."""
-    release_module.release_server(repo.root, version)
+    release_module.release_server(repo.resolve_checkout(), version)
 
 
 @release.command()
@@ -271,7 +271,7 @@ def server(repo: Repo, version: str) -> None:
 @pass_repo
 def ui(repo: Repo, version: str) -> None:
     """Prepare a UI release."""
-    release_module.release_ui(repo.root, version)
+    release_module.release_ui(repo.resolve_checkout(), version)
 
 
 @release.command()
@@ -280,7 +280,7 @@ def ui(repo: Repo, version: str) -> None:
 @pass_repo
 def lib(repo: Repo, name: str, version: str) -> None:
     """Prepare a library release (common, ai-common, worker-common, python-client)."""
-    release_module.release_lib(repo.root, name, version)
+    release_module.release_lib(repo.resolve_checkout(), name, version)
 
 
 @release.command()
@@ -288,7 +288,7 @@ def lib(repo: Repo, name: str, version: str) -> None:
 @pass_repo
 def mcp(repo: Repo, version: str) -> None:
     """Prepare an MCP server release."""
-    release_module.release_mcp(repo.root, version)
+    release_module.release_mcp(repo.resolve_checkout(), version)
 
 
 @release.command()
@@ -297,7 +297,7 @@ def mcp(repo: Repo, version: str) -> None:
 @pass_repo
 def worker(repo: Repo, name: str, version: str) -> None:
     """Prepare a worker release."""
-    release_module.release_worker(repo.root, name, version)
+    release_module.release_worker(repo.resolve_checkout(), name, version)
 
 
 @release.command()
@@ -305,7 +305,7 @@ def worker(repo: Repo, name: str, version: str) -> None:
 @pass_repo
 def dev(repo: Repo, version: str) -> None:
     """Start development of the next minor (X.Y.0) on main."""
-    release_module.start_development(repo.root, version)
+    release_module.start_development(repo.resolve_checkout(), version)
 
 
 @release.command()
@@ -313,7 +313,7 @@ def dev(repo: Repo, version: str) -> None:
 @pass_repo
 def tag(repo: Repo, commit: str) -> None:
     """Tag components whose versions changed in a merged release commit."""
-    release_module.tag_commit(repo.root, commit)
+    release_module.tag_commit(repo.resolve_checkout(), commit)
 
 
 def main() -> None:

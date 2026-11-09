@@ -140,7 +140,7 @@ def commit_release(root: Path, files: list[Path], message: str, tags: list[str])
         print("\nNothing is pushed. Check the commit (git show), push the branch and open a")
         print("pull request. After it's merged, tag the merged commit and push the tags:")
         print(f"  git push origin {branch}")
-        print("  git switch main && git pull && devctl release tag")
+        print("  git switch main && git pull && ./devctl release tag")
         return
     for tag in tags:
         git(root, "tag", "-a", tag, "-m", f"{message} ({tag})")
@@ -170,17 +170,28 @@ def release_platform(root: Path, version: str) -> None:
 
     for name in LIBRARIES:
         pyproject = root / "libs" / name / "pyproject.toml"
-        if project_version(root, pyproject) == version and not tag_exists(root, f"{name}-v{version}"):
+        if pyproject.exists() and project_version(root, pyproject) == version and not tag_exists(root, f"{name}-v{version}"):
             tags.append(f"{name}-v{version}")
     for pyproject in sorted(root.glob("workers/*/pyproject.toml")):
         name = pyproject.parent.name
-        if project_version(root, pyproject) == version and not tag_exists(root, f"worker-{name}-v{version}"):
+        if pyproject.exists() and project_version(root, pyproject) == version and not tag_exists(root, f"worker-{name}-v{version}"):
             tags.append(f"worker-{name}-v{version}")
 
     branch = git(root, "branch", "--show-current", capture=True)
     if branch != f"release/{minor_name}":
         print(f"note: on {branch}, not release/{minor_name}")
     commit_release(root, files, f"Release {version}", tags)
+
+
+def _release_project(root: Path, directory: Path, prefix: str, version: str, label: str) -> None:
+    check_clean_worktree(root)
+    parse_version(version)
+    pyproject = directory / "pyproject.toml"
+    if not pyproject.exists():
+        ui.die(f"no {pyproject.relative_to(root)}")
+    tag = check_new(root, prefix, version)
+    files = set_pyproject_version(pyproject, version)
+    commit_release(root, files, f"Release {label} {version}", [tag])
 
 
 def release_ui(root: Path, version: str) -> None:
@@ -192,46 +203,22 @@ def release_ui(root: Path, version: str) -> None:
 
 
 def release_server(root: Path, version: str) -> None:
-    check_clean_worktree(root)
-    parse_version(version)
-    tag = check_new(root, "server-v", version)
-    files = set_pyproject_version(root / "server" / "pyproject.toml", version)
-    commit_release(root, files, f"Release the server {version}", [tag])
+    _release_project(root, root / "server", "server-v", version, "the server")
 
 
 def release_lib(root: Path, name: str, version: str) -> None:
-    check_clean_worktree(root)
-    parse_version(version)
     pyproject = root / "libs" / name / "pyproject.toml"
-    if not pyproject.exists():
-        ui.die(f"no {pyproject.relative_to(root)}")
-    tag = check_new(root, f"{name}-v", version)
-    package = re.search(r'(?m)^name = "([^"]*)"', pyproject.read_text())
+    package = re.search(r'(?m)^name = "([^"]*)"', pyproject.read_text()) if pyproject.exists() else None
     label = package.group(1) if package else name
-    files = set_pyproject_version(pyproject, version)
-    commit_release(root, files, f"Release {label} {version}", [tag])
+    _release_project(root, root / "libs" / name, f"{name}-v", version, label)
 
 
 def release_mcp(root: Path, version: str) -> None:
-    check_clean_worktree(root)
-    parse_version(version)
-    pyproject = root / "mcp" / "pyproject.toml"
-    if not pyproject.exists():
-        ui.die(f"no {pyproject.relative_to(root)}")
-    tag = check_new(root, "mcp-v", version)
-    files = set_pyproject_version(pyproject, version)
-    commit_release(root, files, f"Release the MCP server {version}", [tag])
+    _release_project(root, root / "mcp", "mcp-v", version, "the MCP server")
 
 
 def release_worker(root: Path, name: str, version: str) -> None:
-    check_clean_worktree(root)
-    parse_version(version)
-    pyproject = root / "workers" / name / "pyproject.toml"
-    if not pyproject.exists():
-        ui.die(f"no {pyproject.relative_to(root)}")
-    tag = check_new(root, f"worker-{name}-v", version)
-    files = set_pyproject_version(pyproject, version)
-    commit_release(root, files, f"Release worker {name} {version}", [tag])
+    _release_project(root, root / "workers" / name, f"worker-{name}-v", version, f"worker {name}")
 
 
 def start_development(root: Path, version: str) -> None:
