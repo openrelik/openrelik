@@ -141,11 +141,11 @@ Every finding has all four parts, each one or two short sentences:
    - **If we skip it:** Late orders show the wrong date, and accounting fixes them by hand.
 
 End with:
-- `Verdict: Ship.` or `Verdict: fix 1 and 3 first.`
+- `Verdict: LGTM` or `Verdict: fix 1 and 3 first.`
 - `Lean: -<N> lines possible.` when lean findings exist.
 - `Not checked:` one line, if something mattered and you could not check it.
 
-Nothing found: `What this change does:`, then `Looks good. Ship.` and one line on what
+Nothing found: `What this change does:`, then `LGTM` and one line on what
 you checked.
 
 ## 5. Workflow
@@ -157,24 +157,37 @@ you checked.
    rounds.
 3. **Record round**: Write the subagent's review in `.private/<slug>/review.md` in the main checkout:
    the date, checks run, and findings.
-4. **Fix or dismiss**: Address findings with the user. Each dismissed finding gets a one-line reason
+4. **Brief and pause**: Present a concise briefing of the findings, checks run, and verdict to the user.
+   Pause and ask how the user wants to proceed before making any code changes, dismissing findings, or
+   running further passes. Do not start fixing findings autonomously.
+5. **Fix or dismiss**: Address findings as guided by the user. Each dismissed finding gets a one-line reason
    recorded so future rounds don't re-raise it.
-5. **Repeat**: Re-run the subagent in clean context until there are **no Must fix and no Should fix**
-   findings.
-6. **Ready**:
+6. **Repeat**: Re-run the subagent in clean context until there are **no Must fix and no Should fix**
+   findings. Brief the user and pause after each round.
+7. **Ready**:
    - Spec tasks are ticked and spec matches code;
    - Regression test exists for bugfix with commit message (symptom, cause, fix);
    - Branch is rebased on main (`./devctl worktree sync`) and checks pass;
    - Clean tree: no debug output, no commented-out code, no untracked files.
-7. **Draft PR and review comment**:
+8. **Save review artifact**:
+   - For a feature, copy `.private/<slug>/review.md` into `dev/artifacts/features/<slug>/review.md`
+     on the implementation branch (`code/<slug>`), and commit it (`Refs #<issue>`) so the review
+     record lands in the repository alongside `idea.md` and `spec.md`.
+9. **Draft PR and review comment**:
    - Write a clean PR description from `dev/templates/pr.md` into `.private/<slug>/pr.md`
      (what the change does and why, `Closes #<issue>`). Keep the PR description clean.
-   - Format the final review report from `.private/<slug>/review.md` into
-     `.private/<slug>/review-comment.md`. This will be posted as the first comment on the PR
-     so the PR description stays uncluttered.
+   - Format the final review report into `.private/<slug>/review-comment.md` to be posted as
+     the first comment on the PR so the PR description stays uncluttered. It must state in a
+     short and concise way what was found across the review rounds and how each was fixed:
+     - **Summary**: what the change does.
+     - **Findings and fixes**: short, numbered summary of what was found and how it was fixed
+       across review rounds (or noting that none were found).
+     - **Requirements**: status of each requirement if reviewing against a spec.
+     - **Final verification**: checks and tests run on the final tree.
+     - **Verdict**: `LGTM`
    - Run both `pr.md` and `review-comment.md` through the `humanize` standard
      (`.agents/skills/humanize/SKILL.md`) to remove any AI boilerplate, buzzwords, or throat-clearing.
-8. **Open PR and post review**: Push and open the PR with the `reviewed` label, then post the
+10. **Open PR and post review**: Push and open the PR with the `reviewed` label, then post the
    review comment, only after the user's explicit go-ahead:
    ```bash
    gh label create reviewed --description "Passed clean-context review; critical findings addressed" --color "0e8a16" 2>/dev/null
@@ -185,13 +198,14 @@ you checked.
 ### When reviewing an open PR
 1. **Subagent review**: Gather PR info (`gh pr view <number> --comments`, `gh pr diff <number>`).
    Launch a subagent with clean context containing only the review rubric, spec/issue, and PR diff.
-2. **Record review**: Write the review to `.private/<slug>/review-<number>.md` in the main checkout.
-   Show it to the user.
+2. **Record review and brief**: Write the review to `.private/<slug>/review-<number>.md` in the main
+   checkout. Brief the user with a concise summary of the findings and verdict, then pause and ask
+   how to proceed before posting comments or making changes.
 3. **Post comment to GitHub**: Only after the user's explicit go-ahead:
    ```bash
    gh pr comment <number> --body-file .private/<slug>/review-<number>.md
    ```
-   - If `Verdict: Ship`: add the `reviewed` label with `gh pr edit <number> --add-label reviewed`.
+   - If `Verdict: LGTM`: add the `reviewed` label with `gh pr edit <number> --add-label reviewed`.
    - If `Must fix` or `Should fix` findings remain: ensure the `reviewed` label is absent
      (`gh pr edit <number> --remove-label reviewed 2>/dev/null`).
 4. **Human approval**: Agents never approve or merge PRs. Every PR requires human approval.

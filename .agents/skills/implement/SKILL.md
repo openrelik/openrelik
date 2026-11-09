@@ -19,8 +19,9 @@ for a bugfix or a refactor, until it's ready for the review skill.
    - A feature: `dev/artifacts/features/<slug>/spec.md` on main, or on its approved
      spec PR; and the `idea.md`, `design.md` and ADRs it refers to.
    - A small feature, with the spec and the code in one PR: there's no spec yet. Do
-     "Start it" from the `idea` skill, and write the spec as the `spec` skill says,
-     both on `code/<slug>`, in its first commit.
+     "Start it" from the `idea` skill, and write the spec as the `spec` skill says
+     (drafted and reviewed in `.private/<slug>/spec.md` first), both committed on
+     `code/<slug>` only after the user approves the draft.
    - A bugfix or a refactor: the issue (`gh issue view <issue>`).
 2. **Gate**: for a feature, the spec merged, or approved (then stack the code on it,
    below); the ADRs it depends on merged; and the idea not assigned to someone else.
@@ -61,7 +62,8 @@ for a bugfix or a refactor, until it's ready for the review skill.
 ## After
 
 When the tasks are ticked, or the fix is in, the change goes to the `review`
-skill, ideally in a fresh session. The PR is opened after it, not before.
+skill, ideally in a fresh session. For a feature, the review record is saved to
+`dev/artifacts/features/<slug>/review.md` on `code/<slug>`. The PR is opened after it, not before.
 
 ## Rules
 

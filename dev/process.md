@@ -40,6 +40,7 @@ The whole process at a glance. The sections below have the details.
   ┌──────────────────────────────────────────────────────────────────┐
   │  .private/<slug>/idea.md       draft             [idea]          │
   │  .private/<slug>/research.md   research          [research]      │
+  │  .private/<slug>/spec.md       draft spec        [spec]          │
   │  prototype/<slug> worktree     try it            (unpushed)      │
   └────────────────────────────────┬─────────────────────────────────┘
                                    │ file it  [idea]
@@ -94,7 +95,8 @@ The whole process at a glance. The sections below have the details.
                               until no Must fix and no Should fix findings
                            │
                            ▼
-              code PR, "Closes #issue", with the review's summary
+              code PR, "Closes #issue", with review.md in dev/artifacts/
+              and the review's summary as a PR comment
                            │
    ╔═══════════════════════▼════════════════════════╗
    ║ GATE: a human approves the PR: a teammate, or  ║
@@ -467,9 +469,11 @@ gh pr create --title "Spec: Bulk tags" --body "Refs #123"
 
 **With the skill** (`spec`): `/spec bulk-tags`, or `/spec 123`. Before writing, it
 checks that the idea is accepted and not someone else's, and that the design and the
-ADRs the spec depends on are merged. For a small feature, it asks whether the spec
-should go with the code on `code/<slug>` instead. It reads the code each task will
-change, so the tasks are real, and opens the PR after your go-ahead.
+ADRs the spec depends on are merged. It drafts the spec in `.private/<slug>/spec.md`
+for local markdown review before committing anything to a branch. For a small feature,
+it asks whether the spec should go with the code on `code/<slug>` instead. It reads
+the code each task will change, so the tasks are real, commits once you approve the
+local draft, and opens the PR after your go-ahead.
 
 ## Code
 
@@ -523,19 +527,26 @@ for human review. It's private. Nothing gets posted, and nothing of it is commit
    implementation. The agent that wrote the code would check its intentions instead of
    the diff. The subagent receives only the review rubric from
    `.agents/skills/review/SKILL.md`, the spec or issue, and the diff.
-3. **Fix or dismiss** each finding. A dismissed finding gets its reason written down,
-   so the next round doesn't raise it again. Then review again, and keep going until a
-   round finds no Must fix and no Should fix findings.
-4. **Ready**. The spec's tasks are ticked and the spec matches the code. The branch is
+3. **Brief and pause**. Present a brief summary of the findings and verdict to the user,
+   then pause and ask how to proceed. The agent does not start fixing or dismissing
+   findings autonomously.
+4. **Fix or dismiss** each finding as agreed with the user. A dismissed finding gets its
+   reason written down, so the next round doesn't raise it again. Then review again,
+   briefing after each round, until a round finds no Must fix and no Should fix findings.
+5. **Ready**. The spec's tasks are ticked and the spec matches the code. The branch is
    rebased on main (`./devctl worktree sync`). The commits say what and why with `Refs
    #<issue>`, and a bugfix has its regression test and its commit message. Nothing is
    left over, such as debug output, commented-out code, or TODOs without an issue.
+6. **Save review artifact**. For a feature, copy `.private/<slug>/review.md` into
+   `dev/artifacts/features/<slug>/review.md` on the implementation branch and commit it
+   with `Refs #<issue>`, so it lands in the repository alongside `idea.md` and `spec.md`.
 
 The rounds go in `.private/<slug>/review.md` in the main checkout, which is gitignored
 and outlives the worktree. Then open the PR with its description from the `pr.md` template
 (kept clean: what the change does and why, and `Closes #<issue>`). The PR is labeled
-`reviewed`, and the review report is posted as the first comment on the PR to keep
-the description clean.
+`reviewed`, and the review report is posted as the first comment on the PR (stating in a
+short and concise way what was found across rounds and how it was fixed, requirement
+statuses, and the final verification) to keep the PR description clean.
 
 **By hand**, in the change's worktree:
 
@@ -547,6 +558,10 @@ git diff main > ../../.private/bulk-tags/diff.patch
 #   record the round in .private/bulk-tags/review.md; fix or dismiss each finding
 #   again, until a round has no Must fix and no Should fix findings
 ./devctl worktree sync                         # rebase on main, then the checks again
+#   for a feature, copy review to dev/artifacts/features/bulk-tags/review.md and commit it
+cp ../../.private/bulk-tags/review.md dev/artifacts/features/bulk-tags/review.md
+git add dev/artifacts/features/bulk-tags/review.md
+git commit -m "artifacts: add review record for bulk-tags"
 #   write clean .private/bulk-tags/pr.md from dev/templates/pr.md
 #   write review comment to .private/bulk-tags/review-comment.md
 git push -u origin code/bulk-tags
@@ -572,7 +587,7 @@ review"). Branch rules can require a review only if the team doesn't allow that.
 
 Anyone (teammate or author) can run `/review <PR number>` at any time to have an agent
 audit an open PR against its spec or issue. It posts the review report as a comment and
-adds the `reviewed` label if it reaches `Verdict: Ship`.
+adds the `reviewed` label if it reaches `Verdict: LGTM`.
 
 The implementer merges once the PR is approved. Agents never approve or merge.
 
@@ -591,7 +606,7 @@ The implementer merges once the PR is approved. Agents never approve or merge.
   documents, so it's safe to reset.
 - Draft PRs labeled `prototype`: prototypes, never merged.
 - `dev/artifacts/features/<slug>/`: `idea.md`, `research.md`, `design.md` (if any),
-  `spec.md`, and `screenshots/`, each reaching main with its PR.
+  `spec.md`, `review.md`, and `screenshots/`, each reaching main with its PR.
 - `dev/artifacts/designs/<slug>/`: designs that several features build on.
 - `dev/artifacts/decisions/`: architecture decision records.
 
@@ -612,7 +627,7 @@ issue, in its `accepted` label, its assignee and its checklist.
 | `design/<slug>`    | `design.md`, its ADRs, and the research            | when approved |
 | `adr/<slug>`       | `dev/artifacts/decisions/<number>-<slug>.md`       | when approved |
 | `spec/<slug>`      | `spec.md`, and the research                        | when approved |
-| `code/<slug>`      | the code, or the spec and the code, or a fix       | when reviewed |
+| `code/<slug>`      | the code, review.md (for a feature), or a fix      | when reviewed |
 
 Each branch is a worktree with its own stack, made from the main checkout with
 `./devctl worktree create` and the full branch name. `code/<slug>` lives in
