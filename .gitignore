@@ -32,7 +32,12 @@ dist/
 coverage.xml
 htmlcov/
 
-# Local development
+# Local development (./devctl init, ./devctl worktree create), personal notes,
+# and private drafts and reviews (dev/process.md)
+/.dev-local/
+/.worktrees/
+/.private/
+/status.md
 Tiltfile
 sql_app.db
 .idea/

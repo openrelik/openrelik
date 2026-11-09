@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#
+# devctl: Developer CLI for the OpenRelik monorepo.
+# Run ./devctl --help for usage. The CLI lives in dev/tools/devctl/ and runs with uv.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+if ! command -v uv >/dev/null 2>&1; then
+  printf '\033[1;31merror:\033[0m %s\n' \
+    "'uv' is required but not installed: https://docs.astral.sh/uv/getting-started/installation/" >&2
+  exit 1
+fi
+
+export DEV_SCRIPT_DIR="$SCRIPT_DIR"
+exec uv run --quiet --frozen --project "${SCRIPT_DIR}/dev/tools/devctl" devctl "$@"

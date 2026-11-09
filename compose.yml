@@ -1,0 +1,548 @@
+# OpenRelik development environment. Run ./devctl init first, then:
+#
+#   docker compose up --build --detach
+#
+# The Compose project name comes from COMPOSE_PROJECT_NAME in .env:
+# "openrelik-main" for the main checkout, "openrelik-<name>" for a worktree
+# created with ./devctl worktree create. Each project has its own database volume
+# and .dev-local/ (config and data) is per checkout, so worktrees never share state.
+#
+# Services without a `profiles:` key always start. Enable optional ones with
+# --profile, e.g. `docker compose --profile yara --profile capa up --build --detach`,
+# or set COMPOSE_PROFILES=yara,capa in .env.
+#
+# Profiles:
+#   workers      all optional workers (strings always runs)
+#   <name>       a single worker, e.g. plaso, grep, exif, yara
+#   mcp          mcp-server
+#   gcs-importer gcs-importer
+#
+# Live reload: the source of every service is bind-mounted into its container,
+# so edits are there at once, without a watcher. The server (uvicorn --reload)
+# and the web UI (Vite) reload by themselves; the other services run under
+# dev/tools/reload/reload.py, which restarts them when their source or the
+# local libraries change. Dependency changes (pyproject.toml, uv.lock,
+# package.json, yarn.lock) need a rebuild: `docker compose up --build --detach`.
+#
+# Local libraries: libs/common, libs/ai-common, libs/python-client and
+# libs/worker-common are bind-mounted into the Python services at
+# /opt/openrelik-libs and put first on PYTHONPATH, so they shadow the versions
+# installed from PyPI in the images.
+
+# Bind mounts shared by services. Referenced as list items (`- *lib-common`)
+# because YAML can't merge lists.
+x-volumes:
+  - &lib-common ./libs/common/openrelik_common:/opt/openrelik-libs/openrelik_common:ro
+  - &lib-ai-common ./libs/ai-common/openrelik_ai_common:/opt/openrelik-libs/openrelik_ai_common:ro
+  - &lib-worker-common ./libs/worker-common/openrelik_worker_common:/opt/openrelik-libs/openrelik_worker_common:ro
+  - &lib-api-client ./libs/python-client/openrelik_api_client:/opt/openrelik-libs/openrelik_api_client:ro
+  # The reloader, run with the Python of each image
+  - &dev-reload ./dev/tools/reload:/opt/openrelik-dev:ro
+
+# Environment shared by the server-side services (server, mediator, metrics, ...).
+x-server-env: &server-env
+  SQLALCHEMY_DATABASE_URL: postgresql://forensics:${POSTGRES_PASSWORD:?run ./devctl init or set POSTGRES_PASSWORD in .env}@postgres/openrelik
+  REDIS_URL: redis://redis:6379
+  OPENRELIK_SERVER_SETTINGS: /etc/openrelik/settings.toml
+  PYTHONPATH: /opt/openrelik-libs
+  PYTHONUNBUFFERED: "1"
+
+# Shared settings for Celery workers. Merged with `<<: *worker`; a key set on
+# the service (e.g. volumes, develop) replaces the template's value instead of
+# adding to it.
+x-worker: &worker
+  # Worker tools are x86-only; runs under emulation on Apple silicon
+  platform: linux/amd64
+  restart: always
+  environment:
+    REDIS_URL: redis://redis:6379
+    PYTHONPATH: /opt/openrelik-libs
+  volumes:
+    - ./.dev-local/data:/usr/share/openrelik/data
+    - *lib-common
+    - *lib-ai-common
+    - *lib-worker-common
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  # Core services - API, UI, mediation, metrics and database.
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./server/pyproject.toml
+        - action: rebuild
+          path: ./server/uv.lock
+    restart: always
+    environment:
+      <<: *server-env
+      PROMETHEUS_SERVER_URL: http://prometheus:9090
+      GOOGLEAI_API_KEY: ${GOOGLEAI_API_KEY:-}
+      GOOGLEAI_DEFAULT_MODEL: gemini-3.5-flash
+      # The mounted source hides the extension the image copies into the code root.
+      OPENRELIK_SQLITE_EXTENSION_PATH: /opt/openrelik-extras/sqlite_scanner.duckdb_extension
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./.dev-local/config:/etc/openrelik
+      - ./server/src:/app/openrelik:ro
+      - ./server/extras:/opt/openrelik-extras:ro
+      - *lib-common
+      - *lib-ai-common
+    ports:
+      - 127.0.0.1:${API_PORT:-8710}:8710
+    # --reload and --workers can't be combined; uvicorn runs a single worker with --reload.
+    # Uvicorn reloads on source and library changes itself, so it needs no reloader.
+    command:
+      - uvicorn
+      - main:app
+      - --host=0.0.0.0
+      - --port=8710
+      - --reload
+      - --reload-dir=/app/openrelik
+      - --reload-dir=/opt/openrelik-libs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # One-shot: applies database migrations and creates the development user (an
+  # admin, dev/dev by default) if it doesn't exist yet, then exits. Mounts the server source so migrations added
+  # since the last image build are picked up. Re-run after pulling:
+  #   docker compose run --rm migrate
+  migrate:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      <<: *server-env
+      OPENRELIK_DEV_USER: ${OPENRELIK_DEV_USER:-dev}
+      OPENRELIK_DEV_PASSWORD: ${OPENRELIK_DEV_PASSWORD:-dev}
+    volumes:
+      - ./server/src:/app/openrelik:ro
+      - ./.dev-local/config:/etc/openrelik
+      - *lib-common
+      - *lib-ai-common
+    working_dir: /app/openrelik/datastores/sql
+    # create-user exits non-zero when the user already exists.
+    command:
+      - sh
+      - -c
+      - >-
+        alembic upgrade head &&
+        cd /app/openrelik &&
+        { python admin.py create-user "$$OPENRELIK_DEV_USER" --password "$$OPENRELIK_DEV_PASSWORD" --admin || true; }
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Vite dev server. The browser talks to the API directly at http://localhost:8710.
+  web-sunstone:
+    build:
+      context: ./web/sunstone
+      dockerfile_inline: |
+        FROM node:22-bookworm-slim
+        WORKDIR /app
+        COPY package.json yarn.lock ./
+        RUN yarn install --frozen-lockfile
+        COPY . .
+    develop:
+      watch:
+        - action: rebuild
+          path: ./web/sunstone/package.json
+        - action: rebuild
+          path: ./web/sunstone/yarn.lock
+    restart: always
+    environment:
+      VITE_OPENRELIK_SERVER_URL: http://localhost:${API_PORT:-8710}
+    volumes:
+      # Vite reloads mounted source changes itself (HMR).
+      - ./web/sunstone:/app
+      # The image's packages, kept in a volume so that a node_modules on the
+      # host (built for macOS) never shadows them.
+      - /app/node_modules
+    ports:
+      - 127.0.0.1:${UI_PORT:-3000}:3000
+    # yarn install updates the node_modules volume after a dependency change;
+    # it's a no-op when nothing changed.
+    command:
+      - sh
+      - -c
+      - yarn install --frozen-lockfile --silent && exec yarn run dev --host 0.0.0.0
+
+  mediator:
+    build:
+      context: ./server
+      dockerfile: ./src/mediator/Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./server/pyproject.toml
+        - action: rebuild
+          path: ./server/uv.lock
+    restart: always
+    environment:
+      <<: *server-env
+      # The mounted source hides the entrypoint the image copies to the code
+      # root, so it runs from server/src/mediator/ with the code root on the path.
+      PYTHONPATH: /opt/openrelik-libs:/mediator/openrelik_server
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./.dev-local/config:/etc/openrelik
+      - ./server/src:/mediator/openrelik_server:ro
+      - *lib-common
+      - *lib-ai-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /mediator/openrelik_server /opt/openrelik-libs -- python mediator/mediator.py"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  metrics:
+    build:
+      context: ./server
+      dockerfile: ./src/metrics/Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./server/pyproject.toml
+        - action: rebuild
+          path: ./server/uv.lock
+    restart: always
+    environment:
+      <<: *server-env
+      # As for the mediator: the entrypoint runs from server/src/metrics/.
+      PYTHONPATH: /opt/openrelik-libs:/metrics/openrelik_server
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./.dev-local/config:/etc/openrelik
+      - ./server/src:/metrics/openrelik_server:ro
+      - *lib-common
+      - *lib-ai-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /metrics/openrelik_server /opt/openrelik-libs -- python metrics/exporter.py"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  gcs-importer:
+    profiles: [gcs-importer]
+    build:
+      context: ./server
+      dockerfile: ./src/importers/gcp/Dockerfile
+    restart: always
+    environment:
+      <<: *server-env
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-your-gcp-project-id}
+      GOOGLE_CLOUD_SUBSCRIPTION_ID: ${GOOGLE_CLOUD_SUBSCRIPTION_ID:-your-pubsub-subscription-id}
+      ROBOT_ACCOUNT_USER_ID: "1"
+      GOOGLE_APPLICATION_CREDENTIALS: /etc/gcp/credentials.json
+      # As for the mediator: the entrypoint runs from server/src/importers/gcp/.
+      PYTHONPATH: /opt/openrelik-libs:/importers/gcp/openrelik_server
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./.dev-local/config:/etc/openrelik
+      - ./server/src:/importers/gcp/openrelik_server:ro
+      - *lib-common
+      - *lib-ai-common
+      - *dev-reload
+      # Service account key; must exist (Docker would otherwise create a directory)
+      - type: bind
+        source: ./.dev-local/config/gcp-credentials.json
+        target: /etc/gcp/credentials.json
+        read_only: true
+        bind:
+          create_host_path: false
+    command: "python /opt/openrelik-dev/reload.py /importers/gcp/openrelik_server /opt/openrelik-libs -- python importers/gcp/importer.py"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  mcp-server:
+    profiles: [mcp]
+    build:
+      context: ./mcp
+      dockerfile: ./docker/Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./mcp/pyproject.toml
+        - action: rebuild
+          path: ./mcp/uv.lock
+    restart: always
+    environment:
+      OPENRELIK_API_URL: http://server:8710
+      # Create a key in the UI (or: docker compose exec server python
+      # admin.py create-api-key admin --key-name mcp) and set it in .env.
+      OPENRELIK_API_KEY: ${OPENRELIK_API_KEY:-}
+      MCP_TRANSPORT: http
+      MCP_HTTP_HOST: 0.0.0.0
+      MCP_HTTP_PORT: "7070"
+      # The image runs from /app; the local api-client shadows the PyPI one.
+      PYTHONPATH: /opt/openrelik-libs:/app
+    volumes:
+      - ./mcp/src:/app/src:ro
+      - *lib-api-client
+      - *dev-reload
+    ports:
+      - 127.0.0.1:${MCP_PORT:-7070}:7070
+    command: "python /opt/openrelik-dev/reload.py /app/src /opt/openrelik-libs -- uv run src/main.py --transport http"
+    depends_on:
+      - server
+
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: forensics
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./devctl init or set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: openrelik
+    volumes:
+      # Named volume; reset with `docker compose down -v`
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP: on first start Postgres runs a temporary socket-only server while
+      # it initializes the database, which a socket check would report as ready.
+      # $$ escapes Compose interpolation so the container's own env vars are used.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:8
+    command: "redis-server --port 6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  prometheus:
+    image: prom/prometheus:v3
+    restart: always
+    configs:
+      - source: prometheus
+        target: /etc/prometheus/prometheus.yml
+    command: --config.file=/etc/prometheus/prometheus.yml
+
+  # Workers - each executes tasks for one capability. Workers live in the
+  # openrelik-workers monorepo under workers/<name>.
+
+  worker-strings:
+    <<: *worker
+    build:
+      context: ./workers/strings
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/strings/pyproject.toml
+        - action: rebuild
+          path: ./workers/strings/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/strings/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-strings"
+
+  worker-grep:
+    <<: *worker
+    profiles: [workers, grep]
+    build:
+      context: ./workers/grep
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/grep/pyproject.toml
+        - action: rebuild
+          path: ./workers/grep/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/grep/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-grep"
+
+  worker-exif:
+    <<: *worker
+    profiles: [workers, exif]
+    build:
+      context: ./workers/exif
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/exif/pyproject.toml
+        - action: rebuild
+          path: ./workers/exif/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/exif/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-exif"
+
+  worker-plaso:
+    <<: *worker
+    profiles: [workers, plaso]
+    build:
+      context: ./workers/plaso
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/plaso/pyproject.toml
+        - action: rebuild
+          path: ./workers/plaso/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/plaso/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-plaso"
+
+  worker-extraction:
+    <<: *worker
+    profiles: [workers, extraction]
+    build:
+      context: ./workers/extraction
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/extraction/pyproject.toml
+        - action: rebuild
+          path: ./workers/extraction/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/extraction/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-extraction"
+
+  worker-capa:
+    <<: *worker
+    profiles: [workers, capa]
+    build:
+      context: ./workers/capa
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/capa/pyproject.toml
+        - action: rebuild
+          path: ./workers/capa/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/capa/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-capa"
+
+  worker-duckdb:
+    <<: *worker
+    profiles: [workers, duckdb]
+    build:
+      context: ./workers/duckdb
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/duckdb/pyproject.toml
+        - action: rebuild
+          path: ./workers/duckdb/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/duckdb/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-duckdb"
+
+  worker-yara:
+    <<: *worker
+    profiles: [workers, yara]
+    build:
+      context: ./workers/yara
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/yara/pyproject.toml
+        - action: rebuild
+          path: ./workers/yara/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/yara/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-yara"
+
+  worker-analyzer-config:
+    <<: *worker
+    profiles: [workers, analyzer-config]
+    build:
+      context: ./workers/analyzer-config
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/analyzer-config/pyproject.toml
+        - action: rebuild
+          path: ./workers/analyzer-config/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/analyzer-config/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-analyzer-config"
+
+volumes:
+  postgres-data:
+
+configs:
+  # Prometheus scrapes the task queue metrics from the metrics exporter.
+  prometheus:
+    content: |
+      global:
+        scrape_interval: 10s
+        external_labels:
+          monitor: "openrelik"
+      scrape_configs:
+        - job_name: "celery"
+          static_configs:
+            - targets: ["metrics:8080"]
