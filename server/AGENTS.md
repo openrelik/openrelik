@@ -68,8 +68,8 @@ Review the generated file; autogenerate misses some changes (renames, server def
   uvicorn, mediator and metrics restart under `dev/tools/reload/reload.py`.
 - `libs/common` and `libs/ai-common` are mounted and first on `PYTHONPATH`, so local
   edits to them take effect in the stack. The tests and the images use the PyPI
-  versions pinned in `uv.lock`, so a server change that depends on an unreleased
-  library change passes in the stack but not in the tests.
+  versions pinned in `uv.lock`; to test against a local library change, pass
+  `--with-editable ../libs/<name>` to `uv run`.
 - After changing `pyproject.toml` or `uv.lock`, rebuild: `./devctl stack up -b`.
 - Settings: `.dev-local/config/settings.toml` in the checkout, mounted at
   `/etc/openrelik`. A new setting goes in `settings_example.toml` too; `./devctl init`

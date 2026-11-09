@@ -46,7 +46,8 @@ implement them, reviewed, approved and merged before the code is written.
    gh pr create --head spec/<slug> --title "Spec: <title>" --body "Refs #<issue>"
    ```
 
-   and add the PR number to the issue's "Spec" step.
+   If the work started with this spec, replace the issue's body now (step 8 of "Start
+   it" in the `idea` skill); then add the PR number to the issue's "Spec" step.
 
 After it's approved, the code can start on `code/<slug>`, stacked on the spec
 (`--from spec/<slug>`) until the spec PR is merged.

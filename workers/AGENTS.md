@@ -64,8 +64,8 @@ Every file starts with the Apache 2.0 "Copyright <year> Google LLC" header.
   restarts under `dev/tools/reload/reload.py` a few seconds after a change.
 - The libraries in `libs/` are mounted and first on `PYTHONPATH`, so local edits to
   `worker-common` take effect in the stack. The tests use the PyPI version pinned in
-  `uv.lock`, so a worker change that needs an unreleased `worker-common` change passes
-  in the stack but not in the tests.
+  `uv.lock`; to test against a local library change, pass
+  `--with-editable ../../libs/<name>` to `uv run`.
 - The images are `linux/amd64`, so on Apple silicon they run emulated and restart
   slower than the server.
 - After changing `pyproject.toml` or `uv.lock`, rebuild: `./devctl stack up -b`.

@@ -44,6 +44,7 @@ class PassthroughCommand(click.Command):
     epilog="""\b
 Examples:
   ./devctl stack up                    Start the main checkout's stack
+  ./devctl stack restart server        Restart a service container
   ./devctl stack logs -f server        Follow logs for the server service
   ./devctl worktree create my-feature  Create worktree + start its isolated stack
   ./devctl worktree list               List all checkouts, ports, and stack states
@@ -82,7 +83,7 @@ def status(repo: Repo, worktree: str | None) -> None:
 
 @cli.group(cls=AliasedGroup, short_help="Manage a checkout's Docker Compose stack.")
 def stack() -> None:
-    """Manage a checkout's Docker Compose stack (up, down, logs, list).
+    """Manage a checkout's Docker Compose stack (up, restart, down, logs, list).
 
     Each worktree has its own ports and database volume, so multiple stacks can
     run simultaneously.
@@ -108,6 +109,18 @@ def up(
     """
     passthrough = ctx.meta.get("passthrough", [])
     stacks.up(ctx.find_object(Repo), worktree, attach, build, profiles, passthrough)
+
+
+@stack.command()
+@worktree_option
+@click.argument("services", nargs=-1, metavar="[<service>...]")
+@pass_repo
+def restart(repo: Repo, worktree: str | None, services: tuple[str, ...]) -> None:
+    """Restart running containers without recreating them.
+
+    Restarts all services in the stack, or only the specified services.
+    """
+    stacks.restart(repo, worktree, services)
 
 
 @stack.command()

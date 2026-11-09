@@ -31,7 +31,7 @@ def test_render_settings():
 
 def test_worktree_slug():
     assert worktree_slug("code/case-tags") == "case-tags"
-    assert worktree_slug("proposal/Case Tags") == "proposal-case-tags"
+    assert worktree_slug("design/Case Tags") == "design-case-tags"
 
 
 def test_next_port_slot_fills_gaps(tmp_path):

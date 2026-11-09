@@ -77,6 +77,20 @@ def up(
     click.echo(f"  Stop:    ./devctl stack down{wt_flag}")
 
 
+def restart(repo: Repo, worktree: str | None, services: tuple[str, ...]) -> None:
+    checkout = repo.resolve_checkout(worktree)
+    label = repo.label(checkout)
+    if not docker.ready():
+        ui.die("docker is not running")
+    if not (checkout / ".env").is_file():
+        ui.die(f"{label} is not initialized; start it with: ./devctl stack up")
+    project = repo.project(checkout)
+    target = f"{', '.join(services)} in {project}" if services else project
+    ui.info(f"Restarting {target} ({label})")
+    run("docker", "compose", "--profile", "*", "restart", *services, cwd=checkout)
+    ui.ok(f"restarted {target}")
+
+
 def down(repo: Repo, worktree: str | None, volumes: bool, assume_yes: bool) -> None:
     checkout = repo.resolve_checkout(worktree)
     label = repo.label(checkout)

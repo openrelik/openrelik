@@ -108,21 +108,25 @@ def test_stack_up_needs_docker(repo, dev):
     dev("stack", "up", "stray-argument", exit_code=2)
 
 
-def test_removing_merged_proposal_moves_prototype_onto_main(repo, dev):
+def test_stack_restart_needs_docker(repo, dev):
+    assert "docker is not running" in dev("stack", "restart", exit_code=1).output
+
+
+def test_removing_merged_design_moves_prototype_onto_main(repo, dev):
     """The flow in dev/process.md: the prototype is stacked on the design branch."""
-    dev("worktree", "create", "proposal/x", "--no-stack")
-    dev("worktree", "create", "prototype/x", "--from", "proposal/x", "--no-stack")
-    proposal, prototype = repo / ".worktrees" / "proposal-x", repo / ".worktrees" / "prototype-x"
-    commit(proposal, "design.md")
-    git(prototype, "rebase", "--quiet", "proposal/x")
+    dev("worktree", "create", "design/x", "--no-stack")
+    dev("worktree", "create", "prototype/x", "--from", "design/x", "--no-stack")
+    design, prototype = repo / ".worktrees" / "design-x", repo / ".worktrees" / "prototype-x"
+    commit(design, "design.md")
+    git(prototype, "rebase", "--quiet", "design/x")
     commit(prototype, "prototype.py")
 
-    git(repo, "merge", "--quiet", "--ff-only", "proposal/x")
-    assert "re-parented prototype/x onto main" in dev("worktree", "remove", "proposal/x", "-y").output
+    git(repo, "merge", "--quiet", "--ff-only", "design/x")
+    assert "re-parented prototype/x onto main" in dev("worktree", "remove", "design/x", "-y").output
     assert git(repo, "log", "--format=%s", "main..prototype/x") == "prototype.py"
 
-    dev("worktree", "create", "proposal/x", "--no-stack")
-    assert git(repo, "rev-parse", "proposal/x") == git(repo, "rev-parse", "main")
+    dev("worktree", "create", "design/x", "--no-stack")
+    assert git(repo, "rev-parse", "design/x") == git(repo, "rev-parse", "main")
     dev("worktree", "create", "code/x", "--no-stack")
     assert (repo / ".worktrees" / "x").is_dir()
     dev("worktree", "remove", "-f", "-y", "prototype/x")

@@ -1,6 +1,6 @@
 # AGENTS.md: web/sunstone
 
-Amber, the OpenRelik web UI: a Vue 3 single-page app with Vuetify 3, Pinia, Vue
+Sunstone, the OpenRelik web UI: a Vue 3 single-page app with Vuetify 3, Pinia, Vue
 Router, and Vite. The root `AGENTS.md` covers the dev stack and the process; this
 covers working in `web/sunstone/`.
 
@@ -25,7 +25,7 @@ uses the Options API; write new components with `<script setup>`.
 ## Commands
 
 The dev stack's `web-sunstone` container has the dependencies installed, so run them
-there, from the repository root:
+there, from the checkout (main or `.worktrees/<slug>`):
 
 ```bash
 docker compose exec web-sunstone yarn test                                   # all tests

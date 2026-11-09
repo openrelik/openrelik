@@ -51,9 +51,9 @@ developer approves it, and it's merged before the spec is written.
    gh pr create --head design/<slug> --title "Design: <title>" --body "Refs #<issue>"
    ```
 
-   If the work started with this design, replace the issue's body now (step 7 of
-   "Start it"); then add the PR number to the issue's "Design" step, and "ADR" if it
-   has any. A core developer approves it.
+   If the work started with this design, replace the issue's body now (step 8 of
+   "Start it" in the `idea` skill); then add the PR number to the issue's "Design"
+   step, and "ADR" if it has any. A core developer approves it.
 
 After it's merged, `./devctl worktree remove design/<slug>`, and the spec follows
 (the `spec` skill).

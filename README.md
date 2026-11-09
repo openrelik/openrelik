@@ -45,6 +45,7 @@ On a fresh checkout `./devctl stack up` runs `./devctl init` and builds the imag
 ./devctl stack up -a                      # in the foreground with logs; rebuilds on dependency changes
 ./devctl stack up -b                      # rebuild images before starting
 ./devctl stack up -p plaso                # enable optional workers or the MCP server (see compose.yml)
+./devctl stack restart server             # restart a service without recreating containers
 ./devctl stack up -- --force-recreate     # pass further options to docker compose up
 ./devctl stack list                       # list all stacks, their status, services, and ports
 ./devctl stack down -v                    # stop and delete the database (asks first)

@@ -65,8 +65,11 @@ You run the checks, fix, and keep the record.
    no file-by-file detail, no round numbers, and no model or tool names. Write it to
    `.private/<slug>/pr.md` and show it to the user. Opening the PR is theirs to
    decide; push and `gh pr create --body-file <main checkout>/.private/<slug>/pr.md`
-   only after their go-ahead. After the final review, a human approves it before
-   it's merged (see "Final review and merge" in `dev/process.md`).
+   only after their go-ahead. When the PR is open for a feature: if the work started
+   with this PR (small feature), replace the issue's body now (step 8 of "Start it" in
+   the `idea` skill). Then add the PR number to the issue's "Implementation" step (and
+   "Spec" if the spec is in this PR). After the final review, a human approves it
+   before it's merged (see "Final review and merge" in `dev/process.md`).
 
 ## Rules
 

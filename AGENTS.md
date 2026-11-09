@@ -22,17 +22,24 @@ read it before changing code there: `server/AGENTS.md`, `web/sunstone/AGENTS.md`
 `workers/AGENTS.md`. It adds to this file; where they disagree, the component's
 file wins.
 
+For the other directories:
+- `libs/*` and `dev/tools/devctl/`: run tests with `uv run pytest` in that directory.
+- `mcp/`: check that it starts with `PYTHONPATH=src uv run --locked python -c 'import openrelik_mcp_server, main'` in `mcp/`.
+- When changing `VERSION`, `LICENSE`, `pyproject.toml`, or `package.json`, run `uv run --python 3.12 dev/check-versions.py`.
+- Every source file starts with the Apache 2.0 `Copyright <year> Google LLC` header.
+
 ## Development stack
 
 `./devctl` runs the whole stack from source with live reload (see `README.md`):
 
 ```bash
 ./devctl stack up [-w <worktree>]         # start a stack in the background (first run: init, build, migrate)
+./devctl stack restart [-w <wt>] [svc...] # restart containers without recreating them
 ./devctl status [-w <worktree>]           # what's running, problems, URLs
 ./devctl stack list                       # list all stacks, their status, services, and ports
 ./devctl stack logs [-w <worktree>] -f    # follow container logs
 ./devctl stack down [-w <worktree>]       # stop it (the database is kept)
-./devctl worktree create <name>           # create .worktrees/<name> and start its stack
+./devctl worktree create <branch>         # create .worktrees/<slug> and start its stack (--no-stack to skip)
 ./devctl worktree sync [<name>]           # rebase worktree branch onto parent branch (or main)
 ./devctl worktree list                    # checkouts, branches, stack states, and ports
 ./devctl worktree remove <name>           # after merge: remove stack, worktree and branch (-f to abandon)
@@ -61,5 +68,8 @@ and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
 - What you publish (issues, PRs, comments, commit messages) is model, provider and
   harness agnostic: no "Generated with" lines, co-author trailers, or tool names.
 - Do prototype and implementation work in a worktree (`./devctl worktree create`),
-  not on main. Refer to the idea's issue in commits and PRs (`Refs #123`).
+  not on main. Pass `--no-stack` for document branches (`design/<slug>`, `adr/<slug>`,
+  `spec/<slug>`). Refer to the issue in commits and PRs (`Refs #123`, and `Closes #123`
+  on the code PR). A bugfix needs a failing regression test first and a commit message
+  stating the symptom, the cause, and the fix.
 - Follow the `AGENTS.md` of the component you change, if it has one.
