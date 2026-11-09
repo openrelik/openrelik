@@ -22,8 +22,10 @@ implement them, reviewed, approved and merged before the code is written.
    whether the spec and the code go in one PR on `code/<slug>` instead.
 3. **Draft privately in `.private/`**: in the main checkout (from a worktree, the first path
    in `git worktree list`), create `.private/<slug>/` and draft the spec in
-   `.private/<slug>/spec.md` from `dev/templates/spec.md`, filling in `$slug`, `$title`
-   and `$issue`, and replacing the hint text:
+   `.private/<slug>/spec.md` from `dev/templates/spec.md`, filling in `$title` and the YAML
+   frontmatter: `$slug`, `$issue` (full GitHub URL), `$created` (today, `YYYY-MM-DD`), and
+   `$by` (`<github username> (<github fullname>)` from `gh api user --jq '"\(.login) (\(.name))"'`),
+   and replacing the hint text:
    - Requirements `R1`, `R2`, ...: each one testable, saying what must be true when
      it's done. Nothing the idea or the design didn't ask for.
    - Tasks `- [ ] T1: ...`: small and ordered, each verifiable on its own, naming its

@@ -1,6 +1,8 @@
 ---
 slug: devctl-release-tools
-issue: 83
+issue: https://github.com/openrelik/openrelik/issues/83
+created: 2026-11-09
+by: berggren (Johan Berggren)
 ---
 # Spec: Add release management and version checking to devctl
 

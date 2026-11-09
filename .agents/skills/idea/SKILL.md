@@ -49,8 +49,9 @@ main checkout (from a worktree, the first path in `git worktree list`) and on Gi
    cp dev/templates/idea.md .private/<slug>/
    ```
 
-   Fill in `$slug`, `$title`, and `$created` (today, `YYYY-MM-DD`); `$issue` stays
-   until the work starts.
+   Fill in the YAML frontmatter: `$slug`, `$title`, `$created` (today, `YYYY-MM-DD`),
+   and `$by` (`<github username> (<github fullname>)` from `gh api user --jq '"\(.login) (\(.name))"'`);
+   `$issue` stays empty until filed.
 3. **Write it** with the user, from the conversation: `## Problem`, `## Proposal`,
    `## Users`, `## Open questions`, replacing the hint text. A few sentences each, no
    implementation details. Refine it with them for as long as they like.
@@ -111,8 +112,9 @@ its PR is the first.
    that `<slug>`; otherwise pick it as in "Write it down" and confirm with the user.
 5. **idea.md**: on the first PR's branch, write
    `dev/artifacts/features/<slug>/idea.md` from `dev/templates/idea.md`, with `$slug`,
-   `$issue`, `$created` (`createdAt` as `YYYY-MM-DD`), `$title`, and the issue's
-   current body. Leave out the "exist locally" line if present.
+   `$issue` (full GitHub URL, e.g. `https://github.com/openrelik/openrelik/issues/<number>`),
+   `$created` (`createdAt` as `YYYY-MM-DD`), `$by` (`<github username> (<github fullname>)`),
+   `$title`, and the issue's current body. Leave out the "exist locally" line if present.
 6. **Research**: if `.private/<slug>/research.md` exists in the main checkout, read it
    for what shouldn't be public (case details, customer names, internal links,
    evidence) and suggest fixes; then move it beside `idea.md`.

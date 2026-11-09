@@ -155,8 +155,10 @@ you checked.
 2. **Subagent review**: Launch a fresh subagent with clean context, giving it only this skill's
    rubric, the spec or issue, the diff (`git diff main`), and dismissed findings from earlier
    rounds.
-3. **Record round**: Write the subagent's review in `.private/<slug>/review.md` in the main checkout:
-   the date, checks run, and findings.
+3. **Record round**: Write the subagent's review in `.private/<slug>/review.md` in the main checkout
+   from `dev/templates/review.md` with its YAML frontmatter (`slug`, `issue` as full GitHub URL,
+   `created` as `YYYY-MM-DD`, and `by` as `<github username> (<github fullname>)` from
+   `gh api user --jq '"\(.login) (\(.name))"'`), recording the date, checks run, and findings.
 4. **Brief and pause**: Present a concise briefing of the findings, checks run, and verdict to the user.
    Pause and ask how the user wants to proceed before making any code changes, dismissing findings, or
    running further passes. Do not start fixing findings autonomously.

@@ -1,3 +1,9 @@
+---
+slug: devctl-release-tools
+issue: https://github.com/openrelik/openrelik/issues/83
+created: 2026-11-09
+by: berggren (Johan Berggren)
+---
 # Review Round 1
 
 Date: 2026-11-09

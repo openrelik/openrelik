@@ -1,6 +1,9 @@
 ---
+slug: $slug
 number: $number
-date: $created
+issue: $issue
+created: $created
+by: $by
 status: accepted
 ---
 # $number. $title

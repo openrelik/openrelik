@@ -27,8 +27,9 @@ approves it. It isn't rewritten: a later ADR supersedes it.
    `"head:design/"`). If two PRs end up with the same number, the one merged second
    renumbers.
 4. **Write** `dev/artifacts/decisions/<number>-<slug>.md` from `dev/templates/adr.md`,
-   filling in `$number`, `$title` and `$created` (today, `YYYY-MM-DD`), and replacing
-   the hint text:
+   filling in `$number`, `$title` and the YAML frontmatter: `$slug`, `$issue` (full
+   GitHub URL), `$created` (today, `YYYY-MM-DD`), and `$by` (`<github username> (<github fullname>)`
+   from `gh api user --jq '"\(.login) (\(.name))"'`), and replacing the hint text:
    - Context: the forces, the constraints, and the options considered; link the
      design or the issue it came from.
    - Decision: what we decided, in a few sentences, as "We will ...".

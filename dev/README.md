@@ -20,8 +20,9 @@ You can do every step with an agent or without one, and each step's section belo
 shows both ways:
 
 - **By hand**: plain `git` and `gh`, `./devctl worktree` for branches and their
-  stacks, and the templates in `dev/templates/` (fill in the `$title`, `$slug`, ...
-  placeholders and replace the hint text).
+  stacks, and the templates in `dev/templates/` (fill in the frontmatter `$slug`,
+  `$issue` full URL, `$created`, `$by`, `$title`, ... placeholders and replace the
+  hint text).
 - **With the skill**: the step's agent skill, in `.agents/skills/<name>/SKILL.md`, for
   any agent that reads skills. Ask for it by name (`/spec bulk-tags`) or in your own
   words ("write the spec for #123"). It runs the same steps you would by hand. It
@@ -662,6 +663,17 @@ Each branch is a worktree with its own stack, made from the main checkout with
 - Slug: lowercase `a-z`, `0-9` and `-`, at most 50 characters, from the title, chosen
   when the idea is drafted or started. Each idea has one slug, for its files, its
   folder and its branches.
+- Artifact frontmatter: Every artifact in the repository (`idea`, `spec`, `design`,
+  `adr`, `review`) starts with standard YAML frontmatter:
+  ```yaml
+  ---
+  slug: $slug
+  issue: <full github url>
+  created: YYYY-MM-DD
+  by: <github username> (<github fullname>)
+  ---
+  ```
+  Where `by` is obtained via `gh api user --jq '"\(.login) (\(.name))"'`.
 - Every code PR is approved by a human before it's merged (see "Approval and
   merge").
 - Agents don't merge, and don't start a step whose input isn't approved. The design

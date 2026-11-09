@@ -26,8 +26,10 @@ developer approves it, and it's merged before the spec is written.
 5. **The idea**: if `idea.md` isn't on main, the work starts with this design: do
    "Start it" from the `idea` skill on this branch, which commits `idea.md`, moves
    the research, and turns the issue into the plan.
-6. **Write** `design.md` from `dev/templates/design.md`, filling in `$slug`, `$title`
-   and `$issue`, and replacing the hint text:
+6. **Write** `design.md` from `dev/templates/design.md`, filling in `$title` and the
+   YAML frontmatter: `$slug`, `$issue` (full GitHub URL), `$created` (today, `YYYY-MM-DD`),
+   and `$by` (`<github username> (<github fullname>)` from `gh api user --jq '"\(.login) (\(.name))"'`),
+   and replacing the hint text:
    - Summary: what changes for users, and roughly how, in a few sentences.
    - Background: the problem, from `idea.md`, and what the research and the prototype
      taught; link the prototype's PR.

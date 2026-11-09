@@ -2,6 +2,7 @@
 slug: $slug
 issue: $issue
 created: $created
+by: $by
 ---
 # $title
 
