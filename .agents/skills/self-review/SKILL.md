@@ -37,11 +37,11 @@ You run the checks, fix, and keep the record.
    their `AGENTS.md` says (`server/`, `web/sunstone/`, `workers/`, and `uv run pytest` in
    a library). Where the tests don't reach, try it on the stack (`./devctl stack up -w
    <slug>`). A failing check is a Must fix.
-3. **Review**: by the brief, `dev/templates/review.md` (fill in `$branch` as
-   `code/<slug>`, `$base` as `main`, `$basis`, and `$context` with
-   `git diff main`, which includes uncommitted changes). The reviewer reads the
-   changed files in full and their callers, and keeps only findings it has checked.
-   Give it the dismissed findings from earlier rounds, with their reasons.
+3. **Review**: by the criteria and format in the `final-review` skill
+   (`.agents/skills/final-review/SKILL.md`), comparing `code/<slug>` against `main`
+   (or uncommitted changes with `git diff main`). The reviewer reads the changed files
+   in full and their callers, and keeps only findings it has checked. Give it the
+   dismissed findings from earlier rounds, with their reasons.
 4. **Record** the round in `.private/<slug>/self-review.md`: the date, the checks
    and their results, and the review. Then, for each finding, with the user: fix it,
    or dismiss it with a one-line reason. Write down which.

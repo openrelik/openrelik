@@ -523,10 +523,11 @@ committed. The PR review still happens, and it stays the safety net.
 1. **Checks**. Run the tests and formatters of each component the change touches (see
    their `AGENTS.md`), and run the stack with the change for what the tests don't
    cover.
-2. **Review**. Use the same brief as the PR review, `dev/templates/review.md`, on `git
-   diff main` (committed and uncommitted), against the spec or the issue. Use an agent
-   that didn't write the code, in a fresh session and ideally on another model. The
-   agent that wrote it would check its intentions instead of the diff.
+2. **Review**. Use the criteria and format from the `final-review` skill
+   (`.agents/skills/final-review/SKILL.md`), on `git diff main` (committed and
+   uncommitted), against the spec or the issue. Use an agent that didn't write the code,
+   in a fresh session and ideally on another model. The agent that wrote it would check
+   its intentions instead of the diff.
 3. **Fix or dismiss** each finding. A dismissed finding gets its reason written down,
    so the next round doesn't raise it again. Then review again, and keep going until a
    round finds no Must fix and no Should fix findings.
@@ -548,9 +549,8 @@ private.
 ```bash
 #   run the checks of each component the change touches
 git diff main > ../../.private/bulk-tags/diff.patch
-#   fill in dev/templates/review.md: $branch code/bulk-tags, $base main,
-#   $basis the spec or the issue, $context the diff; give it to a fresh agent
-#   session, ideally another model, with the dismissed findings of earlier rounds
+#   run the review with the final-review skill criteria, against the spec or issue;
+#   give it to a fresh agent session, ideally another model, with dismissed findings
 #   record the round in .private/bulk-tags/self-review.md; fix or dismiss each finding
 #   again, until a round has no Must fix and no Should fix findings
 ./devctl worktree sync                         # rebase on main, then the checks again
@@ -569,18 +569,16 @@ change isn't called ready while a Must fix or Should fix finding is open. Last c
 ## Final review and merge
 
 Before the merge, an agent reviews the PR, with the model and tool you choose. This is
-the final review, the safety net after the self-review. The brief is
-`dev/templates/review.md`. Give it to the model with the spec (or the issue), the PR's
-description and the diff (`gh pr diff <number>`). The brief is self-contained, so a
-model with no access to the repository can review too.
+the final review, the safety net after the self-review. Follow the `final-review` skill
+(`.agents/skills/final-review/SKILL.md`). Give it to the model with the spec (or the issue),
+the PR's description and the diff (`gh pr diff <number>`).
 
 **By hand**, from the main checkout:
 
 ```bash
 gh pr view 456 --comments                      # the description and the discussion
 gh pr diff 456 > .private/bulk-tags/pr-456.diff
-#   fill in dev/templates/review.md: $branch, $base, $basis the spec or the issue,
-#   $context the diff; give it to the model you choose, and save its answer
+#   give final-review/SKILL.md, the spec/issue, and the diff to the model you choose
 gh pr comment 456 --body-file .private/bulk-tags/final-review-456.md    # post it
 #   tick "Final review" on the issue
 ```

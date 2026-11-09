@@ -150,6 +150,5 @@ only once a human has approved it: a teammate's review, or, if the team has agre
 it, the author's comment saying they approve after reading the final review. Say so if
 neither is there.
 
-To have a model without access to the repository review, fill in the brief in
-`dev/templates/review.md` instead (`$branch`, `$base`, `$basis` with the spec or the issue,
-`$context` with the diff) and give it the result.
+To have a model without access to the repository review, pass the instructions
+from this skill along with the spec or issue and the diff (`gh pr diff <number>`).
