@@ -2,7 +2,8 @@
 
 How to ship a fix as a patch release, for example `openrelik-worker-common` 0.18.1.
 The same steps work for the server, the UI, the other libraries and the MCP server.
-Workers are different, see [Workers](#workers) at the end.
+Workers are different, see [Workers](#workers) at the end. For a new minor, see
+[RELEASING.md](RELEASING.md).
 
 ## How the branches work
 
