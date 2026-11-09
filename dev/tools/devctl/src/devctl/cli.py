@@ -16,7 +16,7 @@
 
 import click
 
-from devctl import stacks, worktrees
+from devctl import release as release_module, stacks, worktrees
 from devctl.checkout import Repo
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 100}
@@ -62,7 +62,9 @@ Examples:
   ./devctl stack logs -f server        Follow logs for the server service
   ./devctl worktree create my-feature  Create worktree + start its isolated stack
   ./devctl worktree list               List all checkouts, ports, and stack states
-  ./devctl worktree remove my-feature  Remove a merged worktree, its stack, and branch""",
+  ./devctl worktree remove my-feature  Remove a merged worktree, its stack, and branch
+  ./devctl release platform 0.19.0     Prepare a platform minor release
+  ./devctl release tag                 Tag components in a merged release commit""",
 )
 @click.pass_context
 def cli(ctx: click.Context) -> None:
@@ -241,6 +243,77 @@ def remove(repo: Repo, name: str | None, force: bool, remote: bool, assume_yes: 
     -f/--force to abandon an unmerged worktree.
     """
     worktrees.remove(repo, name, force, remote, assume_yes)
+
+
+@cli.group(cls=AliasedGroup, short_help="Prepare a release or tag a merged release.")
+def release() -> None:
+    """Prepare a release: set versions, commit, and tag."""
+
+
+@release.command()
+@click.argument("version")
+@pass_repo
+def platform(repo: Repo, version: str) -> None:
+    """Prepare a platform minor release (X.Y.0) on a release branch."""
+    release_module.release_platform(repo.root, version)
+
+
+@release.command()
+@click.argument("version")
+@pass_repo
+def server(repo: Repo, version: str) -> None:
+    """Prepare a server release."""
+    release_module.release_server(repo.root, version)
+
+
+@release.command()
+@click.argument("version")
+@pass_repo
+def ui(repo: Repo, version: str) -> None:
+    """Prepare a UI release."""
+    release_module.release_ui(repo.root, version)
+
+
+@release.command()
+@click.argument("name", type=click.Choice(release_module.LIBRARIES))
+@click.argument("version")
+@pass_repo
+def lib(repo: Repo, name: str, version: str) -> None:
+    """Prepare a library release (common, ai-common, worker-common, python-client)."""
+    release_module.release_lib(repo.root, name, version)
+
+
+@release.command()
+@click.argument("version")
+@pass_repo
+def mcp(repo: Repo, version: str) -> None:
+    """Prepare an MCP server release."""
+    release_module.release_mcp(repo.root, version)
+
+
+@release.command()
+@click.argument("name")
+@click.argument("version")
+@pass_repo
+def worker(repo: Repo, name: str, version: str) -> None:
+    """Prepare a worker release."""
+    release_module.release_worker(repo.root, name, version)
+
+
+@release.command()
+@click.argument("version")
+@pass_repo
+def dev(repo: Repo, version: str) -> None:
+    """Start development of the next minor (X.Y.0) on main."""
+    release_module.start_development(repo.root, version)
+
+
+@release.command()
+@click.argument("commit", required=False, default="HEAD")
+@pass_repo
+def tag(repo: Repo, commit: str) -> None:
+    """Tag components whose versions changed in a merged release commit."""
+    release_module.tag_commit(repo.root, commit)
 
 
 def main() -> None:
