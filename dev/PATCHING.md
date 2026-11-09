@@ -39,10 +39,10 @@ Don't delete release branches. The ruleset blocks it anyway, and
 3. **Make the release commit.**
 
    ```sh
-   dev/release.py lib worker-common 0.18.1
+   ./devctl release lib worker-common 0.18.1
    ```
 
-   This sets the version, runs `uv lock` and `dev/check-versions.py`, commits, and tags
+   This sets the version, runs `uv lock` and `.github/scripts/check-versions.py`, commits, and tags
    `worker-common-v0.18.1`. Nothing gets pushed. For other components use `server`, `ui`
    or `mcp` instead of `lib <name>`.
 
@@ -77,7 +77,7 @@ Workers are released from `main` through a pull request:
 
 ```sh
 cd workers/<name> && uv lock --upgrade-package openrelik-worker-common && cd -
-dev/release.py worker <name> 0.18.2
+./devctl release worker <name> 0.18.2
 ```
 
 Open the pull request and merge it. Then tag the merged commit and push the tags, three
@@ -85,7 +85,7 @@ at most per push (with more, GitHub starts no workflows):
 
 ```sh
 git switch main && git pull
-dev/release.py tag
+./devctl release tag
 ```
 
 ## Not covered yet

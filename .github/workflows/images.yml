@@ -5,7 +5,7 @@
 #   merged pull request) builds nothing. The push event is used rather than
 #   the pull request's "closed" event, whose token can't push packages for pull
 #   requests from forks.
-# - release tag (made by dev/release.py): server-v0.18.1 builds the images
+# - release tag (made by devctl release): server-v0.18.1 builds the images
 #   from server/ (server, mediator, metrics, gcp-importer), ui-v0.18.1 the web
 #   UI, mcp-v0.18.1 the MCP server, worker-<name>-v0.18.1 that worker. They're
 #   tagged 0.18.1 and the floating minor tag 0.18 (unless a newer 0.18.x of that
@@ -15,7 +15,7 @@
 # - pull requests: only checks that every Dockerfile is listed in .github/images.toml.
 #
 # GitHub starts no workflow for tags pushed more than three at a time, so push
-# release tags in groups of at most three (dev/release.py prints the commands).
+# release tags in groups of at most three (devctl release prints the commands).
 name: Build Docker Images
 
 on:

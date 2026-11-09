@@ -13,8 +13,6 @@ How OpenRelik is developed, and the record of what was built and why.
 | `tools/reload/`               | the reloader, mounted into the development stack's containers |
 | `RELEASING.md`                | step-by-step guide for platform releases                 |
 | `PATCHING.md`                 | step-by-step guide for patch releases                    |
-| `release.py`                  | prepares and tags releases                               |
-| `check-versions.py`           | checks that the versions in the repository are consistent |
 
 Bugfixes leave no artifact: their record is the regression test and the commit
 message (see `process.md`).

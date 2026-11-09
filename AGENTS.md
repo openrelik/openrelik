@@ -25,7 +25,7 @@ file wins.
 For the other directories:
 - `libs/*` and `dev/tools/devctl/`: run tests with `uv run pytest` in that directory.
 - `mcp/`: check that it starts with `PYTHONPATH=src uv run --locked python -c 'import openrelik_mcp_server, main'` in `mcp/`.
-- When changing `VERSION`, `LICENSE`, `pyproject.toml`, or `package.json`, run `uv run --python 3.12 dev/check-versions.py`.
+- When changing `VERSION`, `LICENSE`, `pyproject.toml`, or `package.json`, run `uv run --python 3.12 .github/scripts/check-versions.py`.
 - Every source file starts with the Apache 2.0 `Copyright <year> Google LLC` header.
 
 ## Development stack

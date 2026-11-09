@@ -10,7 +10,7 @@ This is not an official Google product (experimental or otherwise), it is just c
 (image versions), `prometheus.yml` and `install.sh`.
 
 On `main`, `config.env` uses the `latest` images; that is what the installer's
-"bleeding edge" option installs. A minor release (`dev/release.py platform
+"bleeding edge" option installs. A minor release (`./devctl release platform
 0.18.0`) sets `config.env` on the release commit to the minor, `0.18`, for the
 platform (`OPENRELIK_VERSION`) and every worker. Every component then has its
 own patch releases (server 0.18.1, UI 0.18.3, a worker 0.18.2), and the

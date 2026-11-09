@@ -11,23 +11,23 @@ The libraries go out first. The server, the MCP server and the workers install t
 PyPI, so their `~=0.19.0` dependencies can't be locked until 0.19.0 is on PyPI. After
 that come the consumers, then the platform itself, and last `main` moves on to 0.20.
 
-`dev/release.py` sets versions, runs `uv lock` and `dev/check-versions.py`, commits and
+`./devctl release` sets versions, runs `uv lock` and `.github/scripts/check-versions.py`, commits and
 tags. It never pushes. `main` only takes pull requests, and those are squash-merged, so
 the release commit you make on a branch isn't the one that lands. That's why every step
-on `main` ends with `dev/release.py tag` on the merged commit.
+on `main` ends with `./devctl release tag` on the merged commit.
 
 When pushing tags, push three at most at a time. With more, GitHub starts no workflows
-for them. `dev/release.py` prints the pushes already grouped.
+for them. `./devctl release` prints the pushes already grouped.
 
 ## Steps
 
 1. **Release the libraries.** On a branch from `main`:
 
    ```sh
-   dev/release.py lib common 0.19.0
-   dev/release.py lib ai-common 0.19.0
-   dev/release.py lib worker-common 0.19.0
-   dev/release.py lib python-client 0.19.0
+   ./devctl release lib common 0.19.0
+   ./devctl release lib ai-common 0.19.0
+   ./devctl release lib worker-common 0.19.0
+   ./devctl release lib python-client 0.19.0
    ```
 
    Release all four, even the ones with no changes since 0.18. Open a pull request and
@@ -35,7 +35,7 @@ for them. `dev/release.py` prints the pushes already grouped.
 
    ```sh
    git switch main && git pull
-   dev/release.py tag
+   ./devctl release tag
    ```
 
    "Publish Python Packages" uploads them to PyPI. Check that all four are there before
@@ -52,7 +52,7 @@ for them. `dev/release.py` prints the pushes already grouped.
    ```sh
    git switch main && git pull
    git switch -c release/0.19
-   dev/release.py platform 0.19.0
+   ./devctl release platform 0.19.0
    ```
 
    This sets `VERSION`, the server, the web UIs and the MCP server to 0.19.0, points the
@@ -67,7 +67,7 @@ for them. `dev/release.py` prints the pushes already grouped.
    ```
 
    Wait for "Python Unit Tests" and "Frontend Unit Tests [sunstone]" to pass on
-   `release/0.19`. Then push the tags in the groups `dev/release.py` printed. CI builds
+   `release/0.19`. Then push the tags in the groups `./devctl release` printed. CI builds
    every image as `0.19.0` and `0.19`.
 
    The installer downloads 0.19's deployment files from `release/0.19`, so this branch
@@ -76,7 +76,7 @@ for them. `dev/release.py` prints the pushes already grouped.
 5. **Start 0.20 on `main`.** On a branch from `main`:
 
    ```sh
-   dev/release.py dev 0.20.0
+   ./devctl release dev 0.20.0
    ```
 
    This moves `VERSION`, the server, the web UIs, the libraries and the MCP server to

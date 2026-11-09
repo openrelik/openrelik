@@ -32,7 +32,7 @@ Implements idea.md (#83).
 - [x] T3: Add Click CLI commands for `release` (`platform`, `server`, `ui`, `lib`, `mcp`, `worker`, `dev`, `tag`) to `dev/tools/devctl/src/devctl/cli.py` (R1).
 - [x] T4: Enforce `.github/scripts/check-versions.py` execution within `devctl release` as an unavoidable pre-commit gate (R4).
 - [x] T5: Remove `dev/release.py` and add unit/integration tests in `dev/tools/devctl/tests/test_release.py` (R1, R2, R4, R6).
-- [ ] T6: Update references across repo documentation (`AGENTS.md`, `dev/README.md`, `dev/RELEASING.md`, `dev/PATCHING.md`, `deploy/README.md`) and workflow comments (`images.yml`, `release-pypi.yml`) (R5).
+- [x] T6: Update references across repo documentation (`AGENTS.md`, `dev/README.md`, `dev/RELEASING.md`, `dev/PATCHING.md`, `deploy/README.md`) and workflow comments (`images.yml`, `release-pypi.yml`) (R5).
 
 ## Tests
 
