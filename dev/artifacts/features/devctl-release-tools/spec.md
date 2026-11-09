@@ -27,7 +27,7 @@ Implements idea.md (#83).
 
 ## Tasks
 
-- [ ] T1: Move `dev/check-versions.py` to `.github/scripts/check-versions.py`, update its `ROOT` path calculation, and update `.github/workflows/version-check.yml` (R3).
+- [x] T1: Move `dev/check-versions.py` to `.github/scripts/check-versions.py`, update its `ROOT` path calculation, and update `.github/workflows/version-check.yml` (R3).
 - [ ] T2: Add `release` module in `dev/tools/devctl/src/devctl/` implementing release logic and subcommands, wired to `Repo.discover().root` (R1).
 - [ ] T3: Add Click CLI commands for `release` (`platform`, `server`, `ui`, `lib`, `mcp`, `worker`, `dev`, `tag`) to `dev/tools/devctl/src/devctl/cli.py` (R1).
 - [ ] T4: Enforce `.github/scripts/check-versions.py` execution within `devctl release` as an unavoidable pre-commit gate (R4).

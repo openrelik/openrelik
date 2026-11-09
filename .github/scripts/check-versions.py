@@ -16,7 +16,7 @@
 
 """Check that the versions in the repository follow the versioning rules.
 
-Usage: dev/check-versions.py   (from anywhere in the repository; Python 3.11+)
+Usage: .github/scripts/check-versions.py   (from anywhere in the repository; Python 3.11+)
 
 VERSION at the root is the platform version; on main it carries a dev suffix
 (0.18.0.dev0, written 0.18.0-dev in package.json); on a release branch it's
@@ -43,7 +43,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(\.dev\d+)?$")
 REQUIREMENT_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*([^;]*)")
 
