@@ -5,7 +5,7 @@ description: Write an OpenRelik architecture decision record in dev/artifacts/de
 
 # ADR
 
-"Designs and ADRs" in `dev/process.md`. An ADR records a decision that outlasts the
+"Designs and ADRs" in `dev/README.md`. An ADR records a decision that outlasts the
 feature and constrains other work (how the API is versioned, how workers are
 packaged): its context, the decision, and its consequences. A core developer
 approves it. It isn't rewritten: a later ADR supersedes it.

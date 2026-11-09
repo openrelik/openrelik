@@ -5,7 +5,7 @@ description: Write the spec for an OpenRelik feature in dev/artifacts/features/<
 
 # Spec
 
-"Specs" in `dev/process.md`: the requirements, testable, and the tasks that
+"Specs" in `dev/README.md`: the requirements, testable, and the tasks that
 implement them, reviewed, approved and merged before the code is written.
 
 1. **Inputs**: the idea, `dev/artifacts/features/<slug>/idea.md` on main, or, if the

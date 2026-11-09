@@ -33,7 +33,7 @@ coverage.xml
 htmlcov/
 
 # Local development (./devctl init, ./devctl worktree create), personal notes,
-# and private drafts and reviews (dev/process.md)
+# and private drafts and reviews (dev/README.md)
 /.dev-local/
 /.worktrees/
 /.private/

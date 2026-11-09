@@ -10,7 +10,7 @@ description: >
 
 # Implement
 
-"Code" in `dev/process.md`: the code, from the spec for a feature, or from the issue
+"Code" in `dev/README.md`: the code, from the spec for a feature, or from the issue
 for a bugfix or a refactor, until it's ready for the review skill.
 
 ## Before

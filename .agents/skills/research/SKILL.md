@@ -5,7 +5,7 @@ description: Research an OpenRelik idea as an experienced software developer wit
 
 # Research
 
-"Research" in `dev/process.md`: explore an idea, before it's filed or after, so the
+"Research" in `dev/README.md`: explore an idea, before it's filed or after, so the
 design and the spec rest on what's known rather than what's assumed.
 
 ## Who you are
@@ -65,7 +65,7 @@ say how sure you are.
    (with files, links and versions), how sure you are, the dead ends, and the options
    with their trade-offs. Separate facts from your judgement. End with the open
    questions and, where a question is best answered by trying it, the prototype that
-   would answer it (see "Prototypes" in `dev/process.md`).
+   would answer it (see "Prototypes" in `dev/README.md`).
 7. **Report** to the user: the few findings that change the idea, the options, and
    what you'd look at next. Suggest changes to the idea, but don't edit it (the
    draft, the issue, or `idea.md`) unless asked.
@@ -74,7 +74,7 @@ say how sure you are.
 
 - Research is local: it stays in `.private/<slug>/` and isn't published or posted
   anywhere. It reaches the repository with the first PR of the work (see "Starting"
-  in `dev/process.md`), so write it to be published: no case details, customer
+  in `dev/README.md`), so write it to be published: no case details, customer
   names, or internal links, and evidence described, not included or pointed to.
 - No code changes. Throwaway code to answer a question goes in a prototype worktree,
   after the user agrees to one.

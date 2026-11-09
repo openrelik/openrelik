@@ -90,7 +90,7 @@ can run at once. `create` starts the worktree's stack, and `remove` removes it.
 The name is the branch name. Branch `code/<name>` lives in `.worktrees/<name>/`, and
 other branches have `/` replaced: `./devctl worktree create design/case-tags` checks out
 branch `design/case-tags` in `.worktrees/design-case-tags/` (see
-`dev/process.md` for the branch kinds). A branch that exists only on origin, such
+`dev/README.md` for the branch kinds). A branch that exists only on origin, such
 as a teammate's, is checked out tracking theirs. Pass `--no-stack` to `worktree create` to skip starting the stack immediately.
 
 `remove` refuses while the worktree has uncommitted changes or the branch isn't merged

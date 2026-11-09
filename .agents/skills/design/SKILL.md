@@ -5,7 +5,7 @@ description: Write the design for a big or user-facing OpenRelik change, or a da
 
 # Design
 
-"Designs and ADRs" in `dev/process.md`: for a change that's expensive to get wrong.
+"Designs and ADRs" in `dev/README.md`: for a change that's expensive to get wrong.
 It says what changes for users and roughly how, and what else was considered. A core
 developer approves it, and it's merged before the spec is written.
 

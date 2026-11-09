@@ -9,7 +9,7 @@ description: >-
 
 # Idea
 
-"Ideas", "The issue" and "Starting" in `dev/process.md`. An idea is short and says
+"Ideas", "The issue" and "Starting" in `dev/README.md`. An idea is short and says
 what and why. Filed, it's an issue labeled `idea`, and the issue is the idea. When
 the work starts, it moves into the repository as
 `dev/artifacts/features/<slug>/idea.md`, and the issue becomes the plan. Only one of

@@ -51,7 +51,7 @@ API at http://localhost:8710; each worktree gets its own port slot (`3001`/`8711
 
 ## Development process
 
-See `dev/process.md`. Document templates live in `dev/templates/`,
+See `dev/README.md`. Document templates live in `dev/templates/`,
 and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
 `spec`, `implement`, `review`, `humanize`) in `.agents/skills/`.
 
@@ -63,7 +63,7 @@ and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
   reviews). Don't track status in files.
 - Never approve or merge (adding the `accepted` label to an idea is an approval), and
   don't start a step whose input hasn't passed its human gate (see "Conventions" in
-  `dev/process.md`).
+  `dev/README.md`).
 - Publishing to GitHub (issues, PRs, comments) needs the user's explicit go-ahead.
 - What you publish (issues, PRs, comments, commit messages) is model, provider and
   harness agnostic: no "Generated with" lines, co-author trailers, or tool names.

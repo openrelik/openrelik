@@ -127,7 +127,7 @@ def test_stack_restart_needs_docker(repo, dev):
 
 
 def test_removing_merged_design_moves_prototype_onto_main(repo, dev):
-    """The flow in dev/process.md: the prototype is stacked on the design branch."""
+    """The flow in dev/README.md: the prototype is stacked on the design branch."""
     dev("worktree", "create", "design/x", "--no-stack")
     dev("worktree", "create", "prototype/x", "--from", "design/x", "--no-stack")
     design, prototype = repo / ".worktrees" / "design-x", repo / ".worktrees" / "prototype-x"
