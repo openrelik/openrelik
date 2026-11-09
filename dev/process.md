@@ -622,11 +622,14 @@ Each branch is a worktree with its own stack, made from the main checkout with
 ## Conventions
 
 - Issues, PRs, reviews, comments and commits don't name the model, provider or tool
-  that helped write them.
+  that helped write them, and follow the humanize standard
+  (`.agents/skills/humanize/SKILL.md`): plain, direct engineering prose without AI tells
+  (no stock filler, no staged contrasts, no forced triads, no bold-label spam on bullets,
+  and no conversational chat wrappers).
 - Slug: lowercase `a-z`, `0-9` and `-`, at most 50 characters, from the title, chosen
   when the idea is drafted or started. Each idea has one slug, for its files, its
   folder and its branches.
-- Every code PR is approved by a human before it's merged (see "Final review and
+- Every code PR is approved by a human before it's merged (see "Approval and
   merge").
 - Agents don't merge, and don't start a step whose input isn't approved. The design
   and the spec need the idea accepted, and the spec also needs the design merged, if

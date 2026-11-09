@@ -64,7 +64,9 @@ and body before it's published, and after their go-ahead:
 
 1. **Body**: the four sections from `dev/templates/idea.md` (`## Problem`,
    `## Proposal`, `## Users`, `## Open questions`), without the YAML frontmatter and
-   without the `# <title>` heading. If `.private/<slug>/research.md` or a prototype
+   without the `# <title>` heading. Follow the `humanize` standard
+   (`.agents/skills/humanize/SKILL.md`): plain, direct prose without promotional fluff or
+   AI buzzwords. If `.private/<slug>/research.md` or a prototype
    exists, end with a line saying so: "Research (and a prototype) exist locally. Ask
    @<user>."
 2. **Issue**: ask whether the user claims it, for now or for later

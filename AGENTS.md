@@ -53,7 +53,7 @@ API at http://localhost:8710; each worktree gets its own port slot (`3001`/`8711
 
 See `dev/process.md`. Document templates live in `dev/templates/`,
 and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
-`spec`, `implement`, `review`) in `.agents/skills/`.
+`spec`, `implement`, `review`, `humanize`) in `.agents/skills/`.
 
 ### Rules
 
@@ -67,6 +67,10 @@ and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
 - Publishing to GitHub (issues, PRs, comments) needs the user's explicit go-ahead.
 - What you publish (issues, PRs, comments, commit messages) is model, provider and
   harness agnostic: no "Generated with" lines, co-author trailers, or tool names.
+  Follow the humanize standard (`.agents/skills/humanize/SKILL.md`): write plain, direct
+  engineering prose without AI tells (no stock filler like "crucial" or "robust", no
+  staged contrasts, no forced triads, no bold-label spam on bullets, and no conversational
+  chat wrappers).
 - Do prototype and implementation work in a worktree (`./devctl worktree create`),
   not on main. Pass `--no-stack` for document branches (`design/<slug>`, `adr/<slug>`,
   `spec/<slug>`). Refer to the issue in commits and PRs (`Refs #123`, and `Closes #123`

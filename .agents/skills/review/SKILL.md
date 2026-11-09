@@ -107,7 +107,9 @@ actually written. **Reviews must always run in a subagent with a completely clea
 ## 4. Output
 
 Very simple English: short sentences, everyday words. Explain a technical term the first
-time you use it. The reader may never have seen this code.
+time you use it. The reader may never have seen this code. Follow the `humanize` standard
+(`.agents/skills/humanize/SKILL.md`): direct engineering prose, no AI stock filler, no
+staged contrasts, no conversational pleasantries, and no wrap-up summaries.
 
 Start with `What this change does:` in two or three sentences.
 
@@ -170,6 +172,8 @@ you checked.
    - Format the final review report from `.private/<slug>/review.md` into
      `.private/<slug>/review-comment.md`. This will be posted as the first comment on the PR
      so the PR description stays uncluttered.
+   - Run both `pr.md` and `review-comment.md` through the `humanize` standard
+     (`.agents/skills/humanize/SKILL.md`) to remove any AI boilerplate, buzzwords, or throat-clearing.
 8. **Open PR and post review**: Push and open the PR with the `reviewed` label, then post the
    review comment, only after the user's explicit go-ahead:
    ```bash

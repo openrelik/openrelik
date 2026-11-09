@@ -1,6 +1,11 @@
 ---
 name: implement
-description: Implement an OpenRelik change on code/<slug>: a feature task by task from its spec, ticking the tasks and keeping the spec in step with the code; or a bugfix or a refactor from its issue, with a regression test and a commit message that says the symptom, the cause, and the fix. Use for "implement the spec", "build this", "fix issue 123", or /implement <slug or issue number>.
+description: >
+  Implement an OpenRelik change on code/<slug>: a feature task by task from its spec,
+  ticking the tasks and keeping the spec in step with the code; or a bugfix or a
+  refactor from its issue, with a regression test and a commit message that says the
+  symptom, the cause, and the fix. Use for "implement the spec", "build this", "fix
+  issue 123", or /implement <slug or issue number>.
 ---
 
 # Implement
@@ -31,7 +36,8 @@ for a bugfix or a refactor, until it's ready for the review skill.
 4. **Task by task**, in the spec's order: implement it, with the tests the spec names
    for its requirements; run the checks of the components it touches; tick it in
    `spec.md` (`- [x] T1: ...`); and commit, saying what and why, with
-   `Refs #<issue>`. A task per commit, where it fits.
+   `Refs #<issue>`. A task per commit, where it fits. Follow the `humanize` standard
+   (`.agents/skills/humanize/SKILL.md`): plain, direct commit messages without AI filler.
 5. **When the spec is wrong**: if the code has to differ, change the spec in this PR,
    so main's spec matches main's code, and tell the user. Stop and ask the user
    first if it changes what users see: that goes back to the team on the PR. Stop
@@ -47,7 +53,8 @@ for a bugfix or a refactor, until it's ready for the review skill.
 5. **Fix** it with the smallest change that makes the test pass, and run the checks.
    A refactor changes no behaviour: the tests pass before and after.
 6. **Commit**, for a bugfix, with a message that says the symptom, the cause, and the
-   fix, and `Refs #<issue>`; it's the bug's record.
+   fix, and `Refs #<issue>`; it's the bug's record. State it plainly without AI fluff
+   (`.agents/skills/humanize/SKILL.md`).
 7. **Bigger than a fix**: if it turns out to need a design or a spec, stop: it becomes
    an idea (the `idea` skill).
 
