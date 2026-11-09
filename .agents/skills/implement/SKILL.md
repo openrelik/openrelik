@@ -6,7 +6,7 @@ description: Implement an OpenRelik change on code/<slug>: a feature task by tas
 # Implement
 
 "Code" in `dev/process.md`: the code, from the spec for a feature, or from the issue
-for a bugfix or a refactor, until it's ready for the self-review.
+for a bugfix or a refactor, until it's ready for the review skill.
 
 ## Before
 
@@ -53,7 +53,7 @@ for a bugfix or a refactor, until it's ready for the self-review.
 
 ## After
 
-When the tasks are ticked, or the fix is in, the change goes to the `self-review`
+When the tasks are ticked, or the fix is in, the change goes to the `review`
 skill, ideally in a fresh session. The PR is opened after it, not before.
 
 ## Rules

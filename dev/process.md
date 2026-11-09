@@ -90,12 +90,11 @@ The whole process at a glance. The sections below have the details.
          │                                 │
          └─────────────────┬───────────────┘
                            ▼
-              [self-review]   private, in .private/<slug>/, in rounds
+              [review]        private, in .private/<slug>/, in rounds
                               until no Must fix and no Should fix findings
                            │
                            ▼
-              code PR, "Closes #issue", with the self-review's summary
-              [final-review]  an agent reviews it, posted on the PR
+              code PR, "Closes #issue", with the review's summary
                            │
    ╔═══════════════════════▼════════════════════════╗
    ║ GATE: a human approves the PR: a teammate, or  ║
@@ -110,10 +109,10 @@ The whole process at a glance. The sections below have the details.
 
   Bugfix, refactor   issue → code/<slug> [implement]: a failing regression test
                      first, the smallest fix, a commit message with the symptom,
-                     the cause, and the fix → [self-review] → PR "Closes #issue"
-                     → [final-review] → GATE: a human approves → merge. No spec
-                     and no artifact: the record is the test and the commit.
-                     Needs a design, or users would notice it? It's an idea.
+                     the cause, and the fix → [review] → PR "Closes #issue"
+                     → GATE: a human approves → merge. No spec and no artifact:
+                     the record is the test and the commit. Needs a design, or
+                     users would notice it? It's an idea.
 
   Standalone ADR     a plain issue (no idea label, no acceptance)
                      → adr/<slug> [adr] → dev/artifacts/decisions/NNNN-<slug>.md
@@ -175,13 +174,10 @@ and a prototype are optional in every row.
 7. **Spec**. Write `spec.md`, the requirements and the tasks that implement them, in a
    spec PR that's reviewed, approved and merged.
 8. **Implement**. Agents implement the spec task by task, with you, on `code/<slug>`.
-9. **Self-review**. Before the PR, you and a fresh agent review the change locally and
-   fix what it finds, until it's ready for others to read. It's private.
-10. **Final review**. Open the code PR with a summary of the self-review. An agent
-   reviews it, and a human approves it, either a teammate or the author if the team
-   has agreed to that.
-11. **Merge**. You, the implementer, merge it once it's approved, and that closes the
-    issue.
+9. **Review**. Before the PR, you and a fresh agent review the change locally and
+   fix what it finds, until it's ready. The PR description summarizes the review.
+10. **Approval and merge**. A human approves the PR (a teammate, or the author if agreed).
+    You, the implementer, merge it once it's approved, and that closes the issue.
 
 ## The issue
 
@@ -480,7 +476,7 @@ change, so the tasks are real, and opens the PR after your go-ahead.
 ```bash
 ./devctl worktree create code/bulk-tags
 #   implement the spec task by task, ticking its tasks in spec.md
-#   then self-review (see "Self-review"), and open the PR
+#   then review (see "Review"), and open the PR
 ```
 
 To start before the spec PR is merged but after it's approved, stack the code on it
@@ -491,7 +487,7 @@ take it back to the team on the PR first.
 
 A small feature puts the spec and the code in one PR on `code/<slug>`, with the idea
 and the spec in its first commit. A bugfix or a refactor has no spec. Run `./devctl
-worktree create code/<slug>`, fix it, self-review it, and open the PR with `Closes
+worktree create code/<slug>`, fix it, review it, and open the PR with `Closes
 #<issue>`.
 
 A bugfix leaves nothing in `dev/artifacts/`. Its record lives in the code and in git,
@@ -512,22 +508,20 @@ git commit    # the symptom, the cause, and the fix, and "Refs #123"
 123` ("fix issue 123") for a bugfix or a refactor. A feature it builds task by task,
 ticking and committing each one. It stops to ask if the spec turns out wrong in a way
 users would see, or in a way that needs an ADR. A bug it reproduces with a failing
-test before it touches the fix. It pushes nothing, and the self-review comes next.
+test before it touches the fix. It pushes nothing, and the review comes next.
 
-## Self-review
+## Review
 
-Review the change yourself, with an agent, before anyone else reads it, so the PR
-review finds little. It's private. Nothing gets posted, and nothing of it is
-committed. The PR review still happens, and it stays the safety net.
+Review the change yourself, with an agent, before opening the PR, so it is ready
+for human review. It's private. Nothing gets posted, and nothing of it is committed.
 
 1. **Checks**. Run the tests and formatters of each component the change touches (see
    their `AGENTS.md`), and run the stack with the change for what the tests don't
    cover.
-2. **Review**. Use the criteria and format from the `final-review` skill
-   (`.agents/skills/final-review/SKILL.md`), on `git diff main` (committed and
-   uncommitted), against the spec or the issue. Use an agent that didn't write the code,
-   in a fresh session and ideally on another model. The agent that wrote it would check
-   its intentions instead of the diff.
+2. **Review**. Follow the `review` skill (`.agents/skills/review/SKILL.md`), on `git
+   diff main` (committed and uncommitted), against the spec or the issue. Use an agent
+   that didn't write the code, in a fresh session and ideally on another model. The
+   agent that wrote it would check its intentions instead of the diff.
 3. **Fix or dismiss** each finding. A dismissed finding gets its reason written down,
    so the next round doesn't raise it again. Then review again, and keep going until a
    round finds no Must fix and no Should fix findings.
@@ -536,22 +530,20 @@ committed. The PR review still happens, and it stays the safety net.
    #<issue>`, and a bugfix has its regression test and its commit message. Nothing is
    left over, such as debug output, commented-out code, or TODOs without an issue.
 
-The rounds go in `.private/<slug>/self-review.md` in the main checkout, which is
-gitignored and outlives the worktree. Then open the PR, ready for review, with its
-description from the `pr.md` template. It says what the change does and why, and sums
-up the self-review in plain English, covering the critical findings (Must fix and
-Should fix) and how each was fixed, or why it was left. That summary tells the final
-reviewer where the change was weak and what to check again. The record itself stays
-private.
+The rounds go in `.private/<slug>/review.md` in the main checkout, which is gitignored
+and outlives the worktree. Then open the PR, ready for review, with its description from
+the `pr.md` template. It says what the change does and why, and sums up the review in
+plain English, covering the critical findings (Must fix and Should fix) and how each was
+fixed, or why it was left.
 
 **By hand**, in the change's worktree:
 
 ```bash
 #   run the checks of each component the change touches
 git diff main > ../../.private/bulk-tags/diff.patch
-#   run the review with the final-review skill criteria, against the spec or issue;
+#   run the review following .agents/skills/review/SKILL.md against the spec or issue;
 #   give it to a fresh agent session, ideally another model, with dismissed findings
-#   record the round in .private/bulk-tags/self-review.md; fix or dismiss each finding
+#   record the round in .private/bulk-tags/review.md; fix or dismiss each finding
 #   again, until a round has no Must fix and no Should fix findings
 ./devctl worktree sync                         # rebase on main, then the checks again
 #   write .private/bulk-tags/pr.md from dev/templates/pr.md
@@ -559,44 +551,24 @@ git push -u origin code/bulk-tags
 gh pr create --title "Bulk tags" --body-file ../../.private/bulk-tags/pr.md
 ```
 
-**With the skill** (`self-review`): `/self-review` in the change's worktree. Run it in
-a fresh session if you can, so the agent running it isn't the one that wrote the code.
-It hands the review itself to a separate agent that has none of the conversation, or
-tells you to start a fresh session if it can't. Every round gets recorded, and the
-change isn't called ready while a Must fix or Should fix finding is open. Last comes a draft of
+**With the skill** (`review`): `/review` in the change's worktree. Run it in a fresh
+session if you can, so the agent running it isn't the one that wrote the code. It hands
+the review itself to a separate agent that has none of the conversation, or tells you
+to start a fresh session if it can't. Every round gets recorded, and the change isn't
+called ready while a Must fix or Should fix finding is open. Last comes a draft of
 `.private/<slug>/pr.md`. Pushing and opening the PR wait for your go-ahead.
 
-## Final review and merge
-
-Before the merge, an agent reviews the PR, with the model and tool you choose. This is
-the final review, the safety net after the self-review. Follow the `final-review` skill
-(`.agents/skills/final-review/SKILL.md`). Give it to the model with the spec (or the issue),
-the PR's description and the diff (`gh pr diff <number>`).
-
-**By hand**, from the main checkout:
-
-```bash
-gh pr view 456 --comments                      # the description and the discussion
-gh pr diff 456 > .private/bulk-tags/pr-456.diff
-#   give final-review/SKILL.md, the spec/issue, and the diff to the model you choose
-gh pr comment 456 --body-file .private/bulk-tags/final-review-456.md    # post it
-#   tick "Final review" on the issue
-```
-
-**With the skill** (`final-review`): `/final-review 456`. It takes nothing in the
-self-review on trust and checks that each claimed fix holds. It reads the changed
-files in full, with their callers, as well as the diff. The review goes to
-`.private/<slug>/final-review-<number>.md` for you to read, and it's posted on the PR
-only after your go-ahead.
+## Approval and merge
 
 Every code PR needs a human's approval before it's merged, with or without a spec. For
-a bugfix, a refactor or a small tweak, that's the only gate. The approval is a
-teammate's review on the PR or, if the team has agreed to it, the author's own, after
-reading the final review. GitHub won't let authors approve their own PRs, so the
-author's approval is a comment on the PR ("Approved after the final review"). Branch
-rules can require a review only if the team doesn't allow that. More reviews, from
-other models or from teammates, are welcome. The implementer merges once the PR is
-approved. Agents never approve or merge.
+a bugfix, a refactor or a small tweak, that's the only gate. The approval is a teammate's
+review on the PR or, if the team has agreed to it, the author's own ("Approved after
+review"). Branch rules can require a review only if the team doesn't allow that.
+
+Anyone (teammate or author) can run `/review <PR number>` at any time to have an agent
+audit an open PR against its spec or issue.
+
+The implementer merges once the PR is approved. Agents never approve or merge.
 
 ## Where things live
 
@@ -605,9 +577,8 @@ approved. Agents never approve or merge.
   plan and its checklist.
 - `.private/<slug>/`: local and private, in the main checkout, kept until you delete
   it. It holds the idea's draft before it's filed (`idea.md`), research before the
-  work starts (`research.md`), the self-review (`self-review.md`), the PR
-  description's draft (`pr.md`), and final reviews before they're posted
-  (`final-review-<number>.md`).
+  work starts (`research.md`), the review rounds (`review.md`), and the PR
+  description's draft (`pr.md`).
 - `.dev-local/`: per checkout, `./devctl`'s config and data for its stack. It holds no
   documents, so it's safe to reset.
 - Draft PRs labeled `prototype`: prototypes, never merged.

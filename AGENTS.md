@@ -53,7 +53,7 @@ API at http://localhost:8710; each worktree gets its own port slot (`3001`/`8711
 
 See `dev/process.md`. Document templates live in `dev/templates/`,
 and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
-`spec`, `implement`, `self-review`, `final-review`) in `.agents/skills/`.
+`spec`, `implement`, `review`) in `.agents/skills/`.
 
 ### Rules
 

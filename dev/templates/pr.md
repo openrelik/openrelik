@@ -3,8 +3,8 @@ spec.
 
 Closes #$issue
 
-## Self-review
+## Review
 
-The self-review's critical findings (Must fix and Should fix) and what was done about
-them, in plain English: one line each, what was wrong and how it was fixed, or why it
-was left. "No Must fix or Should fix findings found." if there were none.
+Critical findings (Must fix and Should fix) from the pre-PR review and what was done
+about them, in plain English: one line each, what was wrong and how it was fixed, or why
+it was left. "No Must fix or Should fix findings found." if there were none.
