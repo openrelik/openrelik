@@ -5,6 +5,10 @@ everything at once: the server, the web UI, the four libraries, the MCP server a
 worker all get 0.19.0. For a fix to one component in between, see
 [PATCHING.md](PATCHING.md).
 
+You can run this workflow with an agent using `/release platform <version>`
+(`.agents/skills/release/SKILL.md`), which automates these stages and stops for
+approval before pushing, or follow the steps below by hand.
+
 ## Order matters
 
 The libraries go out first. The server, the MCP server and the workers install them from
@@ -96,8 +100,8 @@ for them. `./devctl release` prints the pushes already grouped.
 
 ## Not covered yet
 
-- Step 2 has no tooling. Every worker's `pyproject.toml` is edited by hand.
-- There are no changelog files yet, so release notes go in the GitHub release.
+- Step 2 has no standalone CLI command; the `/release platform` skill automates it.
+- Releases update root `CHANGELOG.md` in addition to GitHub release notes.
 - The worker compatibility check (`compat.py`, the server-side check and the bump pull
   requests) isn't built, so external workers find out about a new minor from the release
   notes.

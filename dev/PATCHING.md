@@ -5,6 +5,10 @@ The same steps work for the server, the UI, the other libraries and the MCP serv
 Workers are different, see [Workers](#workers) at the end. For a new minor, see
 [RELEASING.md](RELEASING.md).
 
+You can run this workflow with an agent using `/release patch <component> <version>`
+(`.agents/skills/release/SKILL.md`), which coordinates cherry-picking, release
+commits, and tagging, or follow the steps below by hand.
+
 ## How the branches work
 
 `main` is where the next minor gets built, so right now it holds 0.19 work. Every minor
@@ -92,6 +96,6 @@ git switch main && git pull
 
 - Patches are supposed to be tested against the `0.18.0` images. There's no automated
   test for that yet, so check by hand.
-- There are no changelog files yet, so release notes go in the GitHub release.
+- Releases update root `CHANGELOG.md` in addition to GitHub release notes.
 - A worker patch for an older minor, once `main` has moved its workers on, needs a branch
   from that worker's last tag. The tooling doesn't handle that.

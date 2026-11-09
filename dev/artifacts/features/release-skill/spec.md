@@ -31,12 +31,12 @@ Implements idea.md (#88).
 
 ## Tasks
 
-- [ ] T1: Create `.agents/skills/release/SKILL.md` defining skill frontmatter, execution model, pre-flight checks, and the human approval gate (R1, R7).
-- [ ] T2: Specify platform release workflow (`/release platform <version>`), including automated consumer dependency updates across `server/`, `mcp/`, and `workers/*/pyproject.toml` with `uv lock` (R1, R2).
-- [ ] T3: Specify component patch release workflow (`/release patch <component> <version>`) for core services, libraries, and workers (R1, R3).
-- [ ] T4: Specify tagging and post-merge push workflow (`/release tag [commit]`), enforcing tag batching of at most three (R1, R4, R7).
-- [ ] T5: Specify root `CHANGELOG.md` structure, initial creation, and update format, as well as `gh release create --draft` note generation (R5, R6).
-- [ ] T6: Update monorepo documentation (`AGENTS.md`, `dev/README.md`, `dev/RELEASING.md`, `dev/PATCHING.md`) to integrate the release skill (R8).
+- [x] T1: Create `.agents/skills/release/SKILL.md` defining skill frontmatter, execution model, pre-flight checks, and the human approval gate (R1, R7).
+- [x] T2: Specify platform release workflow (`/release platform <version>`), including automated consumer dependency updates across `server/`, `mcp/`, and `workers/*/pyproject.toml` with `uv lock` (R1, R2).
+- [x] T3: Specify component patch release workflow (`/release patch <component> <version>`) for core services, libraries, and workers (R1, R3).
+- [x] T4: Specify tagging and post-merge push workflow (`/release tag [commit]`), enforcing tag batching of at most three (R1, R4, R7).
+- [x] T5: Specify root `CHANGELOG.md` structure, initial creation, and update format, as well as `gh release create --draft` note generation (R5, R6).
+- [x] T6: Update monorepo documentation (`AGENTS.md`, `dev/README.md`, `dev/RELEASING.md`, `dev/PATCHING.md`) to integrate the release skill (R8).
 
 ## Tests
 
