@@ -23,14 +23,19 @@ approval gate before any external git push, tag creation, or release publication
    run autonomously. No remote git push (`git push origin ...`), tag publishing, or
    GitHub release publication (`gh release edit --draft=false`) may execute without
    the user's explicit, interactive approval.
-2. **Batch Tag Pushing**: GitHub Actions workflows do not start when more than three
+2. **Branch Naming for PRs**: Pull request branches targeting `main` must not start
+   with `release/` (which causes `./devctl release` to treat them as release branches
+   and tag prematurely). Use prefix `bump/` (e.g. `bump/libs-<version>`,
+   `bump/consumers-<version>`, `bump/dev-<next-minor>`). The `release/` prefix is
+   strictly reserved for long-lived release branches (`release/<major>.<minor>`).
+3. **Batch Tag Pushing**: GitHub Actions workflows do not start when more than three
    tags are pushed in a single command. Always push tags in groups of at most three:
    `git push origin tag1 tag2 tag3`.
-3. **No Direct Pushes to Protected Branches**: Pushes to `main` must go through pull
+4. **No Direct Pushes to Protected Branches**: Pushes to `main` must go through pull
    requests. Release branches (`release/<major>.<minor>`) only receive release
-   commits and cherry-picked fixes.
-4. **Strict Version Verification**: Every release step must pass
-   `python3 .github/scripts/check-versions.py` before committing.
+   commits, changelog updates, and cherry-picked fixes.
+5. **Strict Version Verification**: Every release step must pass
+   `uv run --python 3.12 .github/scripts/check-versions.py` before committing.
 
 ---
 
@@ -43,9 +48,9 @@ updates all components across the monorepo.
 
 #### Stage 1: Libraries to PyPI
 1. Verify the current branch is `main` and the worktree is clean (`git status`).
-2. Create branch `release/libs-<version>`:
+2. Create branch `bump/libs-<version>`:
    ```sh
-   git switch -c release/libs-<version>
+   git switch -c bump/libs-<version>
    ./devctl release lib common <version>
    ./devctl release lib ai-common <version>
    ./devctl release lib worker-common <version>
@@ -67,7 +72,7 @@ updates all components across the monorepo.
    packages to PyPI before proceeding to Stage 2.
 
 #### Stage 2: Move Consumers to New Minor
-1. Create branch `release/consumers-<version>` from `main`.
+1. Create branch `bump/consumers-<version>` from `main`.
 2. Update library dependencies in `server/pyproject.toml`, `mcp/pyproject.toml`, and
    all `workers/*/pyproject.toml` to depend on `~=<version>`:
    - `openrelik-common~=<version>`
@@ -81,7 +86,7 @@ updates all components across the monorepo.
    (cd mcp && uv lock)
    for d in workers/*/; do (cd "$d" && uv lock); done
    ```
-5. Verify versions pass: `python3 .github/scripts/check-versions.py`.
+5. Verify versions pass: `uv run --python 3.12 .github/scripts/check-versions.py`.
 6. Commit: `git commit -am "Move consumers to <version> libraries"` (`Refs #<issue>`).
 7. Open a pull request against `main` and merge it. Do not tag yet (workers are
    tagged with the platform in Stage 3).
@@ -91,14 +96,23 @@ updates all components across the monorepo.
    ```sh
    git switch main && git pull
    git switch -c release/<major>.<minor>
-   ./devctl release platform <version>
    ```
 2. Update root `CHANGELOG.md` with a new section for `[<version>] - YYYY-MM-DD`,
    including a summary, major highlights, and component changes.
-3. Commit changelog changes: `git commit -am "Update changelog for <version>"`.
-4. Generate draft release notes and create a draft release on GitHub:
+3. Commit changelog changes first:
    ```sh
-   gh release create v<version> --draft --title "OpenRelik <version>" --notes-file <notes-file>
+   git commit -am "Update changelog for <version>"
+   ```
+4. Run platform release (this creates the release commit and tags, encompassing the
+   changelog update):
+   ```sh
+   ./devctl release platform <version>
+   ```
+5. Generate draft release notes in `/tmp/release-notes-v<version>.md` and create a
+   draft release on GitHub (note: do not publish in the GitHub UI before the approval
+   gate pushes tags in Stage 4):
+   ```sh
+   gh release create v<version> --draft --title "OpenRelik <version>" --notes-file /tmp/release-notes-v<version>.md
    ```
 
 #### Stage 4: Human Approval Gate
@@ -122,10 +136,15 @@ updates all components across the monorepo.
    gh release edit v<version> --draft=false
    ```
 
-#### Stage 5: Start Next Minor on Main
-1. Create branch `release/dev-<next-minor>` from `main`.
-2. Run `./devctl release dev <next-minor>.0`.
-3. Open a pull request against `main` and merge it.
+#### Stage 5: Start Next Minor on Main and Sync Changelog
+1. Create branch `bump/dev-<next-minor>` from `main`.
+2. Cherry-pick the changelog commit from `release/<major>.<minor>` so `main` stays in
+   sync with release documentation:
+   ```sh
+   git cherry-pick <changelog-commit-hash>
+   ```
+3. Run `./devctl release dev <next-minor>.0`.
+4. Open a pull request against `main` and merge it.
 
 ---
 
@@ -140,20 +159,22 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    git switch release/<major>.<minor> && git pull
    git cherry-pick -x <commit-sha>
    ```
-3. Prepare release commit and tag:
+3. Update `CHANGELOG.md` under the release branch with the patch details and commit:
+   ```sh
+   git commit -am "Update changelog for <component> <version>"
+   ```
+4. Prepare release commit and tag:
    ```sh
    ./devctl release <component> <version>
    ```
    (For libraries, use `./devctl release lib <name> <version>`).
-4. Update `CHANGELOG.md` under the release branch with the patch details.
-5. Commit changelog: `git commit -am "Update changelog for <component> <version>"`.
-6. Draft GitHub release notes:
+5. Draft GitHub release notes using `/tmp/release-notes-<tag>.md`:
    ```sh
-   gh release create <tag> --draft --title "Release <label> <version>" --notes-file <notes-file>
+   gh release create <tag> --draft --title "Release <label> <version>" --notes-file /tmp/release-notes-<tag>.md
    ```
-7. **Human Approval Gate**: Present the commit, tag, and changelog diff. Ask for
+6. **Human Approval Gate**: Present the commit, tag, and changelog diff. Ask for
    explicit confirmation.
-8. After approval:
+7. After approval:
    ```sh
    git push origin release/<major>.<minor>
    ```
@@ -162,6 +183,8 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    git push origin <tag>
    gh release edit <tag> --draft=false
    ```
+8. Sync changelog to `main`: cherry-pick the changelog commit onto a branch from `main`
+   and open a pull request.
 
 #### For Workers (`worker <name> <version>`)
 1. On a branch from `main`:

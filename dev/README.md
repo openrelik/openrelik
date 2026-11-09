@@ -24,10 +24,11 @@ shows both ways:
   `$issue` full URL, `$created`, `$by`, `$title`, ... placeholders and replace the
   hint text).
 - **With the skill**: the step's agent skill, in `.agents/skills/<name>/SKILL.md`, for
-  any agent that reads skills. Ask for it by name (`/spec bulk-tags`) or in your own
-  words ("write the spec for #123"). It runs the same steps you would by hand. It
-  stops at a gate that hasn't been passed, and it asks before it publishes anything,
-  whether that's a push, a PR, an issue or a comment.
+  any agent that reads skills (`idea`, `research`, `design`, `adr`, `spec`,
+  `implement`, `review`, `humanize`, `release`). Ask for it by name (`/spec bulk-tags`)
+  or in your own words ("write the spec for #123"). It runs the same steps you would by
+  hand. It stops at a gate that hasn't been passed, and it asks before it publishes
+  anything, whether that's a push, a PR, an issue or a comment.
 
 Three things have no skill. Accepting an idea, approving a PR and merging it are
 decisions people make.
@@ -604,8 +605,8 @@ The implementer merges once the PR is approved. Agents never approve or merge.
 | `artifacts/decisions/`        | architecture decision records, `0001-<slug>.md`, ...     |
 | `tools/devctl/`               | the `./devctl` command line (see its `README.md`)        |
 | `tools/reload/`               | the reloader, mounted into the development stack's containers |
-| `RELEASING.md`                | step-by-step guide for platform releases                 |
-| `PATCHING.md`                 | step-by-step guide for patch releases                    |
+| `RELEASING.md`                | step-by-step guide for platform releases (automated by `/release platform`) |
+| `PATCHING.md`                 | step-by-step guide for patch releases (automated by `/release patch`)        |
 
 - Issues labeled `idea`: the backlog, one per idea, also labeled `accepted` once the
   team agrees to build it. Each is the idea itself until the work starts, then the
