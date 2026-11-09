@@ -532,10 +532,10 @@ for human review. It's private. Nothing gets posted, and nothing of it is commit
    left over, such as debug output, commented-out code, or TODOs without an issue.
 
 The rounds go in `.private/<slug>/review.md` in the main checkout, which is gitignored
-and outlives the worktree. Then open the PR, ready for review, with its description from
-the `pr.md` template. It says what the change does and why, and sums up the review in
-plain English, covering the critical findings (Must fix and Should fix) and how each was
-fixed, or why it was left.
+and outlives the worktree. Then open the PR with its description from the `pr.md` template
+(kept clean: what the change does and why, and `Closes #<issue>`). The PR is labeled
+`reviewed`, and the review report is posted as the first comment on the PR to keep
+the description clean.
 
 **By hand**, in the change's worktree:
 
@@ -547,17 +547,21 @@ git diff main > ../../.private/bulk-tags/diff.patch
 #   record the round in .private/bulk-tags/review.md; fix or dismiss each finding
 #   again, until a round has no Must fix and no Should fix findings
 ./devctl worktree sync                         # rebase on main, then the checks again
-#   write .private/bulk-tags/pr.md from dev/templates/pr.md
+#   write clean .private/bulk-tags/pr.md from dev/templates/pr.md
+#   write review comment to .private/bulk-tags/review-comment.md
 git push -u origin code/bulk-tags
-gh pr create --title "Bulk tags" --body-file ../../.private/bulk-tags/pr.md
+gh label create reviewed --description "Passed clean-context review; critical findings addressed" --color "0e8a16" 2>/dev/null
+gh pr create --title "Bulk tags" --body-file ../../.private/bulk-tags/pr.md --label reviewed
+gh pr comment <number> --body-file ../../.private/bulk-tags/review-comment.md
 ```
 
 **With the skill** (`review`): `/review` in the change's worktree. The skill always
 launches a subagent with a clean context to perform the review (or tells you to run in
 a fresh session if subagents are unsupported). It records every round, coordinates fixes
 with you, and ensures the change isn't called ready while a Must fix or Should fix
-finding is open. Last comes a draft of `.private/<slug>/pr.md`. Pushing and opening the
-PR wait for your go-ahead.
+finding is open. Last comes a draft of `.private/<slug>/pr.md` (clean description) and
+`.private/<slug>/review-comment.md`. Pushing, opening the PR with the `reviewed` label,
+and posting the review comment wait for your go-ahead.
 
 ## Approval and merge
 
@@ -567,7 +571,8 @@ review on the PR or, if the team has agreed to it, the author's own ("Approved a
 review"). Branch rules can require a review only if the team doesn't allow that.
 
 Anyone (teammate or author) can run `/review <PR number>` at any time to have an agent
-audit an open PR against its spec or issue.
+audit an open PR against its spec or issue. It posts the review report as a comment and
+adds the `reviewed` label if it reaches `Verdict: Ship`.
 
 The implementer merges once the PR is approved. Agents never approve or merge.
 
@@ -578,8 +583,10 @@ The implementer merges once the PR is approved. Agents never approve or merge.
   plan and its checklist.
 - `.private/<slug>/`: local and private, in the main checkout, kept until you delete
   it. It holds the idea's draft before it's filed (`idea.md`), research before the
-  work starts (`research.md`), the review rounds (`review.md`), and the PR
-  description's draft (`pr.md`).
+  work starts (`research.md`), the review rounds (`review.md`), the PR description's
+  draft (`pr.md`), and the review comment draft (`review-comment.md`).
+- Label `reviewed`: marks a PR that passed clean-context review with critical findings
+  addressed.
 - `.dev-local/`: per checkout, `./devctl`'s config and data for its stack. It holds no
   documents, so it's safe to reset.
 - Draft PRs labeled `prototype`: prototypes, never merged.

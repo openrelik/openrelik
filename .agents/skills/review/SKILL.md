@@ -164,19 +164,30 @@ you checked.
    - Regression test exists for bugfix with commit message (symptom, cause, fix);
    - Branch is rebased on main (`./devctl worktree sync`) and checks pass;
    - Clean tree: no debug output, no commented-out code, no untracked files.
-7. **Draft PR**: Write PR description from `dev/templates/pr.md` into `.private/<slug>/pr.md`,
-   summarizing critical findings (Must fix and Should fix) and how each was resolved.
-8. **Open PR**: Push and open the PR (`gh pr create --body-file .private/<slug>/pr.md`) only after
-   the user's explicit go-ahead.
+7. **Draft PR and review comment**:
+   - Write a clean PR description from `dev/templates/pr.md` into `.private/<slug>/pr.md`
+     (what the change does and why, `Closes #<issue>`). Keep the PR description clean.
+   - Format the final review report from `.private/<slug>/review.md` into
+     `.private/<slug>/review-comment.md`. This will be posted as the first comment on the PR
+     so the PR description stays uncluttered.
+8. **Open PR and post review**: Push and open the PR with the `reviewed` label, then post the
+   review comment, only after the user's explicit go-ahead:
+   ```bash
+   gh label create reviewed --description "Passed clean-context review; critical findings addressed" --color "0e8a16" 2>/dev/null
+   gh pr create --title "$title" --body-file .private/<slug>/pr.md --label reviewed
+   gh pr comment <number> --body-file .private/<slug>/review-comment.md
+   ```
 
 ### When reviewing an open PR
 1. **Subagent review**: Gather PR info (`gh pr view <number> --comments`, `gh pr diff <number>`).
    Launch a subagent with clean context containing only the review rubric, spec/issue, and PR diff.
 2. **Record review**: Write the review to `.private/<slug>/review-<number>.md` in the main checkout.
    Show it to the user.
-3. **Post to GitHub**: Only after the user's explicit go-ahead:
+3. **Post comment to GitHub**: Only after the user's explicit go-ahead:
    ```bash
    gh pr comment <number> --body-file .private/<slug>/review-<number>.md
    ```
-   and tick "Review" on the tracking issue if present.
+   - If `Verdict: Ship`: add the `reviewed` label with `gh pr edit <number> --add-label reviewed`.
+   - If `Must fix` or `Should fix` findings remain: ensure the `reviewed` label is absent
+     (`gh pr edit <number> --remove-label reviewed 2>/dev/null`).
 4. **Human approval**: Agents never approve or merge PRs. Every PR requires human approval.
