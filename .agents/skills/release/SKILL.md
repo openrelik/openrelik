@@ -21,7 +21,7 @@ approval gate before any external git push, tag creation, or release publication
 1. **Mandatory Human Approval**: Local preparations (branching, version bumps,
    dependency locking, version checks, changelog updates, and draft release notes)
    run autonomously. No remote git push (`git push origin ...`), tag publishing, or
-   GitHub release publication (`gh release edit --draft=false`) may execute without
+   GitHub release publication (`gh release create`) may execute without
    the user's explicit, interactive approval.
 2. **Branch Naming for PRs**: Pull request branches targeting `main` must not start
    with `release/` (which causes `./devctl release` to treat them as release branches
@@ -134,7 +134,11 @@ updates all components across the monorepo.
    ```
 
 #### Stage 5: Start Next Minor on Main and Sync Changelog
-1. Create branch `bump/dev-<next-minor>` from `main`.
+1. On `main`, create a pull request branch:
+   ```sh
+   git switch main && git pull
+   git switch -c bump/dev-<next-minor>
+   ```
 2. Cherry-pick the changelog commit from `release/<major>.<minor>` so `main` stays in
    sync with release documentation:
    ```sh
@@ -208,12 +212,15 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    git switch main && git pull
    ./devctl release tag
    ```
-8. **Human Approval Gate**: Present the created tag `worker-<name>-v<version>`. Ask for
-   approval, then push:
+8. Prepare draft release notes in `/tmp/release-notes-worker-<name>-<version>.md` to
+   be presented during the human approval gate.
+9. **Human Approval Gate**: Present the created tag `worker-<name>-v<version>` and
+   preview of `/tmp/release-notes-worker-<name>-<version>.md`. Ask for approval, then
+   push:
    ```sh
    git push origin worker-<name>-v<version>
    ```
-   Create and publish GitHub release notes:
+   Create and publish GitHub release:
    ```sh
    gh release create worker-<name>-v<version> --title "Release worker <name> <version>" --notes-file /tmp/release-notes-worker-<name>-<version>.md
    ```
