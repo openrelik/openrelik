@@ -609,7 +609,7 @@ A console is used on hotel Wi-Fi, over VPNs and on congested links, not only on 
 1. **Never wait for data already seen.** Cached data renders at once; a refresh happens behind it and never blanks the screen.
 2. **One place per kind of waiting.** Data that is not there yet waits *where it will appear*; work on data already on screen is shown *in the status bar*; a pending change is shown *on its row*.
 3. **No flashing.** Every indicator appears only after the work has taken **200 ms**, and once visible stays at least **300 ms**. On a fast connection nothing flickers; on a slow one the operator sees at once that something is happening. Use `useDelayedFlag` — never hand-rolled timers.
-4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows.
+4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows. **One exception:** a running task's status mark in the workflow flowchart (`TaskRunningIcon.vue`) is a `brand-icon` dot with a circling ring, because it shows work in progress that may last minutes, not a network wait. Reduced motion stills it.
 5. **No layout shift.** Space for a loading line is reserved before its text appears; indicators have fixed widths; placeholders have the height of the row they stand in for.
 
 ### The Situations

@@ -3,14 +3,21 @@ import { File, FileText, Merge, Plus, Trash2, X } from '@/components/icons'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
+import TaskStatusIcon from '@/components/workflow/TaskStatusIcon.vue'
 import PriorityBadge from '@/components/reports/PriorityBadge.vue'
 import Button from '@/components/base/Button.vue'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import { openTaskReport } from '@/composables/useTaskReport'
 import { removeTask, setTaskOption, type AddAt } from '@/composables/useWorkflow'
 import { useItemsStore } from '@/stores/items'
-import { allTasks, canChainAfter, canJoin, canJoinAll, groupOf } from '@/utils/workflow'
+import {
+  allTasks,
+  canChainAfter,
+  canJoin,
+  canJoinAll,
+  groupOf,
+  STATUS_LABEL,
+} from '@/utils/workflow'
 import { useWorkflowsStore } from '@/stores/workflows'
 import type { FileReport, Task } from '@/types/workflow'
 import { count, formatDuration, formatSize } from '@/utils/format'
@@ -155,17 +162,27 @@ function remove() {
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
-      <p class="font-semibold text-ink">{{ task.name }}</p>
-      <p v-if="task.description" class="mt-0.5 text-ink-muted">{{ task.description }}</p>
-      <div class="mt-2 flex min-w-0 items-center gap-2">
-        <TaskStatusBadge :status="workflow?.draft ? 'draft' : task.status" />
+      <div class="flex min-w-0 items-start gap-1.5">
+        <!-- As tall as the title's first line, so the icon stays beside it when the title wraps. -->
         <span
-          v-if="task.status === 'running' && task.progress"
-          class="tabular truncate text-[11px] text-ink-muted"
-          v-overflow-tooltip
-          >{{ task.progress }}</span
+          v-if="!workflow?.draft"
+          class="flex h-lh shrink-0 items-center"
+          role="img"
+          :aria-label="STATUS_LABEL[task.status]"
+          v-tooltip="STATUS_LABEL[task.status]"
         >
+          <TaskStatusIcon :status="task.status" />
+        </span>
+        <p class="min-w-0 font-semibold text-ink">{{ task.name }}</p>
       </div>
+      <p v-if="task.description" class="mt-0.5 text-ink-muted">{{ task.description }}</p>
+      <p
+        v-if="task.status === 'running' && task.progress"
+        class="tabular mt-2 truncate text-[11px] text-ink-muted"
+        v-overflow-tooltip
+      >
+        {{ task.progress }}
+      </p>
 
       <!-- What went wrong: the exception, and the traceback behind it for whoever debugs it. -->
       <div v-if="task.error" class="mt-2.5 border border-danger/40 bg-danger-tint px-2 py-1.5">

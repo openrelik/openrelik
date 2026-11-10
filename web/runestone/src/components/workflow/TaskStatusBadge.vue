@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { Check, Circle, Pencil, X } from '@/components/icons'
+import { Ban, Check, Circle, X } from '@/components/icons'
 
 import { STATUS_LABEL } from '@/utils/workflow'
 import type { TaskStatus } from '@/types/workflow'
 
-/** A task's status, or `draft` for a workflow that has not run (its tasks are not queued). */
-defineProps<{ status: TaskStatus | 'draft' }>()
+defineProps<{ status: TaskStatus }>()
 
 // Status colours stay tints and text, as everywhere else in the system.
-const TONE: Record<TaskStatus | 'draft', string> = {
-  draft: 'border-border-strong bg-sunken text-ink-muted',
+const TONE: Record<TaskStatus, string> = {
   success: 'border-success/40 bg-success-tint text-success',
   running: 'border-brand/40 bg-brand-tint text-brand',
   pending: 'border-border-strong bg-idle-tint text-idle',
   failed: 'border-danger/40 bg-danger-tint text-danger',
+  skipped: 'border-border bg-sunken text-ink-muted',
 }
 </script>
 
@@ -22,8 +21,8 @@ const TONE: Record<TaskStatus | 'draft', string> = {
     <span v-if="status === 'running'" class="size-1.5 animate-pulse rounded-full bg-brand" />
     <Check v-else-if="status === 'success'" :size="11" :stroke-width="2" />
     <X v-else-if="status === 'failed'" :size="11" :stroke-width="2" />
-    <Pencil v-else-if="status === 'draft'" :size="10" :stroke-width="2" />
+    <Ban v-else-if="status === 'skipped'" :size="10" :stroke-width="2" />
     <Circle v-else :size="9" :stroke-width="2" />
-    {{ status === 'draft' ? 'draft' : STATUS_LABEL[status] }}
+    {{ STATUS_LABEL[status] }}
   </span>
 </template>

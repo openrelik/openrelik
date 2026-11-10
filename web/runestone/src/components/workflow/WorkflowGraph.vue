@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import {
-  Check,
   ChevronsDownUp,
   ChevronsUpDown,
-  Circle,
   File,
   Files,
   Maximize,
@@ -16,6 +14,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
+import TaskStatusIcon from '@/components/workflow/TaskStatusIcon.vue'
 
 import { useItemsStore } from '@/stores/items'
 import { isEmptyFile } from '@/utils/item'
@@ -243,7 +242,9 @@ function stackStatus(group: TaskGroup): TaskStatus {
       ? 'running'
       : has('pending')
         ? 'pending'
-        : 'success'
+        : has('skipped')
+          ? 'skipped'
+          : 'success'
 }
 
 /** A node's status: its task's, or its stack's. */
@@ -272,11 +273,12 @@ function stackSummary(group: TaskGroup) {
   // Failures first: they are what a truncated line must not hide.
   if (by('failed')) parts.push(`${by('failed')} failed`)
   if (by('running')) parts.push(`${by('running')} running`)
+  if (by('skipped')) parts.push(`${by('skipped')} ${STATUS_LABEL.skipped}`)
   return {
     name: same ? first!.name : count(group.tasks.length, 'worker'),
     times: same ? `×${group.tasks.length}` : '',
     line: parts.join(' · '),
-    bar: (['success', 'running', 'failed', 'pending'] as TaskStatus[])
+    bar: (['success', 'running', 'failed', 'pending', 'skipped'] as TaskStatus[])
       .map((status) => ({ status, share: by(status) / group.tasks.length }))
       .filter(({ share }) => share > 0),
   }
@@ -802,23 +804,21 @@ const EDGE: Record<TaskStatus, string> = {
   running: 'edge-flow stroke-brand',
   pending: 'stroke-ink-muted/40 [stroke-dasharray:3_3]',
   failed: 'stroke-danger/60',
+  // Solid: dashes mean a task is still to come, and this one is not.
+  skipped: 'stroke-ink-muted/30',
 }
 /** A draft's edges: nothing is queued yet, so none is dashed as pending. */
 const DRAFT_EDGE = 'stroke-ink-muted/60'
 /**
- * A node's frame, when nothing selects it. A finished state tints the frame, so
- * the outcome reads across the graph without finding each icon: success green,
- * failure red. Running and pending keep the plain frame (the icon says them).
- * Half-strength green vanishes on the white light-theme panel, so there the
- * frame takes the graphic success tone (--color-success-icon, 3.45:1) in full,
- * doubled by a 1px inset shadow: a wider border would move the node's text.
+ * A node's frame, when nothing selects it. Status is said by the icon and the
+ * edges; only a failure, the one state that asks for attention, tints the frame.
  */
 const FRAME: Record<TaskStatus, string> = {
-  success:
-    'border-success/50 in-data-[theme=light]:border-success-icon in-data-[theme=light]:shadow-[inset_0_0_0_1px_var(--color-success-icon)]',
+  success: 'border-border-strong',
   running: 'border-border-strong',
   pending: 'border-border-strong',
   failed: 'border-danger/50',
+  skipped: 'border-border',
 }
 /** A stack's progress bar, one segment per status. */
 const BAR: Record<TaskStatus, string> = {
@@ -826,12 +826,7 @@ const BAR: Record<TaskStatus, string> = {
   running: 'bg-brand',
   pending: 'bg-idle',
   failed: 'bg-danger',
-}
-const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
-  success: { icon: Check, tone: 'text-success' },
-  running: { icon: Circle, tone: 'text-brand fill-brand animate-pulse' },
-  pending: { icon: Circle, tone: 'text-idle' },
-  failed: { icon: X, tone: 'text-danger' },
+  skipped: 'bg-border-strong',
 }
 </script>
 
@@ -1075,20 +1070,15 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
               @pointerleave="hovered = null"
             >
               <span class="flex min-w-0 items-center gap-1.5">
-                <component
-                  v-if="!workflow.draft"
-                  :is="ICON[node.task.status].icon"
-                  :size="11"
-                  :stroke-width="2"
-                  class="shrink-0"
-                  :class="ICON[node.task.status].tone"
-                />
+                <TaskStatusIcon v-if="!workflow.draft" :status="node.task.status" />
                 <span
                   class="truncate text-[11px] font-medium"
                   :class="
-                    node.task.status === 'pending' && !workflow.draft
-                      ? 'text-ink-secondary'
-                      : 'text-ink'
+                    node.task.status === 'skipped'
+                      ? 'text-ink-muted'
+                      : node.task.status === 'pending' && !workflow.draft
+                        ? 'text-ink-secondary'
+                        : 'text-ink'
                   "
                   >{{ node.task.name }}</span
                 >
@@ -1151,14 +1141,7 @@ const ICON: Record<TaskStatus, { icon: typeof Check; tone: string }> = {
                 @click="clickStack($event, node.stack.id)"
               >
                 <span class="flex min-w-0 items-center gap-1.5">
-                  <component
-                    v-if="!workflow.draft"
-                    :is="ICON[statusOf(node)].icon"
-                    :size="11"
-                    :stroke-width="2"
-                    class="shrink-0"
-                    :class="ICON[statusOf(node)].tone"
-                  />
+                  <TaskStatusIcon v-if="!workflow.draft" :status="statusOf(node)" />
                   <span class="truncate text-[11px] font-medium text-ink">{{
                     stackSummary(node.stack).name
                   }}</span>

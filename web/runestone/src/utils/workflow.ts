@@ -8,6 +8,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   running: 'running',
   pending: 'queued',
   failed: 'failed',
+  skipped: 'won’t run',
 }
 
 /** Every task in these groups and after them, depth first. */

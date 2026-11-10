@@ -287,9 +287,11 @@ const inputs = computed(() =>
                   <span
                     class="truncate"
                     :class="
-                      row.task.status === 'pending' && !workflow.draft
-                        ? 'text-ink-secondary'
-                        : 'text-ink'
+                      row.task.status === 'skipped'
+                        ? 'text-ink-muted'
+                        : row.task.status === 'pending' && !workflow.draft
+                          ? 'text-ink-secondary'
+                          : 'text-ink'
                     "
                     >{{ row.task.name }}</span
                   >

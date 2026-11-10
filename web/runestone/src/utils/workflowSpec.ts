@@ -158,7 +158,27 @@ export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRe
     }
     return groups
   }
-  return { groups: fromList(spec?.workflow.tasks ?? []) }
+  const groups = fromList(spec?.workflow.tasks ?? [])
+  markSkipped(groups, false)
+  return { groups }
+}
+
+/**
+ * Queued tasks that can never start, because a task they wait for failed: what
+ * is chained after a failure, and a join when anything in the group it waits
+ * for failed. The server does not say so: to it they simply never finish, so
+ * only here can they be told from tasks still waiting their turn.
+ */
+function markSkipped(groups: TaskGroup[], blocked: boolean): void {
+  const settle = (task: Task, isBlocked: boolean) => {
+    if (isBlocked && task.status === 'pending') task.status = 'skipped'
+    markSkipped(task.groups, isBlocked || task.status === 'failed')
+  }
+  for (const { id, tasks, join } of groups) {
+    for (const task of tasks) settle(task, blocked)
+    if (!join) continue
+    settle(join, blocked || allTasks([{ id, tasks }]).some((task) => task.status === 'failed'))
+  }
 }
 
 /** The same spec with a new uuid for every task, so no two runs share one. */

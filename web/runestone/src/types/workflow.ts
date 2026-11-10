@@ -14,7 +14,8 @@ import type { WorkerOption } from '@/types/worker'
  * they own (`stores/workflows.ts`).
  */
 
-export type TaskStatus = 'success' | 'running' | 'pending' | 'failed'
+/** `skipped` is never sent by the server: a queued task that a failure upstream rules out. */
+export type TaskStatus = 'success' | 'running' | 'pending' | 'failed' | 'skipped'
 
 export interface Task {
   /** The spec uuid: 32 hex digits, also the server's task record uuid after a run. */
@@ -107,5 +108,5 @@ export interface RunStats {
   /** Seconds. Wall time is the slowest chain: siblings overlap, a child waits for its parent. */
   elapsed: number
   /** A draft has not run: none of its tasks is queued, so it is not "pending". */
-  state: TaskStatus | 'draft'
+  state: Exclude<TaskStatus, 'skipped'> | 'draft'
 }
