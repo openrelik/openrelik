@@ -216,9 +216,16 @@ const marks = useMarkedRange(mark, 'offset', {
   // Once mounted and measured, so the landing has rows of context above it.
   land: (span) => void nextTick(() => land(Math.min(span.from, last.value))),
   focus: () => grid.value?.focus({ preventScroll: true }),
+  deselect: () => (anchor.value = cursor.value),
 })
 /** The bytes of the row at `offset`. */
 const rowSpan = (offset: number) => ({ from: offset, to: Math.min(offset + ROW - 1, last.value) })
+/** The mark is whole rows: only then do the offsets show it, as marked bytes show themselves. */
+const wholeRows = computed(() => {
+  if (!mark.value) return false
+  const { from, to } = mark.value
+  return from % ROW === 0 && ((to + 1) % ROW === 0 || to === last.value)
+})
 /** More than one byte selected: `m`, or the link button, marks them. */
 const hasSelection = computed(() => selectionEnd.value > selectionStart.value)
 /**
@@ -488,7 +495,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
               <span
                 class="shrink-0 cursor-pointer px-3"
                 :class="
-                  marks.marked(line.offset, line.offset + ROW - 1)
+                  wholeRows && marks.marked(line.offset, line.offset + ROW - 1)
                     ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
                     : 'text-ink-muted hover:text-ink-secondary'
                 "

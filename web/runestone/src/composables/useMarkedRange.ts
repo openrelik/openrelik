@@ -47,6 +47,8 @@ export function useMarkedRange(
     land: (span: Span) => void
     /** Keys go to the viewer once a gutter is pressed. */
     focus: () => void
+    /** A gutter press replaces what was selected in the content, if it can be. */
+    deselect?: () => void
   },
 ): UseMarkedRangeReturn {
   const anchor = ref<Span | null>(null)
@@ -79,6 +81,7 @@ export function useMarkedRange(
     if (event.button !== 0) return
     event.preventDefault()
     options.focus()
+    options.deselect?.()
     const now = model.value
     // The one marked item, clicked again: unmarked.
     if (!event.shiftKey && sameSpan(now, span)) {

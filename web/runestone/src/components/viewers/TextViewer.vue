@@ -188,6 +188,8 @@ watch([text.version, text.done, bodyHeight], tryLand)
 const marks = useMarkedRange(range, 'line', {
   land: (span) => land(span.from, hasColumns(span) ? span.fromCol - 1 : 0),
   focus: () => body.value?.focus({ preventScroll: true }),
+  // The gutter press keeps the browser from clearing the selection itself.
+  deselect: () => window.getSelection()?.removeAllRanges(),
 })
 const inRange = (line: number) => marks.marked(line + 1)
 /** Whole lines are marked (not exact text): their rows take the tint. */
@@ -203,6 +205,8 @@ const painted: { ranges: Range[]; highlight: Highlight | null } = {
   highlight: typeof CSS !== 'undefined' && 'highlights' in CSS ? new Highlight() : null,
 }
 /** The text node and offset at a position in a row's shown text. */
+/** Line numbers show the mark only for whole lines: exact text is shown by its own tint. */
+const gutterMarked = computed(() => wholeLines.value || !painted.highlight)
 function nodeAt(row: HTMLElement, shown: number): [Node, number] {
   const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
   let last: Text | null = null
@@ -607,7 +611,7 @@ async function loadAll() {
               data-gutter
               class="tabular sticky left-0 shrink-0 cursor-pointer px-3 text-right select-none"
               :class="
-                inRange(row.line)
+                gutterMarked && inRange(row.line)
                   ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
                   : 'bg-surface text-ink-muted hover:text-ink-secondary'
               "
