@@ -112,7 +112,7 @@ updates all components across the monorepo.
    draft release on GitHub (note: do not publish in the GitHub UI before the approval
    gate pushes tags in Stage 4):
    ```sh
-   gh release create v<version> --draft --title "OpenRelik <version>" --notes-file /tmp/release-notes-v<version>.md
+   gh release create v<version> --draft --target release/<major>.<minor> --title "OpenRelik <version>" --notes-file /tmp/release-notes-v<version>.md
    ```
 
 #### Stage 4: Human Approval Gate
@@ -170,7 +170,7 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    (For libraries, use `./devctl release lib <name> <version>`).
 5. Draft GitHub release notes using `/tmp/release-notes-<tag>.md`:
    ```sh
-   gh release create <tag> --draft --title "Release <label> <version>" --notes-file /tmp/release-notes-<tag>.md
+   gh release create <tag> --draft --target release/<major>.<minor> --title "Release <label> <version>" --notes-file /tmp/release-notes-<tag>.md
    ```
 6. **Human Approval Gate**: Present the commit, tag, and changelog diff. Ask for
    explicit confirmation.
@@ -187,24 +187,40 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    and open a pull request.
 
 #### For Workers (`worker <name> <version>`)
-1. On a branch from `main`:
+1. On `main`, create a pull request branch:
+   ```sh
+   git switch main && git pull
+   git switch -c bump/worker-<name>-<version>
+   ```
+2. Relock the worker with the updated dependency:
    ```sh
    cd workers/<name> && uv lock --upgrade-package openrelik-worker-common && cd -
+   ```
+3. Update root `CHANGELOG.md` with the worker fix summary.
+4. Commit the dependency update and changelog:
+   ```sh
+   git commit -am "Update openrelik-worker-common and changelog for worker <name>"
+   ```
+5. Prepare the worker release commit:
+   ```sh
    ./devctl release worker <name> <version>
    ```
-2. Update `CHANGELOG.md` with the worker fix summary.
-3. Commit, open PR on `main`, and merge.
-4. On `main`:
+6. Open pull request against `main` and merge it.
+7. On `main`:
    ```sh
    git switch main && git pull
    ./devctl release tag
    ```
-5. **Human Approval Gate**: Present the created tag `worker-<name>-v<version>`. Ask for
+8. **Human Approval Gate**: Present the created tag `worker-<name>-v<version>`. Ask for
    approval, then push:
    ```sh
    git push origin worker-<name>-v<version>
    ```
-   Draft and publish GitHub release notes.
+   Draft and publish GitHub release notes:
+   ```sh
+   gh release create worker-<name>-v<version> --draft --title "Release worker <name> <version>" --notes-file /tmp/release-notes-worker-<name>-<version>.md
+   gh release edit worker-<name>-v<version> --draft=false
+   ```
 
 ---
 
@@ -223,8 +239,13 @@ Tags release commits merged via pull requests.
 ### 4. `/release dev <version>`
 
 Advances `main` to `<version>.dev0` after cutting a platform release branch.
-1. Run `./devctl release dev <version>`.
-2. Open pull request on `main`.
+1. On `main`, create a pull request branch:
+   ```sh
+   git switch main && git pull
+   git switch -c bump/dev-<version>
+   ```
+2. Run `./devctl release dev <version>`.
+3. Open pull request on `main` and merge it.
 
 
 ---
