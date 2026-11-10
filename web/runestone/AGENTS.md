@@ -4,8 +4,13 @@ This document instructs coding agents on how to design, implement, and maintain 
 
 Companion documents:
 - [`docs/design-system.md`](docs/design-system.md): the visual and interaction rules (§1–§13).
+- [`docs/style-guide.md`](docs/style-guide.md): formatting (Prettier) and TypeScript / Vue code conventions, and the lint rules that enforce them.
 - [`src/composables/README.md`](src/composables/README.md): what each major composable does. Add an entry when you add or substantially change a composable.
-- [`docs/file-view-ideas.md`](docs/file-view-ideas.md): planned file-view features (strings, JSON tree, timeline, entropy, archives).
+- [`docs/ideas/`](docs/ideas/): proposals not built yet.
+  - [`file-view-ideas.md`](docs/ideas/file-view-ideas.md): planned file-view features (strings, JSON tree, timeline, entropy, archives).
+  - [`evidence-lineage.md`](docs/ideas/evidence-lineage.md): a lineage record for every task, so any derived file can be traced to the code, rules and input bytes that produced it.
+- [`docs/test-plan.md`](docs/test-plan.md): the first round of unit tests (Vitest), to be done before the code review.
+- [`docs/code-review-plan.md`](docs/code-review-plan.md): the planned code review for simplicity, split into sessions.
 
 ---
 
@@ -19,6 +24,7 @@ Before reaching for `npm install`:
 - Check if the requirement can be solved with modern browser APIs (Web Crypto, Clipboard API, `ResizeObserver`, `IntersectionObserver`, `URL`, `Intl`, `TextDecoder`).
 - Check existing utilities (`src/utils/`), composables (`src/composables/`), or directives (`src/directives/`).
 - If a utility is missing (e.g. string formatting, sorting, fuzzy filtering), implement a clean, typed 15–30 line pure helper in `src/utils/`.
+- Tooling may add dev dependencies, never runtime ones. For tests that is **Vitest only** (see §6): no `jsdom`/`happy-dom`, `@vue/test-utils`, coverage plugins or end-to-end frameworks until a later testing effort decides on them.
 - Do **not** install component libraries (Headless UI, Radix, PrimeVue, Vuetify), utility toolkits (Lodash, Ramda), positioning engines (Popper, Floating UI; use `src/utils/placement.ts`), Markdown/HTML renderers or sanitizers, chart libraries, or event buses (Mitt, EventEmitter). The application uses custom, high-performance, tailored primitives.
 
 ### Design System Compliance
@@ -134,7 +140,7 @@ Every route except `/login` requires a session; the guard hydrates it from the s
 
 #### 2. Components (`src/components/`)
 - Categorized into focused subdirectories:
-  - `base/`: Reusable primitives: `Button.vue`, `Switch.vue`, `LoadState.vue` (every listing's load state), `SlidePane.vue` (every pane that opens and closes), `PanelResizeHandle.vue` + `PanelToggle.vue` (resizable side panels, with `usePanelWidth`), `KeyValueRow.vue`, `Tooltip.vue`, `UserAvatar.vue`, `KeyHint.vue` (Help dialog only).
+  - `base/`: Reusable primitives: `Button.vue`, `Switch.vue`, `LoadState.vue` (every listing's load state), `SlidePane.vue` (every pane that opens and closes), `PanelResizeHandle.vue` + `PanelToggle.vue` (resizable side panels, with `usePanelWidth`), `KeyValueRow.vue`, `CopyValue.vue` (a value that copies on click, with a copy mark on hover), `Tooltip.vue`, `UserAvatar.vue`, `KeyHint.vue` (Help dialog only).
   - `layout/`: Shell structures: `PathBar.vue`, `StatusBar.vue`, `BrandLink.vue`, `SettingsTrigger.vue`, `UploadQueuePanel.vue`.
   - `dialogs/`: Modal sheets: `SettingsDialog`, `AccountDialog`, `HelpDialog`, `ShareDialog`, `RunDialog`, `WorkflowDialog`, `TaskReportDialog`, `ConfirmDialog`.
   - `icons/`: The icon barrel (`index.ts`). **Import icons from `@/components/icons`, never from `lucide-vue-next` directly**; add a re-export there when you need a new one.
@@ -219,6 +225,8 @@ Registered globally by the plugin in `src/directives/index.ts`:
 5. **Draw Only What Is on Screen**: Long content (file lines, hex rows, table rows) is windowed by row number (`useRowScroller`), with fixed row heights; never render a whole file's rows.
 
 ### Readability & Simplicity
+Code conventions (types, `null` vs `undefined`, imports, casts and `!`, async and errors, naming, SFC structure) are in [`docs/style-guide.md`](docs/style-guide.md). Prettier formats; ESLint checks what it can; the guide covers the rest.
+
 1. **Explicit Script Setup**:
    ```html
    <script setup lang="ts">
@@ -275,15 +283,22 @@ When adding or modifying interactive features, ensure:
 ## 6. Testing & Verification
 
 > [!NOTE]
-> **Automated tests are currently skipped.**
-> Automated test suites (e.g. Vitest / Cypress / Playwright) have not yet been implemented in this repository. Agents should **not** write or run test scripts until the testing framework is officially set up.
->
-> **Verification Workflow for Agents**:
-> 1. Run formatting: `npm run format` (`prettier --write --experimental-cli src/`).
-> 2. Run linting: `npm run lint` (`eslint . --fix --cache`).
-> 3. Run typechecking & build: `npm run build` (`vue-tsc --build` and `vite build`, in parallel).
-> 4. Verify that all commands exit with code 0 before concluding your task.
-> 5. For UI changes, check the change in the running app (`npm run dev`) where a server is available, including the slow-connection checks above.
+> **Status: unit tests are planned, not yet set up.** The first round is specified in [`docs/test-plan.md`](docs/test-plan.md) (Phase 1) and comes before the code review in [`docs/code-review-plan.md`](docs/code-review-plan.md). Until Phase 1's setup step (§4.1 of the test plan) has landed, there is no test runner: do not write tests outside that plan. Once it has, the rules below apply, and this note should say so.
+
+### Unit tests (Vitest)
+- **What is tested:** pure logic: `src/utils/`, and module-level composables that need no DOM (`useQueryCache`, the edits in `useWorkflow`). Components, views, directives, the API client and end-to-end flows are **not** unit-tested yet; they are left to a later testing effort, once the code review has settled the structure.
+- **Where:** `src/**/__tests__/<module>.test.ts`, next to the code (`tsconfig.app.json` keeps them out of the app build). Run with `npm test`; `npm run test:watch` while working.
+- **How:** test behaviour through public exports, never internals, so refactoring does not break tests. Table-driven cases (`it.each`) where there are many; no snapshot tests; import `describe`/`it`/`expect`/`vi` from `vitest` explicitly. Mock only the network (`vi.mock('@/api')`); use a real Pinia (`setActivePinia(createPinia())`) and fake timers. Reset module state in `beforeEach` through the module's public API; never add an export just for tests.
+- **Streaming parsers** (`utils/table.ts`, `utils/lines.ts`) must give the same result however the input is split; test every fixture that way.
+- **When you change tested code**, keep the tests passing unchanged for a refactor. Changing a test means changing behaviour: do it in the same commit as the behaviour change, and say so in the message. A bug a test exposes but you are not fixing is marked `it.fails` with a comment naming it.
+
+### Verification Workflow for Agents
+1. Run the unit tests: `npm test` (once Phase 1's setup has landed).
+2. Run formatting: `npm run format` (`prettier --write --experimental-cli src/`; the whole repository once the style guide's rollout, §7.4, has landed).
+3. Run linting: `npm run lint` (`eslint . --fix --cache`).
+4. Run typechecking & build: `npm run build` (`vue-tsc --build` and `vite build`, in parallel; this type-checks the tests too).
+5. Verify that all commands exit with code 0 before concluding your task. Once the style guide's rollout has landed, `npm run check` runs the non-fixing checks (format, lint, types) in one go.
+6. For UI changes, check the change in the running app (`npm run dev`) where a server is available, including the slow-connection checks above. Unit tests do not cover the UI or the network.
 
 ### Commit Messages
 Match the existing history: a short subject naming the area, a colon, then what changed in plain words — e.g. `Folder toolbar: the primary button keeps the right edge`, `SlidePane: one slide for every pane that opens and closes`. Prefix bug fixes with `Fix:`.
