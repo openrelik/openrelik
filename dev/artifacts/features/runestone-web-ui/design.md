@@ -176,8 +176,7 @@ One server header change is required in `server/src/api/v1/files.py`:
 
 - `compose.yml` and `dev/tools/devctl/`: add a `web-runestone` service alongside `web-sunstone` mounting `./web/runestone:/app` with an anonymous `/app/node_modules` volume and `VITE_OPENRELIK_SERVER_URL=http://localhost:${API_PORT:-8710}`. `./devctl stack up` starts both `web-sunstone` (`UI_PORT`, `:3000` + slot) and `web-runestone` (`RUNESTONE_PORT`, `:3050` + slot) by default during parallel development, and `server/settings_example.toml` includes both origins in `allowed_origins`. When Runestone becomes the default UI, `web-runestone` moves to `UI_PORT` (`3000` + slot).
 - `.github/workflows/frontend-runestone-tests.yml`: mirror `frontend-sunstone-tests.yml` with path filtering on `web/runestone/**`, running `npm ci`, format check, ESLint, `vue-tsc --build`, `vitest run`, and `vite build`, with a `Frontend Unit Tests [runestone] passed` gate job.
-- `.github/images.toml` and `.github/scripts/images.py`: register `openrelik-ui-runestone` (`dockerfile = "web/runestone/Dockerfile"`, `context = "web/runestone"`) while `sunstone` remains `openrelik-ui`, so CI validates and publishes the Runestone image for early adopters (`OPENRELIK_UI_IMAGE` / tag override). At default cutover, `openrelik-ui` switches its `dockerfile` and `context` to `web/runestone`.
-- `dev/tools/devctl/src/devctl/release.py`: update `prepare_minor` (`set_package_version`) so platform version bumps update every `web/*/package.json` rather than only `web/sunstone/package.json`.
+- `.github/images.toml` and `.github/scripts/images.py`: register `openrelik-ui-runestone` (`dockerfile = "web/runestone/Dockerfile"`, `context = "web/runestone"`) while `sunstone` remains `openrelik-ui`, so CI validates and publishes the Runestone image for early adopters (`OPENRELIK_UI_IMAGE` / tag override). At default cutover, `openrelik-ui` in `.github/images.toml`, `PLATFORM["ui"]` in `.github/scripts/images.py`, and `release_ui` / `components` in `dev/tools/devctl/src/devctl/release.py` switch from `web/sunstone` to `web/runestone` (`platform_files` in `release.py` already updates every `web/*/package.json` on minor bumps).
 
 ### Rollout phases
 
@@ -186,7 +185,7 @@ One server header change is required in `server/src/api/v1/files.py`:
 1. Foundation, explorer, workflows, metrics, core viewers + pluggable viewer registry, unit tests, CORS range header fix, `devctl` coexistence, and CI workflow.
 2. Auth parity (OAuth/OIDC login methods on `LoginView` and legacy route redirects).
 3. AI parity (file summaries, streaming file assistant chat, LLM workflow name generation) and workflow-level Markdown report dialog.
-4. Flip `openrelik-ui` default in `.github/images.toml`, `.github/scripts/images.py`, and `compose.yml` (`UI_PORT`) once team sign-off confirms parity.
+4. Flip `openrelik-ui` default in `.github/images.toml`, `.github/scripts/images.py`, `dev/tools/devctl/src/devctl/release.py`, and `compose.yml` (`UI_PORT`) once team sign-off confirms parity.
 
 ## Alternatives considered
 
