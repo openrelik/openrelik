@@ -18,7 +18,7 @@ const props = defineProps<{ workflow: Workflow; stats: RunStats; showName?: bool
 // may still say something else, and the path bar must not disagree with it.
 const itemsStore = useItemsStore()
 const name = computed(
-  () => itemsStore.findItem(props.workflow.folderId)?.name ?? props.workflow.name,
+  () => itemsStore.findFolder(props.workflow.folderId)?.name ?? props.workflow.name,
 )
 </script>
 

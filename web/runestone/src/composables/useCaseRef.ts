@@ -72,7 +72,7 @@ function clearError() {
 /** Sets or changes a folder's case reference. Resolves to success. */
 async function setCaseRef(id: number, input: string): Promise<boolean> {
   const itemsStore = useItemsStore()
-  const item = itemsStore.findItem(id)
+  const item = itemsStore.findFolder(id)
   if (!item || savingIds.has(id)) return false
   clearError()
   const check = normalizeCaseRef(input)
@@ -100,7 +100,7 @@ async function setCaseRef(id: number, input: string): Promise<boolean> {
 
 /** Removes a folder's case reference. Resolves to success. */
 async function clearCaseRef(id: number): Promise<boolean> {
-  const item = useItemsStore().findItem(id)
+  const item = useItemsStore().findFolder(id)
   if (!item || savingIds.has(id)) return false
   clearError()
   const previous = item.caseRef
@@ -108,7 +108,7 @@ async function clearCaseRef(id: number): Promise<boolean> {
   try {
     await api.folders.clearCaseRef(id)
     // 204: nothing to upsert, and nothing else about the folder changed.
-    const current = useItemsStore().findItem(id)
+    const current = useItemsStore().findFolder(id)
     if (current) current.caseRef = undefined
     forgetCases(previous)
     return true

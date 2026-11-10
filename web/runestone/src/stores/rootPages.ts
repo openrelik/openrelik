@@ -36,7 +36,7 @@ export const useRootPagesStore = defineStore('rootPages', () => {
   /** A page's folders; ones removed from the store (deleted) drop out at once. */
   function rootPageItems(key: string): Item[] {
     return (pages.value.get(key)?.ids ?? [])
-      .map(itemsStore.findItem)
+      .map(itemsStore.findFolder)
       .filter((item): item is Item => !!item)
   }
 
@@ -78,7 +78,7 @@ export const useRootPagesStore = defineStore('rootPages', () => {
     const items: Item[] = []
     for (const page of sorted) {
       for (const id of page.ids) {
-        const item = itemsStore.findItem(id)
+        const item = itemsStore.findFolder(id)
         if (item && !seen.has(id)) {
           seen.add(id)
           items.push(item)

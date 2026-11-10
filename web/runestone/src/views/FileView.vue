@@ -69,8 +69,7 @@ const preferView = computed(() => (route.query.view === 'rendered' ? 'rendered' 
 const itemsStore = useItemsStore()
 
 const file = computed(() => {
-  const item = itemsStore.findItem(Number(props.fileId))
-  return item?.kind === 'file' ? item : undefined
+  return itemsStore.findFile(Number(props.fileId))
 })
 // Opened by link or reload, the file is not in the store yet: its folder's
 // listing brings it, with the files beside it and the path. Known, it costs nothing.
@@ -186,7 +185,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   >
     <!-- toolbar: path · actions -->
     <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
-      <PathBar :path="itemsStore.pathTo(file.id)" />
+      <PathBar :path="itemsStore.pathTo(file)" />
 
       <div class="flex shrink-0 items-center gap-1.5">
         <Button variant="secondary" size="row" @click="openWorkflow">

@@ -14,7 +14,7 @@ import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
 import { lastRun, openAddToWorkflow, openRun, runError, type Anchor } from '@/composables/useRun'
-import { awaitsOutputs, bytesOf, isEmptyFile, typeOf } from '@/utils/item'
+import { awaitsOutputs, bytesOf, isEmptyFile, itemKey, typeOf } from '@/utils/item'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useRootPagesStore } from '@/stores/rootPages'
@@ -69,10 +69,9 @@ const folderId = computed(() =>
 )
 const folder = computed(() => {
   if (atRoot.value) return undefined
-  const item = itemsStore.findItem(Number(props.id))
-  return item?.kind === 'folder' ? item : undefined
+  return itemsStore.findFolder(Number(props.id))
 })
-const crumbs = computed(() => (folder.value ? itemsStore.pathTo(folder.value.id) : []))
+const crumbs = computed(() => (folder.value ? itemsStore.pathTo(folder.value) : []))
 
 const filter = ref('')
 const toolbar = ref<InstanceType<typeof FolderToolbar> | null>(null)
@@ -96,7 +95,7 @@ const {
   clearError,
   pendingIn,
   savingIds,
-  deletingIds,
+  deletingKeys,
   confirmDeleteItems,
   mayRename,
   createFolder,
@@ -262,7 +261,7 @@ const showPending = useDelayedFlag(
   () =>
     pendingHere.value.length > 0 ||
     savingIds.size > 0 ||
-    deletingIds.size > 0 ||
+    deletingKeys.size > 0 ||
     uploadsHere.value.length > 0,
 )
 
@@ -289,20 +288,21 @@ const {
   extendTo,
   dropAnchor,
   clearSelection,
-} = useRowSelection(rows, bytesOf)
+} = useRowSelection(rows, itemKey, bytesOf)
 
-const selectedItems = computed(() => rows.value.filter((row) => selected.value.has(row.id)))
+const selectedItems = computed(() => rows.value.filter((row) => selected.value.has(itemKey(row))))
 
 /** Shows or folds the empty files; the cursor stays on its row, and nothing hidden stays selected. */
 function toggleEmptyFiles() {
-  const here = rows.value[cursor.value]?.id
+  const row = rows.value[cursor.value]
+  const here = row && itemKey(row)
   const explorer = settingsStore.settings.explorer
   explorer.showEmptyFiles = !explorer.showEmptyFiles
   if (!explorer.showEmptyFiles) {
-    const kept = new Set(rows.value.map((row) => row.id))
-    selected.value = new Set([...selected.value].filter((id) => kept.has(id)))
+    const kept = new Set(rows.value.map(itemKey))
+    selected.value = new Set([...selected.value].filter((key) => kept.has(key)))
   }
-  const at = rows.value.findIndex((row) => row.id === here)
+  const at = rows.value.findIndex((candidate) => itemKey(candidate) === here)
   if (at >= 0) cursor.value = at
   else cursor.value = Math.min(cursor.value, Math.max(0, rows.value.length - 1))
 }
@@ -333,7 +333,7 @@ useFolderPermissions(() => {
 const { actionsFor } = useItemActions({
   folder: () => folder.value,
   open,
-  rename: (item) => startRenameItem(item.id),
+  rename: startRenameItem,
   remove: deleteItems,
   editCase: (item) => {
     const at = menu.value ?? { x: 200, y: 120 }
@@ -342,7 +342,7 @@ const { actionsFor } = useItemActions({
   copyId: (item) => {
     navigator.clipboard?.writeText(String(item.id)).then(
       () => {
-        const button = table.value?.menuButton(item.id)
+        const button = table.value?.menuButton(item)
         if (button) flashTooltip(button, `Copied id ${item.id}`)
       },
       () => {},
@@ -361,7 +361,7 @@ const menuPending = computed(() => {
 
 /** Opens a row's menu; asked again for the row whose menu is open (its `⋯`), closes it. */
 function openMenu(item: Item, at: { x: number; y: number }) {
-  menu.value = menu.value?.item.id === item.id ? null : { item, ...at }
+  menu.value = menu.value && itemKey(menu.value.item) === itemKey(item) ? null : { item, ...at }
 }
 
 // --- workflow & tasks ---
@@ -472,11 +472,14 @@ watch([() => props.id, () => (atRoot.value ? pager.page.value : 0)], (_, [previo
   clearSelection()
   filter.value = ''
   taskId.value = null
-  const from = rows.value.findIndex((row) => String(row.id) === previous)
+  const from = rows.value.findIndex((row) => row.kind === 'folder' && String(row.id) === previous)
   cursor.value = Math.max(0, from)
 })
 
-const focus = rows.value.findIndex((row) => String(row.id) === route.query.focus)
+// Only a file page links back here with a focus: the id is a file's.
+const focus = rows.value.findIndex(
+  (row) => row.kind === 'file' && String(row.id) === route.query.focus,
+)
 if (focus >= 0) cursor.value = focus
 
 /**
@@ -504,7 +507,7 @@ watch(
 
 // --- runs ---
 const runFiles = () => {
-  const chosen = rows.value.filter((row) => row.kind === 'file' && selected.value.has(row.id))
+  const chosen = rows.value.filter((row) => row.kind === 'file' && selected.value.has(itemKey(row)))
   const here = rows.value[cursor.value]
   return chosen.length ? chosen : here?.kind === 'file' ? [here] : []
 }
@@ -534,7 +537,7 @@ const parentPath = computed(() => {
 })
 const parentName = computed(() => {
   const parent = folder.value?.parent
-  return parent === null || parent === undefined ? '/' : (itemsStore.findItem(parent)?.name ?? '')
+  return parent === null || parent === undefined ? '/' : (itemsStore.findFolder(parent)?.name ?? '')
 })
 
 function goUp() {
@@ -568,7 +571,7 @@ async function handleCreateFolder(name: string) {
   const created = await createFolder(parentId, name)
   if (!created) return
   await nextTick()
-  const idx = rows.value.findIndex((r) => r.id === created.id)
+  const idx = rows.value.findIndex((r) => itemKey(r) === itemKey(created))
   if (idx >= 0) cursor.value = idx
 }
 
@@ -589,8 +592,9 @@ async function deleteItems(items: Item[]) {
   const deleted = await confirmDeleteItems(items)
   if (!deleted.length) return
 
-  selected.value = new Set([...selected.value].filter((id) => !deleted.includes(id)))
-  if (current && deleted.includes(current.id)) router.push(upTo)
+  const gone = new Set(deleted.map(itemKey))
+  selected.value = new Set([...selected.value].filter((key) => !gone.has(key)))
+  if (current && gone.has(itemKey(current))) router.push(upTo)
 }
 
 /** Discards the draft workflow this folder holds, with the folder, and moves up. */
@@ -606,20 +610,17 @@ function deleteCurrent() {
   deleteItems(selectedItems.value.length ? selectedItems.value : row ? [row] : [])
 }
 
-function startRenameItem(id: number) {
-  const item = itemsStore.findItem(id)
-  if (item) {
-    const idx = rows.value.findIndex((r) => r.id === id)
-    if (idx >= 0) cursor.value = idx
-    table.value?.startRename(item)
-  }
+function startRenameItem(item: Item) {
+  const idx = rows.value.findIndex((r) => itemKey(r) === itemKey(item))
+  if (idx >= 0) cursor.value = idx
+  table.value?.startRename(item)
 }
 
-function handleRename({ id, name }: { id: number; name: string }) {
+function handleRename(item: Item, name: string) {
   // Files are not loaded from the server yet, so they are still renamed locally.
-  if (itemsStore.findItem(id)?.kind !== 'folder') return itemsStore.renameItem(id, name)
+  if (item.kind === 'file') itemsStore.renameItem(item, name)
   // Its workflow, if it holds one, takes the name too.
-  renameFolder(id, name)
+  else renameFolder(item.id, name)
 }
 
 // --- keyboard navigation ---
@@ -634,7 +635,7 @@ const KEYS: Record<string, () => void> = {
   ArrowRight: () => (cursor.value === UP ? goUp() : open(rows.value[cursor.value])),
   ' ': () => {
     const row = rows.value[cursor.value]
-    if (row) toggle(row.id)
+    if (row) toggle(itemKey(row))
   },
   '/': () => table.value?.focusFilter(),
   n: startCreateFolder,
@@ -662,7 +663,7 @@ const KEYS: Record<string, () => void> = {
   Backspace: deleteCurrent,
   R: refresh,
   Escape: () => {
-    if (table.value?.renamingId) {
+    if (table.value?.renamingKey) {
       table.value.cancelRename()
       return
     }
@@ -784,7 +785,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :upload-blocked="uploadBlocked"
       :new-folder-blocked="newFolderBlocked"
       :may-rename="mayRename"
-      @rename="(id, name) => handleRename({ id, name })"
+      @rename="renameFolder"
       @new-folder="startCreateFolder"
       @upload-files="pickedFiles"
       @clear-selection="clearSelection"
@@ -813,14 +814,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           :listing="listing"
           :pending-folders="pendingHere"
           :saving-ids="savingIds"
-          :deleting-ids="deletingIds"
+          :deleting-keys="deletingKeys"
           :may-rename="mayRename"
           :show-pending="showPending"
           :action-error="actionError ?? runError ?? uploads.error.value ?? dropRefusal"
           :empty-note="emptyNote"
           :uploads="uploadsHere"
           :is-drop-target="isDropTarget"
-          :menu-row-id="menu?.item.id ?? null"
+          :menu-row-key="menu ? itemKey(menu.item) : null"
           :hidden-empty="hiddenEmpty"
           :empty-shown="settingsStore.settings.explorer.showEmptyFiles"
           v-on="dropHandlers"
@@ -898,7 +899,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <ItemMenu
       v-if="menu"
-      :key="menu.item.id"
+      :key="itemKey(menu.item)"
       :item="menu.item"
       :actions="menuActions"
       :pending="menuPending"

@@ -2,6 +2,12 @@ import type { Hashes, Item } from '@/types/item'
 
 /** File metadata and naming helpers over an `Item`. */
 
+/**
+ * What tells one item from every other. An id alone does not: the server numbers
+ * folders and files separately, so a folder and a file can both be 2.
+ */
+export const itemKey = (item: Pick<Item, 'kind' | 'id'>): string => `${item.kind}:${item.id}`
+
 export function hashesOf(item: Item): Hashes {
   return (
     item.hashes ?? {

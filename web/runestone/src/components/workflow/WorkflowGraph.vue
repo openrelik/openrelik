@@ -97,7 +97,7 @@ const itemsStore = useItemsStore()
 /** Outputs with no bytes, among those loaded: a worker that found nothing, said quietly. */
 const emptyOutputs = (task: Task) =>
   task.outputs.filter((id) => {
-    const item = itemsStore.findItem(id)
+    const item = itemsStore.findFile(id)
     return item && isEmptyFile(item)
   }).length
 /** A node's second line: status unless it succeeded, time taken, "16 out (15 empty)". */
@@ -785,8 +785,8 @@ onMounted(async () => {
 const input = computed(() => props.workflow.inputs[0])
 /** An input's page: inputs come from the folder the workflow was made in. */
 const inputLink = (file: WorkflowInput) =>
-  `/folder/${itemsStore.findItem(file.id)?.parent ?? itemsStore.findItem(props.workflow.folderId)?.parent}/file/${file.id}`
-const sizeOf = (file: WorkflowInput) => itemsStore.findItem(file.id)?.size ?? 0
+  `/folder/${itemsStore.findFile(file.id)?.parent ?? itemsStore.findFolder(props.workflow.folderId)?.parent}/file/${file.id}`
+const sizeOf = (file: WorkflowInput) => itemsStore.findFile(file.id)?.size ?? 0
 const inputBytes = computed(() =>
   props.workflow.inputs.reduce((sum, file) => sum + sizeOf(file), 0),
 )

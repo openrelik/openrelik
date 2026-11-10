@@ -45,7 +45,7 @@ const itemsStore = useItemsStore()
 /** Outputs with no bytes, among those loaded. */
 const emptyOutputs = (task: Task) =>
   task.outputs.filter((id) => {
-    const item = itemsStore.findItem(id)
+    const item = itemsStore.findFile(id)
     return item && isEmptyFile(item)
   }).length
 
@@ -150,10 +150,10 @@ const REMOVE =
   'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-danger/60 bg-surface text-danger hover:bg-danger-tint focus-visible:opacity-100'
 
 /** Inputs come from the folder the workflow was made in; sizes are known once it is loaded. */
-const inputFolder = computed(() => itemsStore.findItem(props.workflow.folderId)?.parent ?? null)
+const inputFolder = computed(() => itemsStore.findFolder(props.workflow.folderId)?.parent ?? null)
 const inputs = computed(() =>
   props.workflow.inputs.map((input) => {
-    const item = itemsStore.findItem(input.id)
+    const item = itemsStore.findFile(input.id)
     return { ...input, parent: item?.parent ?? inputFolder.value, size: item?.size }
   }),
 )

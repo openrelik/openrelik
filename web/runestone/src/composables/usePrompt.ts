@@ -13,6 +13,7 @@ import { useRootPagesStore } from '@/stores/rootPages'
 import { useModalStore } from '@/stores/modals'
 import { useSettingsStore } from '@/stores/settings'
 import { normalizeCaseRef } from '@/utils/caseRef'
+import { itemKey } from '@/utils/item'
 import { matchPath } from '@/utils/match'
 
 export interface PromptResult {
@@ -45,7 +46,7 @@ export interface PromptResult {
 export const pathOf = (item: Item) =>
   '/' +
   useItemsStore()
-    .pathTo(item.id)
+    .pathTo(item)
     .map((part) => part.name)
     .join('/') +
   (item.kind === 'folder' ? '/' : '')
@@ -60,11 +61,11 @@ export function labelForPath(pathStr: string | null): string {
   if (match) {
     const fileId = match[2] ? Number(match[2]) : null
     if (fileId) {
-      const fileItem = itemsStore.findItem(fileId)
+      const fileItem = itemsStore.findFile(fileId)
       if (fileItem) return pathOf(fileItem)
     }
     const folderId = Number(match[1])
-    const folderItem = itemsStore.findItem(folderId)
+    const folderItem = itemsStore.findFolder(folderId)
     if (folderItem) return pathOf(folderItem)
   }
   return pathStr
@@ -104,10 +105,10 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
 
   /** The folder you are standing in: the route's folder, or the open file's. */
   const cwd = computed<Item | undefined>(() => {
-    if (route.name === 'folder') return itemsStore.findItem(Number(route.params.id))
+    if (route.name === 'folder') return itemsStore.findFolder(Number(route.params.id))
     if (route.name === 'file') {
-      const parent = itemsStore.findItem(Number(route.params.fileId))?.parent
-      return parent === null || parent === undefined ? undefined : itemsStore.findItem(parent)
+      const parent = itemsStore.findFile(Number(route.params.fileId))?.parent
+      return parent === null || parent === undefined ? undefined : itemsStore.findFolder(parent)
     }
     return undefined
   })
@@ -118,7 +119,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   const parentOf = (item: Item | undefined) =>
     item?.parent === null || item?.parent === undefined
       ? undefined
-      : itemsStore.findItem(item.parent)
+      : itemsStore.findFolder(item.parent)
 
   /**
    * Where the typed line is resolved from, and what is left to match once the
@@ -206,7 +207,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     caseController?.abort()
   })
   const caseResult = computed<PromptResult | null>(() => {
-    const item = caseFolderId.value === null ? undefined : itemsStore.findItem(caseFolderId.value)
+    const item = caseFolderId.value === null ? undefined : itemsStore.findFolder(caseFolderId.value)
     if (!item?.caseRef) return null
     return { item, path: pathOf(item), label: pathOf(item), hits: [], caseRef: item.caseRef }
   })
@@ -343,11 +344,11 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
       .filter((result) => result !== null)
       .sort((a, b) => b.score - a.score)
 
-    const seen = new Set(local.map((result) => result.item.id))
+    const seen = new Set(local.map((result) => itemKey(result.item)))
     const needle = rest.toLowerCase()
     const remote: PromptResult[] = serverTerm.value
       ? serverSearch.items.value
-          .filter((item) => !seen.has(item.id) && item.name.toLowerCase().includes(needle))
+          .filter((item) => !seen.has(itemKey(item)) && item.name.toLowerCase().includes(needle))
           .map((item) => ({
             item,
             // Tab completes to the name: searching it again finds the folder.
@@ -358,7 +359,10 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
           }))
       : []
     const byCase = caseResult.value
-    const matches = [...local, ...remote].filter((result) => result.item?.id !== byCase?.item?.id)
+    const caseKey = byCase?.item && itemKey(byCase.item)
+    const matches = [...local, ...remote].filter(
+      (result) => !result.item || itemKey(result.item) !== caseKey,
+    )
     return (byCase ? [byCase, ...matches] : matches).slice(0, 50)
   })
 

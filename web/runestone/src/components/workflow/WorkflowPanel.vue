@@ -78,7 +78,7 @@ const fullscreen = ref(false)
 /** The folder's name, which is the workflow's. */
 const itemsStore = useItemsStore()
 const folderName = computed(
-  () => itemsStore.findItem(props.workflow.folderId)?.name ?? props.workflow.name,
+  () => itemsStore.findFolder(props.workflow.folderId)?.name ?? props.workflow.name,
 )
 
 const VIEWS: { value: View; label: string; icon: typeof ListTree }[] = [

@@ -1,5 +1,6 @@
 /** A folder or a file, as the app keeps it (`stores/items.ts`). */
 export interface Item {
+  /** Unique among items of one `kind` only; `itemKey` tells any two items apart. */
   id: number
   /** The containing folder, or null for a top-level folder. */
   parent: number | null

@@ -23,7 +23,7 @@ const failed = computed(() => uploads.all.value.filter((upload) => upload.status
 const running = computed(() => uploads.all.value.filter((upload) => upload.status !== 'failed'))
 
 /** Where a file is going, so a queue spanning folders still makes sense. */
-const folderName = (folderId: number) => itemsStore.findItem(folderId)?.name ?? 'folder'
+const folderName = (folderId: number) => itemsStore.findFolder(folderId)?.name ?? 'folder'
 
 const stateOf = (upload: (typeof uploads.all.value)[number]) => {
   if (upload.status === 'failed') return 'failed'

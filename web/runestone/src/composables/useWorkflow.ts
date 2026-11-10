@@ -685,7 +685,7 @@ export async function runWorkflow(folderId: number): Promise<boolean> {
  */
 export async function copyWorkflow(folderId: number): Promise<Workflow | null> {
   const workflow = useWorkflowsStore().workflowOf(folderId)
-  const parentId = useItemsStore().findItem(folderId)?.parent
+  const parentId = useItemsStore().findFolder(folderId)?.parent
   if (!workflow || parentId === null || parentId === undefined) return null
   const state = activityFor(workflow.id)
   state.error = null
@@ -752,7 +752,8 @@ export async function discardWorkflow(folderId: number): Promise<boolean> {
   const folders = useFolderActions()
   const state = activityFor(id)
   state.error = null
-  if (!(await folders.deleteItems([folderId])).length) {
+  const folder = useItemsStore().findFolder(folderId)
+  if (!folder || !(await folders.deleteItems([folder])).length) {
     state.error = folders.error.value ?? 'Could not discard the workflow.'
     folders.clearError()
     return false

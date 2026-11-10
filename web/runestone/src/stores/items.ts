@@ -2,16 +2,21 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import type { Item, Stats } from '@/types/item'
+import { itemKey } from '@/utils/item'
 
 /**
- * Every folder and file the app has loaded, normalized by id: one copy of each
- * item, whichever listing brought it in. Loaders write into it
- * (`useFolderLoader`); views read their folders and files from it.
+ * Every folder and file the app has loaded, normalized by kind and id: one copy
+ * of each item, whichever listing brought it in. Loaders write into it
+ * (`useFolderLoader`); views read their folders and files from it. The server
+ * numbers folders and files separately, so an id alone identifies neither.
  */
 export const useItemsStore = defineStore('items', () => {
   const items = ref<Item[]>([])
 
-  const findItem = (id: number): Item | undefined => items.value.find((item) => item.id === id)
+  const find = (kind: Item['kind'], id: number): Item | undefined =>
+    items.value.find((item) => item.kind === kind && item.id === id)
+  const findFolder = (id: number): Item | undefined => find('folder', id)
+  const findFile = (id: number): Item | undefined => find('file', id)
 
   /** A folder's contents, folders first, each group newest first. */
   function childrenOf(id: number): Item[] {
@@ -24,15 +29,15 @@ export const useItemsStore = defineStore('items', () => {
       )
   }
 
-  /** Root first, the folder itself last. */
-  function pathTo(id: number): Item[] {
+  /** Root first, the item itself last. */
+  function pathTo(item: Item): Item[] {
     const path: Item[] = []
     for (
-      let item = findItem(id);
-      item;
-      item = item.parent === null ? undefined : findItem(item.parent)
+      let at: Item | undefined = item;
+      at;
+      at = at.parent === null ? undefined : findFolder(at.parent)
     ) {
-      path.unshift(item)
+      path.unshift(at)
     }
     return path
   }
@@ -62,9 +67,9 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   /** "/CLI Test Folder/evidence" — the path as a string, for copying. */
-  const pathString = (id: number): string =>
+  const pathString = (item: Item): string =>
     '/' +
-    pathTo(id)
+    pathTo(item)
       .map((item) => item.name)
       .join('/')
 
@@ -76,9 +81,7 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   /** Renames an item (file or folder) in the reactive items store. */
-  function renameItem(id: number, newName: string): boolean {
-    const item = findItem(id)
-    if (!item) return false
+  function renameItem(item: Item, newName: string): boolean {
     const trimmed = newName.trim()
     if (!trimmed) return false
     item.name = trimmed
@@ -94,19 +97,19 @@ export const useItemsStore = defineStore('items', () => {
    */
   function upsertListed(listed: Item[]): void {
     upsertItems(
-      listed.map((item) => ({ ...item, parent: findItem(item.id)?.parent ?? item.parent })),
+      listed.map((item) => ({ ...item, parent: findFolder(item.id)?.parent ?? item.parent })),
     )
   }
 
   /**
-   * Removes a folder and everything below it from the reactive items store.
-   * Returns the ids removed, the folder itself first.
+   * Removes an item, and for a folder everything below it, from the reactive
+   * items store. Returns what was removed, the item itself first.
    */
-  function removeTree(id: number): number[] {
-    const ids = [id, ...descendantsOf(id).map((item) => item.id)]
-    const gone = new Set(ids)
-    items.value = items.value.filter((item) => !gone.has(item.id))
-    return ids
+  function removeTree(item: Item): Item[] {
+    const removed = [item, ...(item.kind === 'folder' ? descendantsOf(item.id) : [])]
+    const gone = new Set(removed.map(itemKey))
+    items.value = items.value.filter((other) => !gone.has(itemKey(other)))
+    return removed
   }
 
   /** Empties the reactive items store (sign-out). */
@@ -114,10 +117,12 @@ export const useItemsStore = defineStore('items', () => {
     items.value = []
   }
 
-  /** Adds items to the reactive items store, replacing any with the same id. */
+  /** Adds items to the reactive items store, replacing any of the same kind and id. */
   function upsertItems(incoming: Item[]): void {
     for (const item of incoming) {
-      const index = items.value.findIndex((existing) => existing.id === item.id)
+      const index = items.value.findIndex(
+        (existing) => existing.kind === item.kind && existing.id === item.id,
+      )
       if (index === -1) items.value.push(item)
       else {
         // Listings do not carry a file's details (hashes, magic): keep those loaded.
@@ -147,7 +152,8 @@ export const useItemsStore = defineStore('items', () => {
 
   return {
     items,
-    findItem,
+    findFolder,
+    findFile,
     childrenOf,
     pathTo,
     subfoldersOf,

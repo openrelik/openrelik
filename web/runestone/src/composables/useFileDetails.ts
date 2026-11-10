@@ -25,12 +25,12 @@ const RETRIES = 10
 
 /** Whether a loaded file has its hashes; a file not in the store has nothing to wait for. */
 function hashed(fileId: number): boolean {
-  const item = useItemsStore().findItem(fileId)
+  const item = useItemsStore().findFile(fileId)
   return !item || !!(item.hashes?.md5 || item.hashes?.sha256)
 }
 
 function merge(file: FileDetail) {
-  const item = useItemsStore().findItem(file.id)
+  const item = useItemsStore().findFile(file.id)
   if (!item) return
   item.hashes = {
     md5: file.hash_md5 ?? '',

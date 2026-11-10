@@ -20,7 +20,7 @@ import UploadRow from '@/components/folders/UploadRow.vue'
 import type { PendingFolder } from '@/composables/useFolderActions'
 import type { Upload } from '@/composables/useUploadQueue'
 import type { QueryState } from '@/composables/useQueryCache'
-import { bytesOf, isEmptyFile, typeOf } from '@/utils/item'
+import { bytesOf, isEmptyFile, itemKey, typeOf } from '@/utils/item'
 import { getUniqueFolderName } from '@/utils/item'
 import type { Item } from '@/types/item'
 import { runStats } from '@/utils/workflow'
@@ -36,7 +36,8 @@ const props = defineProps<{
   /** False for the paginated top level: rows keep the server's order (newest created first). */
   sortable?: boolean
   cursor: number
-  selected: Set<number>
+  /** The selected rows, by `itemKey`. */
+  selected: Set<string>
   allSelected: boolean
   atRoot: boolean
   hasTask: boolean
@@ -56,16 +57,16 @@ const props = defineProps<{
   savingIds?: ReadonlySet<number>
   /** Asked before a rename starts (any way it starts); false keeps the name as it is. */
   mayRename?: (item: Item) => Promise<boolean>
-  /** Folders whose deletion is in flight: dimmed until the server confirms. */
-  deletingIds?: ReadonlySet<number>
+  /** Items (`itemKey`) whose deletion is in flight: dimmed until the server confirms. */
+  deletingKeys?: ReadonlySet<string>
   /** Pending work held for a moment, so fast saves never flash an indicator. */
   showPending?: boolean
   /** Why the last create or rename failed. */
   actionError?: string | null
   /** What an empty folder says instead of inviting uploads (a workflow folder). */
   emptyNote?: string
-  /** The row whose menu is open, if any: its button stays visible. */
-  menuRowId?: number | null
+  /** The row (`itemKey`) whose menu is open, if any: its button stays visible. */
+  menuRowKey?: string | null
   /** Empty files folded away; a last row says how many and shows them. */
   hiddenEmpty?: number
   /** Empty files are listed by choice: the last row offers to fold them again. */
@@ -75,7 +76,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   sort: [key: SortKey]
   toggleAll: []
-  toggle: [id: number]
+  toggle: [key: string]
   rowClick: [event: MouseEvent, index: number]
   open: [item: Item]
   /** A row's menu, asked for at a point on screen (its button, or a right-click). */
@@ -83,7 +84,7 @@ const emit = defineEmits<{
   pick: [index: number]
   goUp: []
   createFolder: [name: string]
-  rename: [item: { id: number; name: string }]
+  rename: [item: Item, name: string]
   retry: []
   /** The row under the mouse (null when it leaves), for prefetching. */
   hover: [item: Item | null]
@@ -99,6 +100,11 @@ const emit = defineEmits<{
 }>()
 
 const workflowsStore = useWorkflowsStore()
+
+/** These sets hold folder ids (saving) and file ids (produced): the other kind is never in them. */
+const isSaving = (item: Item) => item.kind === 'folder' && !!props.savingIds?.has(item.id)
+const isProduced = (item: Item) => item.kind === 'file' && props.produced.has(item.id)
+const isDeleting = (item: Item) => !!props.deletingKeys?.has(itemKey(item))
 
 /** A drop can be thousands of files; the listing stays a listing. */
 const MAX_UPLOAD_ROWS = 50
@@ -161,7 +167,7 @@ function onNewFolderKeydown(event: KeyboardEvent) {
 }
 
 // --- Inline Renaming (Finder style) ---
-const renamingId = ref<number | null>(null)
+const renamingKey = ref<string | null>(null)
 const renamingName = ref('')
 const renameInput = ref<HTMLInputElement | null>(null)
 let cancellingRename = false
@@ -172,10 +178,10 @@ function setRenameInput(el: unknown) {
 
 async function startRename(item: Item) {
   // One rename at a time per folder: the previous name is still being saved.
-  if (props.savingIds?.has(item.id)) return
+  if (isSaving(item)) return
   // No rights, no input: nobody should type a name the server would refuse.
   if (props.mayRename && !(await props.mayRename(item))) return
-  renamingId.value = item.id
+  renamingKey.value = itemKey(item)
   renamingName.value = item.name
   cancellingRename = false
   await nextTick()
@@ -198,20 +204,20 @@ function commitRename() {
     cancellingRename = false
     return
   }
-  if (renamingId.value === null) return
-  const id = renamingId.value
-  const targetItem = props.rows.find((r) => r.id === id)
+  if (renamingKey.value === null) return
+  const key = renamingKey.value
+  const targetItem = props.rows.find((r) => itemKey(r) === key)
   const trimmed = renamingName.value.trim()
-  renamingId.value = null
+  renamingKey.value = null
   if (trimmed && targetItem && trimmed !== targetItem.name) {
-    emit('rename', { id, name: trimmed })
+    emit('rename', targetItem, trimmed)
   }
 }
 
 function cancelRename() {
   cancellingRename = true
   renameInput.value?.blur()
-  renamingId.value = null
+  renamingKey.value = null
   renamingName.value = ''
 }
 
@@ -232,7 +238,7 @@ function rowPath(row: Item): string {
 }
 
 function onWindowPointerDown(event: PointerEvent) {
-  if (renamingId.value === null) return
+  if (renamingKey.value === null) return
   const input = renameInput.value
   if (input && !input.contains(event.target as Node)) {
     commitRename()
@@ -251,8 +257,8 @@ onUnmounted(() => {
 const root = ref<HTMLElement | null>(null)
 
 /** A row's `⋯` button, for anchoring its menu or flashing what it did. */
-function menuButton(id: number): HTMLElement | null {
-  return root.value?.querySelector<HTMLElement>(`[data-row-menu="${id}"]`) ?? null
+function menuButton(item: Item): HTMLElement | null {
+  return root.value?.querySelector<HTMLElement>(`[data-row-menu="${itemKey(item)}"]`) ?? null
 }
 
 /** The menu acts on its row, so the cursor moves there first: you see which. */
@@ -269,7 +275,7 @@ function openMenuAtButton(row: Item, index: number, button: HTMLElement) {
 /** From the keyboard: the cursor row's menu, at its button. */
 function openMenuFor(index: number) {
   const row = props.rows[index]
-  const button = row && menuButton(row.id)
+  const button = row && menuButton(row)
   if (row && button) openMenuAtButton(row, index, button)
 }
 
@@ -289,7 +295,7 @@ defineExpose({
   startRename,
   cancelRename,
   commitRename,
-  renamingId,
+  renamingKey,
   menuButton,
   openMenuFor,
 })
@@ -620,24 +626,24 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
 
         <tr
           v-for="(row, index) in rows"
-          :key="row.id"
+          :key="itemKey(row)"
           :data-row="index"
           v-scroll-into-view="index === cursor && !hasTask"
           class="group h-7 cursor-default border-b border-border/60 select-none"
           :class="[
-            selected.has(row.id) ? 'bg-brand-selected' : 'hover:bg-sunken',
+            selected.has(itemKey(row)) ? 'bg-brand-selected' : 'hover:bg-sunken',
             tracing
-              ? produced.has(row.id)
+              ? isProduced(row)
                 ? 'bg-brand-tint/50 shadow-[inset_2px_0_0_var(--color-brand)]'
                 : 'opacity-40'
               : '',
             index === cursor && !hasTask ? 'shadow-[inset_2px_0_0_var(--color-brand)]' : '',
-            index === cursor && !hasTask && !selected.has(row.id) ? 'bg-sunken' : '',
-            deletingIds?.has(row.id) ? 'pointer-events-none opacity-50' : '',
+            index === cursor && !hasTask && !selected.has(itemKey(row)) ? 'bg-sunken' : '',
+            isDeleting(row) ? 'pointer-events-none opacity-50' : '',
           ]"
-          :aria-busy="deletingIds?.has(row.id) || undefined"
-          :data-output="produced.has(row.id) || undefined"
-          :aria-selected="selected.has(row.id)"
+          :aria-busy="isDeleting(row) || undefined"
+          :data-output="isProduced(row) || undefined"
+          :aria-selected="selected.has(itemKey(row))"
           @click="emit('rowClick', $event, index)"
           @dblclick="emit('open', row)"
           @contextmenu.prevent="openMenu(row, index, $event.clientX, $event.clientY)"
@@ -649,8 +655,8 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               type="checkbox"
               class="accent-brand align-middle"
               :aria-label="`Select ${row.name}`"
-              :checked="selected.has(row.id)"
-              @change="emit('toggle', row.id)"
+              :checked="selected.has(itemKey(row))"
+              @change="emit('toggle', itemKey(row))"
             />
           </td>
           <td class="px-2">
@@ -682,7 +688,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 "
               />
               <input
-                v-if="renamingId === row.id"
+                v-if="renamingKey === itemKey(row)"
                 :ref="setRenameInput"
                 v-model="renamingName"
                 type="text"
@@ -710,11 +716,11 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
           </td>
           <td v-if="atRoot" class="truncate px-2">
             <span
-              v-if="showPending && (savingIds?.has(row.id) || deletingIds?.has(row.id))"
+              v-if="showPending && (isSaving(row) || isDeleting(row))"
               class="inline-flex items-center gap-1.5 text-brand"
             >
               <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
-              {{ deletingIds?.has(row.id) ? 'deleting…' : 'saving…' }}
+              {{ isDeleting(row) ? 'deleting…' : 'saving…' }}
             </span>
             <span v-else-if="row.caseRef" class="tabular text-ink-secondary" v-overflow-tooltip>{{
               row.caseRef
@@ -746,11 +752,11 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
             </td>
             <td class="truncate px-2 text-ink-muted">
               <span
-                v-if="showPending && (savingIds?.has(row.id) || deletingIds?.has(row.id))"
+                v-if="showPending && (isSaving(row) || isDeleting(row))"
                 class="inline-flex items-center gap-1.5 text-brand"
               >
                 <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
-                {{ deletingIds?.has(row.id) ? 'deleting…' : 'saving…' }}
+                {{ isDeleting(row) ? 'deleting…' : 'saving…' }}
               </span>
               <template v-else>{{ typeOf(row) }}</template>
             </td>
@@ -764,13 +770,13 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                  Not "outside" its menu: pressing it again closes the menu, not reopens it. -->
             <button
               type="button"
-              :data-row-menu="row.id"
+              :data-row-menu="itemKey(row)"
               data-click-outside-ignore
               class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted group-hover:opacity-100 hover:bg-surface hover:text-ink focus-visible:opacity-100"
-              :class="index === cursor || menuRowId === row.id ? 'opacity-100' : 'opacity-0'"
+              :class="index === cursor || menuRowKey === itemKey(row) ? 'opacity-100' : 'opacity-0'"
               :aria-label="`Actions for ${row.name}`"
               aria-haspopup="menu"
-              :aria-expanded="menuRowId === row.id"
+              :aria-expanded="menuRowKey === itemKey(row)"
               v-tooltip="'Actions'"
               @click.stop="openMenuAtButton(row, index, $event.currentTarget as HTMLElement)"
               @dblclick.stop

@@ -9,8 +9,8 @@
  *   placeholder rows in their parent until the real folder replaces them.
  * - `savingIds`: folders whose rename is in flight. The new name shows right
  *   away; a second rename waits until the first one settles.
- * - `deletingIds`: folders whose deletion is in flight. They stay on screen,
- *   dimmed, until the server confirms, then disappear with everything below.
+ * - `deletingKeys`: items (`itemKey`) whose deletion is in flight. They stay on
+ *   screen, dimmed, until the server confirms, then disappear with everything below.
  * - `error`: why the last create, rename or delete failed.
  */
 
@@ -33,7 +33,7 @@ import { useRootPagesStore } from '@/stores/rootPages'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/stores/workflows'
 import { count } from '@/utils/format'
-import { awaitsOutputs } from '@/utils/item'
+import { awaitsOutputs, itemKey } from '@/utils/item'
 
 export interface PendingFolder {
   /** Stable key for the placeholder row; not a server id. */
@@ -45,7 +45,7 @@ export interface PendingFolder {
 const error = ref<string | null>(null)
 const pendingCreates = reactive<PendingFolder[]>([])
 const savingIds = reactive(new Set<number>())
-const deletingIds = reactive(new Set<number>())
+const deletingKeys = reactive(new Set<string>())
 let nextPendingKey = 0
 
 export interface UseFolderActionsReturn {
@@ -60,20 +60,20 @@ export interface UseFolderActionsReturn {
   createFolder: (parent: number | null, name: string) => Promise<Item | null>
   /** Renames right away and reverts if the server refuses. Resolves to success. */
   renameFolder: (id: number, name: string) => Promise<boolean>
-  /** Ids of items whose deletion is still in flight. */
-  deletingIds: ReadonlySet<number>
+  /** Items (`itemKey`) whose deletion is still in flight. */
+  deletingKeys: ReadonlySet<string>
   /**
    * Deletes folders (with everything below them) and files, in parallel. Each
    * one leaves the store once the server confirms; failures stay and are
-   * reported. Resolves to the ids that were deleted.
+   * reported. Resolves to the items that were deleted.
    */
-  deleteItems: (ids: number[]) => Promise<number[]>
+  deleteItems: (items: Item[]) => Promise<Item[]>
   /**
    * Asks for confirmation, then deletes. The one entry point for deleting from
-   * the UI (inspector, Delete key, prompt `rm`). Resolves to the ids deleted;
+   * the UI (inspector, Delete key, prompt `rm`). Resolves to the items deleted;
    * none when cancelled.
    */
-  confirmDeleteItems: (items: Item[]) => Promise<number[]>
+  confirmDeleteItems: (items: Item[]) => Promise<Item[]>
   /**
    * Whether the operator may rename `item` (Owner or Editor). Checked before a
    * rename starts, so nobody types a new name the server would refuse; the
@@ -95,7 +95,7 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
   // Every way in (the toolbar, `mkdir`) meets the same rule here.
   if (parent !== null) {
     const itemsStore = useItemsStore()
-    if (awaitsOutputs(itemsStore.findItem(parent), itemsStore.childrenOf(parent).length)) {
+    if (awaitsOutputs(itemsStore.findFolder(parent), itemsStore.childrenOf(parent).length)) {
       error.value = `Could not create “${name}”: the workflow has not produced its outputs yet`
       return null
     }
@@ -136,7 +136,7 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
  */
 async function renameFolder(id: number, name: string): Promise<boolean> {
   const itemsStore = useItemsStore()
-  const item = itemsStore.findItem(id)
+  const item = itemsStore.findFolder(id)
   if (!item || savingIds.has(id)) return false
   clearError()
 
@@ -157,7 +157,7 @@ async function renameFolder(id: number, name: string): Promise<boolean> {
     if (renamed.status === 'rejected' && workflow) workflow.name = previousWorkflowName!
     return true
   } catch (err: unknown) {
-    const current = itemsStore.findItem(id)
+    const current = itemsStore.findFolder(id)
     if (current) current.name = previousName
     if (workflow && previousWorkflowName !== undefined) {
       workflow.name = previousWorkflowName
@@ -172,14 +172,12 @@ async function renameFolder(id: number, name: string): Promise<boolean> {
   }
 }
 
-async function deleteItems(ids: number[]): Promise<number[]> {
+async function deleteItems(items: Item[]): Promise<Item[]> {
   const itemsStore = useItemsStore()
-  const targets = ids
-    .map((id) => itemsStore.findItem(id))
-    .filter((item): item is Item => !!item && !deletingIds.has(item.id))
+  const targets = items.filter((item) => !deletingKeys.has(itemKey(item)))
   if (!targets.length) return []
   clearError()
-  for (const item of targets) deletingIds.add(item.id)
+  for (const item of targets) deletingKeys.add(itemKey(item))
 
   const results = await Promise.allSettled(
     targets.map((item) =>
@@ -187,17 +185,20 @@ async function deleteItems(ids: number[]): Promise<number[]> {
     ),
   )
 
-  const deleted: number[] = []
+  const deleted: Item[] = []
   const failures: { name: string; reason: string }[] = []
-  const removed: number[] = []
+  const removedFolders: number[] = []
   results.forEach((result, index) => {
     const item = targets[index]!
-    deletingIds.delete(item.id)
+    deletingKeys.delete(itemKey(item))
     if (result.status === 'fulfilled') {
-      deleted.push(item.id)
-      // Gone on the server: drop it, everything below it, their cached data and
-      // roles. A file takes nothing else with it.
-      const gone = itemsStore.removeTree(item.id)
+      deleted.push(item)
+      // Gone on the server: drop it, everything below it, and the folders'
+      // cached data and roles. A file takes nothing else with it.
+      const gone = itemsStore
+        .removeTree(item)
+        .filter((removed) => removed.kind === 'folder')
+        .map((folder) => folder.id)
       forget(
         gone.flatMap((g) => [
           folderKeys.folder(g),
@@ -207,7 +208,7 @@ async function deleteItems(ids: number[]): Promise<number[]> {
         ]),
       )
       forgetRoles(gone)
-      removed.push(...gone)
+      removedFolders.push(...gone)
     } else {
       failures.push({
         name: item.name,
@@ -218,7 +219,7 @@ async function deleteItems(ids: number[]): Promise<number[]> {
 
   // Listed at the top: pages shrink now, then refill from the server (the
   // current page right away, the others when visited).
-  if (useRootPagesStore().dropFromRootPages(removed)) {
+  if (useRootPagesStore().dropFromRootPages(removedFolders)) {
     invalidate(folderKeys.rootPrefix)
     refreshAll()
   }
@@ -255,8 +256,8 @@ async function mayRename(item: Item): Promise<boolean> {
   return permitted([item], canRename, () => `Only an owner or editor can rename “${item.name}”.`)
 }
 
-async function confirmDeleteItems(items: Item[]): Promise<number[]> {
-  const targets = items.filter((item) => !deletingIds.has(item.id))
+async function confirmDeleteItems(items: Item[]): Promise<Item[]> {
+  const targets = items.filter((item) => !deletingKeys.has(itemKey(item)))
   if (!targets.length) return []
   clearError()
 
@@ -266,7 +267,7 @@ async function confirmDeleteItems(items: Item[]): Promise<number[]> {
   const folders = targets.filter((item) => item.kind === 'folder')
   const fileParents = targets
     .filter((item) => item.kind === 'file' && item.parent !== null)
-    .map((item) => useItemsStore().findItem(item.parent!))
+    .map((item) => useItemsStore().findFolder(item.parent!))
     .filter((item): item is Item => !!item)
 
   try {
@@ -305,7 +306,7 @@ async function confirmDeleteItems(items: Item[]): Promise<number[]> {
     confirmLabel: 'Delete',
     danger: true,
   })
-  return confirmed ? deleteItems(targets.map((item) => item.id)) : []
+  return confirmed ? deleteItems(targets) : []
 }
 
 export function useFolderActions(): UseFolderActionsReturn {
@@ -316,7 +317,7 @@ export function useFolderActions(): UseFolderActionsReturn {
     savingIds,
     createFolder,
     renameFolder,
-    deletingIds,
+    deletingKeys,
     deleteItems,
     confirmDeleteItems,
     mayRename,

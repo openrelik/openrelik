@@ -1,22 +1,20 @@
 import { computed, ref, watch, type Ref } from 'vue'
 
-export interface Identifiable {
-  id: number
-}
-
 /**
  * Manages cursor position, multi-selection, and Shift+Click/Shift+Arrow range selection
- * for a list of identifiable items.
+ * for a list of rows. `keyOf` says what tells one row from another; the selection
+ * holds those keys.
  */
-export function useRowSelection<T extends Identifiable>(
+export function useRowSelection<T>(
   rows: Ref<T[]>,
+  keyOf: (row: T) => string,
   bytesOf: (item: T) => number = () => 0,
 ) {
   const cursor = ref(0)
-  const selected = ref(new Set<number>())
+  const selected = ref(new Set<string>())
 
   let anchor: number | null = null
-  let base = new Set<number>()
+  let base = new Set<string>()
 
   function dropAnchor() {
     anchor = null
@@ -29,23 +27,23 @@ export function useRowSelection<T extends Identifiable>(
 
   const selectedBytes = computed(() =>
     rows.value
-      .filter((row) => selected.value.has(row.id))
+      .filter((row) => selected.value.has(keyOf(row)))
       .reduce((sum, row) => sum + bytesOf(row), 0),
   )
 
   const allSelected = computed(
-    () => rows.value.length > 0 && rows.value.every((row) => selected.value.has(row.id)),
+    () => rows.value.length > 0 && rows.value.every((row) => selected.value.has(keyOf(row))),
   )
 
-  function toggle(id: number) {
+  function toggle(key: string) {
     dropAnchor()
     const next = new Set(selected.value)
-    if (!next.delete(id)) next.add(id)
+    if (!next.delete(key)) next.add(key)
     selected.value = next
   }
 
   function toggleAll() {
-    selected.value = allSelected.value ? new Set() : new Set(rows.value.map((row) => row.id))
+    selected.value = allSelected.value ? new Set() : new Set(rows.value.map(keyOf))
   }
 
   /**
@@ -57,7 +55,7 @@ export function useRowSelection<T extends Identifiable>(
   function startRange() {
     const list = rows.value
     const at = Math.max(0, cursor.value)
-    const isSelected = (i: number) => !!list[i] && selected.value.has(list[i]!.id)
+    const isSelected = (i: number) => !!list[i] && selected.value.has(keyOf(list[i]!))
     base = new Set(selected.value)
     if (!isSelected(at)) {
       anchor = at
@@ -68,7 +66,7 @@ export function useRowSelection<T extends Identifiable>(
     while (isSelected(start - 1)) start--
     while (isSelected(end + 1)) end++
     anchor = at - start >= end - at ? start : end
-    list.slice(start, end + 1).forEach((row) => base.delete(row.id))
+    list.slice(start, end + 1).forEach((row) => base.delete(keyOf(row)))
   }
 
   function extendTo(index: number) {
@@ -78,7 +76,7 @@ export function useRowSelection<T extends Identifiable>(
     const start = anchor ?? cursor.value
     const [from, to] = start < cursor.value ? [start, cursor.value] : [cursor.value, start]
     const next = new Set(base)
-    rows.value.slice(from, to + 1).forEach((row) => next.add(row.id))
+    rows.value.slice(from, to + 1).forEach((row) => next.add(keyOf(row)))
     selected.value = next
   }
 

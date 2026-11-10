@@ -80,7 +80,7 @@ const ranOn = computed(() => {
   return { from: null, files: workflow.value.inputs }
 })
 /** Input files live in the folder the workflow folder is in. */
-const inputsFolder = computed(() => itemsStore.findItem(props.folderId)?.parent)
+const inputsFolder = computed(() => itemsStore.findFolder(props.folderId)?.parent)
 
 const reportsByFile = computed(
   () =>
@@ -92,7 +92,7 @@ const reportsByFile = computed(
  */
 const outputs = computed(() =>
   props.task.outputs
-    .map((id) => itemsStore.findItem(id))
+    .map((id) => itemsStore.findFile(id))
     .filter((item) => item !== undefined)
     .sort(
       (a, b) =>
