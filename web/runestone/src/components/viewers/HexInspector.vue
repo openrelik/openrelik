@@ -4,10 +4,12 @@ import KeyValueRow from '@/components/base/KeyValueRow.vue'
 import { offsetLabel, type Reading } from '@/utils/bytes'
 
 /**
- * What the hex viewer's cursor and selection read as: where they are, the
- * bytes from the selection's start (the cursor, with nothing selected) as
- * numbers and timestamps in the chosen byte order, and the selection decoded
- * as text. Every value can be copied.
+ * What the hex viewer's cursor and selection read as: where they are (one
+ * row: the cursor's offset, or the selection's range), the bytes from the
+ * selection's start (the cursor, with nothing selected) as numbers and
+ * timestamps in the chosen byte order, and the selection decoded as text.
+ * Every value can be copied. Times are UTC, except where a format keeps none
+ * (DOS), which says so beside the value.
  *
  * Structures point at each other by offset: an integer that is an offset in
  * the file can be followed, which is how a header is walked. A timestamp the
@@ -15,7 +17,6 @@ import { offsetLabel, type Reading } from '@/utils/bytes'
  * dimmed and flagged: the bytes are not a time of that kind.
  */
 const props = defineProps<{
-  cursor: number
   selectionStart: number
   selectionLength: number
   /** Hex digits to write offsets with. */
@@ -68,23 +69,32 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
       </div>
     </div>
 
+    <!-- One place: everything below is read from where it starts. -->
     <dl class="divide-y divide-border px-3">
-      <KeyValueRow label="offset">
-        <span class="tabular whitespace-nowrap"
-          >0x{{ offsetLabel(cursor, width) }} ({{ cursor }})</span
+      <KeyValueRow v-if="selectionLength > 1" label="selection">
+        <!-- the count wraps under the range on a narrow panel -->
+        <span class="tabular inline-flex flex-wrap justify-end gap-x-[1ch]"
+          ><span class="whitespace-nowrap"
+            >0x{{ offsetLabel(selectionStart, width) }}–0x{{
+              offsetLabel(selectionStart + selectionLength - 1, width)
+            }}</span
+          >
+          <span class="whitespace-nowrap text-ink-muted"
+            >· {{ selectionLength.toLocaleString('en-US') }} bytes</span
+          ></span
         >
       </KeyValueRow>
-      <KeyValueRow v-if="selectionLength > 1" label="selection">
+      <KeyValueRow v-else label="offset">
         <span class="tabular whitespace-nowrap"
-          >{{ selectionLength.toLocaleString('en-US') }} bytes from 0x{{
-            offsetLabel(selectionStart, width)
-          }}</span
+          >0x{{ offsetLabel(selectionStart, width) }}
+          <span class="text-ink-muted">({{ selectionStart }})</span></span
         >
       </KeyValueRow>
     </dl>
 
     <p class="micro-label mt-2 px-3">
-      read from <span class="tabular normal-case">0x{{ offsetLabel(selectionStart, width) }}</span>
+      {{ selectionLength > 1 ? 'its start as numbers and times' : 'as numbers and times' }}
+      <span class="normal-case">· UTC</span>
     </p>
     <dl class="divide-y divide-border px-3">
       <KeyValueRow v-for="reading in readings" :key="reading.label" :label="reading.label">
@@ -95,6 +105,12 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
             class="inline-block transition-colors hover:text-brand data-[copied=true]:text-success"
             :class="{ 'text-ink-muted': reading.plausible === false }"
             >{{ reading.value }}</span
+          >
+          <span
+            v-if="reading.note"
+            class="text-[11px] text-ink-muted"
+            v-tooltip="'No time zone is stored: this is the clock of the machine that wrote it'"
+            >{{ reading.note }}</span
           >
           <span
             v-if="reading.plausible === false && reading.value !== '–'"

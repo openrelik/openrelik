@@ -582,7 +582,6 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
     <Teleport defer to="#file-side-bytes">
       <HexInspector
         v-model:little-endian="littleEndian"
-        :cursor="cursor"
         :selection-start="selectionStart"
         :selection-length="selectionEnd - selectionStart + 1"
         :width="width"
