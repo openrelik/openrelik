@@ -48,7 +48,7 @@ The whole process at a glance. The sections below have the details.
   │  prototype/<slug> worktree     try it            (unpushed)      │
   └────────────────────────────────┬─────────────────────────────────┘
                                    │ file it  [idea]
-                                   │ (local idea.md deleted; research stays local)
+                                   │ (idea.md updated with issue URL; stays local until first PR)
                                    ▼
   BACKLOG (GitHub)
   ┌──────────────────────────────────────────────────────────────────┐
@@ -69,31 +69,30 @@ The whole process at a glance. The sections below have the details.
                    ▼
   THE WORK, in dev/artifacts/features/<slug>/, a PR per artifact
 
-   Small feature       Clear scope              Big, user-facing, data model, API
-   ─────────────       ───────────              ─────────────────────────────────
-                                                design/<slug>  [design] [adr]
-                                                idea, design.md, its ADRs
-                                                ╔══════════════════════════════╗
-                                                ║ GATE: a core developer       ║
-                                                ║ approves                     ║
-                                                ╚══════════════╤═══════════════╝
-                                                               │ merged
-                                                               ▼
-                       spec/<slug>  [spec]      spec/<slug>  [spec]
-                       idea, spec.md            spec.md
-                       ╔════════════════╗       ╔════════════════╗
-                       ║ GATE: approved ║       ║ GATE: approved ║
-                       ╚═══════╤════════╝       ╚═══════╤════════╝
-                               └───────────┬────────────┘
-                                           │ approved (stack on it) or merged
-                                           ▼
-   code/<slug>                 code/<slug>  [implement]
-   [implement]                 task by task, ticking T1, T2, ... in spec.md;
-   idea and spec in            the spec changes in the PR where the code differs;
-   the first commit,           a change users see goes back to the team first;
-   then the code               a lasting decision needs its ADR first
-         │                                 │
-         └─────────────────┬───────────────┘
+   Clear scope                                 Big, user-facing, data model, API
+   ───────────                                 ─────────────────────────────────
+                                               design/<slug>  [design] [adr]
+                                               idea, design.md, its ADRs
+                                               ╔══════════════════════════════╗
+                                               ║ GATE: a core developer       ║
+                                               ║ approves                     ║
+                                               ╚══════════════╤═══════════════╝
+                                                              │ merged
+                                                              ▼
+   spec/<slug>  [spec]                         spec/<slug>  [spec]
+   idea, research, spec.md                     spec.md
+   ╔══════════════════════════════╗            ╔══════════════════════════════╗
+   ║ GATE: spec PR merged         ║            ║ GATE: spec PR merged         ║
+   ╚══════════════╤═══════════════╝            ╚══════════════╤═══════════════╝
+                  └─────────────────────┬─────────────────────┘
+                                        │ merged
+                                        ▼
+                       code/<slug>  [implement]
+                       task by task, ticking T1, T2, ... in spec.md;
+                       the spec changes in the PR where the code differs;
+                       a change users see goes back to the team first;
+                       a lasting decision needs its ADR first
+                                        │
                            ▼
               [review]        private, in .private/<slug>/, in rounds
                               until no Must fix and no Should fix findings
@@ -144,7 +143,6 @@ also commits the idea (see "Starting").
 | Change                                               | PRs                                   |
 | ---------------------------------------------------- | ------------------------------------- |
 | Bugfix, refactor, small tweak                        | code (from an issue)                  |
-| Small feature                                        | spec and code in one PR               |
 | Feature with a clear scope                           | spec, code                            |
 | Big or user-facing feature, data model or API change | design (with its ADRs), spec, code    |
 | A decision on its own                                | ADR                                   |
@@ -161,7 +159,7 @@ and a prototype are optional in every row.
 
 ## Workflow
 
-1. **Draft** (optional). Write the idea down privately in `.private/<slug>/idea.md`,
+1. **Draft**. Write the idea down privately in `.private/<slug>/idea.md`,
    from the `idea.md` template, and refine it with agents. It's gitignored, so nobody
    sees it until you file it.
 2. **Research and prototype** (optional, before filing or after). Explore it with
@@ -248,35 +246,36 @@ Before you give up a claim, publish what only you have, such as research in
 
 ## Ideas
 
-An idea says what and why in a few sentences, for a teammate without context. File it
-straight away, or draft it privately first if you want to research it or try it.
+An idea says what and why in a few sentences, for a teammate without context. Write it
+down privately in `.private/<slug>/idea.md` first, to refine it, research it, or try it.
 
 `.private/` lives in the main checkout and is gitignored, so every worktree you start
 from there can read it and nobody else can. Filing publishes the idea. The issue's
 title is its title, and its body is the idea's sections without the frontmatter. Then
-delete the local `idea.md`. The issue is the idea now, and two copies would drift
-apart. Research stays in `.private/<slug>/` until the work starts. Say on the issue
-that it exists ("Research and a prototype exist locally. Ask @you.") so whoever picks
-up the idea knows to ask. Once a prototype has answered its question, put what it
-taught in the research and remove it. One worth showing gets pushed (see
+update `$issue` in `.private/<slug>/idea.md` with the new issue URL. The draft and research
+stay in `.private/<slug>/` until the first PR (design or spec) commits them into the repository.
+Say on the issue that research exists ("Research and a prototype exist locally. Ask @you.")
+so whoever picks up the idea knows to ask. Once a prototype has answered its question, put
+what it taught in the research and remove it. One worth showing gets pushed (see
 "Prototypes").
 
 **By hand**, from the main checkout:
 
 ```bash
-mkdir -p .private/bulk-tags                    # the draft, if you want one
+mkdir -p .private/bulk-tags                    # always draft locally first
 cp dev/templates/idea.md .private/bulk-tags/
 #   fill in $slug, $title and $created; write Problem, Proposal, Users, Open questions
 gh issue list --label idea --search "tags"     # filed already?
 gh issue create --label idea --assignee @me --title "Bulk tags" --body-file body.md
 #   body.md: the idea's sections, without the frontmatter and the title
-rm .private/bulk-tags/idea.md                  # the issue is the idea now
+#   update $issue in .private/bulk-tags/idea.md; keep locally until the first PR
 ```
 
-**With the skill** (`idea`): `/idea Bulk tags`, or "write down an idea: ...". It asks
-whether to file now or draft first, then writes the idea with you. Before filing, it
-reads the idea the way a teammate without context would and checks the backlog for
-duplicates. It files only after your go-ahead, and never adds the `accepted` label.
+**With the skill** (`idea`): `/idea Bulk tags`, or "write down an idea: ...". It always
+drafts the idea privately first in `.private/<slug>/idea.md` without asking, then writes
+the idea with you. Before filing, it reads the idea the way a teammate without context
+would and checks the backlog for duplicates. It files only after your go-ahead, and
+never adds the `accepted` label.
 
 An idea that isn't worth doing is closed as not planned, with a comment saying why. If
 the work has already started, you drop it in the repository instead. An `## Outcome`
@@ -363,8 +362,8 @@ The process starts when someone decides to build an idea. Filing it doesn't coun
 idea has to be accepted (see "Accepting an idea"). Claim it (see "Owning an idea") and
 say on the issue that you're starting, so others know.
 
-The first PR of the work commits the idea, whether that PR is the design, the spec or
-a small feature's code. It adds `dev/artifacts/features/<slug>/idea.md`, from the
+The first PR of the work commits the idea, whether that PR is the design or the
+spec. It adds `dev/artifacts/features/<slug>/idea.md`, from the
 `idea.md` template with the issue's current text, and the research beside it if there
 is any. Its reviewers approve the why along with the what. Once it's open, replace the
 issue's body with the `issue.md` template.
@@ -373,7 +372,7 @@ issue's body with the `issue.md` template.
 
 ```bash
 gh issue edit 123 --add-assignee @me                  # claim it, if it's unassigned
-./devctl worktree create spec/bulk-tags --no-stack    # or design/..., or code/...
+./devctl worktree create spec/bulk-tags --no-stack    # or design/...
 mkdir -p .worktrees/spec-bulk-tags/dev/artifacts/features/bulk-tags
 #   write idea.md there from the issue's text (gh issue view 123)
 #   and move .private/bulk-tags/research.md beside it, if it exists
@@ -382,7 +381,7 @@ gh issue edit 123 --body-file issue.md
 ```
 
 **With the skill** (`idea`): "start on #123". You'll rarely need it on its own, since
-the `design`, `spec` and `implement` skills do this when their PR comes first. It
+the `design` and `spec` skills do this when their PR comes first. It
 checks that the idea is accepted and not someone else's, and screens the research for
 anything that shouldn't be public before moving it into the repository.
 
@@ -473,11 +472,11 @@ gh pr create --title "Spec: Bulk tags" --body "Refs #123"
 
 **With the skill** (`spec`): `/spec bulk-tags`, or `/spec 123`. Before writing, it
 checks that the idea is accepted and not someone else's, and that the design and the
-ADRs the spec depends on are merged. It drafts the spec in `.private/<slug>/spec.md`
-for local markdown review before committing anything to a branch. For a small feature,
-it asks whether the spec should go with the code on `code/<slug>` instead. It reads
-the code each task will change, so the tasks are real, commits once you approve the
-local draft, and opens the PR after your go-ahead.
+ADRs the spec depends on are merged. It always drafts the spec in `.private/<slug>/spec.md`
+and pauses for human review before creating a branch. When creating the spec PR, it
+includes `idea.md`, `research.md` (if research exists), and `spec.md` in
+`dev/artifacts/features/<slug>/`. It reads the code each task will change, so the tasks
+are real, commits once you approve the local draft, and opens the PR after your go-ahead.
 
 ## Code
 
@@ -487,14 +486,13 @@ local draft, and opens the PR after your go-ahead.
 #   then review (see "Review"), and open the PR
 ```
 
-To start before the spec PR is merged but after it's approved, stack the code on it
-with `./devctl worktree create code/bulk-tags --from spec/bulk-tags`. Implementing
+Implementation starts only after the spec PR is merged into `main`. The `implement`
+skill checks that the spec PR is merged and refuses to implement if not. Implementing
 sometimes teaches you something the spec didn't know. When it does, change the spec in
 the code PR, so main's spec matches main's code. If the change is to what users see,
 take it back to the team on the PR first.
 
-A small feature puts the spec and the code in one PR on `code/<slug>`, with the idea
-and the spec in its first commit. A bugfix or a refactor has no spec. Run `./devctl
+A bugfix or a refactor has no spec. Run `./devctl
 worktree create code/<slug>`, fix it, review it, and open the PR with `Closes
 #<issue>`.
 
@@ -513,10 +511,12 @@ git commit    # the symptom, the cause, and the fix, and "Refs #123"
 ```
 
 **With the skill** (`implement`): `/implement bulk-tags` for a feature, or `/implement
-123` ("fix issue 123") for a bugfix or a refactor. A feature it builds task by task,
-ticking and committing each one. It stops to ask if the spec turns out wrong in a way
-users would see, or in a way that needs an ADR. A bug it reproduces with a failing
-test before it touches the fix. It pushes nothing, and the review comes next.
+123` ("fix issue 123") for a bugfix or a refactor. For a feature, it checks that the
+spec PR is merged into `main` first and refuses to implement if it is not. It builds
+task by task, ticking and committing each one. It stops to ask if the spec turns out
+wrong in a way users would see, or in a way that needs an ADR. A bug it reproduces
+with a failing test before it touches the fix. It pushes nothing, and the review comes
+next.
 
 ## Review
 
@@ -646,7 +646,7 @@ Python, so it uses only the standard library.
 | `prototype/<slug>` | throwaway code                                     | never         |
 | `design/<slug>`    | `design.md`, its ADRs, and the research            | when approved |
 | `adr/<slug>`       | `dev/artifacts/decisions/<number>-<slug>.md`       | when approved |
-| `spec/<slug>`      | `spec.md`, and the research                        | when approved |
+| `spec/<slug>`      | `idea.md`, `spec.md`, and the research             | when approved |
 | `code/<slug>`      | the code, review.md (for a feature), or a fix      | when reviewed |
 
 Each branch is a worktree with its own stack, made from the main checkout with
@@ -680,7 +680,7 @@ Each branch is a worktree with its own stack, made from the main checkout with
 - Agents don't merge, and don't start a step whose input isn't approved. The design
   and the spec need the idea accepted, and the spec also needs the design merged, if
   there is one. The spec and the code need the ADRs they depend on merged, and the
-  code needs the spec. Agents don't start work on an idea that's assigned to someone
+  code needs the spec PR merged into main. Agents don't start work on an idea that's assigned to someone
   else, and never add the `accepted` label. A prototype needs no acceptance.
 - `status.md` in the repository root is a personal "what did I do last night" note.
   It's gitignored.

@@ -16,21 +16,23 @@ for a bugfix or a refactor, until it's ready for the review skill.
 ## Before
 
 1. **Basis**:
-   - A feature: `dev/artifacts/features/<slug>/spec.md` on main, or on its approved
-     spec PR; and the `idea.md`, `design.md` and ADRs it refers to.
-   - A small feature, with the spec and the code in one PR: there's no spec yet. Do
-     "Start it" from the `idea` skill, and write the spec as the `spec` skill says
-     (drafted and reviewed in `.private/<slug>/spec.md` first), both committed on
-     `code/<slug>` only after the user approves the draft.
+   - A feature: `dev/artifacts/features/<slug>/spec.md` on `main`; and the `idea.md`,
+     `design.md` and ADRs it refers to.
    - A bugfix or a refactor: the issue (`gh issue view <issue>`).
-2. **Gate**: for a feature, the spec merged, or approved (then stack the code on it,
-   below); the ADRs it depends on merged; and the idea not assigned to someone else.
-   For a small feature, the idea accepted. For a bugfix or a refactor, an issue. If
-   any is missing, stop and tell the user.
+2. **Gate**:
+   - For a feature: **always check that the spec PR is merged into main and refuse to implement if not**.
+     Check that `dev/artifacts/features/<slug>/spec.md` exists on `main`
+     (`git fetch origin && git log origin/main -- dev/artifacts/features/<slug>/spec.md` or
+     `gh pr list --state merged --search "head:spec/<slug>"`). If the spec PR is not merged
+     (whether still open, unapproved, in review, or not yet created), **refuse to implement**
+     and tell the user implementation cannot start until the spec PR is merged into `main`.
+     Do not stack code on unmerged spec branches. In addition, the ADRs the spec depends on
+     must be merged, and the idea must not be assigned to someone else.
+   - For a bugfix or a refactor: an issue (`gh issue view <issue>`).
+   If any gate check fails, refuse to proceed and tell the user.
 3. **Worktree**: from the main checkout, `./devctl worktree create code/<slug>`
-   (`--from spec/<slug>` to stack it on an approved spec; unless
-   `.worktrees/<slug>/` already exists), which starts its stack. Work there, and read
-   the `AGENTS.md` of each component the change touches.
+   (unless `.worktrees/<slug>/` already exists), which starts its stack based on `main`.
+   Work there, and read the `AGENTS.md` of each component the change touches.
 
 ## A feature
 
@@ -67,6 +69,8 @@ skill, ideally in a fresh session. For a feature, the review record is saved to
 
 ## Rules
 
+- Always check that the spec PR is merged into main before starting feature implementation.
+  Refuse to implement if the spec PR is not merged.
 - Nothing the spec or the issue didn't ask for. Something worth doing beyond it is a
   new idea or issue: tell the user.
 - Nothing is published (no push, no PR, no comments) until the user says so.
