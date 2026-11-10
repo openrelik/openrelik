@@ -56,8 +56,8 @@ updates all components across the monorepo.
    ./devctl release lib worker-common <version>
    ./devctl release lib python-client <version>
    ```
-3. Open a pull request against `main` (`Refs #<issue>`).
-4. Once merged, switch to `main`, pull, tag, and push the tags:
+3. Open a pull request against `main` (`Refs #<issue>`). After maintainer review
+   and merge: switch to `main`, pull, tag, and push the tags:
    ```sh
    git switch main && git pull
    ./devctl release tag
@@ -68,7 +68,7 @@ updates all components across the monorepo.
    git push origin common-v<version> ai-common-v<version> worker-common-v<version>
    git push origin python-client-v<version>
    ```
-5. Wait for the `Publish Python Packages` GitHub Actions workflow to publish all four
+4. Wait for the `Publish Python Packages` GitHub Actions workflow to publish all four
    packages to PyPI before proceeding to Stage 2.
 
 #### Stage 2: Move Consumers to New Minor
@@ -88,8 +88,9 @@ updates all components across the monorepo.
    ```
 5. Verify versions pass: `uv run --python 3.12 .github/scripts/check-versions.py`.
 6. Commit: `git commit -am "Move consumers to <version> libraries"` (`Refs #<issue>`).
-7. Open a pull request against `main` and merge it. Do not tag yet (workers are
-   tagged with the platform in Stage 3).
+7. Open a pull request against `main` (`Refs #<issue>`). After maintainer review and
+   merge, proceed to Stage 3 (do not tag yet; workers are tagged with the platform
+   in Stage 3).
 
 #### Stage 3: Cut Release Branch and Release Platform
 1. On `main`:
@@ -108,12 +109,8 @@ updates all components across the monorepo.
    ```sh
    ./devctl release platform <version>
    ```
-5. Generate draft release notes in `/tmp/release-notes-v<version>.md` and create a
-   draft release on GitHub (note: do not publish in the GitHub UI before the approval
-   gate pushes tags in Stage 4):
-   ```sh
-   gh release create v<version> --draft --target release/<major>.<minor> --title "OpenRelik <version>" --notes-file /tmp/release-notes-v<version>.md
-   ```
+5. Prepare draft release notes in `/tmp/release-notes-v<version>.md` to be presented
+   during the human approval gate.
 
 #### Stage 4: Human Approval Gate
 1. Present the release report to the user:
@@ -121,7 +118,7 @@ updates all components across the monorepo.
    - Platform version: `<version>`
    - List of tags created locally
    - Diff of `CHANGELOG.md`
-   - Link/preview of draft GitHub release
+   - Preview of draft release notes (`/tmp/release-notes-v<version>.md`)
 2. **STOP**: Ask the user for explicit confirmation to push the release branch, push
    the tags, and publish the GitHub release.
 3. After approval:
@@ -131,9 +128,9 @@ updates all components across the monorepo.
    Wait for CI tests (`Python Unit Tests` and `Frontend Unit Tests [sunstone]`) to pass.
    Push all tags in batches of at most three (using the push commands printed by
    `./devctl release`).
-   Publish GitHub release:
+   Create and publish the GitHub release:
    ```sh
-   gh release edit v<version> --draft=false
+   gh release create v<version> --title "OpenRelik <version>" --notes-file /tmp/release-notes-v<version>.md
    ```
 
 #### Stage 5: Start Next Minor on Main and Sync Changelog
@@ -144,7 +141,8 @@ updates all components across the monorepo.
    git cherry-pick <changelog-commit-hash>
    ```
 3. Run `./devctl release dev <next-minor>.0`.
-4. Open a pull request against `main` and merge it.
+4. Open a pull request against `main` (`Refs #<issue>`). After maintainer review and
+   merge, the next cycle development branch is established.
 
 ---
 
@@ -168,12 +166,10 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    ./devctl release <component> <version>
    ```
    (For libraries, use `./devctl release lib <name> <version>`).
-5. Draft GitHub release notes using `/tmp/release-notes-<tag>.md`:
-   ```sh
-   gh release create <tag> --draft --target release/<major>.<minor> --title "Release <label> <version>" --notes-file /tmp/release-notes-<tag>.md
-   ```
-6. **Human Approval Gate**: Present the commit, tag, and changelog diff. Ask for
-   explicit confirmation.
+5. Prepare draft release notes in `/tmp/release-notes-<tag>.md` to be presented
+   during the human approval gate.
+6. **Human Approval Gate**: Present the commit, tag, changelog diff, and release
+   notes preview. Ask for explicit confirmation.
 7. After approval:
    ```sh
    git push origin release/<major>.<minor>
@@ -181,10 +177,10 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    Wait for CI tests to pass.
    ```sh
    git push origin <tag>
-   gh release edit <tag> --draft=false
+   gh release create <tag> --title "Release <label> <version>" --notes-file /tmp/release-notes-<tag>.md
    ```
 8. Sync changelog to `main`: cherry-pick the changelog commit onto a branch from `main`
-   and open a pull request.
+   and open a pull request (`Refs #<issue>`).
 
 #### For Workers (`worker <name> <version>`)
 1. On `main`, create a pull request branch:
@@ -194,7 +190,7 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    ```
 2. Relock the worker with the updated dependency:
    ```sh
-   cd workers/<name> && uv lock --upgrade-package openrelik-worker-common && cd -
+   (cd workers/<name> && uv lock --upgrade-package openrelik-worker-common)
    ```
 3. Update root `CHANGELOG.md` with the worker fix summary.
 4. Commit the dependency update and changelog:
@@ -205,7 +201,8 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    ```sh
    ./devctl release worker <name> <version>
    ```
-6. Open pull request against `main` and merge it.
+6. Open a pull request against `main` (`Refs #<issue>`). After maintainer review and
+   merge, proceed to tagging on `main`.
 7. On `main`:
    ```sh
    git switch main && git pull
@@ -216,10 +213,9 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
    ```sh
    git push origin worker-<name>-v<version>
    ```
-   Draft and publish GitHub release notes:
+   Create and publish GitHub release notes:
    ```sh
-   gh release create worker-<name>-v<version> --draft --title "Release worker <name> <version>" --notes-file /tmp/release-notes-worker-<name>-<version>.md
-   gh release edit worker-<name>-v<version> --draft=false
+   gh release create worker-<name>-v<version> --title "Release worker <name> <version>" --notes-file /tmp/release-notes-worker-<name>-<version>.md
    ```
 
 ---
@@ -229,7 +225,9 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
 Tags release commits merged via pull requests.
 1. Run `./devctl release tag [commit]` (defaults to `HEAD`).
 2. Inspect the created tags.
-3. **Human Approval Gate**: Show the tags created. Require approval before pushing:
+3. **Human Approval Gate**: Show the tags created. Require approval before pushing.
+   Push tags in batches of at most three (repeat for groups of three if more than three
+   tags were created):
    ```sh
    git push origin tag1 tag2 tag3
    ```
@@ -245,7 +243,7 @@ Advances `main` to `<version>.dev0` after cutting a platform release branch.
    git switch -c bump/dev-<version>
    ```
 2. Run `./devctl release dev <version>`.
-3. Open pull request on `main` and merge it.
+3. Open a pull request against `main` (`Refs #<issue>`).
 
 
 ---
