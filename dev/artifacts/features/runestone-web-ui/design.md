@@ -152,7 +152,7 @@ flowchart TD
 - Every `.ts`, `.vue`, `.css`, and `.sh` file carries the Apache 2.0 `Copyright 2026 Google LLC` header required by the monorepo.
 - `web/runestone/package.json` sets `"name": "openrelik-ui-runestone"` and tracks the root `VERSION` (`0.19.0-dev` on `main`), satisfying `.github/scripts/check-versions.py` (`ROOT.glob("web/*/package.json")`).
 - `web/runestone/AGENTS.md` documents Runestone's commands, minimal-dependency rule, slow-connection cache rules, untrusted-content rules, and design tokens (distilled from `openrelik-new-ui/AGENTS.md` and `docs/design-system.md`). `web/README.md` adds `runestone` to the UI table.
-- Unit tests use Vitest (`environment: 'node'`, `src/**/__tests__/*.test.ts`) covering pure utilities (`bytes`, `lines`, `marks`, `table`, `markdown`, `links`, `workflowSpec`, `caseRef`, `format`), `useQueryCache`, viewer registry matching, and `useWorkflow` draft/chord transformations.
+- Automated tests use Vitest with `happy-dom`, `@vue/test-utils`, `@pinia/testing`, and `@vitest/coverage-v8` (`src/**/__tests__/*.{test,spec}.ts`), covering API client refresh/CSRF/range/SSE behaviour, pure utilities, Pinia stores, composables, custom directives, viewer registry matching, and mounted `.vue` components and views.
 
 ### Container image and runtime configuration
 
