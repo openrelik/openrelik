@@ -233,6 +233,7 @@ class FileCreate(BaseModel):
 class FileResponseCompact(BaseSchemaCompact):
     display_name: str
     filesize: int
+    original_path: Optional[str] = None
     uuid: UUID
     folder_id: int
     is_deleted: Optional[bool] = False
@@ -268,6 +269,7 @@ class FileResponseCompactList(BaseModel):
     id: Optional[int] = None
     display_name: str
     filesize: int
+    original_path: Optional[str] = None
     data_type: str
     magic_mime: Optional[str] = None
     user: UserResponseCompact

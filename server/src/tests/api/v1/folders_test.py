@@ -343,6 +343,33 @@ def test_get_folder_files(fastapi_test_client, mocker, file_response_compact_lis
     assert response.json() == mock_files
 
 
+def test_get_folder_files_includes_original_path(
+    fastapi_test_client, mocker, file_response_compact_list
+):
+    """Test that the folder file listing includes each file's original path."""
+    mock_file = file_response_compact_list.model_dump(mode="json")
+    mock_file["original_path"] = "root/.bash_history"
+    mock_get_files_from_db = mocker.patch("api.v1.folders.get_files_from_db")
+    mock_get_files_from_db.return_value = [mock_file]
+
+    response = fastapi_test_client.get("/folders/1/files/")
+    assert response.status_code == 200
+    assert response.json()[0]["original_path"] == "root/.bash_history"
+
+
+def test_file_response_compact_includes_original_path():
+    """Test that the compact file schema keeps the original path."""
+    compact = schemas.FileResponseCompact(
+        id=1,
+        display_name=".bash_history",
+        filesize=429,
+        uuid="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        folder_id=1,
+        original_path="root/.bash_history",
+    )
+    assert compact.model_dump()["original_path"] == "root/.bash_history"
+
+
 def test_get_folder_success(fastapi_test_client, mocker):
     """Test get_folder returns success."""
     import uuid
