@@ -9,7 +9,7 @@ Companion documents:
 - [`docs/ideas/`](docs/ideas/): proposals not built yet.
   - [`file-view-ideas.md`](docs/ideas/file-view-ideas.md): planned file-view features (strings, JSON tree, timeline, entropy, archives).
   - [`evidence-lineage.md`](docs/ideas/evidence-lineage.md): a lineage record for every task, so any derived file can be traced to the code, rules and input bytes that produced it.
-- [`docs/test-plan.md`](docs/test-plan.md): the Phase 1 unit and component test suite (Vitest), built before the code review.
+- [`docs/test-plan.md`](docs/test-plan.md): the original unit and component test plan (Vitest); see §6 below for running and adding tests across the full suite.
 - [`docs/code-review-plan.md`](docs/code-review-plan.md): the planned code review for simplicity, split into sessions.
 
 ---
@@ -284,24 +284,37 @@ When adding or modifying interactive features, ensure:
 
 ## 6. Testing & Verification
 
-> [!NOTE]
-> **Status: Phase 1 test harness and suite are active.** Setup and initial coverage follow [`docs/test-plan.md`](docs/test-plan.md), serving as the safety net ahead of [`docs/code-review-plan.md`](docs/code-review-plan.md). Follow the conventions below whenever adding or updating tests.
+Vitest covers every runtime `.ts` and `.vue` file in `src/` (excluding type-only files in `src/types/` and `src/api/types.ts`) at **≥ 85% V8 line coverage**. Add or update tests alongside every feature or bug fix.
 
-### Unit & Component Tests (Vitest)
-- **What is tested:** pure helpers (`src/utils/`), the HTTP client (`src/api/client.ts`), Pinia stores (`items`, `auth`), module-level composables (`useQueryCache`, `useWorkflow`), and targeted safety/load-state components (`MarkdownView` + `LinkMenu`, `LoadState`). Broad view/component tests and end-to-end flows wait until the code review has settled component structure.
-- **Environment:** Vitest runs in **`node` by default** (`vite.config.ts`) so non-DOM suites stay fast. Component tests opt into `happy-dom` per file by placing `// @vitest-environment happy-dom` on line 1 and mounting via `@vue/test-utils`.
-- **Where:** `src/**/__tests__/<module>.test.ts`, next to the code (`tsconfig.app.json` keeps them out of the app build; `tsconfig.vitest.json` includes them in `vue-tsc --build`). Run once with `npm test`, watch with `npm run test:watch`, and measure whole-app V8 coverage across `src/` with `npm run test:coverage` (`text` table + `coverage/coverage-summary.json`; pass `-- --coverage.reporter=html` on demand).
-- **How:** test behaviour through public exports, never internals, so refactoring does not break tests. Table-driven cases (`it.each`) where there are many; no snapshot tests; import `describe`/`it`/`expect`/`vi` from `vitest` explicitly (no globals). Mock only the network (`vi.mock('@/api')`, or `globalThis.fetch` in `client.test.ts`); use a real Pinia (`setActivePinia(createPinia())`) and fake timers (`vi.useFakeTimers()`). `vite.config.ts` sets `clearMocks`, `restoreMocks`, and `unstubGlobals` automatically; reset module state in `beforeEach` through the module's public API and never add an export just for tests.
-- **Streaming parsers** (`utils/table.ts`, `utils/lines.ts`) must give the same result however the input is split; test every fixture that way.
-- **When you change tested code**, keep the tests passing unchanged for a refactor. Changing a test means changing behaviour: do it in the same commit as the behaviour change, and say so in the message. A bug a test exposes but you are not fixing is marked `it.fails` with a comment naming it.
+### Running Tests
+- **Full suite (single run):** `npm test` (`vitest run`).
+- **Single file or test name:** `npx vitest run src/utils/__tests__/table.test.ts` or `npx vitest run -t "splits CRLF"`.
+- **Watch mode:** `npm run test:watch` (`vitest`).
+- **Whole-app V8 coverage:** `npm run test:coverage` — prints the text summary and writes `coverage/coverage-summary.json`.
+  - HTML report on demand: `npm run test:coverage -- --coverage.reporter=html`.
+  - Single-file coverage check: `npx vitest run --coverage --coverage.include=src/composables/useTableStream.ts src/composables/__tests__/useTableStream.test.ts`.
+- **Full verification gate:** `npm run check` — runs `type-check`, `lint:check` (`--max-warnings=0`), `format:check`, and `test` in parallel.
+
+### Adding & Updating Tests
+1. **Location & Type Checking**: Place tests next to the code at `src/<area>/__tests__/<module>.test.ts` (`vite.config.ts` matches `src/**/__tests__/*.test.ts`). `tsconfig.app.json` excludes `__tests__` from the app bundle; `tsconfig.vitest.json` type-checks them during `npm run type-check`. Keep every touched runtime file at **≥ 85% V8 line coverage**.
+2. **Environment (`node` vs `happy-dom`)**: Vitest runs in **`node` by default** so pure utility, API, store, and non-DOM composable tests stay fast. Add `// @vitest-environment happy-dom` on line 1 only when a test needs a DOM (`components/`, `views/`, `directives/`, or browser-API composables).
+3. **Imports & Assertions**: Import `describe`, `it`, `expect`, `vi`, `beforeEach`, and `afterEach` explicitly from `'vitest'` (`vite.config.ts` leaves globals off). Test observable behaviour through public exports rather than internal helpers so refactors do not break tests. Use `it.each` for table-driven cases; do not write snapshot tests.
+4. **Mocking & State Reset**:
+   - Mock only the network boundary: `vi.mock('@/api', async (importOriginal) => ...)` for app code, or `vi.stubGlobal('fetch', ...)` in `src/api/__tests__/client.test.ts`.
+   - Use a real Pinia instance (`setActivePinia(createPinia())` in `beforeEach`) and fake timers (`vi.useFakeTimers()`) where time matters.
+   - `vite.config.ts` enables `clearMocks`, `restoreMocks`, and `unstubGlobals` automatically. Reset module-scoped singleton state in `beforeEach` through public APIs (e.g. `clearQueryCache()`, `forgetRoles()`, `clearUploads()`, `useModalStore().closeAll()`)—never export test-only reset hooks.
+5. **Composables & Components**:
+   - Run composables that register watchers or scope cleanup inside `effectScope()` (and call `scope.stop()`) or mount a minimal host component.
+   - Mount Vue components with `@vue/test-utils` (`mount`), passing `global: { plugins: [pinia, directives, router] }` (`directives` from `@/directives`, `createMemoryHistory()` router) when the component uses global directives or router links.
+6. **Streaming & Chunked Parsers**: Verify streaming parsers and readers (`src/utils/table.ts`, `src/utils/lines.ts`, `useRangeText`, `useTableStream`, `useTextStream`) produce identical output across arbitrary byte or character chunk boundaries.
+7. **Refactors vs Behaviour Changes**: Keep existing tests passing unchanged during a refactor. Change an assertion only when behaviour intentionally changes, in the same commit, and state why in the commit message. Mark an unfixed bug a test exposes with `it.fails(...)` and a comment naming the bug.
 
 ### Verification Workflow for Agents
-1. Run tests: `npm test` (`vitest run`; use `npm run test:coverage` when checking coverage).
-2. Run formatting: `npm run format` (`prettier --write --experimental-cli src/`).
-3. Run linting: `npm run lint` (`eslint . --fix --cache`).
-4. Run the non-fixing verification gate: `npm run check` (runs `type-check`, `lint:check`, `format:check`, and `test` in parallel), plus `npm run build` (`vue-tsc --build` and `vite build`) when verifying the production bundle.
-5. Verify that all commands exit with code 0 before concluding your task.
-6. For UI changes, check the change in the running app (`npm run dev`) where a server is available, including the slow-connection checks above. Unit tests do not replace checking live UI and slow-network behaviour.
+1. Run targeted tests while iterating (`npx vitest run <path>`), then run `npm test` (or `npm run test:coverage` when adding files or branches).
+2. Format and lint modified files: `npm run format` (`prettier --write --experimental-cli src/`) and `npm run lint` (`eslint . --fix --cache`).
+3. Run the non-fixing gate: `npm run check`, plus `npm run build` (`vue-tsc --build` and `vite build`) when verifying the production bundle.
+4. Confirm all commands exit with code 0 before concluding the task.
+5. For UI changes, verify behaviour in the running app (`npm run dev`) when a server is available, including the slow-connection checks in §1. Unit tests do not replace live UI and slow-network verification.
 
 ### Commit Messages
 Match the existing history: a short subject naming the area, a colon, then what changed in plain words — e.g. `Folder toolbar: the primary button keeps the right edge`, `SlidePane: one slide for every pane that opens and closes`. Prefix bug fixes with `Fix:`.
