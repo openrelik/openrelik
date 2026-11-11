@@ -346,6 +346,7 @@ class WorkflowStatus(BaseModel):
 class WorkflowInputFile(BaseSchemaCompact):
     display_name: str
     data_type: str
+    original_path: Optional[str] = None
 
 
 class WorkflowFolder(BaseSchemaCompact):

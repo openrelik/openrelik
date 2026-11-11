@@ -139,6 +139,17 @@ def test_get_workflow(fastapi_test_client, mocker, workflow_response):
     assert response.json() == workflow_response.model_dump(mode="json")
 
 
+def test_workflow_input_file_includes_original_path():
+    """Test that the workflow input file schema keeps the original path."""
+    input_file = schemas.WorkflowInputFile(
+        id=1,
+        display_name=".bash_history",
+        data_type="extraction:image_export:file",
+        original_path="root/.bash_history",
+    )
+    assert input_file.model_dump()["original_path"] == "root/.bash_history"
+
+
 @pytest.mark.asyncio
 async def test_update_workflow(
     fastapi_async_test_client, mocker, workflow_db_model, workflow_response
