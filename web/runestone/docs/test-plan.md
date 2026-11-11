@@ -17,13 +17,16 @@ sessions refactor logic whose bugs are hard to see by eye: workflow edits and
 undo, the streaming table parser, the Markdown parser, the query cache's
 rules, byte/line/mark arithmetic.
 
-Most of that logic is pure (input → output), so it can be tested cheaply: one
-dev dependency, no browser, little mocking. That is this phase.
+Most of that logic is pure or state-only (input → output), so it runs in Node
+with zero DOM startup cost. Alongside those Node suites, a small opt-in
+`happy-dom` + `@vue/test-utils` slice verifies the two highest-stakes UI
+invariants directly in rendered DOM: untrusted Markdown/link safety
+(`MarkdownView` + `LinkMenu`) and slow-connection listing states (`LoadState`).
 
-Everything else waits until after the review, when the structure has settled:
-component and view tests, the API client, the upload queue, end-to-end tests.
-Tests written now against components would pin the very structure the review
-is going to change.
+Everything else waits until after the review, when component structure has
+settled: views, the remaining components, the upload queue, standalone
+directive geometry, and end-to-end tests. Tests written now against layout
+views would pin the very structure the review is going to change.
 
 **Rule for this phase: test behaviour through public exports, never
 internals.** The review will rename, move and inline internals; the tests must
@@ -36,53 +39,62 @@ wrong, not the module.
 
 | In | Out (later effort) |
 | :--- | :--- |
-| `src/utils/` pure helpers named in §4 | Components and views (`@vue/test-utils`) |
-| `useQueryCache` (module-level, no DOM) | `api/client.ts` (needs a `fetch` mock) |
-| `useWorkflow` edits and undo (Pinia + mocked `@/api`) | `useUploadQueue`, `useFolderActions` |
-| | Directives, tooltip, DOM behaviour |
-| | End-to-end (Playwright or similar) |
-| | Coverage targets and CI |
+| `src/utils/` pure helpers named in §4 | Views and remaining components |
+| `src/api/client.ts` (CSRF, 401 refresh, timeout/abort, activity over stubbed `fetch`) | `useUploadQueue`, `useFolderActions` |
+| Pinia stores: `items.ts` and `auth.ts` (including sign-out state/cache wipe) | Standalone directive & tooltip geometry tests |
+| `useQueryCache` (module-level, no DOM) | End-to-end (Playwright or similar) |
+| `useWorkflow` edits, undo, and save coalescing (Pinia + mocked `@/api`) | Coverage thresholds / gates and CI |
+| Safety & load-state components (`MarkdownView` + `LinkMenu`, `LoadState`) via `@vue/test-utils` + `happy-dom` | |
+| Whole-app V8 coverage reporting (`@vitest/coverage-v8`, `npm run test:coverage`) | |
 
 ---
 
 ## 3. Setup
 
-### Dependency
+### Dependencies
 
-`vitest` as a **dev dependency only**. Nothing else: no `jsdom` /
-`happy-dom` (the code under test needs no DOM; `AbortController`,
-`DOMException`, `TextDecoder` are built into Node 22+), no
-`@vue/test-utils` (no components in this phase), no coverage plugin.
+Four **dev dependencies** (`vitest`, `@vitest/coverage-v8`, `@vue/test-utils`,
+`happy-dom`), and nothing else (no `jsdom`):
 
 ```sh
-npm install --save-dev vitest
+npm install --save-dev vitest @vitest/coverage-v8 @vue/test-utils happy-dom
 ```
 
-`AGENTS.md` §1 (Minimal Dependency Discipline) is about the runtime
-footprint; it now names Vitest as the one allowed test dependency.
+Vitest runs in `node` by default (`AbortController`, `DOMException`,
+`TextDecoder`, `fetch` are built into Node 22+), keeping pure utility, store,
+composable, and HTTP client tests fast. Component tests opt into `happy-dom`
+per file via `// @vitest-environment happy-dom` on line 1. `AGENTS.md` §1 names
+these four packages as the allowed test dev dependencies.
 
 ### Configuration
 
-- **Config:** a `test` block in `vite.config.ts` (so the `@/` alias and Vue
-  plugin are shared), or a `vitest.config.ts` that merges it. Prefer the
-  former; one file is simpler. `environment: 'node'`.
+- **Config:** a `test` block in `vite.config.ts` (`import { defineConfig } from 'vitest/config'`, sharing the `@/` alias and Vue plugin):
+  - `environment: 'node'` (default; opt into `happy-dom` per file with `// @vitest-environment happy-dom`)
+  - `include: ['src/**/__tests__/*.test.ts']`
+  - `clearMocks: true`, `restoreMocks: true`, `unstubGlobals: true`
+  - `coverage`: `{ provider: 'v8', include: ['src/**/*.{ts,vue}'], exclude: ['src/**/__tests__/**', 'src/types/**', 'src/api/types.ts'], reporter: ['text', 'json-summary'] }` (skips static HTML generation so whole-app coverage runs stay ~2 s; HTML remains available via `npx vitest run --coverage --coverage.reporter=html`)
 - **Location:** `src/**/__tests__/<module>.test.ts`, next to the code.
   `tsconfig.app.json` already excludes `src/**/__tests__/*`, so test files
   stay out of the app build.
-- **Type-checking tests:** add `tsconfig.vitest.json` (extends
-  `tsconfig.app.json`, `include` the `__tests__` folders, `exclude: []`,
-  `types: ["node"]`) and reference it from `tsconfig.json`, so
-  `vue-tsc --build` checks the tests too. This is the standard `create-vue`
-  layout.
+- **Type-checking tests:** `tsconfig.vitest.json` (extends
+  `./tsconfig.app.json`, `include: ["env.d.ts", "src/**/*", "src/**/*.vue"]`,
+  `exclude: []`, `types: ["node"]`) referenced from `tsconfig.json`, so
+  `vue-tsc --build` (`npm run type-check`) checks the tests too.
 - **Imports:** import `describe`, `it`, `expect`, `vi` from `vitest`
-  explicitly. No globals.
+  explicitly (and `mount` from `@vue/test-utils` in component tests). No
+  globals.
 - **Scripts** in `package.json`:
   ```json
   "test": "vitest run",
-  "test:watch": "vitest"
+  "test:watch": "vitest",
+  "test:coverage": "vitest run --coverage",
+  "lint:check": "eslint . --cache --max-warnings=0",
+  "format:check": "prettier --check --experimental-cli src/",
+  "check": "run-p type-check lint:check format:check test"
   ```
-- **Lint / format:** confirm `npm run lint` and `npm run format` cover the
-  test files without changes to their configs; adjust only if they don't.
+- **Lint / format:** `npm run lint` (`lint:check`) and `npm run format`
+  (`format:check`) cover the test files out of the box, and `npm run check`
+  runs `type-check`, `lint:check`, `format:check`, and `test` in parallel.
 
 ### How tests are written
 
@@ -224,18 +236,51 @@ returning promises the test resolves or rejects by hand.
   with `error` set.
 - `markFresh`, `forget`, `queryState` of an unknown key (`idle`).
 
-### 4.8 `utils/upload.ts` (review session 4)
+### 4.8 `utils/format.ts` and `utils/upload.ts` (review session 4)
 
-Small and cheap: `chunkCount` and `chunkRange` at exact multiples, one byte
-over, and zero; `backoffMs` grows and is capped.
+Small and cheap: `stamp`, `formatSize`, `count`, `formatDuration`; `chunkCount`
+and `chunkRange` at exact multiples, one byte over, and zero; `backoffMs`
+grows and is capped; `uploadIdentifier`.
+
+### 4.9 `api/client.ts` and Pinia stores (`items.ts`, `auth.ts`)
+
+Node environment with `globalThis.fetch` and `sessionStorage` stubbed in
+`client.test.ts`, real Pinia in store tests:
+
+- `client.ts`: URL resolution (`/auth/*` vs `/api/v1/*`, query params), shared
+  CSRF fetch and invalid-CSRF retry, shared 401 refresh and `onUnauthorized`
+  fallback, timeout (`ApiError` status 0 + reachability) vs caller
+  `AbortSignal` (`AbortError`), `onActivity` counters.
+- `items.ts`: folder/file ID namespace separation, `childrenOf` and
+  `subfoldersOf` ordering, `pathTo`/`pathString`, recursive `statsOf` and
+  `descendantsOf`, `upsertListed` parent preservation, `renameItem`, cascading
+  `removeItems`.
+- `auth.ts`: `login` and `fetchCurrentUser` hydration, and full sign-out wipe
+  across `items`, `rootPages`, `workflows`, and `useQueryCache`.
+
+### 4.10 Safety & load-state components (`MarkdownView`, `LinkMenu`, `LoadState`)
+
+Opt into `happy-dom` via `// @vitest-environment happy-dom` on line 1 and mount
+with `@vue/test-utils`:
+
+- `MarkdownView.vue` + `LinkMenu.vue`: untrusted Markdown produces zero
+  `<script>`, `<iframe>`, `<img>`, or `<a>` elements and zero `href`/`src`
+  attributes; line-range marks (`data-line`, `data-end`, `data-marked`);
+  clicking/activating links or images opens `LinkMenu` with `javascript:`
+  blocked, userinfo (`https://bank.com@evil.com`) exposing `evil.com`, and
+  images never loaded (Copy only).
+- `LoadState.vue`: fake timers across all 5 states (delayed initial spinner at
+  200 ms, silent background refresh over cached rows, initial error alert +
+  Retry, refresh failure status banner over saved rows + Retry, empty slot).
 
 ---
 
 ## 5. Effort
 
-Roughly two working sessions. 4.1–4.4 in the first, 4.5–4.8 in the second.
-Use the same agent-human split as the review: the agent drafts each test file
-and the case list, the human checks the cases describe intended behaviour.
+Split across parallel test slices after harness setup (4.1): parsers (4.2–4.3),
+file/format/upload utilities (4.4, 4.8), workflow helpers & undo (4.5–4.6),
+query cache + HTTP client + stores (4.7, 4.9), and component safety/load states
+(4.10).
 
 **When a test exposes a bug,** don't fix it in this phase. Mark the test
 `it.fails(...)` with a comment naming the bug, log it in the review plan's
@@ -249,14 +294,15 @@ matching review session.
 
 ## 6. Done when
 
-- [ ] `vitest` is the only new dependency, in `devDependencies`.
-- [ ] `npm test` runs every test and exits 0; `npm run build`, `npm run lint`,
-      `npm run format` still exit 0 with the tests type-checked.
-- [ ] Items 4.2–4.8 are in, each in its own commit.
+- [x] `vitest`, `@vitest/coverage-v8`, `@vue/test-utils`, and `happy-dom` are
+      the only new dependencies, in `devDependencies`.
+- [ ] `npm test` and `npm run check` (`type-check`, `lint:check`,
+      `format:check`, `test`) exit 0, and `npm run build` still exits 0 with
+      the tests type-checked.
+- [ ] Items 4.2–4.10 are in and passing.
 - [ ] Any known bugs are `it.fails` with a logged entry.
-- [ ] `AGENTS.md` §6: the status note says Phase 1 is done, and the
-      "(once Phase 1's setup has landed)" qualifier on `npm test` is removed.
-      The test-writing rules there already match §3 of this plan; adjust
-      them if implementation changed anything (e.g. config location).
-- [ ] `AGENTS.md` §2 (Technology Stack): a Vitest row is added.
+- [x] `AGENTS.md` §1, §2, and §6 document the 4-package stack (`vitest`,
+      `@vitest/coverage-v8`, `@vue/test-utils`, `happy-dom`), default `node`
+      environment + `// @vitest-environment happy-dom` per-file opt-in, and
+      `npm test` / `npm run test:coverage` / `npm run check`.
 - [ ] `code-review-plan.md` §8 Q3 is marked done.

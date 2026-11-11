@@ -130,7 +130,8 @@ function start(entry: Entry, fetcher: Fetcher): void {
     .then(() => {
       if (!current()) return
       entry.status = 'success'
-      entry.fetchedAt = Date.now()
+      // Invalidated while in flight: its answer may predate the change, so stay stale.
+      if (entry.requestGeneration === entry.generation) entry.fetchedAt = Date.now()
       entry.error = null
       entry.errorStatus = null
     })

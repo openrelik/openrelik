@@ -1,8 +1,8 @@
 import { fileURLToPath, URL } from 'node:url'
 
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vitest/config'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -23,6 +23,19 @@ export default defineConfig({
         target: 'http://localhost:8710',
         changeOrigin: true,
       },
+    },
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/__tests__/*.test.ts'],
+    clearMocks: true,
+    restoreMocks: true,
+    unstubGlobals: true,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,vue}'],
+      exclude: ['src/**/__tests__/**', 'src/types/**', 'src/api/types.ts'],
+      reporter: ['text', 'json-summary'],
     },
   },
 })

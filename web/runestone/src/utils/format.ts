@@ -31,6 +31,7 @@ export const count = (n: number, noun: string, plural = `${noun}s`) =>
 /** 2.4 → "2.4s", 72 → "1m 12s". */
 export function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Number(seconds.toFixed(1))}s`
-  const minutes = Math.floor(seconds / 60)
-  return `${minutes}m ${String(Math.round(seconds % 60)).padStart(2, '0')}s`
+  const total = Math.round(seconds)
+  const minutes = Math.floor(total / 60)
+  return `${minutes}m ${String(total % 60).padStart(2, '0')}s`
 }

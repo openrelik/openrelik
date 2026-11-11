@@ -275,7 +275,7 @@ export function parseMarkdown(source: string): Block[] {
     if (/^ {0,3}>/.test(line)) {
       const body: string[] = []
       for (; i < lines.length && /^ {0,3}>/.test(lines[i]!); i++) {
-        body.push(lines[i]!.trim().replace(/^>\s?/, ''))
+        body.push(lines[i]!.trimStart().replace(/^>\s?/, ''))
       }
       blocks.push({ type: 'quote', inlines: paragraphInlines(body), line: start })
       continue

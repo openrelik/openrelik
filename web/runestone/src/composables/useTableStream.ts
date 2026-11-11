@@ -81,7 +81,7 @@ export function useTableStream(
     columns.value = parser.columns()
     if (!parsed.length) return
     // Pushing into the array in place, then triggering: copying 200 000 rows per chunk would not scale.
-    rows.value.push(...parsed)
+    for (const row of parsed) rows.value.push(row)
     triggerRef(rows)
   }
 

@@ -57,6 +57,7 @@ export function sniffDelimiter(sample: string): string {
  */
 export function csvParser(delimiter: string, firstRowIsHeader = true): TableParser {
   let header: string[] | null = null
+  let maxColumns = 0
   let field = ''
   let row: string[] = []
   let quoted = false
@@ -74,6 +75,7 @@ export function csvParser(delimiter: string, firstRowIsHeader = true): TablePars
     const cells = row
     row = []
     if (cells.length === 1 && cells[0] === '') return // a blank line
+    if (cells.length > maxColumns) maxColumns = cells.length
     if (firstRowIsHeader && !header) header = cells.map((name, i) => name || `column ${i + 1}`)
     else out.push({ cells })
   }
@@ -142,7 +144,7 @@ export function csvParser(delimiter: string, firstRowIsHeader = true): TablePars
     },
     columns() {
       if (header) return header
-      const widest = Math.max(0, row.length)
+      const widest = Math.max(maxColumns, row.length)
       return Array.from({ length: widest }, (_, i) => `column ${i + 1}`)
     },
   }

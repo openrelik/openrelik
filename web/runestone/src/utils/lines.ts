@@ -40,8 +40,7 @@ export function createLineIndex(): LineIndex {
   const lineRow: number[] = []
   let open = false
 
-  function push(line: string) {
-    const text = line.endsWith('\r') ? line.slice(0, -1) : line
+  function push(text: string) {
     lineRow.push(rowLine.length)
     for (let start = 0; start === 0 || start < text.length; start += ROW_CHARS) {
       rowLine.push(lines.length)
@@ -73,7 +72,7 @@ export function createLineIndex(): LineIndex {
       }
       const parts = text.split('\n')
       const tail = parts.pop()!
-      for (const part of parts) push(part)
+      for (const part of parts) push(part.endsWith('\r') ? part.slice(0, -1) : part)
       open = !last && tail !== ''
       if (tail) push(tail)
     },

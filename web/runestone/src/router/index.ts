@@ -33,15 +33,6 @@ const router = createRouter({
       path: '/case/:ref(.*)',
       name: 'case',
       component: () => import('@/views/NotFoundView.vue'),
-      beforeEnter: async (to) => {
-        const ref = String(to.params.ref)
-        const id = await findCaseFolder(ref).catch((err: unknown) => {
-          console.warn('[router] Case lookup failed:', err)
-          return null
-        })
-        // No such case (or none this user can see): the page says not found.
-        return id === null ? true : { path: `/folder/${id}`, replace: true }
-      },
     },
     {
       path: '/metrics',
@@ -88,6 +79,17 @@ router.beforeEach(async (to) => {
         query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : undefined,
       }
     }
+  }
+
+  // 3. Resolve /case/:ref on every navigation (including param-only changes on 'case').
+  if (to.name === 'case') {
+    const ref = String(to.params.ref)
+    const id = await findCaseFolder(ref).catch((err: unknown) => {
+      console.warn('[router] Case lookup failed:', err)
+      return null
+    })
+    // No such case (or none this user can see): the page says not found.
+    return id === null ? true : { path: `/folder/${id}`, replace: true }
   }
 
   return true

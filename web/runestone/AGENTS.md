@@ -9,7 +9,7 @@ Companion documents:
 - [`docs/ideas/`](docs/ideas/): proposals not built yet.
   - [`file-view-ideas.md`](docs/ideas/file-view-ideas.md): planned file-view features (strings, JSON tree, timeline, entropy, archives).
   - [`evidence-lineage.md`](docs/ideas/evidence-lineage.md): a lineage record for every task, so any derived file can be traced to the code, rules and input bytes that produced it.
-- [`docs/test-plan.md`](docs/test-plan.md): the first round of unit tests (Vitest), to be done before the code review.
+- [`docs/test-plan.md`](docs/test-plan.md): the Phase 1 unit and component test suite (Vitest), built before the code review.
 - [`docs/code-review-plan.md`](docs/code-review-plan.md): the planned code review for simplicity, split into sessions.
 
 ---
@@ -24,7 +24,7 @@ Before reaching for `npm install`:
 - Check if the requirement can be solved with modern browser APIs (Web Crypto, Clipboard API, `ResizeObserver`, `IntersectionObserver`, `URL`, `Intl`, `TextDecoder`).
 - Check existing utilities (`src/utils/`), composables (`src/composables/`), or directives (`src/directives/`).
 - If a utility is missing (e.g. string formatting, sorting, fuzzy filtering), implement a clean, typed 15–30 line pure helper in `src/utils/`.
-- Tooling may add dev dependencies, never runtime ones. For tests that is **Vitest only** (see §6): no `jsdom`/`happy-dom`, `@vue/test-utils`, coverage plugins or end-to-end frameworks until a later testing effort decides on them.
+- Tooling may add dev dependencies, never runtime ones. For tests that is **`vitest`**, **`@vitest/coverage-v8`**, **`@vue/test-utils`**, and **`happy-dom`** only (see §6): no `jsdom` or end-to-end frameworks until a later testing effort decides on them.
 - Do **not** install component libraries (Headless UI, Radix, PrimeVue, Vuetify), utility toolkits (Lodash, Ramda), positioning engines (Popper, Floating UI; use `src/utils/placement.ts`), Markdown/HTML renderers or sanitizers, chart libraries, or event buses (Mitt, EventEmitter). The application uses custom, high-performance, tailored primitives.
 
 ### Design System Compliance
@@ -77,6 +77,8 @@ File contents and worker reports are untrusted (this is a forensics tool: the fi
 | **Vue Router** | `^5.2` | Application routing and path navigation (`src/router/index.ts`). |
 | **Lucide Vue Next**| `^1.0` | Iconography, **imported only through `@/components/icons`** (see below). Standard size is `:size="13"` with `:stroke-width="1.5"` for dense UI; 11–12 for row-height controls. |
 | **Vite** | `^8.1` | Build tooling and development server. |
+| **Vitest** | `^5.1` | Unit and component test runner (`environment: 'node'` by default) paired with `@vitest/coverage-v8` (`^5.1`) for V8 coverage (see §6). Dev dependencies only. |
+| **Vue Test Utils** | `^2.5` | Component mounting (`@vue/test-utils`) paired with `happy-dom` (`^21.0`, opted in per file via `// @vitest-environment happy-dom`). Dev dependencies only. |
 | **Node** | `^22.18 \|\| >=24.12` | Tooling only. |
 
 > IDs for tasks, groups and uploads come from `hexId()` in `src/utils/id.ts` (`crypto.getRandomValues`); do not add a UUID package.
@@ -283,22 +285,23 @@ When adding or modifying interactive features, ensure:
 ## 6. Testing & Verification
 
 > [!NOTE]
-> **Status: unit tests are planned, not yet set up.** The first round is specified in [`docs/test-plan.md`](docs/test-plan.md) (Phase 1) and comes before the code review in [`docs/code-review-plan.md`](docs/code-review-plan.md). Until Phase 1's setup step (§4.1 of the test plan) has landed, there is no test runner: do not write tests outside that plan. Once it has, the rules below apply, and this note should say so.
+> **Status: Phase 1 test harness and suite are active.** Setup and initial coverage follow [`docs/test-plan.md`](docs/test-plan.md), serving as the safety net ahead of [`docs/code-review-plan.md`](docs/code-review-plan.md). Follow the conventions below whenever adding or updating tests.
 
-### Unit tests (Vitest)
-- **What is tested:** pure logic: `src/utils/`, and module-level composables that need no DOM (`useQueryCache`, the edits in `useWorkflow`). Components, views, directives, the API client and end-to-end flows are **not** unit-tested yet; they are left to a later testing effort, once the code review has settled the structure.
-- **Where:** `src/**/__tests__/<module>.test.ts`, next to the code (`tsconfig.app.json` keeps them out of the app build). Run with `npm test`; `npm run test:watch` while working.
-- **How:** test behaviour through public exports, never internals, so refactoring does not break tests. Table-driven cases (`it.each`) where there are many; no snapshot tests; import `describe`/`it`/`expect`/`vi` from `vitest` explicitly. Mock only the network (`vi.mock('@/api')`); use a real Pinia (`setActivePinia(createPinia())`) and fake timers. Reset module state in `beforeEach` through the module's public API; never add an export just for tests.
+### Unit & Component Tests (Vitest)
+- **What is tested:** pure helpers (`src/utils/`), the HTTP client (`src/api/client.ts`), Pinia stores (`items`, `auth`), module-level composables (`useQueryCache`, `useWorkflow`), and targeted safety/load-state components (`MarkdownView` + `LinkMenu`, `LoadState`). Broad view/component tests and end-to-end flows wait until the code review has settled component structure.
+- **Environment:** Vitest runs in **`node` by default** (`vite.config.ts`) so non-DOM suites stay fast. Component tests opt into `happy-dom` per file by placing `// @vitest-environment happy-dom` on line 1 and mounting via `@vue/test-utils`.
+- **Where:** `src/**/__tests__/<module>.test.ts`, next to the code (`tsconfig.app.json` keeps them out of the app build; `tsconfig.vitest.json` includes them in `vue-tsc --build`). Run once with `npm test`, watch with `npm run test:watch`, and measure whole-app V8 coverage across `src/` with `npm run test:coverage` (`text` table + `coverage/coverage-summary.json`; pass `-- --coverage.reporter=html` on demand).
+- **How:** test behaviour through public exports, never internals, so refactoring does not break tests. Table-driven cases (`it.each`) where there are many; no snapshot tests; import `describe`/`it`/`expect`/`vi` from `vitest` explicitly (no globals). Mock only the network (`vi.mock('@/api')`, or `globalThis.fetch` in `client.test.ts`); use a real Pinia (`setActivePinia(createPinia())`) and fake timers (`vi.useFakeTimers()`). `vite.config.ts` sets `clearMocks`, `restoreMocks`, and `unstubGlobals` automatically; reset module state in `beforeEach` through the module's public API and never add an export just for tests.
 - **Streaming parsers** (`utils/table.ts`, `utils/lines.ts`) must give the same result however the input is split; test every fixture that way.
 - **When you change tested code**, keep the tests passing unchanged for a refactor. Changing a test means changing behaviour: do it in the same commit as the behaviour change, and say so in the message. A bug a test exposes but you are not fixing is marked `it.fails` with a comment naming it.
 
 ### Verification Workflow for Agents
-1. Run the unit tests: `npm test` (once Phase 1's setup has landed).
-2. Run formatting: `npm run format` (`prettier --write --experimental-cli src/`; the whole repository once the style guide's rollout, §7.4, has landed).
+1. Run tests: `npm test` (`vitest run`; use `npm run test:coverage` when checking coverage).
+2. Run formatting: `npm run format` (`prettier --write --experimental-cli src/`).
 3. Run linting: `npm run lint` (`eslint . --fix --cache`).
-4. Run typechecking & build: `npm run build` (`vue-tsc --build` and `vite build`, in parallel; this type-checks the tests too).
-5. Verify that all commands exit with code 0 before concluding your task. Once the style guide's rollout has landed, `npm run check` runs the non-fixing checks (format, lint, types) in one go.
-6. For UI changes, check the change in the running app (`npm run dev`) where a server is available, including the slow-connection checks above. Unit tests do not cover the UI or the network.
+4. Run the non-fixing verification gate: `npm run check` (runs `type-check`, `lint:check`, `format:check`, and `test` in parallel), plus `npm run build` (`vue-tsc --build` and `vite build`) when verifying the production bundle.
+5. Verify that all commands exit with code 0 before concluding your task.
+6. For UI changes, check the change in the running app (`npm run dev`) where a server is available, including the slow-connection checks above. Unit tests do not replace checking live UI and slow-network behaviour.
 
 ### Commit Messages
 Match the existing history: a short subject naming the area, a colon, then what changed in plain words — e.g. `Folder toolbar: the primary button keeps the right edge`, `SlidePane: one slide for every pane that opens and closes`. Prefix bug fixes with `Fix:`.
