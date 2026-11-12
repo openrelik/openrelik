@@ -62,11 +62,6 @@ export interface UseItemActionsReturn {
 }
 
 export function useItemActions(handlers: ItemActionHandlers): UseItemActionsReturn {
-  const viewerName = () => {
-    const viewer = useAuthStore().user
-    return viewer?.display_name || viewer?.username
-  }
-
   function actionsFor(items: Item[]): ItemAction[] {
     if (!items.length) return []
     const single = items.length === 1 ? items[0]! : undefined
@@ -149,7 +144,7 @@ export function useItemActions(handlers: ItemActionHandlers): UseItemActionsRetu
         run: () => handlers.copyId(single),
       })
     }
-    if (items.every((item) => canDeleteItem(item, viewerName()))) {
+    if (items.every((item) => canDeleteItem(item, useAuthStore().user))) {
       actions.push({
         key: 'delete',
         label: 'Delete',

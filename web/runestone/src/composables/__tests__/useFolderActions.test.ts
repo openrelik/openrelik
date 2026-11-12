@@ -6,6 +6,7 @@ vi.mock('@/composables/useAutoRefresh', () => ({
 }))
 
 import { refreshAll } from '@/composables/useAutoRefresh'
+import { findCaseFolder } from '@/composables/useCaseRef'
 import { useConfirm } from '@/composables/useConfirm'
 import { useFolderActions } from '@/composables/useFolderActions'
 import { folderKeys } from '@/composables/useFolderLoader'
@@ -30,6 +31,7 @@ vi.mock('@/api', async (importOriginal) => {
         renameFolder: vi.fn(),
         deleteFolder: vi.fn(),
         getMyFolderRole: vi.fn(),
+        getCaseFolder: vi.fn(),
       },
       files: {
         ...actual.api.files,
@@ -171,6 +173,17 @@ describe('useFolderActions', () => {
       expect(useWorkflowsStore().workflowOf(10)?.name).toBe('Old Name')
       expect(error.value).toBe('Could not rename “Renamed”: DB down')
       expect(api.workflows.rename).toHaveBeenLastCalledWith(10, 5, 'Old Name')
+
+      // 3) Unloaded workflow folder renamed from parent listing still rolls back server workflow
+      useItemsStore().upsertItems([makeItem('folder', 11, { name: 'Draft', workflowId: 8 })])
+      vi.mocked(api.folders.renameFolder).mockRejectedValueOnce(new Error('Folder rename failed'))
+      vi.mocked(api.workflows.rename)
+        .mockResolvedValueOnce({} as WorkflowRecord)
+        .mockResolvedValueOnce({} as WorkflowRecord)
+
+      expect(await renameFolder(11, 'Final')).toBe(false)
+      expect(useItemsStore().findFolder(11)?.name).toBe('Draft')
+      expect(api.workflows.rename).toHaveBeenLastCalledWith(11, 8, 'Draft')
     })
   })
 
@@ -287,6 +300,23 @@ describe('useFolderActions', () => {
 
       const removed = await acceptPromise
       expect(removed).toHaveLength(2)
+    })
+
+    it('clears cached case reference lookups when a case folder is deleted', async () => {
+      vi.mocked(api.folders.getCaseFolder).mockResolvedValueOnce({
+        ...makeDetail(40, 'Case 40'),
+        case_ref: 'ir-40',
+      })
+      expect(await findCaseFolder('ir-40')).toBe(40)
+
+      vi.mocked(api.folders.deleteFolder).mockResolvedValueOnce(undefined)
+      const folder = useItemsStore().findFolder(40)!
+      await useFolderActions().deleteItems([folder])
+
+      vi.mocked(api.folders.getCaseFolder).mockRejectedValueOnce(
+        new ApiError({ status: 404, statusText: 'Not Found', message: 'Gone' }),
+      )
+      expect(await findCaseFolder('ir-40')).toBeNull()
     })
   })
 })

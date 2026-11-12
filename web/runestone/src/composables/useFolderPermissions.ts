@@ -12,7 +12,7 @@
  */
 
 import { computed, onScopeDispose, reactive, watch, type ComputedRef } from 'vue'
-import { api, type FolderRole } from '@/api'
+import { api, type FolderRole, type User } from '@/api'
 import { folderKeys } from '@/composables/useFolderLoader'
 import type { Item } from '@/types/item'
 import { ensure } from '@/composables/useQueryCache'
@@ -48,15 +48,21 @@ export function canShare(role: FolderRole | null | undefined): boolean {
   return canRename(role)
 }
 
+export type DeleteViewer = Pick<User, 'username' | 'display_name'> | string | null | undefined
+
 /**
  * Whether the operator may delete an item. A folder takes Owner on itself. A
  * file takes Owner on the file, which the server grants through the folder it
  * is in — and to whoever uploaded it, who becomes its owner.
  */
-export function canDeleteItem(item: Item, viewer?: string | null): boolean {
+export function canDeleteItem(item: Item, viewer?: DeleteViewer): boolean {
   if (item.kind === 'folder') return canDelete(roleOf(item.id))
   if (item.parent !== null && canDelete(roleOf(item.parent))) return true
-  return !!viewer && item.owner === viewer
+  if (!viewer) return false
+  if (typeof viewer === 'string') return (item.ownerUsername ?? item.owner) === viewer
+  if (item.ownerUsername) return item.ownerUsername === viewer.username
+  // Missing `file.user` defaults `owner` to 'user'; do not match a real operator to that sentinel.
+  return item.owner !== 'user' && item.owner === (viewer.display_name || viewer.username)
 }
 
 /** The known role on a folder, or undefined while it has not been loaded. */

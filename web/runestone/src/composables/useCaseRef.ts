@@ -63,8 +63,8 @@ export function clearCaseLookups(): void {
   takenBy.value = null
 }
 
-/** Lookups of these references are out of date: they moved, or were freed. */
-function forgetCases(...refs: (string | undefined)[]) {
+/** Lookups of these references are out of date: they moved, were freed, or were deleted. */
+export function forgetCases(...refs: (string | undefined)[]): void {
   const known = refs.filter((ref): ref is string => !!ref)
   for (const ref of known) caseFolders.delete(ref)
   forget(known.map(folderKeys.case))

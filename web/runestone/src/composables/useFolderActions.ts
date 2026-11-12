@@ -17,6 +17,7 @@
 import { reactive, readonly, ref, type Ref } from 'vue'
 import { api, errorMessage, type FolderRole } from '@/api'
 import { refreshAll } from '@/composables/useAutoRefresh'
+import { forgetCases } from '@/composables/useCaseRef'
 import { confirmAction } from '@/composables/useConfirm'
 import { folderKeys, mapFolderToItem } from '@/composables/useFolderLoader'
 import {
@@ -159,11 +160,9 @@ async function renameFolder(id: number, name: string): Promise<boolean> {
   } catch (err: unknown) {
     const current = itemsStore.findFolder(id)
     if (current) current.name = previousName
-    if (workflow && previousWorkflowName !== undefined) {
-      workflow.name = previousWorkflowName
-      if (workflowId !== undefined) {
-        api.workflows.rename(id, workflowId, previousWorkflowName).catch(() => {})
-      }
+    if (workflow && previousWorkflowName !== undefined) workflow.name = previousWorkflowName
+    if (workflowId !== undefined) {
+      api.workflows.rename(id, workflowId, previousWorkflowName ?? previousName).catch(() => {})
     }
     error.value = `Could not rename “${previousName}”: ${errorMessage(err, 'request failed')}`
     return false
@@ -188,17 +187,19 @@ async function deleteItems(items: Item[]): Promise<Item[]> {
   const deleted: Item[] = []
   const failures: { name: string; reason: string }[] = []
   const removedFolders: number[] = []
+  const removedCaseRefs: string[] = []
   results.forEach((result, index) => {
     const item = targets[index]!
     deletingKeys.delete(itemKey(item))
     if (result.status === 'fulfilled') {
       deleted.push(item)
       // Gone on the server: drop it, everything below it, and the folders'
-      // cached data and roles. A file takes nothing else with it.
-      const gone = itemsStore
-        .removeTree(item)
-        .filter((removed) => removed.kind === 'folder')
-        .map((folder) => folder.id)
+      // cached data, case lookups and roles. A file takes nothing else with it.
+      const goneFolders = itemsStore.removeTree(item).filter((removed) => removed.kind === 'folder')
+      const gone = goneFolders.map((folder) => folder.id)
+      for (const folder of goneFolders) {
+        if (folder.caseRef) removedCaseRefs.push(folder.caseRef)
+      }
       forget(
         gone.flatMap((g) => [
           folderKeys.folder(g),
@@ -216,6 +217,7 @@ async function deleteItems(items: Item[]): Promise<Item[]> {
       })
     }
   })
+  if (removedCaseRefs.length) forgetCases(...removedCaseRefs)
 
   // Listed at the top: pages shrink now, then refill from the server (the
   // current page right away, the others when visited).
@@ -278,9 +280,8 @@ async function confirmDeleteItems(items: Item[]): Promise<Item[]> {
   }
 
   const viewer = useAuthStore().user
-  const viewerName = viewer?.display_name || viewer?.username
 
-  const denied = targets.filter((item) => !canDeleteItem(item, viewerName))
+  const denied = targets.filter((item) => !canDeleteItem(item, viewer))
   if (denied.length) {
     error.value =
       denied.length === 1

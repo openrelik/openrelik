@@ -93,6 +93,16 @@ describe('useFolderPermissions', () => {
     expect(canDeleteItem(makeItem('file', 12, 2, 'bob'), 'carol')).toBe(false)
     expect(canDeleteItem(makeItem('file', 13, null, 'bob'), null)).toBe(false)
 
+    // Structured user avoids display-name collisions and missing-user 'user' sentinel
+    const aliceOne = { username: 'alice1', display_name: 'Alice' }
+    const aliceTwo = { username: 'alice2', display_name: 'Alice' }
+    const sentinelUser = { username: 'user', display_name: 'user' }
+    const aliceFile = { ...makeItem('file', 14, 2, 'Alice'), ownerUsername: 'alice1' }
+    const unknownOwnerFile = makeItem('file', 15, 2, 'user')
+    expect(canDeleteItem(aliceFile, aliceOne)).toBe(true)
+    expect(canDeleteItem(aliceFile, aliceTwo)).toBe(false)
+    expect(canDeleteItem(unknownOwnerFile, sentinelUser)).toBe(false)
+
     forgetRoles([1])
     expect(roleOf(1)).toBeUndefined()
     expect(roleOf(2)).toBe('Editor')
