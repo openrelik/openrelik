@@ -83,12 +83,11 @@ const runs = new Map<number, number>()
 let sessionEpoch = 0
 
 function activityFor(workflowId: number): WorkflowActivity {
-  let entry = activity.get(workflowId)
-  if (!entry) {
-    entry = { ...IDLE }
-    activity.set(workflowId, entry)
-  }
-  return entry
+  const existing = activity.get(workflowId)
+  if (existing) return existing
+  const created = reactive({ ...IDLE })
+  activity.set(workflowId, created)
+  return created
 }
 
 /** What is in flight or failed for a workflow; reactive when read in a computed or template. */
