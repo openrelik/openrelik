@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 import type { TableRow } from '@/utils/table'
-import { escapeControls } from '@/utils/bytes'
+import { escapeControls, hex2 } from '@/utils/bytes'
 
 /**
  * One table row in full: every column's value, with nested JSON (JSONL)
@@ -16,13 +16,19 @@ const props = defineProps<{
   cells: string[]
 }>()
 
+const escapeDelAndC1 = (text: string) =>
+  text.replace(/[\u007f-\u009f]/g, (ch) => `\\x${hex2(ch.charCodeAt(0))}`)
+
 const fields = computed(() =>
   props.columns.map((name, index) => {
-    const value = props.row.record?.[name]
+    const value =
+      props.row.record && Object.hasOwn(props.row.record, name) ? props.row.record[name] : undefined
     const nested = value !== null && typeof value === 'object'
     return {
-      name,
-      text: nested ? JSON.stringify(value, null, 2) : escapeControls(props.cells[index] ?? ''),
+      name: escapeControls(name),
+      text: nested
+        ? escapeDelAndC1(JSON.stringify(value, null, 2))
+        : escapeControls(props.cells[index] ?? ''),
       nested,
     }
   }),
@@ -35,10 +41,10 @@ const fields = computed(() =>
       row <span class="tabular ml-1 normal-case">{{ number.toLocaleString('en-US') }}</span>
     </p>
     <p v-if="row.error" class="border-b border-border px-3 py-2 text-danger">
-      Not valid JSON: {{ row.error }}
+      Not valid JSON: {{ escapeControls(row.error) }}
     </p>
     <dl class="divide-y divide-border px-3">
-      <div v-for="field in fields" :key="field.name" class="py-2">
+      <div v-for="(field, index) in fields" :key="index" class="py-2">
         <dt class="micro-label truncate normal-case" v-overflow-tooltip>{{ field.name }}</dt>
         <dd class="mt-0.5 font-mono">
           <span v-if="field.text === ''" class="text-ink-muted">–</span>

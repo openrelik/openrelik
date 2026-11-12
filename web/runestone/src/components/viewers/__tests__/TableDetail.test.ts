@@ -165,4 +165,34 @@ describe('TableDetail', () => {
     expect(dds[0]?.text()).toBe('{broken: json\\x00}')
     expect(dds[1]?.text()).toBe('–')
   })
+
+  it('escapes control chars in column names, error text, and nested C1 controls, and ignores prototype keys', () => {
+    const columns = ['__proto__', 'col\x1b', 'col\x1b', 'nested']
+    const row: TableRow = {
+      cells: [],
+      record: { nested: { msg: 'hi\x7f\u0085' } },
+      error: 'bad token \x1b[31m',
+    }
+    const cells = ['', 'val1', 'val2', '[object Object]']
+
+    const wrapper = mountDetail({
+      row,
+      number: 1,
+      columns,
+      cells,
+    })
+
+    const dts = wrapper.findAll('dt').map((dt) => dt.text())
+    expect(dts).toEqual(['__proto__', 'col\\x1b', 'col\\x1b', 'nested'])
+    expect(wrapper.text()).toContain('Not valid JSON: bad token \\x1b[31m')
+
+    // Missing `__proto__` key on record must not fall back to Object.prototype (<pre>{}</pre>)
+    const dds = wrapper.findAll('dd')
+    expect(dds[0]?.text()).toBe('–')
+    expect(dds[1]?.text()).toBe('val1')
+    expect(dds[2]?.text()).toBe('val2')
+
+    const pre = dds[3]?.get('pre')
+    expect(pre?.text()).toContain('\\x7f\\x85')
+  })
 })
