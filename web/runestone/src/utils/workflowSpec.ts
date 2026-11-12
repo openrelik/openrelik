@@ -102,7 +102,7 @@ export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRe
     const config: TaskConfigOption[] = Array.isArray(node.task_config) ? node.task_config : []
     const options = config.map(mapOption)
     return {
-      id: node.uuid,
+      id: node.uuid || hexId(),
       name: node.display_name || node.task_name,
       module: node.task_name,
       queue: node.queue_name || node.task_name.split('.')[0]!,

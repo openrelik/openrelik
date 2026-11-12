@@ -164,4 +164,37 @@ describe('TaskReportDialog', () => {
     await body.get('[aria-hidden="true"]').trigger('pointerdown')
     expect(body.find('[role="dialog"]').exists()).toBe(false)
   })
+
+  it('renders multiple fileReports entries even when sharing a fileId without key collisions', async () => {
+    const { body } = await mountDialog()
+
+    openTaskReport(
+      makeTask({
+        name: 'Strings',
+        fileReports: [
+          {
+            fileId: 9,
+            fileName: 'sample.bin',
+            priority: 60,
+            summary: 'First pass finding',
+            markdown: '',
+          },
+          {
+            fileId: 9,
+            fileName: 'sample.bin (chunk 2)',
+            priority: 40,
+            summary: 'Second pass finding',
+            markdown: '',
+          },
+        ],
+      }),
+      10,
+    )
+    await nextTick()
+
+    const articles = body.findAll('section[aria-label="File reports"] article')
+    expect(articles).toHaveLength(2)
+    expect(body.text()).toContain('First pass finding')
+    expect(body.text()).toContain('Second pass finding')
+  })
 })

@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { openTaskReport, useTaskReport } from '@/composables/useTaskReport'
+import { clearTaskReport, openTaskReport, useTaskReport } from '@/composables/useTaskReport'
 import { useModalStore } from '@/stores/modals'
 import type { Task } from '@/types/workflow'
 
@@ -48,6 +48,13 @@ describe('useTaskReport', () => {
     expect(report.value).toEqual({ task: secondTask, folderId: 99 })
 
     modalStore.closeTopModal()
+    expect(report.value).toBeNull()
+
+    // clearTaskReport clears both the modal stack and retained report state (sign-out).
+    openTaskReport(secondTask, 99)
+    expect(report.value).toEqual({ task: secondTask, folderId: 99 })
+    clearTaskReport()
+    expect(modalStore.isModalOpen('report')).toBe(false)
     expect(report.value).toBeNull()
   })
 })

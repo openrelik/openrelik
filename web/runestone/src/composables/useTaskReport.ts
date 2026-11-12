@@ -30,6 +30,6 @@ export function useTaskReport(): {
   return {
     // Closed by the stack too (Esc): the sheet follows the stack, not only `shown`.
     report: computed(() => (modalStore.isModalOpen('report') ? shown.value : null)),
-    close: () => modalStore.closeModal('report'),
+    close: clearTaskReport,
   }
 }
