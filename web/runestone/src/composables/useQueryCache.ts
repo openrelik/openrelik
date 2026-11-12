@@ -28,7 +28,7 @@
  * sign-out so the next operator never sees the previous one's data.
  */
 
-import { reactive } from 'vue'
+import { markRaw, reactive } from 'vue'
 import { ApiError, errorMessage } from '@/api'
 
 /** How long a loaded listing counts as fresh and is not requested again. */
@@ -117,7 +117,7 @@ const waiters = new WeakMap<AbortController, number>()
 const isAbort = (err: unknown): boolean => err instanceof DOMException && err.name === 'AbortError'
 
 function start(entry: Entry, fetcher: Fetcher): void {
-  const controller = new AbortController()
+  const controller = markRaw(new AbortController())
   entry.controller = controller
   entry.isFetching = true
   waiters.set(controller, 0)
@@ -168,22 +168,20 @@ function join(entry: Entry, signal?: AbortSignal): Promise<void> {
 
   return new Promise<void>((resolve, reject) => {
     let settled = false
+    const onAbort = () => {
+      if (!leave()) return
+      if (!waiters.get(controller)) controller.abort()
+      resolve()
+    }
     const leave = (): boolean => {
       if (settled) return false
       settled = true
+      signal?.removeEventListener('abort', onAbort)
       waiters.set(controller, (waiters.get(controller) ?? 1) - 1)
       return true
     }
 
-    signal?.addEventListener(
-      'abort',
-      () => {
-        if (!leave()) return
-        if (!waiters.get(controller)) controller.abort()
-        resolve()
-      },
-      { once: true },
-    )
+    signal?.addEventListener('abort', onAbort, { once: true })
 
     promise.then(
       () => leave() && resolve(),
@@ -229,7 +227,13 @@ export function queryState(key: string): QueryState {
  */
 export function markFresh(key: string): void {
   const entry = entryFor(key)
-  if (entry.isFetching) return
+  if (entry.controller) {
+    entry.controller.abort()
+    entry.controller = null
+    entry.promise = null
+    entry.isFetching = false
+    entry.generation++
+  }
   entry.status = 'success'
   entry.fetchedAt = Date.now()
   entry.error = null

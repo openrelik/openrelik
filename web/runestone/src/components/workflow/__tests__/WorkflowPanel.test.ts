@@ -349,8 +349,12 @@ describe('WorkflowPanel', () => {
   it('delegates split/merge from WorkflowGraph and handles Shift+Enter run shortcut', async () => {
     const workflow = seedWorkflow(
       [
-        makeGroup('gm1', [makeTask('t1'), makeTask('t2'), makeTask('t3')]),
-        makeGroup('gm2', [makeTask('t4')]),
+        makeGroup('gm1', [
+          makeTask('t1'),
+          makeTask('t2'),
+          makeTask('t3', { module: 'openrelik-worker-t1.tasks.t1' }),
+        ]),
+        makeGroup('gm2', [makeTask('t4', { module: 'openrelik-worker-t2.tasks.t2' })]),
       ],
       true,
     )

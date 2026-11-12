@@ -332,4 +332,44 @@ describe('composables/useQueryCache', () => {
     expect(queryState('folder:88:subfolders').status).toBe('idle')
     expect(queryState('folder:88:files').status).toBe('idle')
   })
+
+  it('aborts an in-flight fetch on markFresh so stale results cannot overwrite fresh state', async () => {
+    let resolveStale!: () => void
+    let fetchSignal!: AbortSignal
+    const stalePromise = ensure('folder:99:files', (signal) => {
+      fetchSignal = signal
+      return new Promise<void>((resolve) => {
+        resolveStale = resolve
+      })
+    })
+
+    markFresh('folder:99:files')
+
+    expect(fetchSignal.aborted).toBe(true)
+    expect(queryState('folder:99:files')).toMatchObject({
+      status: 'success',
+      isFetching: false,
+      error: null,
+    })
+
+    resolveStale()
+    await stalePromise
+
+    // Next read sees fresh state and skips fetching
+    const nextFetcher = vi.fn(async () => {})
+    await ensure('folder:99:files', nextFetcher)
+    expect(nextFetcher).not.toHaveBeenCalled()
+  })
+
+  it('removes the abort listener from a long-lived caller signal after join settles', async () => {
+    const controller = new AbortController()
+    const addSpy = vi.spyOn(controller.signal, 'addEventListener')
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener')
+
+    await ensure('folder:101:files', async () => {}, { signal: controller.signal })
+
+    expect(addSpy).toHaveBeenCalledTimes(1)
+    expect(removeSpy).toHaveBeenCalledTimes(1)
+    expect(removeSpy.mock.calls[0]?.[1]).toBe(addSpy.mock.calls[0]?.[1])
+  })
 })
