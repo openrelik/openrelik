@@ -130,7 +130,7 @@ function choose(worker: Worker | undefined) {
 
 function onListKey(event: KeyboardEvent) {
   event.stopPropagation()
-  const last = flat.value.length - 1
+  const last = Math.max(0, flat.value.length - 1)
   if (event.key === 'ArrowDown') index.value = Math.min(last, index.value + 1)
   else if (event.key === 'ArrowUp') index.value = Math.max(0, index.value - 1)
   else if (event.key === 'Enter') choose(flat.value[index.value])
@@ -247,7 +247,8 @@ function onOptionsKey(event: KeyboardEvent) {
         <div
           v-else
           v-autofocus
-          class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5"
+          tabindex="-1"
+          class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5 outline-none"
           @keydown="onOptionsKey"
         >
           <p class="font-medium text-ink">{{ configuring.name }}</p>

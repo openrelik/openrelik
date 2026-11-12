@@ -41,6 +41,7 @@ export interface WorkflowTemplate {
 const templates = shallowRef<WorkflowTemplate[]>([])
 /** Why the last rename or delete failed, until the next one. */
 const error = ref<string | null>(null)
+let sessionEpoch = 0
 
 /** Its workers, by name, in the order they first appear; repeats counted. */
 function workersOf(specJson: string): string {
@@ -65,7 +66,9 @@ function mapTemplate(record: WorkflowTemplateRecord): WorkflowTemplate {
 const byName = (a: WorkflowTemplate, b: WorkflowTemplate) => a.name.localeCompare(b.name)
 
 async function fetchTemplates(signal: AbortSignal): Promise<void> {
+  const epoch = sessionEpoch
   const records = await api.workflows.listTemplates({ signal, background: true })
+  if (epoch !== sessionEpoch) return
   templates.value = records.map(mapTemplate).sort(byName)
 }
 
@@ -100,13 +103,15 @@ export async function renameTemplate(id: number, name: string): Promise<boolean>
   const template = templates.value.find((t) => t.id === id)
   const trimmed = name.trim()
   if (!template || !trimmed || trimmed === template.name) return false
+  const epoch = sessionEpoch
   error.value = null
   replace(id, (t) => ({ ...t, name: trimmed }))
   try {
     await api.workflows.renameTemplate(id, trimmed)
-    return true
+    return epoch === sessionEpoch
   } catch (err: unknown) {
-    replace(id, (t) => ({ ...t, name: template.name }))
+    if (epoch !== sessionEpoch) return false
+    replace(id, (t) => (t.name === trimmed ? { ...t, name: template.name } : t))
     error.value = `Could not rename “${template.name}”: ${errorMessage(err, 'request failed')}`
     return false
   }
@@ -116,12 +121,15 @@ export async function renameTemplate(id: number, name: string): Promise<boolean>
 export async function deleteTemplate(id: number): Promise<boolean> {
   const template = templates.value.find((t) => t.id === id)
   if (!template) return false
+  const epoch = sessionEpoch
   error.value = null
   try {
     await api.workflows.deleteTemplate(id)
+    if (epoch !== sessionEpoch) return false
     replace(id, () => null)
     return true
   } catch (err: unknown) {
+    if (epoch !== sessionEpoch) return false
     error.value = `Could not delete “${template.name}”: ${errorMessage(err, 'request failed')}`
     return false
   }
@@ -134,8 +142,14 @@ export interface UseWorkflowTemplatesReturn {
   error: Readonly<Ref<string | null>>
 }
 
+/** Clears the last template rename/delete error (e.g. when reopening the picker). */
+export function clearTemplateError(): void {
+  error.value = null
+}
+
 /** Forgets loaded workflow templates and errors (sign-out). */
 export function clearWorkflowTemplates(): void {
+  sessionEpoch++
   templates.value = []
   error.value = null
 }
