@@ -72,6 +72,7 @@ export function useTextSearch(
   let debounce: ReturnType<typeof setTimeout> | undefined
 
   function restart() {
+    clearTimeout(debounce)
     run++
     hits.value = []
     current.value = -1
@@ -107,7 +108,7 @@ export function useTextSearch(
         const stop = Math.min(end, scanned + SLICE_LINES)
         const found = hits.value
         for (let line = scanned; line < stop; line++) {
-          for (const [start, until] of matcher(index.lines[line]!)) {
+          for (const [start, until] of matcher(index.lines[line]!, MAX_HITS - found.length + 1)) {
             if (found.length >= MAX_HITS) {
               overflow.value = true
               break

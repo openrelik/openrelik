@@ -78,7 +78,13 @@ export function useTableStream(
 
   function append(parsed: TableRow[]) {
     if (!parser) return
-    columns.value = parser.columns()
+    const nextCols = parser.columns()
+    if (
+      nextCols.length !== columns.value.length ||
+      nextCols.some((name, i) => name !== columns.value[i])
+    ) {
+      columns.value = nextCols
+    }
     if (!parsed.length) return
     // Pushing into the array in place, then triggering: copying 200 000 rows per chunk would not scale.
     for (const row of parsed) rows.value.push(row)
@@ -106,10 +112,11 @@ export function useTableStream(
     parser = null
     rows.value = []
     columns.value = []
+    delimiter.value = ','
   }
 
   watch(
-    [() => file().id, kind],
+    [() => file().id, () => file().size, kind],
     () => {
       reset()
       const next = createRangeText(file(), onText)
@@ -121,12 +128,15 @@ export function useTableStream(
   onScopeDispose(reset)
 
   const types = computed<ColumnType[]>(() => {
-    // Lines that did not parse have no columns: they do not vote.
-    const sample = rows.value.filter((row) => !row.error).slice(0, TYPE_SAMPLE)
     void rows.value.length // re-infer as the first rows arrive
-    return columns.value.map((_, index) =>
-      inferType(sample.map((row) => cellsOf(row)[index] ?? '')),
-    )
+    // Lines that did not parse have no columns: they do not vote.
+    const sample: string[][] = []
+    for (const row of rows.value) {
+      if (row.error) continue
+      sample.push(cellsOf(row))
+      if (sample.length >= TYPE_SAMPLE) break
+    }
+    return columns.value.map((_, index) => inferType(sample.map((cells) => cells[index] ?? '')))
   })
 
   function cellsOf(row: TableRow): string[] {

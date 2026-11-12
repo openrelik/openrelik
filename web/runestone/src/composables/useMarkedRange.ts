@@ -65,7 +65,16 @@ export function useMarkedRange(
   watch(
     () => hashOf(model.value),
     (hash) => {
-      if (hash === ownHash || !model.value) return
+      if (!model.value) {
+        ownHash = null
+        anchor.value = null
+        return
+      }
+      if (hash === ownHash) {
+        ownHash = null
+        return
+      }
+      ownHash = null
       anchor.value = model.value
       options.land(model.value)
     },
@@ -100,20 +109,22 @@ export function useMarkedRange(
       .elementFromPoint(dragX, event.clientY)
       ?.closest<HTMLElement>('[data-mark-from]')
     if (!item) return
-    const next = spanOf(anchor.value, {
-      from: Number(item.dataset.markFrom),
-      to: Number(item.dataset.markTo),
-    })
+    const from = Number(item.dataset.markFrom)
+    const to = Number(item.dataset.markTo)
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return
+    const next = spanOf(anchor.value, { from, to })
     if (!sameSpan(next, model.value)) set(next)
   }
   const endDrag = () => (dragX = null)
   onMounted(() => {
     window.addEventListener('pointermove', onDragMove)
     window.addEventListener('pointerup', endDrag)
+    window.addEventListener('pointercancel', endDrag)
   })
   onUnmounted(() => {
     window.removeEventListener('pointermove', onDragMove)
     window.removeEventListener('pointerup', endDrag)
+    window.removeEventListener('pointercancel', endDrag)
   })
 
   const label = () => (model.value ? markLabel({ kind, ...model.value }) : '')
