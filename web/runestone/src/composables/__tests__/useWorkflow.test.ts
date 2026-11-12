@@ -7,6 +7,7 @@ import { folderKeys } from '@/composables/useFolderLoader'
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates'
 import {
   addTask,
+  clearWorkflowState,
   copyWorkflow,
   createWorkflow,
   discardWorkflow,
@@ -992,5 +993,188 @@ describe('runWorkflow, copyWorkflow, saveAsTemplate, discardWorkflow, and follow
     followWorkflow(errWf.folderId)
     await vi.advanceTimersByTimeAsync(POLL_MS * 3)
     expect(api.workflows.get).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('workflow race guards, sign-out cleanup, and edit/follow lifecycle', () => {
+  it('does not send a follow-up saveSpec when runWorkflow drains a failing in-flight save', async () => {
+    const workflow = seedWorkflow([makeGroup('g1', [makeTask('t1')])])
+    const firstSave = createDeferred<WorkflowRecord>()
+    vi.mocked(api.workflows.saveSpec).mockReturnValueOnce(firstSave.promise)
+    vi.mocked(api.workflows.run).mockResolvedValueOnce({
+      ...makeWorkflowRecord(workflow.id, workflow.folderId),
+      tasks: [{ id: 1, uuid: 't1', display_name: 'Task t1', status_short: 'STARTED' }],
+    })
+
+    // First edit triggers the debounced save; a second edit while it is in flight queues a follow-up.
+    setTaskOption(workflow.folderId, 't1', 'depth', '2')
+    await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS)
+    expect(api.workflows.saveSpec).toHaveBeenCalledTimes(1)
+
+    setTaskOption(workflow.folderId, 't1', 'depth', '3')
+    const running = runWorkflow(workflow.folderId)
+    expect(workflowActivity(workflow.id).running).toBe(true)
+
+    firstSave.reject(new Error('Transient failure'))
+    expect(await running).toBe(true)
+
+    // Queued save was aborted before calling saveSpec a second time, and run succeeded cleanly.
+    expect(api.workflows.saveSpec).toHaveBeenCalledTimes(1)
+    expect(api.workflows.run).toHaveBeenCalledTimes(1)
+    expect(workflowActivity(workflow.id).saveError).toBeNull()
+    expect(workflowActivity(workflow.id).running).toBe(false)
+  })
+
+  it('clears lastEdit when running starts and dismisses edits on run success or discard', async () => {
+    const workflow = seedWorkflow([makeGroup('g1', [makeTask('t1')])])
+    removeTask(workflow.folderId, 't1')
+    expect(lastEdit.value).not.toBeNull()
+
+    const runGate = createDeferred<WorkflowRecord>()
+    vi.mocked(api.workflows.run).mockReturnValueOnce(runGate.promise)
+    const runPromise = runWorkflow(workflow.folderId)
+    // Hidden immediately while running so Undo is not offered mid-run.
+    expect(lastEdit.value).toBeNull()
+
+    runGate.resolve({
+      ...makeWorkflowRecord(workflow.id, workflow.folderId),
+      tasks: [{ id: 1, uuid: 't1', display_name: 'Task t1', status_short: 'STARTED' }],
+    })
+    expect(await runPromise).toBe(true)
+    expect(lastEdit.value).toBeNull()
+
+    // Discard also clears lastEdit and any run activity error.
+    const draft2 = seedWorkflow([makeGroup('g2', [makeTask('t2')])])
+    useItemsStore().upsertItems([
+      {
+        id: draft2.folderId,
+        parent: null,
+        kind: 'folder',
+        name: draft2.name,
+        owner: 'Alice',
+        modified: '2026-11-01T00:00:00Z',
+        workflowId: draft2.id,
+      },
+    ])
+    vi.mocked(api.workflows.run).mockRejectedValueOnce(new Error('Run failed'))
+    expect(await runWorkflow(draft2.folderId)).toBe(false)
+    expect(workflowActivity(draft2.id).error).toContain('Run failed')
+
+    removeTask(draft2.folderId, 't2')
+    expect(lastEdit.value).not.toBeNull()
+
+    vi.mocked(api.folders.deleteFolder).mockResolvedValueOnce(undefined)
+    const confirm = useConfirm()
+    const discarding = discardWorkflow(draft2.folderId)
+    confirm.accept()
+    expect(await discarding).toBe(true)
+    expect(lastEdit.value).toBeNull()
+    expect(workflowActivity(draft2.id).error).toBeNull()
+  })
+
+  it('guards createWorkflow, loadWorkflow, copyWorkflow, saveAsTemplate, discardWorkflow, and followWorkflow against clearWorkflowState mid-flight', async () => {
+    const confirm = useConfirm()
+    // 1. createWorkflow rejects cleanly and does not store the created workflow after sign-out.
+    const createGate = createDeferred<WorkflowRecord>()
+    vi.mocked(api.workflows.create).mockReturnValueOnce(createGate.promise)
+    const createPromise = createWorkflow(500, [1])
+    clearWorkflowState()
+    createGate.resolve(makeWorkflowRecord(501, 502))
+    await expect(createPromise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(useWorkflowsStore().workflowOf(502)).toBeUndefined()
+
+    // 2. loadWorkflow ignores response that lands after sign-out.
+    const getGate = createDeferred<WorkflowRecord>()
+    vi.mocked(api.workflows.get).mockReturnValueOnce(getGate.promise)
+    const loadPromise = loadWorkflow(601, 602)
+    clearWorkflowState()
+    getGate.resolve(makeWorkflowRecord(601, 602))
+    await expect(loadPromise).resolves.toBeUndefined()
+    expect(useWorkflowsStore().workflowOf(602)).toBeUndefined()
+
+    // 3. copyWorkflow does not store the copied workflow after sign-out.
+    const source = seedWorkflow([makeGroup('g1', [makeTask('t1')])], false)
+    const copyGate = createDeferred<WorkflowRecord>()
+    vi.mocked(api.workflows.copy).mockReturnValueOnce(copyGate.promise)
+    const copyPromise = copyWorkflow(source.folderId)
+    clearWorkflowState()
+    copyGate.resolve(makeWorkflowRecord(source.id + 1, source.folderId + 1))
+    expect(await copyPromise).toBeNull()
+    expect(useWorkflowsStore().workflowOf(source.folderId + 1)).toBeUndefined()
+
+    // 4. saveAsTemplate does not mutate templates after sign-out.
+    const wfForTpl = seedWorkflow([makeGroup('g1', [makeTask('t1')])], false)
+    const tplGate = createDeferred<{ id: number; display_name: string }>()
+    vi.mocked(api.workflows.createTemplate).mockReturnValueOnce(tplGate.promise)
+    const tplPromise = saveAsTemplate(wfForTpl.folderId)
+    confirm.text.value = 'My Template'
+    confirm.accept()
+    await Promise.resolve()
+    clearWorkflowState()
+    tplGate.resolve({ id: 99, display_name: 'My Template' })
+    expect(await tplPromise).toBeNull()
+    expect(useWorkflowTemplates().templates.value.some((t) => t.id === 99)).toBe(false)
+
+    // 5. discardWorkflow aborts before folders.deleteFolder if sign-out happens while confirming.
+    const wfForDiscard = seedWorkflow([makeGroup('g1', [makeTask('t1')])], true)
+    const discardPromise = discardWorkflow(wfForDiscard.folderId)
+    clearWorkflowState()
+    confirm.accept()
+    expect(await discardPromise).toBe(false)
+    expect(api.folders.deleteFolder).not.toHaveBeenCalled()
+
+    // 6. followWorkflow stops polling when clearWorkflowState runs before timer fires.
+    const active = seedWorkflow(
+      [makeGroup('g1', [makeTask('t1', { status: 'running' })])],
+      false,
+    )
+    const callsBeforeFollow = vi.mocked(api.workflows.get).mock.calls.length
+    followWorkflow(active.folderId)
+    clearWorkflowState()
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3)
+    expect(vi.mocked(api.workflows.get).mock.calls.length).toBe(callsBeforeFollow)
+  })
+
+  it('ignores inactive workflows in followWorkflow and does not schedule a post-completion poll', async () => {
+    const finished = seedWorkflow(
+      [makeGroup('g1', [makeTask('t1', { status: 'success' })])],
+      false,
+    )
+    const callsBefore = vi.mocked(api.workflows.get).mock.calls.length
+    followWorkflow(finished.folderId)
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3)
+    expect(vi.mocked(api.workflows.get).mock.calls.length).toBe(callsBefore)
+
+    // One poll sees the task finish; no further poll is scheduled.
+    const active = seedWorkflow(
+      [makeGroup('g1', [makeTask('t2', { status: 'running' })])],
+      false,
+    )
+    vi.mocked(api.workflows.get).mockResolvedValueOnce({
+      ...makeWorkflowRecord(active.id, active.folderId),
+      spec_json: JSON.stringify({
+        workflow: {
+          type: 'chain',
+          isRoot: true,
+          tasks: [
+            {
+              type: 'task',
+              uuid: 't2',
+              task_name: 'worker.strings',
+              queue_name: 'default',
+              display_name: 'Strings',
+              task_config: [],
+              tasks: [],
+            },
+          ],
+        },
+      } satisfies WorkflowSpec),
+      tasks: [{ id: 1, uuid: 't2', display_name: 'Strings', status_short: 'SUCCESS' }],
+    })
+    followWorkflow(active.folderId)
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(vi.mocked(api.workflows.get).mock.calls.length).toBe(callsBefore + 1)
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3)
+    expect(vi.mocked(api.workflows.get).mock.calls.length).toBe(callsBefore + 1)
   })
 })
