@@ -317,4 +317,18 @@ describe('useRun', () => {
     expect(createFailed).toBeNull()
     expect(runError.value).toBe('Could not run Strings: Quota exceeded')
   })
+
+  it('clears runTarget when closeTopModal dismisses the run modal via Escape', () => {
+    const file = makeFile(77, 'disk.dd')
+    openRun([file], 10)
+    expect(runTarget.value).not.toBeNull()
+    expect(useModalStore().isModalOpen('run')).toBe(true)
+
+    useModalStore().closeTopModal()
+    expect(useModalStore().isModalOpen('run')).toBe(false)
+    expect(runTarget.value).toBeNull()
+
+    openRun([file], 10)
+    expect(runTarget.value).not.toBeNull()
+  })
 })

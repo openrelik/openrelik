@@ -187,4 +187,52 @@ describe('useFileDetails', () => {
     await vi.advanceTimersByTimeAsync(10_000)
     expect(api.files.getFile).toHaveBeenCalledTimes(1)
   })
+
+  it('does not schedule a retry if disposed or superseded while getFile is in flight', async () => {
+    const itemsStore = useItemsStore()
+    itemsStore.upsertItems([makeFileItem(5), makeFileItem(6)])
+
+    let resolveSlow!: (value: FileDetail) => void
+    vi.mocked(api.files.getFile).mockImplementationOnce(
+      () =>
+        new Promise<FileDetail>((resolve) => {
+          resolveSlow = resolve
+        }),
+    )
+
+    // Case 1: scope disposed before in-flight request resolves unhashed.
+    const scope1 = effectScope()
+    scope1.run(() => useFileDetails(() => 5))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(api.files.getFile).toHaveBeenCalledTimes(1)
+
+    scope1.stop()
+    resolveSlow(makeFileDetail(5))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(api.files.getFile).toHaveBeenCalledTimes(1)
+
+    // Case 2: overlapping refresh supersedes an in-flight request before it resolves unhashed.
+    let resolveFirst!: (value: FileDetail) => void
+    vi.mocked(api.files.getFile)
+      .mockImplementationOnce(
+        () =>
+          new Promise<FileDetail>((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockResolvedValueOnce(makeFileDetail(6, { hash_sha1: 'sha1-only-hash' }))
+
+    const scope2 = effectScope()
+    scope2.run(() => useFileDetails(() => 6))
+    await vi.advanceTimersByTimeAsync(0)
+
+    refreshAll({ force: true })
+    await vi.advanceTimersByTimeAsync(0)
+    // Resolving the superseded first unhashed request must not schedule a 3s poll timer.
+    resolveFirst(makeFileDetail(6))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(api.files.getFile).toHaveBeenCalledTimes(3)
+
+    scope2.stop()
+  })
 })

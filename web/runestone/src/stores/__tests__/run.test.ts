@@ -167,4 +167,52 @@ describe('stores/run', () => {
     expect(result).toBeNull()
     expect(store.error).toBe('Could not run Strings: Permission denied')
   })
+
+  it('clearRun resets state and ignores in-flight quick-run resolution or rejection after sign-out', async () => {
+    const store = useRunStore()
+    store.open({ label: 'report.pdf', files: [sampleFile], folderId: 10 })
+    store.error = 'Previous error'
+    store.lastRun = { folderId: 99, label: 'Old', parentId: 10 }
+    store.clearRun()
+
+    expect(store.runTarget).toBeNull()
+    expect(store.lastRun).toBeNull()
+    expect(store.error).toBeNull()
+
+    // In-flight createWorkflow resolving after clearRun does not addTask, rename, run, or set lastRun.
+    let resolveCreate!: (wf: ReturnType<typeof makeWorkflow>) => void
+    vi.mocked(createWorkflow).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve
+      }),
+    )
+    const pendingSuccess = store.start(
+      sampleWorker,
+      { label: 'report.pdf', files: [sampleFile], folderId: 10 },
+      {},
+    )
+    store.clearRun()
+    resolveCreate(makeWorkflow())
+    expect(await pendingSuccess).toBeNull()
+    expect(addTask).not.toHaveBeenCalled()
+    expect(store.lastRun).toBeNull()
+    expect(store.error).toBeNull()
+
+    // In-flight createWorkflow rejecting after clearRun does not populate store.error.
+    let rejectCreate!: (err: Error) => void
+    vi.mocked(createWorkflow).mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectCreate = reject
+      }),
+    )
+    const pendingError = store.start(
+      sampleWorker,
+      { label: 'report.pdf', files: [sampleFile], folderId: 10 },
+      {},
+    )
+    store.clearRun()
+    rejectCreate(new Error('Aborted'))
+    expect(await pendingError).toBeNull()
+    expect(store.error).toBeNull()
+  })
 })

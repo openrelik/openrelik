@@ -202,14 +202,15 @@ export function jsonlParser(): TableParser {
       tail = ''
       return last ? [last] : []
     },
-    columns: () => keys,
+    columns: () => [...keys],
   }
 }
 
 /** A JSONL row's cells for the columns as they are now (columns grow as keys appear). */
 export function jsonlCells(row: TableRow, columns: string[]): string[] {
   if (!row.record) return columns.map((_, i) => (i === 0 ? (row.raw ?? '') : ''))
-  return columns.map((key) => cellText(row.record![key]))
+  const record = row.record
+  return columns.map((key) => (Object.hasOwn(record, key) ? cellText(record[key]) : ''))
 }
 
 // --- types, for alignment and sorting ---
@@ -236,8 +237,9 @@ export function inferType(values: string[]): ColumnType {
 export function sortKey(value: string, type: ColumnType): number | string | null {
   if (value === '') return null
   if (type === 'number') {
+    if (value.trim() === '') return null
     const number = Number(value)
-    return Number.isNaN(number) ? null : number
+    return Number.isFinite(number) ? number : null
   }
   if (type === 'date') {
     const time = Date.parse(value.replace(' ', 'T'))

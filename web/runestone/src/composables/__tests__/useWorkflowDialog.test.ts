@@ -51,4 +51,17 @@ describe('useWorkflowDialog', () => {
     dialog.workflowTarget.value = null
     expect(modalStore.isModalOpen('workflow')).toBe(false)
   })
+
+  it('returns null workflowTarget when closeTopModal dismisses the dialog via Escape', () => {
+    const modalStore = useModalStore()
+    const dialog = useWorkflowDialog()
+    const file = makeFile(2, 'disk.raw')
+
+    openWorkflowDialog([file], 7)
+    expect(dialog.workflowTarget.value).not.toBeNull()
+
+    modalStore.closeTopModal()
+    expect(modalStore.isModalOpen('workflow')).toBe(false)
+    expect(dialog.workflowTarget.value).toBeNull()
+  })
 })

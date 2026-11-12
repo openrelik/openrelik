@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, customRef, type Ref } from 'vue'
 import type { Item } from '@/types/item'
 import type { Worker } from '@/types/worker'
 import type { AddAt } from '@/composables/useWorkflow'
@@ -18,8 +18,11 @@ export function anchorOf(event: Event): Anchor | undefined {
   return { top, bottom, left, right }
 }
 
-export const runTarget = computed({
-  get: () => useRunStore().runTarget,
+export const runTarget: Ref<RunTarget | null> = customRef((track, trigger) => ({
+  get: () => {
+    track()
+    return useModalStore().isModalOpen('run') ? useRunStore().runTarget : null
+  },
   set: (val: RunTarget | null) => {
     useRunStore().runTarget = val
     if (val) {
@@ -27,11 +30,12 @@ export const runTarget = computed({
     } else {
       useModalStore().closeModal('run')
     }
+    trigger()
   },
-})
+}))
 
 const labelOf = (files: Item[]) =>
-  files.length === 1 ? files[0]!.name : count(files.length, 'file')
+  files.length === 1 && files[0] ? files[0].name : count(files.length, 'file')
 
 /** Opens the picker to run one worker on `files`, as a workflow of its own. */
 export function openRun(files: Item[], folderId: number) {
@@ -53,8 +57,8 @@ export function openAddToWorkflow(workflow: Workflow, at: AddAt, anchor?: Anchor
     if (parent === undefined || (parent && !canChainAfter(workflow, parent.id))) return
     label = parent
       ? parent.name
-      : inputs.length === 1
-        ? inputs[0]!.name
+      : inputs.length === 1 && inputs[0]
+        ? inputs[0].name
         : count(inputs.length, 'input file')
   } else if ('beside' in at) {
     const task = findTask(workflow, at.beside)

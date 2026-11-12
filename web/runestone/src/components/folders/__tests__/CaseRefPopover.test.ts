@@ -267,4 +267,46 @@ describe('CaseRefPopover', () => {
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     expect(wrapper.emitted('close')).toHaveLength(4)
   })
+
+  it('does not emit close after unmount if save settles late, clears error on unmount, and keeps dialog focusable', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const item = makeFolderItem()
+    useItemsStore().upsertItems([item])
+    const router = makeRouter()
+    await router.push('/')
+    await router.isReady()
+
+    let resolveSave!: (folder: FolderDetail) => void
+    vi.mocked(api.folders.setCaseRef).mockImplementation(
+      () =>
+        new Promise<FolderDetail>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+
+    wrapper = mount(CaseRefPopover, {
+      attachTo: document.body,
+      props: { item, x: 50, y: 50 },
+      global: { plugins: [pinia, router, directives] },
+    })
+
+    const body = new DOMWrapper(document.body)
+    const dialog = body.get('[role="dialog"]')
+    expect(dialog.attributes('tabindex')).toBe('-1')
+
+    await dialog.get('input').setValue('ir-2024/008')
+    await dialog
+      .findAll('button')
+      .find((b) => b.text() === 'Save')!
+      .trigger('click')
+
+    // Unmount before save settles
+    wrapper.unmount()
+    resolveSave(makeFolderRecord({ case_ref: 'ir-2024/008' }))
+    await flushPromises()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(useCaseRef().error.value).toBeNull()
+    wrapper = undefined
+  })
 })

@@ -14,6 +14,7 @@ import { ensureRole, forgetRoles } from '@/composables/useFolderPermissions'
 import { closeRun } from '@/composables/useRun'
 import { closeShareDialog } from '@/composables/useShareDialog'
 import { clearUploads } from '@/composables/useUploadQueue'
+import { runWorkflow } from '@/composables/useWorkflow'
 import { closeWorkflowDialog } from '@/composables/useWorkflowDialog'
 import { useAuthStore } from '@/stores/auth'
 import { useItemsStore } from '@/stores/items'
@@ -56,6 +57,7 @@ vi.mock('@/api', async (importOriginal) => {
       ...actual.api.workflows,
       get: vi.fn(),
       rename: vi.fn(),
+      run: vi.fn(),
       saveSpec: vi.fn(),
       listTemplates: vi.fn(),
     },
@@ -364,6 +366,11 @@ describe('FolderView', () => {
     expect(wrapper.text()).toContain('notes.txt')
     expect(wrapper.text()).toContain('1 empty file hidden · show')
 
+    // ?focus=201 placed the cursor on disk.raw (row 2) after rows finished loading.
+    expect(wrapper.get('tr[data-row="2"]').classes()).toContain(
+      'shadow-[inset_2px_0_0_var(--color-brand)]',
+    )
+
     // Show empty files, select all, then hide empty files again (hidden ones drop from selection).
     const emptyToggleBtn = wrapper.findAll('button').find((b) => b.text().includes('empty file'))
     expect(emptyToggleBtn).toBeDefined()
@@ -375,6 +382,15 @@ describe('FolderView', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', metaKey: true }))
     await nextTick()
     expect(wrapper.text()).toContain('5 selected')
+
+    // Filtering narrows visible selection count in both FolderToolbar and FolderStatusBar.
+    const filterBeforeEmpty = wrapper.get('input[aria-label="Filter by name"]')
+    await filterBeforeEmpty.setValue('disk')
+    await nextTick()
+    expect(wrapper.get('[aria-label="Selection"]').text()).toContain('1 selected')
+    expect(wrapper.get('footer').text()).toContain('1 selected')
+    await filterBeforeEmpty.setValue('')
+    await nextTick()
 
     const hideEmptyBtn = wrapper
       .findAll('button')
@@ -749,6 +765,20 @@ describe('FolderView', () => {
     await nextTick()
     expect(wrapper.text()).toContain('Extract ASCII and Unicode strings')
 
+    // TaskInspector Add worker button opens RunDialog, and Close button clears taskId.
+    const addWorkerBtn = wrapper.findAll('button').find((b) => b.text().includes('Add worker'))
+    if (addWorkerBtn) {
+      await addWorkerBtn.trigger('click')
+      expect(useModalStore().isModalOpen('run')).toBe(true)
+      closeRun()
+    }
+    const closeInspectorBtn = wrapper.get('button[aria-label="Close task"]')
+    await closeInspectorBtn.trigger('click')
+    await nextTick()
+    expect(wrapper.find('button[aria-label="Close task"]').exists()).toBe(false)
+    await taskRow!.trigger('click')
+    await nextTick()
+
     // Escape closes the TaskInspector first.
     ;(document.activeElement as HTMLElement | null)?.blur()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -766,5 +796,230 @@ describe('FolderView', () => {
 
     expect(api.folders.deleteFolder).toHaveBeenCalledWith(12)
     expect(router.currentRoute.value.path).toBe('/folder/10')
+  })
+
+  it('guards Escape hierarchy over open menu/case popover, empty ArrowDown, workflow revisit cursor, and unloaded folder create', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().setUser(operatorAlice)
+
+    vi.mocked(api.folders.getAllFolders).mockResolvedValue({
+      folders: [],
+      page: 1,
+      page_size: 40,
+      total_count: 0,
+    })
+
+    const router = buildRouter()
+    await router.push('/')
+    await router.isReady()
+
+    wrapper = mount(
+      { template: '<router-view />' },
+      {
+        attachTo: document.body,
+        global: { plugins: [pinia, router, directives] },
+      },
+    )
+    await flushPromises()
+
+    // ArrowDown on an empty root listing must not set cursor to -1 (UP).
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
+    await nextTick()
+    expect(wrapper.find('tr[data-row="-1"]').exists()).toBe(false)
+
+    // Load root folder A, select it, open ItemMenu, blur focus to body, and verify Escape closes menu without clearing selection.
+    vi.mocked(api.folders.getAllFolders).mockResolvedValue({
+      folders: [rootFolderA],
+      page: 1,
+      page_size: 40,
+      total_count: 1,
+    })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', shiftKey: true }))
+    await flushPromises()
+
+    await wrapper.get('tr[data-row="0"] input[type="checkbox"]').trigger('change')
+    expect(wrapper.text()).toContain('1 selected')
+
+    const menuBtn = wrapper.get('button[aria-label="Actions for Incident Alpha"]')
+    await menuBtn.trigger('click')
+    await nextTick()
+    expect(document.body.querySelector('[role="menu"]')).not.toBeNull()
+
+    // Focus escapes to body: Delete must not act behind menu, Escape closes menu and preserves selection.
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    expect(useConfirm().isOpen.value).toBe(false)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(document.body.querySelector('[role="menu"]')).toBeNull()
+    expect(wrapper.text()).toContain('1 selected')
+
+    // Re-open menu -> Change case… -> CaseRefPopover opens; Escape on body closes popover, keeping selection.
+    await menuBtn.trigger('click')
+    await nextTick()
+    const caseBtn = [
+      ...(document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []),
+    ].find((b) => b.textContent?.includes('case'))
+    expect(caseBtn).toBeDefined()
+    caseBtn!.click()
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(wrapper.text()).toContain('1 selected')
+
+    // Navigating to a workflow folder, then plain folder, then back to the workflow folder still places cursor on '..' (-1).
+    const wfDetail: FolderDetail = {
+      id: 12,
+      uuid: 'uuid-wf-12',
+      display_name: 'Strings workflow',
+      parent: folderAlphaDetail,
+      parent_id: 10,
+      workflows: [{ id: 77, display_name: 'Strings workflow' }],
+      created_at: '2026-04-10T11:15:00Z',
+      updated_at: '2026-04-10T11:45:00Z',
+    }
+    vi.mocked(api.folders.getFolder).mockImplementation(async (id) =>
+      id === 12 ? wfDetail : folderAlphaDetail,
+    )
+    vi.mocked(api.folders.getSubfolders).mockImplementation(async (id) =>
+      id === 10 ? [wfDetail] : [],
+    )
+    vi.mocked(api.folders.getFolderFiles).mockImplementation(async (id) =>
+      id === 12 ? [fileDiskImg] : [],
+    )
+    vi.mocked(api.workflows.get).mockResolvedValue({
+      id: 77,
+      uuid: 'wf-uuid-77',
+      display_name: 'Strings workflow',
+      spec_json: null,
+      files: [{ id: 201, display_name: 'disk.raw' }],
+      tasks: [],
+      folder: { id: 12 },
+    })
+
+    await router.push('/folder/12')
+    await flushPromises()
+    expect(wrapper.get('tr[data-row="-1"]').classes()).toContain(
+      'shadow-[inset_2px_0_0_var(--color-brand)]',
+    )
+
+    await router.push('/folder/10')
+    await flushPromises()
+
+    await router.push('/folder/12')
+    await flushPromises()
+    expect(wrapper.get('tr[data-row="-1"]').classes()).toContain(
+      'shadow-[inset_2px_0_0_var(--color-brand)]',
+    )
+
+    // Navigating with ?focus=201 moves cursor onto disk.raw even when FolderView stays mounted.
+    await router.push('/folder/12?focus=201')
+    await flushPromises()
+    expect(wrapper.get('tr[data-row="0"]').classes()).toContain(
+      'shadow-[inset_2px_0_0_var(--color-brand)]',
+    )
+  })
+
+  it('retries failed workflow load from LoadState and opens/closes TaskInspector', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().setUser(operatorAlice)
+
+    const wfDetail: FolderDetail = {
+      id: 12,
+      uuid: 'uuid-wf-12',
+      display_name: 'Strings workflow',
+      parent: folderAlphaDetail,
+      parent_id: 10,
+      workflows: [{ id: 77, display_name: 'Strings workflow' }],
+      created_at: '2026-04-10T11:15:00Z',
+      updated_at: '2026-04-10T11:45:00Z',
+    }
+    vi.mocked(api.folders.getFolder).mockResolvedValue(wfDetail)
+    vi.mocked(api.folders.getSubfolders).mockResolvedValue([])
+    vi.mocked(api.folders.getFolderFiles).mockResolvedValue([fileDiskImg])
+    vi.mocked(api.workflows.get)
+      .mockRejectedValueOnce(new Error('Workflow unavailable'))
+      .mockResolvedValueOnce({
+        id: 77,
+        uuid: 'wf-uuid-77',
+        display_name: 'Strings workflow',
+        spec_json: JSON.stringify({
+          workflow: {
+            type: 'chain',
+            isRoot: true,
+            tasks: [
+              {
+                type: 'task',
+                uuid: '11111111111111111111111111111111',
+                task_name: 'openrelik-worker-strings.tasks.strings',
+                queue_name: 'openrelik-worker-strings',
+                display_name: 'Strings',
+                description: 'Extract strings',
+                task_config: [],
+                tasks: [],
+              },
+            ],
+          },
+        }),
+        files: [{ id: 201, display_name: 'disk.raw' }],
+        tasks: [],
+        folder: { id: 12 },
+      })
+
+    const router = buildRouter()
+    await router.push('/folder/12')
+    await router.isReady()
+
+    wrapper = mount(
+      { template: '<router-view />' },
+      {
+        attachTo: document.body,
+        global: { plugins: [pinia, router, directives] },
+      },
+    )
+    await flushPromises()
+
+    const retryBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Retry')
+    expect(retryBtn).toBeDefined()
+    await retryBtn!.trigger('click')
+    await flushPromises()
+
+    expect(api.workflows.get).toHaveBeenCalledTimes(2)
+    // Select the task row inside WorkflowTree to open TaskInspector.
+    const taskRow = wrapper.findAll('tr').find((r) => r.text().includes('Strings'))
+    expect(taskRow).toBeDefined()
+    await taskRow!.trigger('click')
+    await nextTick()
+    expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Remove')).toBe(true)
+
+    // While a draft run is in flight, TaskInspector is read-only (hides Remove / Add worker actions).
+    let rejectRun!: (err: Error) => void
+    vi.mocked(api.workflows.run).mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectRun = reject
+      }),
+    )
+    const runPromise = runWorkflow(12)
+    await nextTick()
+    expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Remove')).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Add worker'))).toBe(false)
+
+    rejectRun(new Error('Cancelled'))
+    await runPromise
+    await nextTick()
+    expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Remove')).toBe(true)
+
+    const closeTaskBtn = wrapper.get('button[aria-label="Close task"]')
+    await closeTaskBtn.trigger('click')
+    await nextTick()
+    expect(wrapper.find('button[aria-label="Close task"]').exists()).toBe(false)
   })
 })

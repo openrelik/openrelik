@@ -103,7 +103,10 @@ function dosTime(time: number, date: number): number {
   const minutes = (time >> 5) & 0x3f
   const seconds = (time & 0x1f) * 2
   if (month < 1 || month > 12 || day < 1 || hours > 23 || minutes > 59 || seconds > 59) return NaN
-  return Date.UTC(year, month - 1, day, hours, minutes, seconds)
+  const ms = Date.UTC(year, month - 1, day, hours, minutes, seconds)
+  const check = new Date(ms)
+  if (check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return NaN
+  return ms
 }
 
 /** Each format's zero, in ms since 1970: where it starts, and what "no value" reads as. */

@@ -56,7 +56,10 @@ function onKey(event: KeyboardEvent) {
   const at = list.indexOf(document.activeElement as HTMLElement)
   const step: Record<string, number> = { ArrowDown: 1, j: 1, ArrowUp: -1, k: -1 }
   if (event.key in step) {
-    list[(at + step[event.key]! + list.length) % list.length]?.focus()
+    const delta = step[event.key]!
+    const next =
+      at === -1 ? (delta > 0 ? 0 : list.length - 1) : (at + delta + list.length) % list.length
+    list[next]?.focus()
   } else if (event.key === 'Home') {
     list[0]?.focus()
   } else if (event.key === 'End') {
@@ -80,7 +83,8 @@ function run(action: ItemAction) {
   <Teleport to="body">
     <div
       ref="menu"
-      class="sheet fixed z-50 w-64 py-1 text-[12px] shadow-(--shadow-float)"
+      tabindex="-1"
+      class="sheet fixed z-50 w-64 py-1 text-[12px] shadow-(--shadow-float) outline-none"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
       role="menu"
       :aria-label="`Actions for ${item.name}`"

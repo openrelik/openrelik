@@ -1,7 +1,13 @@
-import { computed } from 'vue'
+import { type WritableComputedRef, computed } from 'vue'
 import { useModalStore } from '@/stores/modals'
 
-export function useHelp() {
+export interface UseHelpReturn {
+  helpOpen: WritableComputedRef<boolean>
+  open: () => void
+  close: () => void
+}
+
+export function useHelp(): UseHelpReturn {
   const modalStore = useModalStore()
   return {
     helpOpen: computed({

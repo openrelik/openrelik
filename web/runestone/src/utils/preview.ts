@@ -6,7 +6,15 @@
  */
 
 /** Types that are text without saying so in their `text/` prefix. */
-const TEXT_MIMES = new Set(['application/json', 'application/javascript', 'application/x-ndjson'])
+const TEXT_MIMES = new Set([
+  'application/json',
+  'application/javascript',
+  'application/x-ndjson',
+  'application/jsonl',
+  'application/csv',
+])
+
+const baseMime = (mime: string): string => mime.split(';', 1)[0]!.trim().toLowerCase()
 
 export type Preview =
   | { kind: 'text' }
@@ -15,7 +23,8 @@ export type Preview =
   | { kind: 'unknown' }
 
 export function isTextMime(mime: string): boolean {
-  return mime.startsWith('text/') || TEXT_MIMES.has(mime)
+  const base = baseMime(mime)
+  return base.startsWith('text/') || TEXT_MIMES.has(base)
 }
 
 export function previewOf(file: { mime?: string }): Preview {
@@ -26,10 +35,9 @@ export function previewOf(file: { mime?: string }): Preview {
 
 /** Markdown, by the server's rule: the extension, the name, or the MIME type. */
 export function isMarkdown(file: { name: string; mime?: string }): boolean {
+  const mime = file.mime ? baseMime(file.mime) : ''
   return (
-    /\.(md|markdown)$/i.test(file.name) ||
-    file.mime === 'text/markdown' ||
-    file.mime === 'text/x-markdown'
+    /\.(md|markdown)$/i.test(file.name) || mime === 'text/markdown' || mime === 'text/x-markdown'
   )
 }
 
@@ -60,7 +68,8 @@ export function tableKindOf(file: {
   mime?: string
   dataType?: string
 }): TableKind | null {
-  const text = !file.mime || isTextMime(file.mime) || file.mime in TABLE_MIMES
+  const mime = file.mime ? baseMime(file.mime) : ''
+  const text = !mime || isTextMime(mime) || mime in TABLE_MIMES
   if (!text) return null
   const type = file.dataType?.toLowerCase() ?? ''
   if (/:(jsonl|ndjson)\b/.test(type)) return 'jsonl'
@@ -68,5 +77,5 @@ export function tableKindOf(file: {
   if (/:csv/.test(type)) return 'csv'
   const extension = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase()
   if (extension && TABLE_EXTENSIONS[extension]) return TABLE_EXTENSIONS[extension]
-  return (file.mime && TABLE_MIMES[file.mime]) || null
+  return (mime && TABLE_MIMES[mime]) || null
 }

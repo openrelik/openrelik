@@ -75,6 +75,7 @@ type View = 'tree' | 'graph'
 const view = useRemembered<View>('openrelik.workflow.view', 'tree')
 const open = ref(true)
 const fullscreen = ref(false)
+const fullscreenGraph = ref<InstanceType<typeof WorkflowGraph> | null>(null)
 /** The folder's name, which is the workflow's. */
 const itemsStore = useItemsStore()
 const folderName = computed(
@@ -136,22 +137,33 @@ const showCopying = useDelayedFlag(() => copying.value)
 /** Copies the workflow into a new draft to remix; the view opens it. */
 async function copy() {
   if (copying.value) return
+  const folderId = props.workflow.folderId
   copying.value = true
-  const made = await copyWorkflow(props.workflow.folderId).finally(() => (copying.value = false))
-  if (made) emit('copied', made.folderId)
+  const made = await copyWorkflow(folderId).finally(() => (copying.value = false))
+  if (made && props.workflow.folderId === folderId) emit('copied', made.folderId)
 }
 
 /** What was just saved as a template, said for a few seconds. */
 const savedTemplate = ref<string | null>(null)
 let savedTimer: ReturnType<typeof setTimeout> | undefined
 async function saveTemplate() {
-  const name = await saveAsTemplate(props.workflow.folderId)
-  if (!name) return
+  const folderId = props.workflow.folderId
+  const name = await saveAsTemplate(folderId)
+  if (!name || props.workflow.folderId !== folderId) return
   savedTemplate.value = name
   clearTimeout(savedTimer)
   savedTimer = setTimeout(() => (savedTemplate.value = null), 4000)
 }
 onUnmounted(() => clearTimeout(savedTimer))
+
+watch(
+  () => props.workflow.folderId,
+  () => {
+    fullscreen.value = false
+    savedTemplate.value = null
+    clearTimeout(savedTimer)
+  },
+)
 
 // Run checks the tasks against the workers online, so a draft keeps the registry loaded.
 const { available } = useWorkers()
@@ -203,9 +215,15 @@ async function run() {
  */
 function onKey(event: KeyboardEvent) {
   if (modalStore.hasActiveModal) return
-  if (isTyping(event) || event.altKey) return
+  if (isTyping(event) || event.target instanceof HTMLSelectElement || event.altKey) return
   // ⌘Z / Ctrl+Z: put back what was just removed.
-  if ((event.metaKey || event.ctrlKey) && event.key === 'z' && edit.value) {
+  if (
+    (event.metaKey || event.ctrlKey) &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === 'z' &&
+    editable.value &&
+    edit.value
+  ) {
     edit.value.undo()
     event.preventDefault()
     event.stopPropagation()
@@ -219,7 +237,7 @@ function onKey(event: KeyboardEvent) {
     // Only with a task selected: otherwise these delete rows in the listing.
     ...(props.selectedId ? { Delete: removeSelected, Backspace: removeSelected } : {}),
   }
-  const draftAction = props.workflow.draft
+  const draftAction = editable.value
     ? draftKeys[event.shiftKey ? `Shift+${event.key}` : event.key]
     : undefined
   if (draftAction) {
@@ -237,12 +255,22 @@ function onKey(event: KeyboardEvent) {
     return
   }
   if (event.key === 'Escape') {
-    if (props.selectedId) emit('select', null)
-    else fullscreen.value = false
+    if (!fullscreenGraph.value?.clearPicks()) {
+      if (props.selectedId) emit('select', null)
+      else fullscreen.value = false
+    }
+    event.preventDefault()
+    event.stopPropagation()
   } else if (event.key === 'f') {
     fullscreen.value = false
+    event.preventDefault()
+    event.stopPropagation()
   }
-  event.preventDefault()
+}
+
+/** Keep non-global explorer keys from leaking out of the fullscreen dialog to window shortcuts. */
+function onFullscreenDialogKeydown(event: KeyboardEvent) {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.key === '?') return
   event.stopPropagation()
 }
 onMounted(() => window.addEventListener('keydown', onKey, { capture: true }))
@@ -294,7 +322,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
       <span v-else-if="showSaving" class="text-ink-muted" aria-live="polite">saving…</span>
       <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
         <span class="truncate text-ink-secondary">{{ edit.label }}</span>
-        <Button variant="ghost" size="row" @click="edit.undo()">Undo</Button>
+        <Button variant="ghost" size="row" :disabled="!editable" @click="edit.undo()">Undo</Button>
       </span>
       <span v-if="savedTemplate" class="min-w-0 truncate text-ink-secondary" aria-live="polite"
         >Saved as template “{{ savedTemplate }}”</span
@@ -425,17 +453,37 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
     <Teleport to="body">
       <div
         v-if="fullscreen"
-        class="fixed inset-0 z-50 flex flex-col bg-canvas text-[12px]"
+        tabindex="-1"
+        v-autofocus
+        v-trap-focus
+        class="fixed inset-0 z-50 flex flex-col bg-canvas text-[12px] outline-none"
         role="dialog"
         aria-modal="true"
         :aria-label="`${folderName} — flowchart`"
+        @keydown="onFullscreenDialogKeydown"
       >
         <div class="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3">
           <WorkflowSummary :workflow="workflow" :stats="stats" show-name />
+          <span v-if="activity.saveError" role="alert" class="flex min-w-0 items-center gap-1.5">
+            <span class="truncate text-danger" v-overflow-tooltip
+              >not saved: {{ activity.saveError }}</span
+            >
+            <Button variant="ghost" size="row" @click="retrySave(workflow.folderId)">Retry</Button>
+          </span>
+          <span v-else-if="showSaving" class="text-ink-muted" aria-live="polite">saving…</span>
           <span v-if="edit" class="flex min-w-0 items-center gap-1.5" aria-live="polite">
             <span class="truncate text-ink-secondary">{{ edit.label }}</span>
-            <Button variant="ghost" size="row" @click="edit.undo()">Undo</Button>
+            <Button variant="ghost" size="row" :disabled="!editable" @click="edit.undo()"
+              >Undo</Button
+            >
           </span>
+          <span
+            v-if="activity.error"
+            role="alert"
+            class="min-w-0 truncate text-danger"
+            v-overflow-tooltip
+            >{{ activity.error }}</span
+          >
           <div class="ml-auto flex items-center gap-1.5">
             <button
               type="button"
@@ -470,11 +518,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
 
         <div class="flex min-h-0 flex-1">
           <WorkflowGraph
+            ref="fullscreenGraph"
             class="min-w-0 flex-1"
             fill
             :capped="false"
             :workflow="workflow"
             :selected-id="selectedId"
+            :producer-id="producerId"
             :editable="editable"
             @select="emit('select', $event)"
             @add="add"

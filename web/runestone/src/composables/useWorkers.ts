@@ -17,9 +17,12 @@ const KEY = 'workers:registered'
 const STALE_MS = 5 * 60_000
 
 const workers = shallowRef<Worker[]>([])
+let sessionEpoch = 0
 
 async function fetchWorkers(signal: AbortSignal): Promise<void> {
+  const epoch = sessionEpoch
   const tasks = await api.taskqueue.registeredTasks({ signal, background: true })
+  if (epoch !== sessionEpoch) return
   workers.value = tasks.map(mapRegisteredTask).sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -37,6 +40,7 @@ export interface UseWorkersReturn {
 
 /** Forgets the loaded worker registry (sign-out). */
 export function clearWorkers(): void {
+  sessionEpoch++
   workers.value = []
 }
 

@@ -240,4 +240,47 @@ describe('LinkMenu', () => {
     await flushPromises()
     expect(useLinkMenu().state.value).toBeNull()
   })
+
+  it('cancels pending copy close timer when switching links, reveals hidden/control URL chars, and closes on window Escape', async () => {
+    const router = makeRouter()
+    await router.push('/a')
+    await router.isReady()
+
+    const wrapper = mount(LinkMenu, {
+      global: { plugins: [router, directives] },
+    })
+    wrappers.push(wrapper)
+
+    const anchor2 = document.createElement('button')
+    anchor2.textContent = 'second link'
+    document.body.appendChild(anchor2)
+
+    try {
+      openLinkMenu(anchor, 'https://example.com/first', 'link')
+      await flushPromises()
+      const [copyBtn] = getMenu()!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+      copyBtn!.click()
+      await flushPromises()
+
+      // Switch to a second link before 600ms elapses: old timer must not close the new menu
+      openLinkMenu(anchor2, 'https://evil.com/\u202Egpj\t.exe', 'link')
+      await flushPromises()
+      vi.advanceTimersByTime(650)
+      await nextTick()
+
+      const menu = getMenu()!
+      expect(useLinkMenu().state.value?.anchor).toBe(anchor2)
+      expect(menu.textContent).toContain('https://evil.com/‹U+202E›gpj‹U+0009›.exe')
+      expect(menu.textContent).not.toContain('\u202E')
+
+      // Pressing Escape even when focus is outside menu items (e.g. window) closes menu and refocuses anchor2
+      const focus2 = vi.spyOn(anchor2, 'focus')
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flushPromises()
+      expect(useLinkMenu().state.value).toBeNull()
+      expect(focus2).toHaveBeenCalledTimes(1)
+    } finally {
+      anchor2.remove()
+    }
+  })
 })

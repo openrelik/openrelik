@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
@@ -33,6 +33,7 @@ const showSaving = useDelayedFlag(() => saving.value)
 const check = computed(() => normalizeCaseRef(text.value))
 
 const MARGIN = 8
+let alive = true
 
 onMounted(async () => {
   clearError()
@@ -46,6 +47,11 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  alive = false
+  clearError()
+})
+
 function close() {
   clearError()
   emit('close')
@@ -53,11 +59,11 @@ function close() {
 
 async function save() {
   if (saving.value || !check.value.ok) return
-  if (await setCaseRef(props.item.id, text.value)) close()
+  if ((await setCaseRef(props.item.id, text.value)) && alive) close()
 }
 
 async function clear() {
-  if (await clearCaseRef(props.item.id)) close()
+  if ((await clearCaseRef(props.item.id)) && alive) close()
 }
 
 function onKey(event: KeyboardEvent) {
@@ -73,7 +79,8 @@ function onKey(event: KeyboardEvent) {
   <Teleport to="body">
     <div
       ref="sheet"
-      class="sheet fixed z-50 w-72 p-3 text-[12px] shadow-(--shadow-float)"
+      tabindex="-1"
+      class="sheet fixed z-50 w-72 p-3 text-[12px] shadow-(--shadow-float) outline-none"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
       role="dialog"
       :aria-label="`Case of ${item.name}`"

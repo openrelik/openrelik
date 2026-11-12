@@ -14,7 +14,7 @@
  * - The thumb drags; a click on the track pages toward it.
  */
 
-import { computed, onMounted, onUnmounted, ref, type ComputedRef, type Ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 
 const THUMB_MIN = 24
 
@@ -48,6 +48,9 @@ export function useRowScroller(
   const topRow = ref(0)
   const clampTop = (row: number) => Math.min(maxTop.value, Math.max(0, Math.round(row)))
   const scrollTo = (row: number) => (topRow.value = clampTop(row))
+  watch(maxTop, (max) => {
+    if (topRow.value > max) topRow.value = max
+  })
 
   function reveal(row: number) {
     if (row < topRow.value) scrollTo(row)

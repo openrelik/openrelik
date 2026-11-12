@@ -235,4 +235,35 @@ describe('useTextSearch', () => {
 
     scope.stop()
   })
+
+  it('stops matching a huge single line at MAX_HITS and clears pending debounce on file change', async () => {
+    const hugeSingleLine = 'a '.repeat(MAX_HITS + 500) + '\n'
+    const { stream, replaceFile } = createFakeStream('', true)
+    const query = ref('a')
+
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useTextSearch(
+        stream,
+        () => query.value,
+        () => ({ caseSensitive: true, regex: false }),
+        () => 0,
+      ),
+    )!
+
+    replaceFile(hugeSingleLine, true)
+    await vi.runAllTimersAsync()
+    expect(search.hits.value).toHaveLength(MAX_HITS)
+    expect(search.overflow.value).toBe(true)
+
+    // Schedule a debounced query change, then immediately switch files before 150ms elapses.
+    query.value = 'b'
+    await Promise.resolve()
+    replaceFile('b one\nb two\n', true)
+    await vi.runAllTimersAsync()
+    expect(search.hits.value).toHaveLength(2)
+    expect(search.overflow.value).toBe(false)
+
+    scope.stop()
+  })
 })

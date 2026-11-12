@@ -51,6 +51,7 @@ const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { path: '/', name: 'folders', component: StubView },
+    { path: '/login', name: 'login', component: StubView },
     { path: '/folder/:id', name: 'folder', component: StubView },
     { path: '/folder/:folderId/file/:fileId', name: 'file', component: StubView },
     { path: '/metrics', name: 'metrics', component: StubView },
@@ -128,6 +129,7 @@ describe('composables/usePrompt', () => {
 
     expect(labelForPath(null)).toBe('~ (home)')
     expect(labelForPath('/')).toBe('~ (home)')
+    expect(labelForPath('/?page=2')).toBe('~ (home)')
     expect(labelForPath('/folder/2')).toBe('/Cases/IR-01/')
     expect(labelForPath('/folder/2/file/9')).toBe('/Cases/IR-01/syslog.txt')
     // Unknown file falls back to known parent folder, then raw path when folder is unknown.
@@ -198,13 +200,16 @@ describe('composables/usePrompt', () => {
     prompt.line.value = 'cd ../evid'
     expect(prompt.query.value).toBe('../evid')
     expect(prompt.scopePath.value).toBe('/Cases')
-    expect(prompt.results.value[0]?.item?.id).toBe(12)
-    expect(prompt.results.value[0]?.path).toBe('../Evidence/')
+    expect(prompt.results.value[0]).toMatchObject({
+      kind: 'item',
+      item: { id: 12 },
+      path: '../Evidence/',
+    })
 
     // '/' prefix resolves from instance root.
     prompt.line.value = '/Cases/Triage/disk'
     expect(prompt.scopePath.value).toBe('/')
-    expect(prompt.results.value[0]?.item?.id).toBe(50)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 50 } })
 
     // go() on file pushes file route; go(undefined) is a no-op.
     prompt.go(undefined)
@@ -216,15 +221,15 @@ describe('composables/usePrompt', () => {
     // Standing on a file: first '../' resolves to the file's own folder (/Cases/Triage), second '../' to /Cases.
     prompt.line.value = '../disk'
     expect(prompt.scopePath.value).toBe('/Cases/Triage')
-    expect(prompt.results.value[0]?.item?.id).toBe(50)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 50 } })
 
     prompt.line.value = '../../evid'
     expect(prompt.scopePath.value).toBe('/Cases')
-    expect(prompt.results.value[0]?.item?.id).toBe(12)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 12 } })
 
     // '.' and '..' from a file return to its containing folder with ?focus=<fileId>.
     prompt.line.value = '.'
-    expect(prompt.results.value[0]?.here).toBe(true)
+    expect(prompt.results.value[0]?.kind).toBe('here')
     prompt.go(prompt.results.value[0])
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe('/folder/11?focus=50')
@@ -331,7 +336,7 @@ describe('composables/usePrompt', () => {
     // 'cd -' Tab-completes and Enter jumps to previousPath (/folder/2).
     prompt.line.value = '-'
     await nextTick()
-    expect(prompt.results.value[0]?.prev).toBe(true)
+    expect(prompt.results.value[0]?.kind).toBe('prev')
     expect(prompt.results.value[0]?.label).toContain('/RootCase/Alpha/')
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('cd -')
@@ -342,7 +347,7 @@ describe('composables/usePrompt', () => {
     // 'cd ~' Tab-completes and Enter jumps home ('/').
     prompt.line.value = '~'
     await nextTick()
-    expect(prompt.results.value[0]?.home).toBe(true)
+    expect(prompt.results.value[0]?.kind).toBe('home')
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('cd ~')
     prompt.handleKey(keyEvent('Enter'))
@@ -354,6 +359,31 @@ describe('composables/usePrompt', () => {
     prompt.line.value = 'mkdir'
     await nextTick()
     expect(prompt.results.value[0]?.label).toBe('mkdir: enter folder name')
+    // Pressing Enter on bare mkdir fills in the trailing space without dismissing.
+    const goCountBeforeEmptyMkdir = onGo.mock.calls.length
+    prompt.handleKey(keyEvent('Enter'))
+    expect(prompt.line.value).toBe('mkdir ')
+    expect(onGo).toHaveBeenCalledTimes(goCountBeforeEmptyMkdir)
+
+    // Folder names starting with 'mkdir' (no whitespace separator) search rather than invoke mkdir.
+    const mkdirLogs = makeItem({ id: 76, kind: 'folder', name: 'mkdir_logs', parent: 1 })
+    const mkdirNotes = makeItem({ id: 75, kind: 'folder', name: 'notes_mkdir_extra', parent: 1 })
+    itemsStore.upsertItems([mkdirLogs, mkdirNotes])
+    prompt.line.value = 'mkdir_logs'
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 76 } })
+
+    // Multi-match local search sorts higher-ranked basename matches first.
+    prompt.line.value = 'mkdir'
+    prompt.line.value = 'cd mkdir_'
+    expect(
+      prompt.results.value.map((r) => (r.kind === 'item' || r.kind === 'rm' ? r.item.id : null)),
+    ).toEqual([76, 75])
+
+    // Sync index reset lets an immediate Enter after changing line act on index 0 without nextTick.
+    prompt.line.value = ''
+    prompt.handleKey(keyEvent('ArrowDown'))
+    prompt.handleKey(keyEvent('ArrowDown'))
+    expect(prompt.index.value).toBe(2)
 
     vi.mocked(api.folders.createFolder).mockResolvedValueOnce({
       id: 77,
@@ -363,8 +393,8 @@ describe('composables/usePrompt', () => {
       parent_id: 1,
     })
     prompt.line.value = 'mkdir "Exports/"'
-    await nextTick()
-    expect(prompt.results.value[0]?.folderName).toBe('Exports')
+    expect(prompt.index.value).toBe(0)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'mkdir', folderName: 'Exports' })
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('mkdir Exports')
     prompt.handleKey(keyEvent('Enter'))
@@ -372,10 +402,27 @@ describe('composables/usePrompt', () => {
     expect(api.folders.createFolder).toHaveBeenCalledWith('Exports', 1)
     expect(itemsStore.findFolder(77)?.name).toBe('Exports')
 
+    // IME composing events are left alone by handleKey.
+    expect(prompt.handleKey(keyEvent('Enter', { isComposing: true }))).toBe(false)
+
+    // Navigating to /login clears previousPath.
+    await router.push('/login')
+    expect(previousPath.value).toBeNull()
+
+    // On a file route whose parent folder isn't loaded yet, '.' falls back to route folderId.
+    await router.push('/folder/888/file/999')
+    prompt.line.value = '.'
+    prompt.go(prompt.results.value[0])
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/folder/888?focus=999')
+    await router.push('/folder/1')
+
     // 'rm': exact folder name ranks above longer prefix match; Tab completes; go() confirms & deletes.
     prompt.line.value = 'rm Alpha'
     await nextTick()
-    expect(prompt.results.value.map((r) => r.item?.name)).toEqual(['Alpha', 'AlphaArchive'])
+    expect(
+      prompt.results.value.map((r) => (r.kind === 'rm' || r.kind === 'item' ? r.item.name : null)),
+    ).toEqual(['Alpha', 'AlphaArchive'])
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('rm Alpha')
 

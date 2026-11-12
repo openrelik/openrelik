@@ -9,9 +9,10 @@ import { canRename, roleOf } from '@/composables/useFolderPermissions'
 import { registerPrompt, usePrompt } from '@/composables/usePrompt'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
+import { useModalStore } from '@/stores/modals'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useSettingsStore } from '@/stores/settings'
-import { promptPassesThrough } from '@/utils/keyboard'
+import { isCommandModifier, promptPassesThrough } from '@/utils/keyboard'
 
 /**
  * Where you are, as a shell prompt: `/CLI Test Folder/evidence $ ▌`.
@@ -40,13 +41,15 @@ const emit = defineEmits<{
 const route = useRoute()
 
 const itemsStore = useItemsStore()
+const modalStore = useModalStore()
 const rootPagesStore = useRootPagesStore()
 
 // --- the prompt -----------------------------------------------------------------
 
 const input = ref<HTMLInputElement | null>(null)
 const focused = ref(false)
-const { line, index, query, cwdPath, scopePath, results, serverSearch, go, handleKey } = usePrompt()
+const { line, index, query, isRm, cwdPath, scopePath, results, serverSearch, go, handleKey } =
+  usePrompt()
 
 const dropdown = computed(() => focused.value && line.value.trim() !== '')
 
@@ -63,6 +66,8 @@ const dropdown = computed(() => focused.value && line.value.trim() !== '')
  */
 function onInputKey(event: KeyboardEvent) {
   if (promptPassesThrough(event, line.value)) return
+  // Global command shortcuts (⌘,, ⌘K) must still reach the window handler.
+  if (isCommandModifier(event) && (event.key === ',' || event.key.toLowerCase() === 'k')) return
   event.stopPropagation()
   if (handleKey(event)) return
   if (event.key === 'Escape') {
@@ -80,7 +85,7 @@ const focusPrompt = () => input.value?.focus({ preventScroll: true })
  * waits for `g` or a click there.
  */
 const focusOnArrival = () => {
-  if (route.name !== 'file') focusPrompt()
+  if (route.name !== 'file' && !modalStore.hasActiveModal) focusPrompt()
 }
 
 let unregister = () => {}
@@ -88,9 +93,10 @@ onMounted(() => {
   unregister = registerPrompt(focusPrompt)
   focusOnArrival()
 })
-// Arriving somewhere — by prompt, link or keyboard — puts you back at the prompt.
+// Arriving somewhere — by prompt, link or keyboard — puts you back at the prompt;
+// query-only changes (e.g. root paging) leave focus where the operator put it.
 watch(
-  () => route.fullPath,
+  () => route.path,
   async () => {
     await nextTick()
     focusOnArrival()
@@ -108,6 +114,7 @@ const renamable = computed(() => {
   return role === undefined || canRename(role) ? last : undefined
 })
 const renaming = ref(false)
+const checkingRename = ref(false)
 const newName = ref('')
 const nameInput = ref<HTMLInputElement | null>(null)
 // Inside the path's v-for, a plain ref would collect an array.
@@ -115,7 +122,18 @@ const setNameInput = (el: unknown) => (nameInput.value = el as HTMLInputElement 
 
 async function startRename() {
   const folder = renamable.value
-  if (!folder || !(await props.mayRename!(folder))) return
+  if (!folder || checkingRename.value) return
+  const folderId = folder.id
+  const pathSnapshot = route.fullPath
+  checkingRename.value = true
+  try {
+    if (!(await props.mayRename!(folder))) return
+  } finally {
+    checkingRename.value = false
+  }
+  if (props.path.at(-1)?.id !== folderId || route.fullPath !== pathSnapshot) {
+    return
+  }
   newName.value = folder.name
   renaming.value = true
   await nextTick()
@@ -185,6 +203,7 @@ async function toggle(at: number) {
   openAt.value = openAt.value === at ? null : at
   if (openAt.value === null) return
   await nextTick()
+  if (openAt.value !== at) return
   const items = menuItems()
   const current = items.findIndex((el) => el.dataset.current === 'true')
   items[Math.max(0, current)]?.focus()
@@ -251,7 +270,7 @@ function onBarClick(event: MouseEvent) {
             :data-separator="at"
             class="cursor-pointer rounded-(--radius-check) px-1 text-ink-muted hover:bg-surface hover:text-brand"
             :class="{ 'bg-surface text-brand': openAt === at }"
-            :aria-label="`Folders in ${at < 0 ? 'root' : path[at]!.name}`"
+            :aria-label="`Folders in ${path[at]!.name}`"
             v-tooltip="'Folders at this level'"
             aria-haspopup="menu"
             :aria-expanded="openAt === at"
@@ -267,7 +286,7 @@ function onBarClick(event: MouseEvent) {
             @keydown="onMenuKey"
           >
             <p class="px-3 pb-1 text-[11px] text-ink-muted">
-              folders in {{ at < 0 ? '/' : `${path[at]!.name}/` }}
+              folders in {{ `${path[at]!.name}/` }}
             </p>
             <RouterLink
               v-for="entry in entries"
@@ -277,6 +296,7 @@ function onBarClick(event: MouseEvent) {
               data-menu-item
               :data-current="entry.id === onPath?.id"
               class="flex h-6 items-center gap-2 px-3 whitespace-nowrap outline-none hover:bg-sunken focus:bg-brand-selected"
+              @click="openAt = null"
             >
               <span class="w-2 shrink-0 text-brand">{{ entry.id === onPath?.id ? '›' : '' }}</span>
               <span class="text-brand" :class="{ 'font-semibold': entry.id === onPath?.id }"
@@ -355,7 +375,7 @@ function onBarClick(event: MouseEvent) {
       aria-label="Find a folder or file"
       aria-controls="prompt-results"
       :aria-expanded="dropdown"
-      :aria-activedescendant="dropdown ? `prompt-${index}` : undefined"
+      :aria-activedescendant="dropdown && results.length ? `prompt-${index}` : undefined"
       class="min-w-24 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
       :placeholder="focused ? 'cd, or type to find…' : ''"
       @focus="focused = true"
@@ -370,6 +390,7 @@ function onBarClick(event: MouseEvent) {
       :results="results"
       :index="index"
       :query="query"
+      :mode="isRm ? 'rm' : 'search'"
       :cwd-path="cwdPath"
       :scope-path="scopePath"
       :server-search="serverSearch"

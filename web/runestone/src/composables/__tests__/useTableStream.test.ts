@@ -192,4 +192,65 @@ describe('useTableStream', () => {
     expect(stream.rows.value.length).toBe(oneMeg / shortRow.length - 1)
     scope.stop()
   })
+
+  it('updates columns across JSONL chunks, resets delimiter on 0-byte file, and caps type sampling at 1000 rows', async () => {
+    const oneMeg = 1024 * 1024
+    const chunk0Text = '{"a":"1"}\n'.repeat(1005) + 'not-json\n'
+    const chunk0 = new Uint8Array(oneMeg).fill(0x20)
+    chunk0.set(new TextEncoder().encode(chunk0Text), 0)
+    // Pad with newlines? Better: make chunk0 end cleanly on '\n' so chunk1 parses '{"b":"abc"}\n' cleanly.
+    chunk0[oneMeg - 1] = 0x0a
+    const chunk1 = new TextEncoder().encode('{"a":"not-a-number","b":"extra"}\n')
+    const totalSize = oneMeg + chunk1.length
+
+    vi.mocked(api.files.readRange).mockResolvedValueOnce(chunk0).mockResolvedValueOnce(chunk1)
+
+    const activeFile = ref({ id: 30, size: totalSize })
+    const scope = effectScope()
+    const stream = scope.run(() =>
+      useTableStream(
+        () => activeFile.value,
+        () => 'jsonl',
+      ),
+    )!
+
+    await vi.runAllTimersAsync()
+    expect(stream.done.value).toBe(true)
+    expect(stream.reading.value).toBe(false)
+    expect(stream.capped.value).toBe(false)
+    expect(stream.bytesRead.value).toBe(totalSize)
+    // Chunk 1 added 'b' after chunk 0 only had 'a'; columns.value must include both.
+    expect(stream.columns.value).toEqual(['a', 'b'])
+    // First 1,000 valid rows had numeric 'a', so row 1006 ('not-a-number') was past TYPE_SAMPLE.
+    expect(stream.types.value[0]).toBe('number')
+
+    // Changing only file.size triggers a reload.
+    vi.mocked(api.files.readRange).mockResolvedValueOnce(new TextEncoder().encode('{"x":"1"}\n'))
+    activeFile.value = { id: 30, size: 10 }
+    await vi.runAllTimersAsync()
+    expect(stream.columns.value).toEqual(['x'])
+
+    // Switching to TSV sets delimiter to '\t', then switching to a 0-byte file resets delimiter to ','.
+    const tsvFile = ref({ id: 31, size: 9 })
+    const kind = ref<'csv' | 'tsv' | 'jsonl'>('tsv')
+    vi.mocked(api.files.readRange).mockResolvedValueOnce(new TextEncoder().encode('h1\th2\n1\t2'))
+    const tsvScope = effectScope()
+    const tsvStream = tsvScope.run(() =>
+      useTableStream(
+        () => tsvFile.value,
+        () => kind.value,
+      ),
+    )!
+    await vi.runAllTimersAsync()
+    expect(tsvStream.delimiter.value).toBe('\t')
+
+    tsvFile.value = { id: 32, size: 0 }
+    kind.value = 'csv'
+    await vi.runAllTimersAsync()
+    expect(tsvStream.delimiter.value).toBe(',')
+    expect(tsvStream.done.value).toBe(true)
+
+    scope.stop()
+    tsvScope.stop()
+  })
 })

@@ -123,4 +123,28 @@ describe('useRowSelection', () => {
     await nextTick()
     expect(sel.cursor.value).toBe(0)
   })
+
+  it('keeps shift-range anchored by row key when background refresh inserts rows above, and drops anchor if anchor disappears', async () => {
+    const rows = ref(makeRows(5))
+    const sel = useRowSelection(rows, (row) => row.id)
+
+    // Start range at r3 (index 3) and extend upward to r2 (index 2).
+    sel.pick(3)
+    sel.extendTo(2)
+    expect([...sel.selected.value]).toEqual(['r2', 'r3'])
+
+    // Background refresh inserts a new row at the top; r3 shifts to index 4, r2 to index 3.
+    rows.value = [{ id: 'new-top', bytes: 5 }, ...rows.value]
+    await nextTick()
+
+    // Extending upward to index 2 (r1) keeps r3 as the anchor rather than re-anchoring on r1/r2.
+    sel.extendTo(2)
+    expect([...sel.selected.value]).toEqual(['r1', 'r2', 'r3'])
+
+    // Removing the anchor row (r3) drops the stale anchor cleanly on the next extendTo.
+    rows.value = rows.value.filter((r) => r.id !== 'r3')
+    await nextTick()
+    sel.extendTo(1)
+    expect([...sel.selected.value]).toContain('r0')
+  })
 })

@@ -293,4 +293,85 @@ describe('useByteChunks', () => {
 
     scope.stop()
   })
+
+  it('forgets the old file cache keys on file switch so revisiting re-fetches and keeps pending accurate', async () => {
+    const file2Slow = createDeferred<Uint8Array>()
+    const file1Revisit = createDeferred<Uint8Array>()
+    vi.mocked(api.files.readRange)
+      .mockResolvedValueOnce(makeRangeBytes(0, 1023))
+      .mockImplementationOnce(() => file2Slow.promise)
+      .mockImplementationOnce(() => file1Revisit.promise)
+
+    const fileId = ref(1)
+    const scope = effectScope()
+    const chunks = scope.run(() =>
+      useByteChunks(
+        () => fileId.value,
+        () => 1024,
+      ),
+    )!
+
+    // Load chunk 0 for file 1.
+    chunks.show(0, 31)
+    await vi.waitFor(() => expect(chunks.byteAt(10)).toBe(10))
+
+    // Switch to file 2 (stale file 1 cache entries must be forgotten) and request chunk 0.
+    fileId.value = 2
+    await Promise.resolve()
+    chunks.show(0, 31)
+    expect(chunks.loading.value).toBe(true)
+
+    // Switch back to file 1 while file 2 is still pending, and start a fresh fetch for file 1.
+    fileId.value = 1
+    await Promise.resolve()
+    chunks.show(0, 31)
+    expect(chunks.loading.value).toBe(true)
+
+    // Settling the aborted file 2 request must not clear file 1's loading state.
+    file2Slow.reject(new DOMException('Aborted', 'AbortError'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(chunks.loading.value).toBe(true)
+
+    // File 1 was evicted from query cache on switch, so it re-fetched and now populates bytes.
+    file1Revisit.resolve(makeRangeBytes(0, 1023))
+    await vi.waitFor(() => expect(chunks.loading.value).toBe(false))
+    expect(chunks.byteAt(12)).toBe(12)
+    expect(api.files.readRange).toHaveBeenCalledTimes(3)
+
+    scope.stop()
+  })
+
+  it('aborts in-flight read() on file switch and handles out-of-range offsets', async () => {
+    const slowRead = createDeferred<Uint8Array>()
+    vi.mocked(api.files.readRange).mockImplementationOnce((_id, _s, _e, options) => {
+      options?.signal?.addEventListener('abort', () =>
+        slowRead.reject(new DOMException('Aborted', 'AbortError')),
+      )
+      return slowRead.promise
+    })
+
+    const fileId = ref(10)
+    const scope = effectScope()
+    const chunks = scope.run(() =>
+      useByteChunks(
+        () => fileId.value,
+        () => 256,
+      ),
+    )!
+
+    // Negative to in show() is a no-op; negative start in read() clamps to 0.
+    chunks.show(0, -1)
+    expect(api.files.readRange).not.toHaveBeenCalled()
+
+    const pendingRead = chunks.read(-4, 3)
+    fileId.value = 11
+    await Promise.resolve()
+
+    await expect(pendingRead).rejects.toThrow('Could not read the bytes')
+    // Aborted read on file 10 must not pollute file 11's error state.
+    expect(chunks.error.value).toBeNull()
+
+    scope.stop()
+  })
 })

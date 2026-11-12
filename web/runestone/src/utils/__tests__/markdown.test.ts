@@ -145,6 +145,28 @@ describe('forensic safety', () => {
     expect(joined).toContain('‹U+2069›')
     expect(joined).toContain('‹U+200F›')
   })
+
+  it('reveals Arabic Letter Mark, soft hyphen, word joiner, and C0/C1 control chars in both parseMarkdown and parseInline', () => {
+    const hostile = 'a\u061Cb\u00ADc\u2060d\x00e\x1b[31mf\x7fg\x9bh'
+    const blocks = parseMarkdown(hostile)
+    const blockText = walkBlocks(blocks).strings.join('')
+    const inlineText = parseInline(hostile)
+      .map((n) => (n.type === 'text' ? n.text : ''))
+      .join('')
+
+    for (const rendered of [blockText, inlineText]) {
+      expect(rendered).toContain('‹U+061C›')
+      expect(rendered).toContain('‹U+00AD›')
+      expect(rendered).toContain('‹U+2060›')
+      expect(rendered).toContain('‹U+0000›')
+      expect(rendered).toContain('‹U+001B›')
+      expect(rendered).toContain('‹U+007F›')
+      expect(rendered).toContain('‹U+009B›')
+      expect(rendered).not.toMatch(
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u061C\u2060]/,
+      )
+    }
+  })
 })
 
 describe('block parsing', () => {
@@ -442,11 +464,25 @@ describe('bounds and pathological inputs', () => {
     expect(Math.max(...block.items.map((item) => item.depth))).toBe(LIST_DEPTH_MAX)
   })
 
+  it('does not treat a backtick inline span with backticks in the rest of the line as a code fence or an empty pipe row as a table', () => {
+    const blocks = parseMarkdown('```foo`bar`\n\nfollowing paragraph\n\n|\n| --- |')
+    expect(blocks[0]?.type).toBe('paragraph')
+    expect(blocks[1]).toEqual({
+      type: 'paragraph',
+      inlines: [{ type: 'text', text: 'following paragraph' }],
+      line: 3,
+      end: 3,
+    })
+    expect(blocks.some((b) => b.type === 'table')).toBe(false)
+  })
+
   it.each([
     ['10k asterisks', '*'.repeat(10_000)],
     ['just-under-INLINE_MAX asterisks', '*'.repeat(INLINE_MAX - 1)],
     ['10k unclosed brackets', '['.repeat(10_000)],
     ['just-under-INLINE_MAX unclosed link openers', '[a]('.repeat(Math.floor(INLINE_MAX / 4))],
+    ['10k blank lines inside a list', `- first\n${'\n'.repeat(10_000)}- second`],
+    ['table rule with 20k trailing spaces before mismatch', `| a |\n| ---${' '.repeat(20_000)}x`],
   ])('finishes pathological %s in under 200ms', (_label, hostile) => {
     const start = performance.now()
     const blocks = parseMarkdown(hostile)

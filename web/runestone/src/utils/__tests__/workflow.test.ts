@@ -648,4 +648,59 @@ describe('isActive and runStats across workflow lifecycles', () => {
       state: 'success',
     })
   })
+
+  it('handles spec edge cases: missing queue_name/uuid, empty/callback-only chords, and empty-header groups', () => {
+    const fallbackSpec = parseSpec(
+      JSON.stringify({
+        workflow: {
+          type: 'chain',
+          isRoot: true,
+          tasks: [
+            {
+              type: 'task',
+              uuid: '',
+              task_name: 'openrelik-worker-yara.tasks.scan',
+              queue_name: '',
+              display_name: '',
+              task_config: [],
+              tasks: [],
+            },
+            {
+              type: 'chord',
+              // Empty chord with no tasks or callback is skipped cleanly.
+            },
+            {
+              type: 'chord',
+              callback: {
+                type: 'task',
+                uuid: 'cb-uuid',
+                task_name: 'openrelik-worker-merge.tasks.merge',
+                queue_name: 'merge-q',
+                display_name: 'Merge',
+                task_config: [],
+                tasks: [],
+              },
+            },
+          ],
+        },
+      }),
+    )
+
+    const records: WorkflowTaskRecord[] = [
+      { id: 1, uuid: null, display_name: 'Ignored', status_short: 'SUCCESS' },
+      { id: 2, uuid: 'cb-uuid', display_name: 'Merge', status_short: 'SUCCESS' },
+    ]
+    const parsed = tasksFromSpec(fallbackSpec, records)
+    expect(parsed.groups).toHaveLength(2)
+    expect(parsed.groups[0]?.tasks[0]?.id).toMatch(/^[0-9a-f]+$/)
+    expect(parsed.groups[0]?.tasks[0]?.queue).toBe('openrelik-worker-yara')
+    expect(parsed.groups[0]?.tasks[0]?.name).toBe('openrelik-worker-yara.tasks.scan')
+    expect(parsed.groups[1]?.tasks[0]?.id).toBe('cb-uuid')
+    expect(parsed.groups[1]?.tasks[0]?.status).toBe('success')
+
+    // specFromTasks skips groups whose tasks array is empty.
+    const wf = makeWorkflow([makeGroup('empty', []), makeGroup('real', [makeTask('t1')])])
+    const serialized = specFromTasks(wf)
+    expect(serialized.workflow.tasks).toHaveLength(1)
+  })
 })

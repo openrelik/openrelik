@@ -26,7 +26,7 @@ const RETRIES = 10
 /** Whether a loaded file has its hashes; a file not in the store has nothing to wait for. */
 function hashed(fileId: number): boolean {
   const item = useItemsStore().findFile(fileId)
-  return !item || !!(item.hashes?.md5 || item.hashes?.sha256)
+  return !item || !!(item.hashes?.md5 || item.hashes?.sha1 || item.hashes?.sha256)
 }
 
 function merge(file: FileDetail) {
@@ -61,14 +61,17 @@ async function loadFileDetails(
 export function useFileDetails(fileId: () => number | undefined): void {
   let controller: AbortController | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
+  let disposed = false
 
   async function load(force: boolean, tries: number) {
     clearTimeout(timer)
     controller?.abort()
     const id = fileId()
-    if (id === undefined) return
-    controller = new AbortController()
-    const complete = await loadFileDetails(id, { force, signal: controller.signal })
+    if (disposed || id === undefined) return
+    const mine = new AbortController()
+    controller = mine
+    const complete = await loadFileDetails(id, { force, signal: mine.signal })
+    if (disposed || mine.signal.aborted || controller !== mine) return
     if (!complete && tries > 0 && fileId() === id) {
       timer = setTimeout(() => load(true, tries - 1), RETRY_MS)
     }
@@ -77,6 +80,7 @@ export function useFileDetails(fileId: () => number | undefined): void {
   watch(fileId, () => load(false, RETRIES), { immediate: true })
   useAutoRefresh(({ force }) => load(force, RETRIES))
   onScopeDispose(() => {
+    disposed = true
     clearTimeout(timer)
     controller?.abort()
   })

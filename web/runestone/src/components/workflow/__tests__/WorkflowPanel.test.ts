@@ -445,4 +445,118 @@ describe('WorkflowPanel', () => {
       .trigger('click')
     expect(draftWf.groups[0]?.tasks.map((t) => t.id)).toEqual(['d1', 'd2'])
   })
+
+  it('keeps fullscreen Tab/Enter/Cmd+K functional, surfaces errors & producerId, resets on workflow switch, and guards in-flight copy/run', async () => {
+    const t1 = makeTask('t1', { name: 'T1' })
+    const t2 = makeTask('t2', { name: 'T2' })
+    const t3 = makeTask('t3', {
+      name: 'T3',
+      module: 'openrelik-worker-t1.tasks.t1',
+      queue: 'openrelik-worker-t1',
+    })
+    const wf1 = seedWorkflow([makeGroup('g1', [t1, t2, t3])], true)
+    const wf2 = seedWorkflow([makeGroup('g2', [makeTask('o1')])], false)
+    await flushPromises()
+
+    const { wrapper } = mountPanel({
+      workflow: wf1,
+      selectedId: 't1',
+      producerId: 't2',
+    })
+
+    // Switch to flowchart and open fullscreen.
+    const viewButtons = wrapper.get('[role="group"][aria-label="Workflow view"]').findAll('button')
+    await viewButtons[1]!.trigger('click')
+    await wrapper.get('button[aria-label="Full-screen flowchart"]').trigger('click')
+
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!
+    expect(dialog).not.toBeNull()
+    expect(dialog.getAttribute('tabindex')).toBe('-1')
+
+    // Fullscreen WorkflowGraph receives producerId (t2 highlighted with ring-2).
+    const producerBtn = dialog.querySelector<HTMLButtonElement>('button[data-task="t2"]')
+    expect(producerBtn?.className).toContain('ring-2')
+
+    // Tab, Enter, Space, and Cmd+K are NOT cancelled by capture onKey in fullscreen.
+    for (const init of [
+      { key: 'Tab', bubbles: true, cancelable: true },
+      { key: 'Enter', bubbles: true, cancelable: true },
+      { key: ' ', bubbles: true, cancelable: true },
+      { key: 'k', metaKey: true, bubbles: true, cancelable: true },
+    ]) {
+      const ev = new KeyboardEvent('keydown', init)
+      window.dispatchEvent(ev)
+      expect(ev.defaultPrevented).toBe(false)
+    }
+
+    // Explorer keys inside the dialog stop bubbling at the dialog instead of hitting window shortcuts.
+    const windowBubbleSpy = vi.fn()
+    window.addEventListener('keydown', windowBubbleSpy)
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))
+    expect(windowBubbleSpy).not.toHaveBeenCalled()
+    window.removeEventListener('keydown', windowBubbleSpy)
+
+    // Pick t2 to form split picks in fullscreen; first Escape clears picks before deselecting t1.
+    producerBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }))
+    await nextTick()
+    expect(dialog.querySelector('[aria-label="Picked tasks"]')).not.toBeNull()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(dialog.querySelector('[aria-label="Picked tasks"]')).toBeNull()
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+
+    // Fullscreen header shows background save errors with Retry.
+    vi.mocked(api.workflows.saveSpec).mockRejectedValueOnce(new Error('save failed'))
+    setTaskOption(wf1.folderId, 't1', 'depth', '5')
+    await vi.advanceTimersByTimeAsync(600)
+    await nextTick()
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('not saved: save failed')
+
+    // Draft shortcuts do not trigger while focus is inside a <select>.
+    const selectEl = dialog.ownerDocument.createElement('select')
+    dialog.appendChild(selectEl)
+    selectEl.focus()
+    selectEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    expect(useModalStore().isModalOpen('run')).toBe(false)
+    selectEl.remove()
+
+    // Draft shortcuts do not trigger while workflow run is in flight (editable === false).
+    let resolveRun!: (v: WorkflowRecord) => void
+    vi.mocked(api.workflows.run).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve
+        }),
+    )
+    const runBtn = [...dialog.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Run workflow'),
+    )!
+    runBtn.click()
+    await nextTick()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    expect(useModalStore().isModalOpen('run')).toBe(false)
+    resolveRun(makeWorkflowRecord(wf1.id, wf1.folderId, true))
+    await flushPromises()
+
+    // Switching to another workflow closes fullscreen and discards late copy responses.
+    await wrapper.setProps({ workflow: wf2, selectedId: null, producerId: null })
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+
+    let resolveCopy!: (v: WorkflowRecord) => void
+    vi.mocked(api.workflows.copy).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCopy = resolve
+        }),
+    )
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('Copy workflow'))!
+      .trigger('click')
+    await wrapper.setProps({ workflow: wf1 })
+    resolveCopy(makeWorkflowRecord(999, 3333, false))
+    await flushPromises()
+    expect(wrapper.emitted('copied')).toBeUndefined()
+  })
 })

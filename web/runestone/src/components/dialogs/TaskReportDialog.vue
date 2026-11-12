@@ -62,8 +62,8 @@ const { report, close } = useTaskReport()
           >
             <p class="micro-label pb-2">files</p>
             <article
-              v-for="file in report.task.fileReports"
-              :key="file.fileId"
+              v-for="(file, index) in report.task.fileReports"
+              :key="`${file.fileId}-${index}`"
               class="border-b border-border py-3 last:border-b-0"
             >
               <div class="flex items-start gap-2">

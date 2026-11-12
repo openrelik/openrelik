@@ -142,6 +142,18 @@ describe('createLineIndex', () => {
       'next\r',
     ])
   })
+
+  it('falls back safely on out-of-range row or line queries', () => {
+    const empty = createLineIndex()
+    expect(empty.rowText(99)).toBe('')
+
+    const index = createLineIndex()
+    index.append('only\n', true)
+    expect(index.lineOf(99)).toBe(0)
+    expect(index.startOf(99)).toBe(0)
+    expect(index.firstRow(99)).toBe(0)
+    expect(index.rowText(99)).toBe('only')
+  })
 })
 
 describe('parseLineRange', () => {
@@ -158,12 +170,21 @@ describe('parseLineRange', () => {
     expect(parseLineRange(input)).toEqual(expected)
   })
 
-  it.each(['', '   ', '0', '1-0', '#L0', '-5', 'abc', '12-20-30', '#R12'])(
-    'returns null for %j',
-    (input) => {
-      expect(parseLineRange(input)).toBeNull()
-    },
-  )
+  it.each([
+    '',
+    '   ',
+    '0',
+    '1-0',
+    '#L0',
+    '-5',
+    'abc',
+    '12-20-30',
+    '#R12',
+    '9007199254740992',
+    '1-9007199254740992',
+  ])('returns null for %j', (input) => {
+    expect(parseLineRange(input)).toBeNull()
+  })
 })
 
 describe('showControls, shownOffset, and sourceOffset', () => {

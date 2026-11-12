@@ -34,11 +34,7 @@ const name = computed(
   >
     draft · {{ count(stats.total, 'worker') }}
   </span>
-  <span
-    v-if="!workflow.draft"
-    class="tabular whitespace-nowrap"
-    :class="showName ? 'text-ink-muted' : 'text-ink'"
-  >
+  <span v-else class="tabular whitespace-nowrap" :class="showName ? 'text-ink-muted' : 'text-ink'">
     {{ stats.done }}/{{ stats.total }} tasks done
     <template v-if="stats.failed">
       · <span class="text-danger">{{ stats.failed }} failed</span></template

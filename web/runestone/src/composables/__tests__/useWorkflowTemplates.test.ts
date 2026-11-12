@@ -5,6 +5,8 @@ import { ApiError, api, type WorkflowSpec, type WorkflowTemplateRecord } from '@
 import { clearQueryCache } from '@/composables/useQueryCache'
 import {
   addTemplate,
+  clearTemplateError,
+  clearWorkflowTemplates,
   deleteTemplate,
   loadTemplates,
   ownsTemplate,
@@ -177,5 +179,63 @@ describe('useWorkflowTemplates', () => {
     expect(await deleteTemplate(20)).toBe(true)
     expect(templates.value.map((t) => t.name)).toEqual(['Windows Triage'])
     expect(error.value).toBeNull()
+  })
+
+  it('guards concurrent renames, clears errors, and ignores late responses after clearWorkflowTemplates', async () => {
+    const { templates, error } = useWorkflowTemplates()
+    vi.mocked(api.workflows.listTemplates).mockResolvedValueOnce([
+      makeTemplateRecord(10, 'Alpha', ['Strings']),
+    ])
+    await loadTemplates({ force: true })
+
+    // Concurrent rename: first rename rejects AFTER second succeeds; second name must stay.
+    let rejectFirst!: (err: Error) => void
+    vi.mocked(api.workflows.renameTemplate)
+      .mockReturnValueOnce(
+        new Promise((_, rej) => {
+          rejectFirst = rej
+        }),
+      )
+      .mockResolvedValueOnce(makeTemplateRecord(10, 'Gamma', ['Strings']))
+
+    const r1 = renameTemplate(10, 'Beta')
+    const r2 = renameTemplate(10, 'Gamma')
+    expect(await r2).toBe(true)
+    rejectFirst(new ApiError({ status: 409, statusText: 'Conflict', message: 'Stale' }))
+    expect(await r1).toBe(false)
+    expect(templates.value.map((t) => t.name)).toEqual(['Gamma'])
+    expect(error.value).toContain('Stale')
+
+    clearTemplateError()
+    expect(error.value).toBeNull()
+
+    // Mid-flight delete/rename/load landing after clearWorkflowTemplates are ignored cleanly.
+    let resolveLoad!: (records: WorkflowTemplateRecord[]) => void
+    vi.mocked(api.workflows.listTemplates).mockReturnValueOnce(
+      new Promise((res) => {
+        resolveLoad = res
+      }),
+    )
+    const loading = loadTemplates({ force: true })
+    clearWorkflowTemplates()
+    expect(templates.value).toEqual([])
+    expect(error.value).toBeNull()
+    resolveLoad([makeTemplateRecord(99, 'Late Template', ['Strings'])])
+    await loading
+    expect(templates.value).toEqual([])
+
+    // Seed again, then trigger mid-flight delete + sign-out before delete settles.
+    addTemplate(makeTemplateRecord(55, 'Active Template', ['Strings']))
+    let resolveDelete!: () => void
+    vi.mocked(api.workflows.deleteTemplate).mockReturnValueOnce(
+      new Promise<void>((res) => {
+        resolveDelete = res
+      }),
+    )
+    const deleting = deleteTemplate(55)
+    clearWorkflowTemplates()
+    resolveDelete()
+    expect(await deleting).toBe(false)
+    expect(templates.value).toEqual([])
   })
 })

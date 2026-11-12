@@ -177,11 +177,17 @@ describe('PathBar', () => {
     await nextTick()
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
 
-    // Route change also closes open separator menu.
+    // Route change also closes open separator menu; clicking current folder entry closes it too.
     await sep1.trigger('click')
     await nextTick()
     expect(wrapper.find('[role="menu"]').exists()).toBe(true)
     await router.push('/folder/1')
+    await flushPromises()
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false)
+
+    await sep0.trigger('click')
+    await nextTick()
+    await wrapper.get('[data-menu-item]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
   })
@@ -233,6 +239,43 @@ describe('PathBar', () => {
     expect(wrapper.find('button[aria-label="Rename evidence"]').exists()).toBe(false)
   })
 
+  it('ignores stale async mayRename results when navigating away during permission check', async () => {
+    const router = makeRouter()
+    await router.push('/folder/2')
+    await router.isReady()
+
+    const folderA = makeItem({ id: 2, kind: 'folder', name: 'evidence' })
+    const folderB = makeItem({ id: 3, kind: 'folder', name: 'timeline' })
+    let resolveRename!: (allowed: boolean) => void
+    const mayRename = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRename = resolve
+        }),
+    )
+
+    const wrapper = mount(PathBar, {
+      attachTo: document.body,
+      props: { path: [folderA], mayRename },
+      global: { plugins: [pinia, router, directives] },
+    })
+    wrappers.push(wrapper)
+
+    // Trigger rename twice while pending -> only one mayRename check starts.
+    const btn = wrapper.get('button[aria-label="Rename evidence"]')
+    await btn.trigger('click')
+    await btn.trigger('click')
+    expect(mayRename).toHaveBeenCalledTimes(1)
+
+    // Navigate to another folder before permission check settles.
+    await router.push('/folder/3')
+    await wrapper.setProps({ path: [folderB] })
+    resolveRename(true)
+    await flushPromises()
+
+    expect(wrapper.find('input[aria-label^="Rename"]').exists()).toBe(false)
+  })
+
   it('manages prompt focus, passes empty-line keys through, opens PromptResults on input, and handles two-step Escape', async () => {
     const router = makeRouter()
     await router.push('/folder/1/file/99')
@@ -262,7 +305,8 @@ describe('PathBar', () => {
     modalStore.triggerPrompt()
     expect(document.activeElement).toBe(promptInput.element)
 
-    // Empty line passes navigation keys (e.g. ArrowDown) through without stopping propagation.
+    // Empty line passes navigation keys (e.g. ArrowDown) and '?' through without stopping propagation,
+    // and lets Cmd+, / Cmd+K bubble even when the prompt has text.
     let propagated = false
     const onBubble = () => {
       propagated = true
@@ -271,8 +315,21 @@ describe('PathBar', () => {
     promptInput.element.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
     )
-    window.removeEventListener('keydown', onBubble)
     expect(propagated).toBe(true)
+
+    propagated = false
+    promptInput.element.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }))
+    expect(propagated).toBe(true)
+
+    await promptInput.setValue('sys')
+    propagated = false
+    promptInput.element.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true }),
+    )
+    expect(propagated).toBe(true)
+
+    window.removeEventListener('keydown', onBubble)
+    await promptInput.setValue('')
 
     // Typing opens PromptResults dropdown; ArrowDown moves active option; first Escape clears line; second Escape blurs.
     await promptInput.trigger('focus')
@@ -295,5 +352,30 @@ describe('PathBar', () => {
     await flushPromises()
     await nextTick()
     expect(document.activeElement).toBe(promptInput.element)
+
+    // Query-only route updates (e.g. paging) do not steal focus back into the prompt.
+    await router.push('/')
+    await flushPromises()
+    await nextTick()
+    expect(document.activeElement).toBe(promptInput.element)
+    ;(promptInput.element as HTMLInputElement).blur()
+    await router.replace('/?page=2')
+    await flushPromises()
+    await nextTick()
+    expect(document.activeElement).not.toBe(promptInput.element)
+
+    // Path changes while a modal is active also do not steal focus away from the modal.
+    modalStore.openModal('settings')
+    await router.push('/folder/1')
+    await flushPromises()
+    await nextTick()
+    expect(document.activeElement).not.toBe(promptInput.element)
+    modalStore.closeAllModals()
+
+    // Empty result list omits aria-activedescendant instead of pointing at a missing element.
+    await promptInput.trigger('focus')
+    await promptInput.setValue('zzz-no-match')
+    await nextTick()
+    expect(promptInput.attributes('aria-activedescendant')).toBeUndefined()
   })
 })

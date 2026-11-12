@@ -426,4 +426,39 @@ describe('TaskInspector', () => {
     expect(workflow.groups[0]?.tasks.map((t) => t.id)).toEqual(['b'])
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
+
+  it('links input via file parent, distinguishes unloaded outputs, and ignores failed remove', async () => {
+    // Workflow folder 300 is NOT in itemsStore, while input file 55 IS loaded with parent 77.
+    useItemsStore().upsertItems([makeFile(55, 'evidence.E01', 2048, 77)])
+    const doneWithUnloaded = makeTask('u1', {
+      status: 'success',
+      duration: 8,
+      outputs: [901, 902],
+    })
+    seedWorkflow({
+      id: 6,
+      folderId: 300,
+      name: 'Unloaded outputs',
+      created: '2026-11-01T00:00:00Z',
+      inputs: [{ id: 55, name: 'evidence.E01' }],
+      groups: [makeGroup('gu', [doneWithUnloaded])],
+      draft: false,
+    })
+
+    const { wrapper } = mountInspector({ task: doneWithUnloaded, folderId: 300 })
+    expect(wrapper.get('section[aria-label="Ran on"] a').attributes('href')).toBe(
+      '/folder/77/file/55',
+    )
+    expect(wrapper.get('section[aria-label="Outputs"]').text()).toContain(
+      '2 output files (not loaded)',
+    )
+    expect(wrapper.get('section[aria-label="Outputs"]').text()).not.toContain('None.')
+
+    // Remove button does not emit close when removeTask cannot remove (non-draft / missing).
+    const orphanDraftTask = makeTask('ghost-t')
+    await wrapper.setProps({ task: orphanDraftTask, editable: true })
+    const removeBtn = wrapper.findAll('button').find((b) => b.text().includes('Remove'))!
+    await removeBtn.trigger('click')
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
 })

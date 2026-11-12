@@ -29,6 +29,13 @@ describe('promptPassesThrough', () => {
     },
   )
 
+  it('passes ? through only when the prompt line is empty and unmodified', () => {
+    expect(promptPassesThrough(keyEvent('?'), '')).toBe(true)
+    expect(promptPassesThrough(keyEvent('?'), 'abc')).toBe(false)
+    expect(promptPassesThrough(keyEvent('?', { metaKey: true }), '')).toBe(false)
+    expect(promptPassesThrough(keyEvent('?', { altKey: true }), '')).toBe(false)
+  })
+
   it('keeps non-listing keys in the prompt even when empty', () => {
     expect(promptPassesThrough(keyEvent('a'), '')).toBe(false)
     expect(promptPassesThrough(keyEvent('Escape'), '')).toBe(false)
@@ -43,8 +50,10 @@ describe('isTyping', () => {
     expect(isTyping(keyEvent('j', {}, document.createElement('button')))).toBe(false)
   })
 
-  it('returns true for textarea, text input, and contentEditable elements', () => {
+  it('returns true for textarea, select, text input, and contentEditable elements', () => {
     expect(isTyping(keyEvent('j', {}, document.createElement('textarea')))).toBe(true)
+    expect(isTyping(keyEvent('g', {}, document.createElement('select')))).toBe(true)
+    expect(isTyping(keyEvent('Escape', {}, document.createElement('select')))).toBe(true)
 
     const textInput = document.createElement('input')
     textInput.type = 'text'

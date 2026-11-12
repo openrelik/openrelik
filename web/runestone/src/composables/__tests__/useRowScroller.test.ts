@@ -238,4 +238,27 @@ describe('useRowScroller', () => {
     } as unknown as PointerEvent)
     expect(scroller.topRow.value).toBe(45)
   })
+
+  it('clamps topRow when maxTop shrinks and ignores thumb drag when room <= 0', async () => {
+    const { scroller } = mountScroller({ initialHeight: 200, rowHeight: 20 })
+    scroller.scrollTo(90)
+    expect(scroller.topRow.value).toBe(90)
+
+    // Viewport grows from 200px (10 visibleRows, maxTop=90) to 400px (20 visibleRows, maxTop=80).
+    latestResizeCallback?.([{ contentRect: { height: 400 } }])
+    await Promise.resolve()
+    expect(scroller.topRow.value).toBe(80)
+
+    // Shrink viewport height to 0 so room <= 0; thumb drag does not throw or produce NaN.
+    scroller.onThumbDown({
+      pointerId: 2,
+      clientY: 10,
+      currentTarget: { setPointerCapture: vi.fn() },
+    } as unknown as PointerEvent)
+    latestResizeCallback?.([{ contentRect: { height: 0 } }])
+    await Promise.resolve()
+    scroller.onThumbMove({ clientY: 50 } as unknown as PointerEvent)
+    expect(Number.isFinite(scroller.topRow.value)).toBe(true)
+    expect(scroller.topRow.value).toBe(80)
+  })
 })

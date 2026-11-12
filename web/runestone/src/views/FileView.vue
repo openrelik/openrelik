@@ -9,6 +9,7 @@ import FileContent from '@/components/viewers/FileContent.vue'
 import Button from '@/components/base/Button.vue'
 import PanelToggle from '@/components/base/PanelToggle.vue'
 import { downloadFile } from '@/composables/useDownload'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useFileDetails } from '@/composables/useFileDetails'
 import { useFolderLoader } from '@/composables/useFolderLoader'
 import { useRemembered } from '@/composables/useRemembered'
@@ -38,18 +39,28 @@ const route = useRoute()
  * Changes in one tick are written once, together — each write starts from
  * the URL as it is, and the router updates it only later.
  */
-let pendingUrl: { hash: string; view: string | undefined } | null = null
+let alive = true
+onUnmounted(() => (alive = false))
+
+let pendingUrl: { path: string; hash: string; view: string | undefined } | null = null
 function writeUrl(change: Partial<{ hash: string; view: string | undefined }>) {
   if (!pendingUrl) {
     const view = route.query.view
-    pendingUrl = { hash: route.hash, view: typeof view === 'string' ? view : undefined }
+    pendingUrl = {
+      path: route.path,
+      hash: route.hash,
+      view: typeof view === 'string' ? view : undefined,
+    }
     void Promise.resolve().then(() => {
-      const { hash, view } = pendingUrl!
+      const next = pendingUrl
       pendingUrl = null
+      if (!next || !alive || route.path !== next.path) return
+      const currentView = typeof route.query.view === 'string' ? route.query.view : undefined
+      if (next.hash === route.hash && next.view === currentView) return
       const query = { ...route.query }
-      if (view) query.view = view
+      if (next.view) query.view = next.view
       else delete query.view
-      router.replace({ query, hash })
+      router.replace({ query, hash: next.hash })
     })
   }
   Object.assign(pendingUrl, change)
@@ -81,10 +92,22 @@ watch(
   },
   { immediate: true },
 )
+const folderListing = computed(() =>
+  /^\d+$/.test(props.folderId) ? listingState(Number(props.folderId)) : null,
+)
 const loading = computed(() => {
-  if (file.value || !/^\d+$/.test(props.folderId)) return false
-  const { status } = listingState(Number(props.folderId))
+  if (file.value || !folderListing.value) return false
+  const { status } = folderListing.value
   return status === 'idle' || status === 'loading'
+})
+const loadError = computed(() => {
+  if (file.value || !folderListing.value) return null
+  const { status, error, errorStatus } = folderListing.value
+  if (status !== 'error' || errorStatus === 404) return null
+  return error ?? 'Could not load the file.'
+})
+useAutoRefresh(({ force }) => {
+  if (!file.value && /^\d+$/.test(props.folderId)) void load(Number(props.folderId), { force })
 })
 
 /** The details panel, shown or hidden (`i`): remembered, for every file. */
@@ -118,10 +141,14 @@ function onView(view: typeof contentView.value) {
   chosenTab.value =
     view === 'hex' || (view === 'table' && rowSelected.value) ? 'inspector' : 'details'
 }
-// Another file: nothing selected in it yet.
+// Another file: nothing selected or pinned in it yet.
 watch(
   () => file.value?.id,
-  () => (rowSelected.value = false),
+  () => {
+    rowSelected.value = false
+    pinned.value = false
+    chosenTab.value = contentView.value === 'hex' ? 'inspector' : 'details'
+  },
 )
 function onRowSelected(selected: boolean) {
   rowSelected.value = selected
@@ -139,7 +166,14 @@ const bytes = computed(() => (file.value ? exactSize(file.value) : 0))
 
 /** Back to the listing, with this file under the cursor. */
 function back() {
-  router.push({ path: `/folder/${folderId.value}`, query: { focus: String(file.value?.id) } })
+  if (!Number.isFinite(folderId.value)) {
+    router.push('/')
+    return
+  }
+  router.push({
+    path: `/folder/${folderId.value}`,
+    query: file.value ? { focus: String(file.value.id) } : undefined,
+  })
 }
 
 function openWorkflow() {
@@ -173,6 +207,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 <template>
   <div v-if="!file && loading" class="h-full bg-surface px-4 py-6 text-ink-muted">
     Loading file…
+  </div>
+  <div
+    v-else-if="!file && loadError"
+    class="flex h-full items-start gap-3 bg-surface px-4 py-6 text-ink-muted"
+  >
+    <span class="text-danger" role="alert">{{ loadError }}</span>
+    <Button size="row" @click="load(Number(props.folderId), { force: true })">Retry</Button>
   </div>
   <div v-else-if="!file" class="h-full bg-surface px-4 py-6 text-ink-muted">
     No file {{ fileId }}.
@@ -231,7 +272,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
     <!-- status bar -->
     <StatusBar>
-      <span class="tabular">{{ file.mime }} · {{ formatSize(bytes) }}</span>
+      <span class="tabular"
+        ><template v-if="file.mime">{{ file.mime }} · </template>{{ formatSize(bytes) }}</span
+      >
     </StatusBar>
   </section>
 </template>

@@ -288,4 +288,64 @@ describe('WorkflowDialog', () => {
     expect(api.workflows.deleteTemplate).toHaveBeenCalledWith(11)
     expect(body.text()).not.toContain('EVTX Deep Triage')
   })
+
+  it('aborts stale create navigation, clears stale template errors/rename on reopen, and clamps cursor on list shrink', async () => {
+    let resolveCreate!: (record: WorkflowRecord) => void
+    vi.mocked(api.workflows.create).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve
+      }),
+    )
+    const { router, body } = await mountDialog()
+    const pushSpy = vi.spyOn(router, 'push')
+
+    openWorkflowDialog(FILES, 10)
+    await nextTick()
+    await flushPromises()
+
+    // Select "Empty workflow" while create is pending, then dismiss before it resolves.
+    await body.findAll('[role="option"]')[0]!.trigger('click')
+    closeWorkflowDialog()
+    await nextTick()
+
+    // Reopen immediately: creating state and stale errors are reset so the user is not blocked.
+    openWorkflowDialog(FILES, 10)
+    await nextTick()
+    expect(body.text()).toContain('New workflow')
+
+    resolveCreate(makeCreatedWorkflow(99, 999))
+    await flushPromises()
+    expect(pushSpy).not.toHaveBeenCalled()
+
+    // Start rename on first template, fail rename to populate error, then close & reopen.
+    vi.mocked(api.workflows.renameTemplate).mockRejectedValueOnce(
+      new ApiError({ status: 403, statusText: 'Forbidden', message: 'Denied' }),
+    )
+    await body.get('button[aria-label="Rename EVTX Triage"]').trigger('click')
+    const renameInput = body.get('input[aria-label="Rename EVTX Triage"]')
+    await renameInput.setValue('Bad Name')
+    await renameInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(body.text()).toContain('Denied')
+
+    closeWorkflowDialog()
+    await nextTick()
+    openWorkflowDialog(FILES, 10)
+    await nextTick()
+    expect(body.text()).not.toContain('Denied')
+    expect(body.find('input[aria-label^="Rename "]').exists()).toBe(false)
+
+    // Move cursor to the last item (index 2 = Memory Quickcheck), delete EVTX Triage so totalItems shrinks.
+    const filterInput = body.get('input[aria-label="Filter templates"]')
+    await filterInput.trigger('keydown', { key: 'ArrowDown' })
+    await filterInput.trigger('keydown', { key: 'ArrowDown' })
+    await body.get('button[aria-label="Delete EVTX Triage"]').trigger('click')
+    await nextTick()
+    useConfirm().accept()
+    await flushPromises()
+
+    // Cursor remains clamped on a valid option instead of going out of bounds.
+    const remainingOptions = body.findAll('[role="option"]')
+    expect(remainingOptions.some((o) => o.attributes('aria-selected') === 'true')).toBe(true)
+  })
 })

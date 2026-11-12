@@ -63,6 +63,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  Object.defineProperty(document, 'hidden', { value: false, configurable: true })
+  Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
   wrapper?.unmount()
   wrapper = null
   document.body.innerHTML = ''
@@ -194,5 +196,48 @@ describe('MetricsView', () => {
     await flushPromises()
 
     expect(wrapper.findAll('[role="alert"]')).toHaveLength(9)
+  })
+
+  it('sanitizes invalid remembered settings and skips auto-refresh while hidden or offline', async () => {
+    localStorage.setItem('openrelik.metrics.range', JSON.stringify(999999))
+    localStorage.setItem('openrelik.metrics.step', JSON.stringify('bad'))
+    localStorage.setItem('openrelik.metrics.refresh', JSON.stringify(15))
+
+    vi.mocked(api.metrics.tasks).mockResolvedValue(sampleSeries)
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push('/metrics')
+    await router.isReady()
+
+    vi.useFakeTimers()
+    wrapper = mount(MetricsView, {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+    await flushPromises()
+
+    expect(api.metrics.tasks).toHaveBeenCalledWith(
+      expect.objectContaining({ range: 3600, step: 60, resolution: '1m' }),
+      expect.anything(),
+    )
+
+    vi.mocked(api.metrics.tasks).mockClear()
+
+    // Hidden tab skips auto-refresh ticks.
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(api.metrics.tasks).not.toHaveBeenCalled()
+
+    // Offline skips auto-refresh ticks.
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true })
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(api.metrics.tasks).not.toHaveBeenCalled()
+
+    // Visible and online resumes auto-refresh ticks.
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(api.metrics.tasks).toHaveBeenCalledTimes(10)
   })
 })

@@ -121,7 +121,7 @@ const { status: connection } = useConnection()
         v-tooltip="'Account and API keys'"
         @click="openAccount"
       >
-        <UserIcon :size="12" :stroke-width="1.5" class="text-brand" />
+        <UserIcon :size="12" :stroke-width="1.5" class="text-brand" aria-hidden="true" />
         <span class="text-ink">{{ authStore.user?.username }}</span>
       </button>
       <button
@@ -131,7 +131,7 @@ const { status: connection } = useConnection()
         aria-label="Sign out"
         @click="authStore.logout()"
       >
-        <LogOut :size="11" :stroke-width="1.5" />
+        <LogOut :size="11" :stroke-width="1.5" aria-hidden="true" />
       </button>
     </div>
   </footer>

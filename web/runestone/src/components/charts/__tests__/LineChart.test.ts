@@ -146,4 +146,66 @@ describe('LineChart', () => {
 
     wrapper.unmount()
   })
+
+  it('ignores non-finite and out-of-window points and picks the closest timestamp across series on hover', async () => {
+    // Out-of-window and non-finite points should show the empty message and produce no NaN coordinates.
+    const emptyWindowWrapper = mount(LineChart, {
+      props: {
+        series: [
+          {
+            name: 'strings',
+            data: [
+              [500, 9999],
+              [20_000, Number.NaN],
+              [30_000, Number.POSITIVE_INFINITY],
+            ],
+          },
+        ],
+        start: 1_000,
+        end: 61_000,
+        empty: 'Nothing in window.',
+      },
+      global: { plugins: [directives] },
+    })
+    await nextTick()
+    expect(emptyWindowWrapper.text()).toContain('Nothing in window.')
+    expect(emptyWindowWrapper.find('svg path').exists()).toBe(false)
+    expect(emptyWindowWrapper.html()).not.toContain('NaN')
+    emptyWindowWrapper.unmount()
+
+    // Series 1 has an old point at 5_000; Series 2 has a point at 55_000.
+    // Hovering near the right edge should snap the crosshair to 55_000, not 5_000.
+    const wrapper = mount(LineChart, {
+      props: {
+        series: [
+          { name: 'slow-worker', data: [[5_000, 2]] },
+          {
+            name: 'fast-worker',
+            data: [
+              [10_000, 4],
+              [55_000, 10],
+            ],
+          },
+        ],
+        start: 1_000,
+        end: 61_000,
+      },
+      global: { plugins: [directives] },
+    })
+    await nextTick()
+
+    const svg = wrapper.get('svg')
+    vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 600, 200))
+
+    await svg.trigger('pointermove', { clientX: 540 })
+    const tooltip = wrapper.get('div.pointer-events-none.min-w-40')
+    expect(tooltip.attributes('style')).toContain('right:')
+
+    // Shifting start/end so hoverT falls outside clears the stale crosshair reading.
+    await wrapper.setProps({ start: 100_000, end: 160_000 })
+    await nextTick()
+    expect(wrapper.find('div.pointer-events-none.min-w-40').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
 })

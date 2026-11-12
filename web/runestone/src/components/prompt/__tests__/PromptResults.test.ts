@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PromptResults from '@/components/prompt/PromptResults.vue'
 import type { PromptResult } from '@/composables/usePrompt'
@@ -37,16 +37,23 @@ describe('PromptResults', () => {
       size: 2048,
       mime: 'text/plain',
     })
-    const bareFile = makeItem({ id: 11, kind: 'file', name: 'raw.bin', parent: 1, size: 512 })
+    const bareFile = makeItem({ id: 11, kind: 'file', name: 'raw.bin', parent: 1 })
     const wfFolder = makeItem({ id: 2, kind: 'folder', name: 'plaso-run', workflowId: 77 })
     itemsStore.upsertItems([folder, childFile, bareFile, wfFolder])
 
     const results: PromptResult[] = [
-      { item: folder, path: '/evidence/', label: 'evidence/', hits: [0, 1] },
-      { item: wfFolder, path: '/plaso-run/', label: 'plaso-run/', hits: [] },
-      { item: childFile, path: '/evidence/syslog.txt', label: 'syslog.txt', hits: [] },
-      { item: bareFile, path: '/evidence/raw.bin', label: 'raw.bin', hits: [] },
+      { kind: 'item', item: folder, path: '/evidence/', label: 'evidence/', hits: [0, 1] },
+      { kind: 'item', item: wfFolder, path: '/plaso-run/', label: 'plaso-run/', hits: [] },
       {
+        kind: 'item',
+        item: childFile,
+        path: '/evidence/syslog.txt',
+        label: 'syslog.txt',
+        hits: [],
+      },
+      { kind: 'item', item: bareFile, path: '/evidence/raw.bin', label: 'raw.bin', hits: [] },
+      {
+        kind: 'item',
         item: folder,
         path: '/case/',
         label: '/case/',
@@ -54,6 +61,7 @@ describe('PromptResults', () => {
         caseRef: 'INC-42',
       },
       {
+        kind: 'item',
         item: makeItem({ id: 9, kind: 'folder', name: 'remote-dir' }),
         path: 'remote-dir',
         label: 'remote-dir/',
@@ -78,6 +86,7 @@ describe('PromptResults', () => {
     expect(wrapper.text()).toContain('4 folders on the server')
     expect(wrapper.text()).toContain('2 items')
     expect(wrapper.text()).toContain('workflow')
+    expect(wrapper.text()).toContain('0 B')
     expect(wrapper.text()).toContain('text/plain')
     expect(wrapper.text()).toContain('case INC-42')
     expect(wrapper.text()).toContain('server')
@@ -104,11 +113,10 @@ describe('PromptResults', () => {
       {
         results: [
           {
-            item: null,
+            kind: 'mkdir',
             path: 'logs',
             label: 'mkdir logs/',
             hits: [],
-            mkdir: true,
             folderName: 'logs',
           },
         ],
@@ -117,7 +125,13 @@ describe('PromptResults', () => {
       },
       {
         results: [
-          { item: null, path: 'mkdir ', label: 'mkdir: enter folder name', hits: [], mkdir: true },
+          {
+            kind: 'mkdir',
+            path: 'mkdir ',
+            label: 'mkdir: enter folder name',
+            hits: [],
+            folderName: null,
+          },
         ],
         query: 'mkdir',
         expected: 'mkdir: create folder',
@@ -125,28 +139,28 @@ describe('PromptResults', () => {
       {
         results: [
           {
+            kind: 'rm',
             item: makeItem({ id: 3, kind: 'folder', name: 'old' }),
             path: 'rm old',
             label: 'rm old/',
             hits: [],
-            rm: true,
           },
         ],
         query: 'rm old',
         expected: 'rm: delete folder in /work',
       },
       {
-        results: [{ item: null, path: '~', label: '~ (home)', hits: [], home: true }],
+        results: [{ kind: 'home', path: '~', label: '~ (home)', hits: [] }],
         query: '~',
         expected: 'cd: home',
       },
       {
-        results: [{ item: null, path: '/', label: '- (~)', hits: [], prev: true }],
+        results: [{ kind: 'prev', path: '/', label: '- (~)', hits: [] }],
         query: '-',
         expected: 'cd: previous directory',
       },
       {
-        results: [{ item: null, path: '..', label: '..', hits: [], up: true }],
+        results: [{ kind: 'up', path: '..', label: '..', hits: [] }],
         query: '',
         expected: 'contents of /work',
       },
@@ -212,5 +226,47 @@ describe('PromptResults', () => {
     expect(failedAndScoped.text()).toContain('no match for "../missing" in /cases')
     expect(failedAndScoped.text()).toContain('/missing')
     failedAndScoped.unmount()
+
+    // cd rm (mode: 'search') does not show rm empty-state text.
+    const cdRm = mount(PromptResults, {
+      props: {
+        results: [],
+        index: 0,
+        query: 'rm',
+        mode: 'search',
+        cwdPath: '/cases',
+        scopePath: '/cases',
+      },
+      global: { plugins: [pinia, directives] },
+    })
+    expect(cdRm.text()).toContain('no match for "rm" in /cases')
+    cdRm.unmount()
+  })
+
+  it('keys same-named remote folders uniquely and shows 50+ indicator at cap', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const results: PromptResult[] = Array.from({ length: 50 }, (_, idx) => ({
+      kind: 'item',
+      item: makeItem({ id: 100 + idx, kind: 'folder', name: 'evidence' }),
+      path: 'evidence',
+      label: 'evidence/',
+      hits: [],
+      remote: true,
+    }))
+
+    const wrapper = mount(PromptResults, {
+      props: {
+        results,
+        index: 0,
+        query: 'evidence',
+        cwdPath: '/',
+        scopePath: '/',
+      },
+      global: { plugins: [pinia, directives] },
+    })
+    expect(wrapper.text()).toContain('50 matches+ in /')
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(50)
+    expect(warnSpy).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 })

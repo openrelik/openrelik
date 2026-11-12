@@ -43,21 +43,28 @@ export function useByteChunks(fileId: () => number, size: () => number): UseByte
   /** Chunks on screen that are loading, and the controllers of every load in flight. */
   const pending = ref(new Set<number>())
   const inFlight = new Map<number, AbortController>()
+  const readControllers = new Set<AbortController>()
+  let activeId = fileId()
   let lastFrom = 0
 
-  const key = (index: number) => `file:${fileId()}:bytes:${index}`
+  const key = (index: number, id = activeId) => `file:${id}:bytes:${index}`
 
-  function reset() {
+  function reset(id = activeId) {
     for (const controller of inFlight.values()) controller.abort()
     inFlight.clear()
-    forget([...chunks.keys()].map(key))
+    for (const controller of readControllers) controller.abort()
+    readControllers.clear()
+    forget([...chunks.keys()].map((index) => key(index, id)))
     chunks = new Map()
     pending.value = new Set()
     error.value = null
     version.value++
   }
-  watch(fileId, reset)
-  onScopeDispose(reset)
+  watch(fileId, (next) => {
+    reset(activeId)
+    activeId = next
+  })
+  onScopeDispose(() => reset(activeId))
 
   function evict() {
     while (chunks.size > MAX_CHUNKS) {
@@ -69,14 +76,14 @@ export function useByteChunks(fileId: () => number, size: () => number): UseByte
 
   /** Loads a chunk unless it is here; resolves once it is (or failed, or was cancelled). */
   function load(index: number, controller: AbortController): Promise<void> {
-    const id = fileId()
+    const id = activeId
     const start = index * CHUNK_SIZE
     const end = Math.min(size(), start + CHUNK_SIZE) - 1
     return ensure(
-      key(index),
+      key(index, id),
       async (signal) => {
         const bytes = await api.files.readRange(id, start, end, { signal, background: true })
-        if (id !== fileId()) return
+        if (id !== activeId) return
         chunks.set(index, bytes)
         evict()
         error.value = null
@@ -84,12 +91,12 @@ export function useByteChunks(fileId: () => number, size: () => number): UseByte
       },
       { signal: controller.signal, staleMs: Infinity },
     ).catch((err: unknown) => {
-      error.value = errorMessage(err, 'could not read the file')
+      if (id === activeId) error.value = errorMessage(err, 'could not read the file')
     })
   }
 
   function show(from: number, to: number) {
-    if (size() <= 0) return
+    if (size() <= 0 || to < 0) return
     const first = Math.floor(Math.max(0, from) / CHUNK_SIZE)
     const last = Math.floor(Math.min(size() - 1, to) / CHUNK_SIZE)
     const forward = from >= lastFrom
@@ -120,7 +127,8 @@ export function useByteChunks(fileId: () => number, size: () => number): UseByte
       const controller = new AbortController()
       inFlight.set(index, controller)
       load(index, controller).finally(() => {
-        if (inFlight.get(index) === controller) inFlight.delete(index)
+        if (inFlight.get(index) !== controller) return
+        inFlight.delete(index)
         if (pending.value.has(index)) {
           const next = new Set(pending.value)
           next.delete(index)
@@ -137,19 +145,25 @@ export function useByteChunks(fileId: () => number, size: () => number): UseByte
   }
 
   async function read(start: number, end: number): Promise<Uint8Array> {
+    const firstByte = Math.max(0, start)
     const last = Math.min(end, size() - 1)
-    if (last < start) return new Uint8Array()
+    if (last < firstByte) return new Uint8Array()
     const indexes: number[] = []
-    for (let i = Math.floor(start / CHUNK_SIZE); i <= Math.floor(last / CHUNK_SIZE); i++) {
+    for (let i = Math.floor(firstByte / CHUNK_SIZE); i <= Math.floor(last / CHUNK_SIZE); i++) {
       indexes.push(i)
     }
     const controller = new AbortController()
-    await Promise.all(indexes.filter((i) => !chunks.has(i)).map((i) => load(i, controller)))
-    const out = new Uint8Array(last - start + 1)
-    for (let offset = start; offset <= last; offset++) {
+    readControllers.add(controller)
+    try {
+      await Promise.all(indexes.filter((i) => !chunks.has(i)).map((i) => load(i, controller)))
+    } finally {
+      readControllers.delete(controller)
+    }
+    const out = new Uint8Array(last - firstByte + 1)
+    for (let offset = firstByte; offset <= last; offset++) {
       const byte = byteAt(offset)
       if (byte === undefined) throw new Error(error.value ?? 'Could not read the bytes')
-      out[offset - start] = byte
+      out[offset - firstByte] = byte
     }
     return out
   }

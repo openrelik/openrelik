@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type RegisteredTask } from '@/api'
 import api from '@/api'
 import { clearQueryCache } from '@/composables/useQueryCache'
-import { loadWorkers, useWorkers } from '@/composables/useWorkers'
+import { clearWorkers, loadWorkers, useWorkers } from '@/composables/useWorkers'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -97,5 +97,29 @@ describe('useWorkers', () => {
     expect(state.value.status).toBe('error')
     expect(state.value.error).toBe('Broker unreachable')
     expect(available.value).toBeNull()
+  })
+
+  it('clearWorkers empties workers and discards an in-flight registry response after sign-out', async () => {
+    const { workers } = useWorkers()
+    vi.mocked(api.taskqueue.registeredTasks).mockResolvedValueOnce([
+      makeRegisteredTask('strings', 'Strings'),
+    ])
+    await loadWorkers()
+    expect(workers.value).toHaveLength(1)
+
+    clearWorkers()
+    expect(workers.value).toEqual([])
+
+    let resolveLate!: (tasks: RegisteredTask[]) => void
+    vi.mocked(api.taskqueue.registeredTasks).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveLate = resolve
+      }),
+    )
+    const loading = loadWorkers({ force: true })
+    clearWorkers()
+    resolveLate([makeRegisteredTask('yara', 'YARA')])
+    await loading
+    expect(workers.value).toEqual([])
   })
 })

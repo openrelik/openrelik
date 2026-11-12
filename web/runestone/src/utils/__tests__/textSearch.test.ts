@@ -61,12 +61,35 @@ describe('lineMatcher', () => {
     ])
     expect(hex.matcher('next 0x00')).toEqual([[5, 9]])
   })
+
+  it('stops matching a line once the optional limit is reached', () => {
+    const result = lineMatcher('a', { caseSensitive: true, regex: false })
+    if (!('matcher' in result)) throw new Error('Expected matcher')
+
+    expect(result.matcher('a a a a a', 3)).toEqual([
+      [0, 1],
+      [2, 3],
+      [4, 5],
+    ])
+  })
 })
 
 describe('rowSegments', () => {
   it('returns a single plain segment when there are no hits or text is empty', () => {
     expect(rowSegments('plain text', 0, [])).toEqual([{ text: 'plain text', mark: 'none' }])
     expect(rowSegments('', 0, [])).toEqual([{ text: '', mark: 'none' }])
+  })
+
+  it('ignores out-of-range or overlapping/degenerate hits gracefully', () => {
+    const hits = [
+      { start: 0, end: 4, current: false },
+      { start: 2, end: 3, current: true }, // fully overlapped by previous hit
+      { start: 20, end: 25, current: false }, // starts past row end
+    ]
+    expect(rowSegments('abcdef', 0, hits)).toEqual([
+      { text: 'abcd', mark: 'hit' },
+      { text: 'ef', mark: 'none' },
+    ])
   })
 
   it('marks hit and current segments and omits empty gaps', () => {

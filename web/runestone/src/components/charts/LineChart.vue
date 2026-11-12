@@ -40,7 +40,9 @@ let observer: ResizeObserver | undefined
 onMounted(() => {
   if (!root.value) return
   width.value = root.value.clientWidth
-  observer = new ResizeObserver(([entry]) => (width.value = entry!.contentRect.width))
+  observer = new ResizeObserver(([entry]) => {
+    if (entry) width.value = entry.contentRect.width
+  })
   observer.observe(root.value)
 })
 onUnmounted(() => observer?.disconnect())
@@ -54,16 +56,31 @@ function toggle(name: string) {
   hidden.value = next
 }
 
+const isVisiblePoint = ([t, v]: [number, number]) =>
+  Number.isFinite(t) && Number.isFinite(v) && t >= props.start && t <= props.end
+
+const hasData = computed(() => props.series.some((series) => series.data.some(isVisiblePoint)))
+
 const drawn = computed(() =>
   props.series
-    .map((series, index) => ({ ...series, color: color(index) }))
+    .map((series, index) => ({
+      name: series.name,
+      color: color(index),
+      points: series.data.filter(isVisiblePoint),
+    }))
     .filter((series) => !hidden.value.has(series.name)),
 )
-const hasData = computed(() => props.series.some((series) => series.data.length > 0))
 
 const yTicks = computed(() => {
-  const values = drawn.value.flatMap((series) => series.data.map(([, value]) => value))
-  return niceTicks(Math.min(0, ...values), Math.max(0, ...values))
+  let min = 0
+  let max = 0
+  for (const series of drawn.value) {
+    for (const [, value] of series.points) {
+      if (value < min) min = value
+      if (value > max) max = value
+    }
+  }
+  return niceTicks(min, max)
 })
 const yMin = computed(() => yTicks.value[0] ?? 0)
 const yMax = computed(() => yTicks.value[yTicks.value.length - 1] ?? 1)
@@ -83,14 +100,16 @@ const y = (value: number) =>
 
 const lines = computed(() =>
   drawn.value.map((series) => {
-    const points = series.data.filter(([t]) => t >= props.start && t <= props.end)
+    const { points } = series
     const line = points
       .map(([t, v], i) => `${i ? 'L' : 'M'}${x(t).toFixed(1)},${y(v).toFixed(1)}`)
       .join('')
     const base = y(Math.max(0, yMin.value)).toFixed(1)
+    const first = points[0]
+    const last = points[points.length - 1]
     const area =
-      points.length > 1
-        ? `${line}L${x(points[points.length - 1]![0]).toFixed(1)},${base}L${x(points[0]![0]).toFixed(1)},${base}Z`
+      first && last && points.length > 1
+        ? `${line}L${x(last[0]).toFixed(1)},${base}L${x(first[0]).toFixed(1)},${base}Z`
         : ''
     return { name: series.name, color: series.color, line, area, points }
   }),
@@ -113,7 +132,7 @@ function onMove(event: PointerEvent) {
 /** At the hovered time: each series' nearest point, largest value first. */
 const reading = computed(() => {
   const t = hoverT.value
-  if (t === null) return null
+  if (t === null || t < props.start || t > props.end) return null
   const values = lines.value
     .map((series) => {
       let nearest: [number, number] | undefined
@@ -125,11 +144,14 @@ const reading = computed(() => {
       )
     })
     .filter((entry): entry is NonNullable<typeof entry> => !!entry)
-  if (!values.length) return null
-  const time = values[0]!.time
+  const anchor = values.reduce<(typeof values)[number] | undefined>(
+    (best, entry) => (!best || Math.abs(entry.time - t) < Math.abs(best.time - t) ? entry : best),
+    undefined,
+  )
+  if (!anchor) return null
   return {
-    time,
-    x: x(time),
+    time: anchor.time,
+    x: x(anchor.time),
     values: values.sort((a, b) => b.value - a.value),
   }
 })
@@ -144,7 +166,9 @@ const READING_MAX = 8
       :height="height"
       class="block overflow-visible"
       role="img"
-      :aria-label="`Chart of ${series.map((s) => s.name).join(', ')}`"
+      :aria-label="
+        series.length ? `Chart of ${series.map((s) => s.name).join(', ')}` : 'Empty chart'
+      "
       @pointermove="onMove"
       @pointerleave="hoverT = null"
     >
@@ -182,23 +206,23 @@ const READING_MAX = 8
       </g>
 
       <!-- the series: a light fill under a line; a lone point as a dot -->
-      <g v-for="series in lines" :key="series.name">
-        <path v-if="series.area" :d="series.area" :fill="series.color" fill-opacity="0.18" />
+      <g v-for="item in lines" :key="item.name">
+        <path v-if="item.area" :d="item.area" :fill="item.color" fill-opacity="0.18" />
         <path
-          v-if="series.points.length > 1"
-          :d="series.line"
+          v-if="item.points.length > 1"
+          :d="item.line"
           fill="none"
-          :stroke="series.color"
+          :stroke="item.color"
           stroke-width="1.5"
           stroke-linejoin="round"
         />
         <circle
-          v-for="point in series.points.length === 1 ? series.points : []"
+          v-for="point in item.points.length === 1 ? item.points : []"
           :key="point[0]"
           :cx="x(point[0])"
           :cy="y(point[1])"
           r="2.5"
-          :fill="series.color"
+          :fill="item.color"
         />
       </g>
 

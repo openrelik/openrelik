@@ -235,5 +235,31 @@ describe('FileContent', () => {
     await vi.advanceTimersByTimeAsync(20)
     await flushPromises()
     expect(linkedWrapper.emitted('view')?.at(-1)).toEqual(['table'])
+
+    // Clicking a table row forwards rowSelected(true) and clears rowMark
+    const rowEl = linkedWrapper.get('[role="grid"]').findAll('div.absolute')[1]!
+    await rowEl.trigger('click')
+    expect(linkedWrapper.emitted('rowSelected')?.at(-1)).toEqual([true])
+    expect(linkedWrapper.emitted('update:mark')?.at(-1)).toEqual([null])
+
+    // If MIME changes from text/plain to binary, TextViewer unmounts rather than staying mounted
+    const textSize = mockBytes('hello\n')
+    const mimeWrapper = mountContent({
+      file: makeFile({ id: 16, name: 'data.txt', mime: 'text/plain', size: textSize }),
+    })
+    await flushPromises()
+    expect(mimeWrapper.find('[aria-label="File text"]').exists()).toBe(true)
+
+    await mimeWrapper.setProps({
+      file: makeFile({
+        id: 16,
+        name: 'data.txt',
+        mime: 'application/octet-stream',
+        size: textSize,
+      }),
+    })
+    await flushPromises()
+    expect(mimeWrapper.find('[aria-label="File text"]').exists()).toBe(false)
+    expect(mimeWrapper.emitted('view')?.at(-1)).toEqual(['hex'])
   })
 })

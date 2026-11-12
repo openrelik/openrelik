@@ -9,7 +9,7 @@ export interface SearchOptions {
 }
 
 /** Where a line matches: `[start, end)` character offsets, in order. */
-export type LineMatcher = (line: string) => [number, number][]
+export type LineMatcher = (line: string, limit?: number) => [number, number][]
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -33,10 +33,11 @@ export function lineMatcher(
     return { error: err instanceof Error ? err.message : 'Not a valid expression' }
   }
   return {
-    matcher: (line) => {
+    matcher: (line, limit) => {
       const out: [number, number][] = []
       pattern.lastIndex = 0
       for (let match = pattern.exec(line); match; match = pattern.exec(line)) {
+        if (limit !== undefined && out.length >= limit) break
         if (match[0].length === 0) {
           pattern.lastIndex++
           continue
@@ -67,9 +68,9 @@ export function rowSegments(
   const out: RowSegment[] = []
   let at = 0
   for (const hit of hits) {
-    const from = Math.max(0, hit.start - start)
+    const from = Math.max(at, hit.start - start)
     const to = Math.min(text.length, hit.end - start)
-    if (to <= 0 || from >= text.length) continue
+    if (to <= from || from >= text.length) continue
     if (from > at) out.push({ text: text.slice(at, from), mark: 'none' })
     out.push({ text: text.slice(from, to), mark: hit.current ? 'current' : 'hit' })
     at = to

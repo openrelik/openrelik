@@ -83,8 +83,11 @@ const runs = new Map<number, number>()
 let sessionEpoch = 0
 
 function activityFor(workflowId: number): WorkflowActivity {
-  if (!activity.has(workflowId)) activity.set(workflowId, { ...IDLE })
-  return activity.get(workflowId)!
+  const existing = activity.get(workflowId)
+  if (existing) return existing
+  const created = reactive({ ...IDLE })
+  activity.set(workflowId, created)
+  return created
 }
 
 /** What is in flight or failed for a workflow; reactive when read in a computed or template. */
@@ -115,8 +118,10 @@ async function fetchWorkflow(
   background: boolean,
 ): Promise<void> {
   const workflowsStore = useWorkflowsStore()
+  const epoch = sessionEpoch
   const runsBefore = runs.get(workflowId) ?? 0
   const record = await api.workflows.get(folderId, workflowId, { signal, background })
+  if (epoch !== sessionEpoch) return
   // Edits the server has not got yet win over what it had.
   if (unsaved.has(workflowId) || saves.has(workflowId)) return
   // A run started or ended meanwhile: this answer may predate it (a refresh
@@ -170,7 +175,10 @@ export async function createWorkflow(
   fileIds: number[],
   templateId?: number,
 ): Promise<Workflow> {
-  return adopt(await api.workflows.create(parentId, fileIds, templateId), parentId)
+  const epoch = sessionEpoch
+  const record = await api.workflows.create(parentId, fileIds, templateId)
+  if (epoch !== sessionEpoch) throw new DOMException('Session ended', 'AbortError')
+  return adopt(record, parentId)
 }
 
 /**
@@ -209,10 +217,15 @@ export async function renameWorkflow(folderId: number, name: string): Promise<bo
   const workflow = useWorkflowsStore().workflowOf(folderId)
   const trimmed = name.trim()
   if (!workflow || !trimmed) return false
+  const epoch = sessionEpoch
   activityFor(workflow.id).error = null
   const folderActions = useFolderActions()
   const ok = await folderActions.renameFolder(folderId, trimmed)
-  if (!ok && folderActions.error.value) activityFor(workflow.id).error = folderActions.error.value
+  if (epoch !== sessionEpoch) return false
+  if (!ok && folderActions.error.value) {
+    activityFor(workflow.id).error = folderActions.error.value
+    folderActions.clearError()
+  }
   return ok
 }
 
@@ -291,9 +304,10 @@ export function addTask(
     const owner = at.joinAll === null ? workflow : findTask(workflow, at.joinAll)
     if (!owner || !canJoinAll(owner.groups)) return null
     const [target, ...others] = owner.groups
-    for (const group of others) target!.tasks.push(...group.tasks)
-    owner.groups = [target!]
-    target!.join = task
+    if (!target) return null
+    for (const group of others) target.tasks.push(...group.tasks)
+    owner.groups = [target]
+    target.join = task
   }
   scheduleSave(workflow)
   return task
@@ -333,7 +347,7 @@ function record(
   const edit: Edit = {
     folderId,
     label,
-    undoable,
+    undoable: () => !!editable(folderId) && undoable(),
     undo: () => {
       edits.value = edits.value.filter((entry) => entry !== edit)
       revert()
@@ -349,6 +363,10 @@ function record(
 export function dismissEdits(): void {
   clearTimeout(editTimer)
   edits.value = []
+}
+
+function dismissEditsFor(folderId: number): void {
+  edits.value = edits.value.filter((entry) => entry.folderId !== folderId)
 }
 
 /** Where a removed task was, to put it back. */
@@ -388,7 +406,9 @@ export function removeTask(folderId: number, taskId: string): Edit | null {
     delete group.join
   } else {
     place.at = group.tasks.findIndex((t) => t.id === taskId)
-    task = group.tasks.splice(place.at, 1)[0]!
+    const removed = group.tasks.splice(place.at, 1)[0]
+    if (!removed) return null
+    task = removed
     if (!group.tasks.length && group.join) {
       place.unjoinedId = group.join.id
       group.tasks.push(group.join)
@@ -494,7 +514,8 @@ function unsplit(
   for (const [id, index] of [...from].sort((a, b) => a[1] - b[1])) {
     const at = split.tasks.findIndex((task) => task.id === id)
     if (at === -1) continue
-    group.tasks.splice(Math.min(index, group.tasks.length), 0, split.tasks.splice(at, 1)[0]!)
+    const moved = split.tasks.splice(at, 1)[0]
+    if (moved) group.tasks.splice(Math.min(index, group.tasks.length), 0, moved)
   }
   if (!split.tasks.length) owner.groups.splice(owner.groups.indexOf(split), 1)
   scheduleSave(workflow)
@@ -529,6 +550,7 @@ export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | n
   const [target, ...others] = placed
     .map(({ group }) => group)
     .sort((a, b) => owner.groups.indexOf(a) - owner.groups.indexOf(b))
+  if (!target) return null
   const merged: Merged[] = others.map((group) => ({
     id: group.id,
     index: owner.groups.indexOf(group),
@@ -536,8 +558,8 @@ export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | n
     joinId: group.join?.id,
   }))
   for (const group of others) {
-    target!.tasks.push(...group.tasks)
-    if (group.join) target!.join = group.join
+    target.tasks.push(...group.tasks)
+    if (group.join) target.join = group.join
     owner.groups.splice(owner.groups.indexOf(group), 1)
   }
   scheduleSave(workflow)
@@ -545,10 +567,10 @@ export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | n
   record(
     folderId,
     `merged ${count(placed.length, 'group')}`,
-    () => unmerge(folderId, parent?.id ?? null, target!.id, merged),
-    () => !!findGroup(folderId, parent?.id ?? null, target!.id),
+    () => unmerge(folderId, parent?.id ?? null, target.id, merged),
+    () => !!findGroup(folderId, parent?.id ?? null, target.id),
   )
-  return target!
+  return target
 }
 
 /** A group among a task's (or the inputs') groups, by id, in the current draft. */
@@ -597,6 +619,7 @@ function saveDraft(folderId: number): Promise<boolean> {
   const workflow = useWorkflowsStore().workflowOf(folderId)
   if (!workflow?.draft) return Promise.resolve(true)
   const id = workflow.id
+  if (workflowActivity(id).running) return Promise.resolve(false)
   clearTimeout(saveTimers.get(id))
   saveTimers.delete(id)
 
@@ -618,7 +641,7 @@ function saveDraft(folderId: number): Promise<boolean> {
     })
     .catch((err: unknown) => {
       if (epoch !== sessionEpoch) return false
-      unsaved.add(id)
+      if (!state.running) unsaved.add(id)
       state.saveError = errorMessage(err, 'request failed')
       return false
     })
@@ -665,12 +688,14 @@ export async function runWorkflow(folderId: number): Promise<boolean> {
   unsaved.delete(id)
   await saves.get(id)
   if (epoch !== sessionEpoch) return false
+  unsaved.delete(id)
 
   try {
     const spec = withFreshUuids(specFromTasks(workflow))
     const record = await api.workflows.run(folderId, id, spec)
     if (epoch !== sessionEpoch) return false
     workflowsStore.upsertWorkflow({ ...mapWorkflow(record), draft: false })
+    dismissEditsFor(folderId)
     state.saveError = null
     markFresh(workflowKeys.workflow(id))
     return true
@@ -696,11 +721,15 @@ export async function copyWorkflow(folderId: number): Promise<Workflow | null> {
   const workflow = useWorkflowsStore().workflowOf(folderId)
   const parentId = useItemsStore().findFolder(folderId)?.parent
   if (!workflow || parentId === null || parentId === undefined) return null
+  const epoch = sessionEpoch
   const state = activityFor(workflow.id)
   state.error = null
   try {
-    return adopt(await api.workflows.copy(folderId, workflow.id), parentId)
+    const record = await api.workflows.copy(folderId, workflow.id)
+    if (epoch !== sessionEpoch) return null
+    return adopt(record, parentId)
   } catch (err: unknown) {
+    if (epoch !== sessionEpoch) return null
     state.error = `Could not copy: ${errorMessage(err, 'request failed')}`
     return null
   }
@@ -714,6 +743,7 @@ export async function copyWorkflow(folderId: number): Promise<Workflow | null> {
 export async function saveAsTemplate(folderId: number): Promise<string | null> {
   const workflow = useWorkflowsStore().workflowOf(folderId)
   if (!workflow) return null
+  const epoch = sessionEpoch
   const name = await askForText({
     title: 'Save as template',
     message:
@@ -721,13 +751,16 @@ export async function saveAsTemplate(folderId: number): Promise<string | null> {
     field: { label: 'template name', value: workflow.name },
     confirmLabel: 'Save template',
   })
-  if (!name) return null
+  if (!name || epoch !== sessionEpoch) return null
   const state = activityFor(workflow.id)
   state.error = null
   try {
-    addTemplate(await api.workflows.createTemplate(workflow.id, name))
+    const template = await api.workflows.createTemplate(workflow.id, name)
+    if (epoch !== sessionEpoch) return null
+    addTemplate(template)
     return name
   } catch (err: unknown) {
+    if (epoch !== sessionEpoch) return null
     state.error = `Could not save the template: ${errorMessage(err, 'request failed')}`
     return null
   }
@@ -743,13 +776,14 @@ export async function saveAsTemplate(folderId: number): Promise<string | null> {
 export async function discardWorkflow(folderId: number): Promise<boolean> {
   const workflow = editable(folderId)
   if (!workflow) return false
+  const epoch = sessionEpoch
   const confirmed = await confirmAction({
     title: `Discard “${workflow.name}”?`,
     message: 'The draft and its folder are deleted. This cannot be undone.',
     confirmLabel: 'Discard',
     danger: true,
   })
-  if (!confirmed) return false
+  if (!confirmed || epoch !== sessionEpoch || !editable(folderId)) return false
 
   // A save landing after the delete would only fail.
   const id = workflow.id
@@ -757,18 +791,23 @@ export async function discardWorkflow(folderId: number): Promise<boolean> {
   saveTimers.delete(id)
   unsaved.delete(id)
   await saves.get(id)
+  if (epoch !== sessionEpoch || !editable(folderId)) return false
 
   const folders = useFolderActions()
   const state = activityFor(id)
   state.error = null
   const folder = useItemsStore().findFolder(folderId)
-  if (!folder || !(await folders.deleteItems([folder])).length) {
+  const deleted = folder ? await folders.deleteItems([folder]) : []
+  if (epoch !== sessionEpoch) return false
+  if (!folder || !deleted.length) {
     state.error = folders.error.value ?? 'Could not discard the workflow.'
     folders.clearError()
     return false
   }
   useWorkflowsStore().forgetWorkflow(folderId)
   forget([workflowKeys.workflow(id)])
+  dismissEditsFor(folderId)
+  runs.delete(id)
   activity.delete(id)
   return true
 }
@@ -799,7 +838,7 @@ export function clearWorkflowState(): void {
 export function followWorkflow(folderId: number): void {
   const workflowsStore = useWorkflowsStore()
   const workflow = workflowsStore.workflowOf(folderId)
-  if (!workflow || followed.has(workflow.id)) return
+  if (!workflow || !isActive(workflow) || followed.has(workflow.id)) return
   const id = workflow.id
   const epoch = sessionEpoch
   followed.add(id)
@@ -813,8 +852,12 @@ export function followWorkflow(folderId: number): void {
     }
     loadWorkflow(folderId, id, { force: true, background: true }).then(
       () => {
-        if (epoch === sessionEpoch && followed.has(id)) {
+        if (epoch !== sessionEpoch) return
+        const updated = workflowsStore.workflowOf(folderId)
+        if (followed.has(id) && updated && isActive(updated)) {
           followTimers.set(id, setTimeout(tick, POLL_MS))
+        } else {
+          followed.delete(id)
         }
       },
       () => followed.delete(id),

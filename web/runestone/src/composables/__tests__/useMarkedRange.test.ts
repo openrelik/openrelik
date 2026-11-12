@@ -210,4 +210,61 @@ describe('useMarkedRange', () => {
     writeText.mockRejectedValueOnce(new Error('Permission denied'))
     expect(await range.copyLink()).toBe('Could not copy the link')
   })
+
+  it('clears ownHash on external clear or external change so revisiting the same mark lands', async () => {
+    const { model, range, land } = mountMarkedRange(null, 'line')
+
+    // Self-set mark does not call land().
+    range.onGutterDown(makeGutterEvent().event, { from: 10, to: 20 })
+    await Promise.resolve()
+    expect(land).not.toHaveBeenCalled()
+    expect(range.anchor.value).toEqual({ from: 10, to: 20 })
+
+    // External clear resets both anchor and ownHash.
+    model.value = null
+    await Promise.resolve()
+    expect(range.anchor.value).toBeNull()
+
+    // Setting the exact same range externally afterwards must call land().
+    model.value = { from: 10, to: 20 }
+    await Promise.resolve()
+    expect(land).toHaveBeenCalledWith({ from: 10, to: 20 })
+
+    // Returning externally (e.g., browser Back) to a previously self-set mark also calls land().
+    range.set({ from: 30, to: 35 })
+    await Promise.resolve()
+    model.value = { from: 50, to: 55 }
+    await Promise.resolve()
+    model.value = { from: 30, to: 35 }
+    await Promise.resolve()
+    expect(land).toHaveBeenLastCalledWith({ from: 30, to: 35 })
+  })
+
+  it('ignores non-numeric drag targets, stops on pointercancel, and ignores shift-click without anchor', () => {
+    const { model, range } = mountMarkedRange(null, 'line', false)
+
+    // Shift-click with no existing mark uses the clicked span as anchor.
+    range.onGutterDown(makeGutterEvent({ shiftKey: true }).event, { from: 8, to: 8 })
+    expect(model.value).toEqual({ from: 8, to: 8 })
+
+    const badRow = document.createElement('div')
+    badRow.dataset.markFrom = 'NaN'
+    badRow.dataset.markTo = '12'
+    const origElementFromPoint = document.elementFromPoint
+    const fromPointSpy = vi.fn<(x: number, y: number) => Element | null>(() => badRow)
+    document.elementFromPoint = fromPointSpy
+
+    try {
+      window.dispatchEvent(new PointerEvent('pointermove', { clientY: 100 }))
+      expect(model.value).toEqual({ from: 8, to: 8 })
+
+      // Re-moving over same span leaves model unchanged; pointercancel ends drag.
+      window.dispatchEvent(new PointerEvent('pointercancel'))
+      fromPointSpy.mockClear()
+      window.dispatchEvent(new PointerEvent('pointermove', { clientY: 120 }))
+      expect(fromPointSpy).not.toHaveBeenCalled()
+    } finally {
+      document.elementFromPoint = origElementFromPoint
+    }
+  })
 })

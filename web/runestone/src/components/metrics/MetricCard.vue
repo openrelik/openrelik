@@ -1,9 +1,27 @@
+<script lang="ts">
+import { markRaw, reactive } from 'vue'
+import type { MetricSeries } from '@/api'
+
+const MAX_SERIES_CACHE = 100
+const seriesByKey = reactive(new Map<string, MetricSeries[]>())
+
+function cacheSeries(cacheKey: string, data: MetricSeries[]): void {
+  if (seriesByKey.has(cacheKey)) seriesByKey.delete(cacheKey)
+  seriesByKey.set(cacheKey, markRaw(data))
+  while (seriesByKey.size > MAX_SERIES_CACHE) {
+    const oldest = seriesByKey.keys().next().value
+    if (oldest === undefined) break
+    seriesByKey.delete(oldest)
+  }
+}
+</script>
+
 <script setup lang="ts">
-import { computed, onUnmounted, shallowRef, watch } from 'vue'
+import { computed, onUnmounted, watch } from 'vue'
 
 import LineChart from '@/components/charts/LineChart.vue'
 import LoadState from '@/components/base/LoadState.vue'
-import { api, type MetricSeries } from '@/api'
+import { api } from '@/api'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { ensure, queryState } from '@/composables/useQueryCache'
 import { workerShortName } from '@/utils/worker'
@@ -26,17 +44,20 @@ const props = defineProps<{
   background?: boolean
 }>()
 
-const series = shallowRef<MetricSeries[]>([])
 const key = computed(
   () =>
     `metrics:${props.metric}:${props.aggregate}:${props.range}:${props.step}:${props.resolution}`,
 )
 const state = computed(() => queryState(key.value))
+const series = computed<MetricSeries[]>(() =>
+  state.value.status === 'success' ? (seriesByKey.get(key.value) ?? []) : [],
+)
 let controller: AbortController | undefined
 
-function load(force: boolean) {
+function load(force: boolean, background = false) {
   controller?.abort()
   controller = new AbortController()
+  const requestKey = key.value
   const query = {
     metric: props.metric,
     aggregate: props.aggregate,
@@ -45,33 +66,30 @@ function load(force: boolean) {
     resolution: props.resolution,
   }
   ensure(
-    key.value,
+    requestKey,
     async (signal) => {
-      series.value = await api.metrics.tasks(query, { signal, background: props.background })
+      cacheSeries(requestKey, await api.metrics.tasks(query, { signal, background }))
     },
     { signal: controller.signal, force },
   ).catch(() => {})
 }
-watch(key, () => load(false), { immediate: true })
+watch(key, () => load(false, false), { immediate: true })
 watch(
   () => props.refresh,
-  () => load(true),
+  () => load(true, Boolean(props.background)),
 )
 onUnmounted(() => controller?.abort())
 // Back to the tab or online: read again if stale.
-useAutoRefresh(({ force }) => load(force))
+useAutoRefresh(({ force }) => load(force, !force))
 
 /** Something to draw: points, or a read that found none. */
-const loaded = computed(() => series.value.length > 0 || state.value.status === 'success')
+const loaded = computed(() => state.value.status === 'success')
 
 /** Queue names without the common prefix, as workers are named everywhere else. */
 const chartSeries = computed(() =>
   series.value.map((entry) => ({ name: workerShortName(entry.name), data: entry.data })),
 )
-const end = computed(() => {
-  void state.value.fetchedAt
-  return Date.now()
-})
+const end = computed(() => state.value.fetchedAt || Date.now())
 const start = computed(() => end.value - props.range * 1000)
 </script>
 
@@ -92,7 +110,7 @@ const start = computed(() => end.value - props.range * 1000)
     />
     <!-- loading and failures; a failed refresh warns under the chart still shown -->
     <div :class="{ 'flex h-[200px] items-center justify-center': !loaded }">
-      <LoadState :state="state" noun="metrics" :has-content="loaded" @retry="load(true)" />
+      <LoadState :state="state" noun="metrics" :has-content="loaded" @retry="load(true, false)" />
     </div>
   </section>
 </template>

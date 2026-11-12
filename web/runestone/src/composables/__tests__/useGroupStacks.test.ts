@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { foldable, STACK_MIN, stackable, useGroupStacks } from '@/composables/useGroupStacks'
+import {
+  clearGroupStacks,
+  foldable,
+  STACK_MIN,
+  stackable,
+  useGroupStacks,
+} from '@/composables/useGroupStacks'
 import type { Task, TaskGroup } from '@/types/workflow'
 
 function makeTask(id: string, groups: TaskGroup[] = []): Task {
@@ -91,5 +97,19 @@ describe('useGroupStacks', () => {
 
     stacks.setInputsStacked(workflowId, true)
     expect(stacks.inputsStacked(workflowId)).toBe(true)
+  })
+
+  it('clears all group and input stack preferences on sign-out', () => {
+    const stacks = useGroupStacks()
+    const pairGroup: TaskGroup = { id: 'u-clear', tasks: [makeTask('c1'), makeTask('c2')] }
+    stacks.closeStack(pairGroup.id)
+    stacks.setInputsStacked(999, false)
+
+    expect(stacks.isStacked(pairGroup)).toBe(true)
+    expect(stacks.inputsStacked(999)).toBe(false)
+
+    clearGroupStacks()
+    expect(stacks.isStacked(pairGroup)).toBe(false)
+    expect(stacks.inputsStacked(999)).toBe(true)
   })
 })

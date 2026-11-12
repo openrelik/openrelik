@@ -13,7 +13,7 @@ export function useWorkflowDialog() {
   const modalStore = useModalStore()
 
   const workflowTarget = computed({
-    get: () => target.value,
+    get: () => (modalStore.isModalOpen('workflow') ? target.value : null),
     set: (val: WorkflowTarget | null) => {
       target.value = val
       if (val) {

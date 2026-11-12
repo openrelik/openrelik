@@ -10,6 +10,7 @@ import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { createWorkflow } from '@/composables/useWorkflow'
 import { closeWorkflowDialog, useWorkflowDialog } from '@/composables/useWorkflowDialog'
 import {
+  clearTemplateError,
   deleteTemplate,
   loadTemplates,
   ownsTemplate,
@@ -80,6 +81,7 @@ function startRename(template: WorkflowTemplate) {
 /** Back to the filter, so the keys move and choose again. */
 async function refocus() {
   await nextTick()
+  if (renamingId.value !== null || !workflowTarget.value) return
   filterInput.value?.focus()
 }
 
@@ -122,7 +124,19 @@ watch(query, () => {
   selectedIndex.value = 0
 })
 
+watch(totalItems, (count) => {
+  if (selectedIndex.value >= count) selectedIndex.value = Math.max(0, count - 1)
+})
+
+let openEpoch = 0
+
 watch(workflowTarget, (target) => {
+  openEpoch++
+  clearTemplateError()
+  renamingId.value = null
+  renameText.value = ''
+  creating.value = false
+  creatingFrom.value = null
   if (target) {
     query.value = ''
     selectedIndex.value = 0
@@ -138,6 +152,7 @@ function close() {
 async function select(templateId?: number) {
   if (!workflowTarget.value || creating.value) return
   const { files, folderId } = workflowTarget.value
+  const epoch = openEpoch
   creating.value = true
   creatingFrom.value = templateId ?? null
   error.value = null
@@ -147,13 +162,17 @@ async function select(templateId?: number) {
       files.map((file) => file.id),
       templateId,
     )
+    if (epoch !== openEpoch) return
     close()
     router.push(`/folder/${workflow.folderId}`)
   } catch (err: unknown) {
+    if (epoch !== openEpoch) return
     error.value = `Could not create the workflow: ${errorMessage(err, 'request failed')}`
   } finally {
-    creating.value = false
-    creatingFrom.value = null
+    if (epoch === openEpoch) {
+      creating.value = false
+      creatingFrom.value = null
+    }
   }
 }
 

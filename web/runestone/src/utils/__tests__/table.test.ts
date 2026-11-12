@@ -337,5 +337,36 @@ describe('inferType, sortKey, and compareKeys', () => {
       const mixed: (number | null)[] = [null, 20, null, 3, -1]
       expect(mixed.sort(compareKeys)).toEqual([-1, 3, 20, null, null])
     })
+
+    it('treats whitespace-only strings and non-finite numbers as null in number columns', () => {
+      expect(sortKey('   ', 'number')).toBeNull()
+      expect(sortKey('Infinity', 'number')).toBeNull()
+      expect(sortKey('-Infinity', 'number')).toBeNull()
+      expect(sortKey('not-a-number', 'number')).toBeNull()
+    })
+  })
+
+  describe('JSONL prototype safety and columns snapshot', () => {
+    it('ignores inherited Object.prototype keys in jsonlCells and returns a copy of columns()', () => {
+      const parser = jsonlParser()
+      const rows = [
+        ...parser.push('{"constructor":"ok","toString":"str","a":1}\n{"a":2}\n'),
+        ...parser.end(),
+      ]
+      const cols = parser.columns()
+      expect(cols).toEqual(['constructor', 'toString', 'a'])
+
+      // Mutating the returned array must not corrupt the parser's internal columns list.
+      cols.push('mutated')
+      expect(parser.columns()).toEqual(['constructor', 'toString', 'a'])
+
+      // Row 2 omits 'constructor' and 'toString'; they must resolve to '' rather than Object.prototype functions.
+      expect(jsonlCells(rows[1]!, parser.columns())).toEqual(['', '', '2'])
+      // Unparsed/error rows without record place raw text in column 0.
+      expect(jsonlCells({ cells: [], raw: 'bad json', error: 'err' }, ['c1', 'c2'])).toEqual([
+        'bad json',
+        '',
+      ])
+    })
   })
 })

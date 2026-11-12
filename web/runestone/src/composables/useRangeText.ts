@@ -44,12 +44,12 @@ export interface RangeText {
   stop: () => void
 }
 
-function encodingOf(bytes: Uint8Array): string {
+function encodingOf(bytes: Uint8Array, last: boolean): string {
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le'
   if (bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be'
   try {
-    // Streaming: a character cut off at the chunk's end is not an error.
-    new TextDecoder('utf-8', { fatal: true }).decode(bytes, { stream: true })
+    // Streaming: a character cut off at the chunk's end is not an error unless EOF.
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes, { stream: !last })
     return 'utf-8'
   } catch {
     return 'windows-1252'
@@ -96,13 +96,15 @@ export function createRangeText(
         const end = Math.min(file.size, start + CHUNK_SIZE) - 1
         const bytes = await api.files.readRange(file.id, start, end, { signal })
         if (signal.aborted) return
-        decoder ??= new TextDecoder(encodingOf(bytes))
         const last = end >= file.size - 1
+        decoder ??= new TextDecoder(encodingOf(bytes, last))
         onText(decoder.decode(bytes, { stream: !last }), last)
         bytesRead.value = end + 1
         // Let the page draw between chunks.
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        if (signal.aborted) return
+        if (!last) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          if (signal.aborted) return
+        }
       }
       until = null
       done.value = true

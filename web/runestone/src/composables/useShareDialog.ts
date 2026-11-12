@@ -27,6 +27,8 @@ import {
   type GroupRecord,
 } from '@/api'
 import type { ShareRole } from '@/api/endpoints/folders'
+import { folderKeys } from '@/composables/useFolderLoader'
+import { ensureRole, forgetRoles } from '@/composables/useFolderPermissions'
 import { ensure, invalidate, queryState, type QueryState } from '@/composables/useQueryCache'
 import type { Item } from '@/types/item'
 import { useModalStore } from '@/stores/modals'
@@ -130,8 +132,19 @@ export function loadGroups(options: { force?: boolean } = {}): Promise<void> {
   ).catch(() => {})
 }
 
+const MAX_USER_RESULTS = 100
 const usersKey = (query: string) => `directory:users:${query.toLowerCase()}`
 const userResults = reactive(new Map<string, DirectoryUser[]>())
+
+function cacheUserResults(key: string, results: DirectoryUser[]): void {
+  if (userResults.has(key)) userResults.delete(key)
+  userResults.set(key, results)
+  while (userResults.size > MAX_USER_RESULTS) {
+    const oldest = userResults.keys().next().value
+    if (oldest === undefined) break
+    userResults.delete(oldest)
+  }
+}
 
 /** Searches users unless the same query is fresh; `signal` cancels a search typed past. */
 export function searchUsers(query: string, signal?: AbortSignal): Promise<void> {
@@ -140,7 +153,7 @@ export function searchUsers(query: string, signal?: AbortSignal): Promise<void> 
   return ensure(
     usersKey(q),
     async (fetchSignal) => {
-      userResults.set(q.toLowerCase(), await api.directory.searchUsers(q, { signal: fetchSignal }))
+      cacheUserResults(q.toLowerCase(), await api.directory.searchUsers(q, { signal: fetchSignal }))
     },
     { signal },
   ).catch(() => {})
@@ -197,7 +210,9 @@ export async function saveAccess(
     return errorMessage(err, 'request failed')
   } finally {
     invalidate(accessKey(folderId))
-    await loadAccess(folderId, { force: true })
+    invalidate(folderKeys.role(folderId))
+    forgetRoles([folderId])
+    await Promise.all([loadAccess(folderId, { force: true }), ensureRole(folderId).catch(() => {})])
   }
 }
 

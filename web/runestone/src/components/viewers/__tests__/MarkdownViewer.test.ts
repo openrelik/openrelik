@@ -241,4 +241,70 @@ describe('MarkdownViewer', () => {
     await flushPromises()
     expect(wrapper.emitted('update:mark')?.at(-1)).toEqual([{ from: 3, to: 5 }])
   })
+
+  it('offers Show source instead of empty state when line 1 alone exceeds RENDER_MAX, and clears hover when fileId changes', async () => {
+    const hugeSingleLine = 'x'.repeat(2_050_000)
+    const size107 = mockFileContent(hugeSingleLine)
+
+    const wrapper = mountViewer({ fileId: 107, size: size107 }, true)
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(50)
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Nothing to render: the file is empty.')
+    const status = wrapper.get('[role="status"]')
+    expect(status.text()).toContain('line 1 exceeds')
+    await status.get('button').trigger('click')
+    expect(wrapper.emitted('source')?.[0]).toEqual([1])
+
+    // Switch to a normal file, hover a block, then switch fileId and confirm hover clears
+    const size108 = mockFileContent('# Alpha\n\nParagraph three.')
+    await wrapper.setProps({ fileId: 108, size: size108 })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+
+    await wrapper.get('[data-line="3"]').trigger('pointerover')
+    expect(wrapper.findAll('button').some((b) => b.text().includes('line 3'))).toBe(true)
+
+    const size109 = mockFileContent('# Beta')
+    await wrapper.setProps({ fileId: 109, size: size109 })
+    await flushPromises()
+    expect(wrapper.findAll('button').some((b) => b.text().includes('line 3'))).toBe(false)
+  })
+
+  it('finishes landing on a mark beyond RENDER_MAX once streaming ends without rendered.lines changing', async () => {
+    const chunk1 = encoder.encode(`${'# Head\n\nBody\n'.repeat(100)}`)
+    const chunk2 = encoder.encode('x'.repeat(1_050_000))
+    const chunk3 = encoder.encode('y'.repeat(1_050_000))
+    const total = chunk1.length + chunk2.length + chunk3.length
+    const full = new Uint8Array(total)
+    full.set(chunk1, 0)
+    full.set(chunk2, chunk1.length)
+    full.set(chunk3, chunk1.length + chunk2.length)
+
+    vi.mocked(api.files.readRange).mockImplementation(async (_id, start, end) =>
+      full.slice(start, end + 1),
+    )
+
+    const wrapper = mountViewer(
+      { fileId: 110, size: total, mark: { from: 99999, to: 99999 } },
+      true,
+    )
+    const docEl = wrapper.get('[role="document"]').element as HTMLElement
+    vi.spyOn(docEl, 'clientHeight', 'get').mockReturnValue(300)
+    const blockSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.hasAttribute('data-end')) return new DOMRect(0, 600, 400, 20)
+        return new DOMRect(0, 0, 400, 300)
+      })
+
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(100)
+    await flushPromises()
+
+    expect(docEl.scrollTop).toBeGreaterThan(0)
+    blockSpy.mockRestore()
+  })
 })

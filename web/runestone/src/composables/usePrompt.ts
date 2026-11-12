@@ -1,4 +1,12 @@
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import {
+  type ComputedRef,
+  type Ref,
+  type WritableComputedRef,
+  computed,
+  onScopeDispose,
+  ref,
+  watch,
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { refreshAll } from '@/composables/useAutoRefresh'
@@ -16,30 +24,68 @@ import { normalizeCaseRef } from '@/utils/caseRef'
 import { itemKey } from '@/utils/item'
 import { matchPath } from '@/utils/match'
 
-export interface PromptResult {
-  item: Item | null
-  /** What Tab puts on the prompt: the full path. */
-  path: string
-  /** What the line shows: the name alone for a listing, the path for a search. */
-  label: string
-  hits: number[]
+export type PromptResult =
   /** `..`: up a level. */
-  up?: boolean
+  | { kind: 'up'; path: '..'; label: '..'; hits: number[] }
   /** `.`: the folder you are in — from a file page, back to its listing. */
-  here?: boolean
+  | { kind: 'here'; path: '.'; label: '.'; hits: number[] }
   /** `cd` or `cd ~`: home / root. */
-  home?: boolean
+  | { kind: 'home'; path: '~'; label: '~ (home)'; hits: number[] }
   /** `cd -`: previous directory. */
-  prev?: boolean
+  | { kind: 'prev'; path: string; label: string; hits: number[] }
   /** `mkdir`: create new folder. */
-  mkdir?: boolean
-  folderName?: string
+  | { kind: 'mkdir'; path: string; label: string; hits: number[]; folderName: string | null }
   /** `rm`: delete `item`, a folder in the current one (after confirmation). */
-  rm?: boolean
-  /** Found by the server search, not among the loaded folders: its path is unknown. */
-  remote?: boolean
-  /** The folder of the case the line names: an exact match on its reference. */
-  caseRef?: string
+  | { kind: 'rm'; item: Item; path: string; label: string; hits: number[] }
+  /** An item in the local listing, server search, or case reference lookup. */
+  | {
+      kind: 'item'
+      item: Item
+      /** What Tab puts on the prompt: the full path. */
+      path: string
+      /** What the line shows: the name alone for a listing, the path for a search. */
+      label: string
+      hits: number[]
+      /** Found by the server search, not among the loaded folders: its path is unknown. */
+      remote?: boolean
+      /** The folder of the case the line names: an exact match on its reference. */
+      caseRef?: string
+    }
+
+export interface UsePromptReturn {
+  promptOpen: WritableComputedRef<boolean>
+  registerPrompt: (focus: () => void) => void
+  open: () => void
+  close: () => void
+  line: Ref<string>
+  index: Ref<number>
+  query: ComputedRef<string>
+  isRm: ComputedRef<boolean>
+  cwd: ComputedRef<Item | undefined>
+  cwdPath: ComputedRef<string>
+  scopePath: ComputedRef<string>
+  results: ComputedRef<PromptResult[]>
+  /** The server search behind a top-level search; null when none runs. */
+  serverSearch: ComputedRef<{
+    searching: boolean
+    error: string | null
+    total: number | null
+  } | null>
+  go: (result: PromptResult | undefined) => void
+  handleKey: (event: KeyboardEvent) => boolean
+}
+
+function stripCommandArg(raw: string, command: 'mkdir' | 'rm'): string {
+  const prefix = command === 'mkdir' ? /^\s*mkdir\s*/i : /^\s*rm\s*/i
+  return raw
+    .replace(prefix, '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\/+$/, '')
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected prompt result: ${JSON.stringify(value)}`)
 }
 
 /** Paths are shown and matched from the root of the whole instance. */
@@ -51,12 +97,12 @@ export const pathOf = (item: Item) =>
     .join('/') +
   (item.kind === 'folder' ? '/' : '')
 
-let trackingInitialized = false
+const trackedRouters = new WeakSet<object>()
 export const previousPath = ref<string | null>(null)
 
 export function labelForPath(pathStr: string | null): string {
   const itemsStore = useItemsStore()
-  if (!pathStr || pathStr === '/') return '~ (home)'
+  if (!pathStr || pathStr === '/' || pathStr.startsWith('/?')) return '~ (home)'
   const match = pathStr.match(/^\/folder\/(\d+)(?:\/file\/(\d+))?/)
   if (match) {
     const fileId = match[2] ? Number(match[2]) : null
@@ -80,7 +126,7 @@ export function clearPromptState(): void {
  * Terminal prompt navigation logic: fuzzy path matching,
  * directory traversal (`cd`), autocompletion, and modal state.
  */
-export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
+export function usePrompt(onGo: (result: PromptResult) => void = () => {}): UsePromptReturn {
   const itemsStore = useItemsStore()
   const rootPagesStore = useRootPagesStore()
   const modalStore = useModalStore()
@@ -91,8 +137,8 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   /** The top level is paginated: listing it means the pages loaded so far. */
   const pageSize = () => settingsStore.settings.explorer.pageSize
 
-  if (!trackingInitialized) {
-    trackingInitialized = true
+  if (!trackedRouters.has(router)) {
+    trackedRouters.add(router)
     router.afterEach((to, from) => {
       if (to.name === 'login') {
         previousPath.value = null
@@ -122,6 +168,12 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     return undefined
   })
   const cwdPath = computed(() => (cwd.value ? pathOf(cwd.value).replace(/\/$/, '') : '/'))
+  const fileFolderId = computed(() => {
+    if (route.name !== 'file') return undefined
+    if (cwd.value) return cwd.value.id
+    const parsed = Number(route.params.folderId)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+  })
 
   const query = computed(() => line.value.replace(/^cd\s+/, '').trim())
 
@@ -159,6 +211,8 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     const base = resolved.value.base
     return base ? pathOf(base).replace(/\/$/, '') : '/'
   })
+
+  const isRm = computed(() => /^rm(\s|$)/.test(line.value.trim().toLowerCase()))
 
   /** The line is a command or a jump, not a search. */
   const isCommand = computed(() => {
@@ -218,7 +272,14 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   const caseResult = computed<PromptResult | null>(() => {
     const item = caseFolderId.value === null ? undefined : itemsStore.findFolder(caseFolderId.value)
     if (!item?.caseRef) return null
-    return { item, path: pathOf(item), label: pathOf(item), hits: [], caseRef: item.caseRef }
+    return {
+      kind: 'item',
+      item,
+      path: pathOf(item),
+      label: pathOf(item),
+      hits: [],
+      caseRef: item.caseRef,
+    }
   })
 
   const results = computed<PromptResult[]>(() => {
@@ -231,13 +292,12 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     if (trimmed === 'cd -' || trimmed === 'cd-' || q === '-') {
       return [
         {
-          item: null,
+          kind: 'prev',
           path: previousPath.value ?? '/',
           label: previousPath.value
             ? `- (${labelForPath(previousPath.value)})`
             : '- (OLDPWD not set)',
           hits: [0],
-          prev: true,
         },
       ]
     }
@@ -246,40 +306,34 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     if (trimmed === 'cd' || trimmed === 'cd ~' || q === '~') {
       return [
         {
-          item: null,
+          kind: 'home',
           path: '~',
           label: '~ (home)',
           hits: [0],
-          home: true,
         },
       ]
     }
 
     // 3. "mkdir" command
-    if (trimmed.startsWith('mkdir')) {
-      const folderName = raw
-        .replace(/^mkdir\s*/i, '')
-        .trim()
-        .replace(/^["']|["']$/g, '')
-        .replace(/\/+$/, '')
+    if (/^mkdir(\s|$)/.test(trimmed)) {
+      const folderName = stripCommandArg(raw, 'mkdir')
       if (!folderName) {
         return [
           {
-            item: null,
+            kind: 'mkdir',
             path: 'mkdir ',
             label: 'mkdir: enter folder name',
             hits: [0, 1, 2, 3, 4],
-            mkdir: true,
+            folderName: null,
           },
         ]
       }
       return [
         {
-          item: null,
+          kind: 'mkdir',
           path: folderName,
           label: `mkdir ${folderName}/`,
           hits: [0, 1, 2, 3, 4],
-          mkdir: true,
           folderName,
         },
       ]
@@ -287,11 +341,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
 
     // 4. "rm" command: pick a folder in the current one
     if (/^rm(\s|$)/.test(trimmed)) {
-      const target = raw
-        .replace(/^\s*rm\s*/i, '')
-        .trim()
-        .replace(/^["']|["']$/g, '')
-        .replace(/\/+$/, '')
+      const target = stripCommandArg(raw, 'rm')
       const offset = 'rm '.length
       return (
         cwd.value
@@ -307,12 +357,12 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
               Number(a.item.name.toLowerCase() === target.toLowerCase()) ||
             b.match!.score - a.match!.score,
         )
-        .map(({ item, match }) => ({
+        .map(({ item, match }): PromptResult => ({
+          kind: 'rm',
           item,
           path: `rm ${item.name}`,
           label: `rm ${item.name}/`,
           hits: match!.hits.map((hit) => hit + offset),
-          rm: true,
         }))
     }
 
@@ -321,15 +371,21 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
         ? itemsStore.childrenOf(cwd.value.id)
         : rootPagesStore.rootListedItems(pageSize())
       const up: PromptResult[] = cwd.value
-        ? [{ item: null, path: '..', label: '..', hits: [], up: true }]
+        ? [{ kind: 'up', path: '..', label: '..', hits: [] }]
         : []
       return [
         ...up,
-        ...here.map((item) => ({ item, path: name(item), label: name(item), hits: [] })),
+        ...here.map((item): PromptResult => ({
+          kind: 'item',
+          item,
+          path: name(item),
+          label: name(item),
+          hits: [],
+        })),
       ]
     }
-    if (q === '..') return [{ item: null, path: '..', label: '..', hits: [0, 1], up: true }]
-    if (q === '.') return [{ item: null, path: '.', label: '.', hits: [0], here: true }]
+    if (q === '..') return [{ kind: 'up', path: '..', label: '..', hits: [0, 1] }]
+    if (q === '.') return [{ kind: 'here', path: '.', label: '.', hits: [0] }]
 
     const { base, rest, prefix } = resolved.value
     // Loaded folders first: they know their path. From the top, the server
@@ -342,6 +398,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
         const match = rest ? matchPath(rest, relative) : { score: -relative.length, hits: [] }
         return (
           match && {
+            kind: 'item' as const,
             item,
             path: prefix + relative,
             label: prefix + relative,
@@ -355,10 +412,11 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
 
     const seen = new Set(local.map((result) => itemKey(result.item)))
     const needle = rest.toLowerCase()
-    const remote: PromptResult[] = serverTerm.value
+    const remote = serverTerm.value
       ? serverSearch.items.value
           .filter((item) => !seen.has(itemKey(item)) && item.name.toLowerCase().includes(needle))
           .map((item) => ({
+            kind: 'item' as const,
             item,
             // Tab completes to the name: searching it again finds the folder.
             path: prefix + item.name,
@@ -368,149 +426,126 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
           }))
       : []
     const byCase = caseResult.value
-    const caseKey = byCase?.item && itemKey(byCase.item)
-    const matches = [...local, ...remote].filter(
-      (result) => !result.item || itemKey(result.item) !== caseKey,
+    const caseKey = byCase?.kind === 'item' ? itemKey(byCase.item) : undefined
+    const matches: PromptResult[] = [...local, ...remote].filter(
+      (result) => itemKey(result.item) !== caseKey,
     )
     return (byCase ? [byCase, ...matches] : matches).slice(0, 50)
   })
 
-  watch(results, () => (index.value = 0))
+  watch(results, () => (index.value = 0), { flush: 'sync' })
 
   /** Creates a folder in the current one and stays put, like a shell's mkdir.
    *  The placeholder row shows meanwhile and the new folder takes its place;
    *  then the listing is re-read so it matches the server. Failures show in
    *  the explorer. */
   async function mkdir(folderName: string) {
-    const parent = cwd.value?.id ?? null
+    const parent = cwd.value?.id ?? fileFolderId.value ?? null
     const created = await createFolder(parent, folderName)
     if (!created) return
     invalidate(parent === null ? folderKeys.rootPrefix : folderKeys.subfolders(parent))
     refreshAll()
   }
 
-  function go(result: PromptResult | undefined) {
-    if (!result) return
-    line.value = ''
-    onGo(result)
-    if (result.mkdir && result.folderName) {
-      mkdir(result.folderName)
-      return
+  function goToFileFolder(): void {
+    const folderId = fileFolderId.value
+    if (route.name === 'file' && folderId !== undefined) {
+      router.push({
+        path: `/folder/${folderId}`,
+        query: { focus: String(route.params.fileId) },
+      })
     }
-    if (result.rm) {
-      // Like the Delete key: confirm, then delete; the listing updates itself.
-      if (result.item) confirmDeleteItems([result.item])
-      return
-    }
-    if (result.home) {
-      if (route.path !== '/') router.push('/')
-      return
-    }
-    if (result.prev) {
-      if (previousPath.value && route.fullPath !== previousPath.value) {
-        router.push(previousPath.value)
-      }
-      return
-    }
-    // From a file, `..` and `.` are its folder: back to the listing, with the
-    // file under the cursor. From a folder, `..` is its parent.
-    if (result.here || (result.up && route.name === 'file')) {
-      if (route.name === 'file' && cwd.value) {
-        router.push({
-          path: `/folder/${cwd.value.id}`,
-          query: { focus: String(route.params.fileId) },
-        })
-      }
-      return
-    }
-    if (result.up) {
-      const parent = cwd.value?.parent
-      router.push(parent === null || parent === undefined ? '/' : `/folder/${parent}`)
-      return
-    }
-    const item = result.item!
-    router.push(
-      item.kind === 'folder' ? `/folder/${item.id}` : `/folder/${item.parent}/file/${item.id}`,
-    )
   }
 
-  function complete() {
-    const result = results.value[index.value]
-    if (result && !result.up) {
-      if (result.home) {
-        line.value = 'cd ~'
-      } else if (result.prev) {
-        line.value = 'cd -'
-      } else if (result.mkdir && result.folderName) {
-        line.value = `mkdir ${result.folderName}`
-      } else if (result.rm && result.item) {
-        line.value = `rm ${result.item.name}`
-      } else {
-        line.value = result.path
+  function go(result: PromptResult | undefined): void {
+    if (!result) return
+    if (result.kind === 'mkdir' && !result.folderName) {
+      line.value = 'mkdir '
+      return
+    }
+    line.value = ''
+    onGo(result)
+    switch (result.kind) {
+      case 'mkdir':
+        if (result.folderName) mkdir(result.folderName)
+        return
+      case 'rm':
+        // Like the Delete key: confirm, then delete; the listing updates itself.
+        confirmDeleteItems([result.item])
+        return
+      case 'home':
+        if (route.path !== '/') router.push('/')
+        return
+      case 'prev':
+        if (previousPath.value && route.fullPath !== previousPath.value) {
+          router.push(previousPath.value)
+        }
+        return
+      case 'here':
+        goToFileFolder()
+        return
+      case 'up': {
+        // From a file, `..` is its folder: back to the listing, with the
+        // file under the cursor. From a folder, `..` is its parent.
+        if (route.name === 'file') {
+          goToFileFolder()
+          return
+        }
+        const parent = cwd.value?.parent
+        router.push(parent === null || parent === undefined ? '/' : `/folder/${parent}`)
+        return
       }
+      case 'item': {
+        const item = result.item
+        router.push(
+          item.kind === 'folder' ? `/folder/${item.id}` : `/folder/${item.parent}/file/${item.id}`,
+        )
+        return
+      }
+      default:
+        assertNever(result)
+    }
+  }
+
+  function complete(): void {
+    const result = results.value[index.value]
+    if (!result) return
+    switch (result.kind) {
+      case 'up':
+        return
+      case 'home':
+        line.value = 'cd ~'
+        return
+      case 'prev':
+        line.value = 'cd -'
+        return
+      case 'mkdir':
+        line.value = result.folderName ? `mkdir ${result.folderName}` : result.path
+        return
+      case 'rm':
+        line.value = `rm ${result.item.name}`
+        return
+      case 'here':
+      case 'item':
+        line.value = result.path
+        return
+      default:
+        assertNever(result)
     }
   }
 
   /** The prompt's own keys. Returns whether it used the key; Esc is the
    *  caller's, since closing means something different in each place. */
   function handleKey(event: KeyboardEvent): boolean {
+    if (event.isComposing) return false
     const last = results.value.length - 1
     const move = (to: number) => (index.value = Math.max(0, Math.min(last, to)))
     const ctrl = event.ctrlKey && !event.metaKey
     if (event.key === 'ArrowDown' || (ctrl && event.key === 'n')) move(index.value + 1)
     else if (event.key === 'ArrowUp' || (ctrl && event.key === 'p')) move(index.value - 1)
     else if (event.key === 'Tab') complete()
-    else if (event.key === 'Enter') {
-      const trimmed = line.value.trim().toLowerCase()
-      if (trimmed.startsWith('mkdir')) {
-        const folderName = line.value
-          .replace(/^mkdir\s*/i, '')
-          .trim()
-          .replace(/^["']|["']$/g, '')
-          .replace(/\/+$/, '')
-        if (folderName) {
-          line.value = ''
-          onGo({
-            item: null,
-            path: folderName,
-            label: `mkdir ${folderName}/`,
-            hits: [],
-            mkdir: true,
-            folderName,
-          })
-          mkdir(folderName)
-          event.preventDefault()
-          return true
-        }
-      }
-      if (trimmed === 'cd' || trimmed === 'cd ~' || query.value === '~') {
-        line.value = ''
-        const res: PromptResult = { item: null, path: '/', label: '~ (home)', hits: [], home: true }
-        onGo(res)
-        if (route.path !== '/') router.push('/')
-        event.preventDefault()
-        return true
-      }
-      if (trimmed === 'cd -' || trimmed === 'cd-' || query.value === '-') {
-        line.value = ''
-        const res: PromptResult = {
-          item: null,
-          path: previousPath.value ?? '/',
-          label: previousPath.value
-            ? `- (${labelForPath(previousPath.value)})`
-            : '- (OLDPWD not set)',
-          hits: [0],
-          prev: true,
-        }
-        onGo(res)
-        if (previousPath.value && route.fullPath !== previousPath.value) {
-          router.push(previousPath.value)
-        }
-        event.preventDefault()
-        return true
-      }
-      go(results.value[index.value])
-    } else if (ctrl && event.key === 'u') line.value = ''
+    else if (event.key === 'Enter') go(results.value[index.value])
+    else if (ctrl && event.key === 'u') line.value = ''
     else return false
     event.preventDefault()
     return true
@@ -524,6 +559,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     line,
     index,
     query,
+    isRm,
     cwd,
     cwdPath,
     scopePath,

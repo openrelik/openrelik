@@ -383,4 +383,45 @@ describe('RunDialog', () => {
     expect(workflowsStore.workflowOf(300)?.groups).toHaveLength(2)
     expect(runTarget.value).toBeNull()
   })
+
+  it('keeps cursor clamped on empty filter results and focuses select-only options container', async () => {
+    const selectOnlyWorker: RegisteredTask = {
+      task_name: 'openrelik-worker-triage.tasks.scan',
+      queue_name: 'triage',
+      task_config: [
+        {
+          name: 'mode',
+          label: 'Mode',
+          type: 'select',
+          items: ['fast', 'deep'],
+          value: 'fast',
+        },
+      ],
+      display_name: 'Triage Select',
+      description: 'Select only',
+    }
+    vi.mocked(api.taskqueue.registeredTasks).mockResolvedValueOnce([selectOnlyWorker])
+
+    const body = mountDialog()
+    openRun([SAMPLE_FILE], 10)
+    await nextTick()
+    await flushPromises()
+
+    const filterInput = body.get('input[aria-label="Filter workers"]')
+    await filterInput.setValue('nonexistent-worker')
+    await filterInput.trigger('keydown', { key: 'ArrowDown' })
+
+    // Clearing filter leaves the first option active instead of index -1.
+    await filterInput.setValue('')
+    const options = body.findAll('[role="option"]')
+    expect(options[0]!.attributes('aria-selected')).toBe('true')
+
+    // Opening options with Tab for a select-only worker lands focus on its tabindex="-1" options container.
+    await filterInput.trigger('keydown', { key: 'Tab' })
+    await nextTick()
+    const selectEl = body.get('select')
+    const optionsContainer = selectEl.element.closest('[tabindex="-1"]')
+    expect(optionsContainer).not.toBeNull()
+    expect(document.activeElement).toBe(optionsContainer)
+  })
 })
