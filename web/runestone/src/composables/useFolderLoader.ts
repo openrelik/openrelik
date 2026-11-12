@@ -214,6 +214,12 @@ export interface UseFolderLoaderReturn {
   folderState: (folderId: number) => QueryState
 }
 
+function pathLoaded(folderId: number): boolean {
+  const itemsStore = useItemsStore()
+  const item = itemsStore.findFolder(folderId)
+  return !!item && itemsStore.pathTo(item)[0]?.parent === null
+}
+
 export function useFolderLoader(): UseFolderLoaderReturn {
   // Leaving a location releases its requests; the cache aborts them unless
   // someone else still needs the result.
@@ -244,11 +250,14 @@ export function useFolderLoader(): UseFolderLoaderReturn {
               common,
             ),
             ensure(folderKeys.files(folderId), (signal) => fetchFiles(folderId, signal), common),
-            // Always load folder details - follows design system rule (30s freshness)
-            ensure(folderKeys.folder(folderId), (signal) => fetchFolder(folderId, signal), {
-              signal: controller.signal,
-              force: options.force,
-            }),
+            ...(options.force || !pathLoaded(folderId)
+              ? [
+                  ensure(folderKeys.folder(folderId), (signal) => fetchFolder(folderId, signal), {
+                    signal: controller.signal,
+                    force: options.force,
+                  }),
+                ]
+              : []),
           ]
 
     for (const result of await Promise.allSettled(requests)) {

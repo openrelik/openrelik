@@ -18,6 +18,7 @@ import {
 import { clearApiKeys } from '@/composables/useApiKeys'
 import { clearCaseLookups } from '@/composables/useCaseRef'
 import { clearConfirm } from '@/composables/useConfirm'
+import { clearDownloads } from '@/composables/useDownload'
 import { clearFolderActions } from '@/composables/useFolderActions'
 import { forgetRoles } from '@/composables/useFolderPermissions'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
@@ -91,6 +92,7 @@ export const useAuthStore = defineStore('auth', () => {
       forgetRoles()
       clearPromptState()
       // Bytes must not keep flowing on a session that just ended.
+      clearDownloads()
       clearUploads()
     }
   }

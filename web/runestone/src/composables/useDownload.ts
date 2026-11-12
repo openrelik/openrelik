@@ -31,13 +31,24 @@ export function downloadFile(fileId: number, name?: string): void {
 
 /** Between downloads started together: browsers drop clicks that come too close. */
 const STAGGER_MS = 300
+const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
+
+/** Cancels any staggered downloads that have not opened yet (sign-out). */
+export function clearDownloads(): void {
+  for (const timer of pendingTimers) clearTimeout(timer)
+  pendingTimers.clear()
+}
 
 /**
  * Starts a download for each file, one after the other. The browser may ask
  * once whether this site may download several files.
  */
 export function downloadFiles(files: { id: number; name: string }[]): void {
-  files.forEach((file, index) =>
-    setTimeout(() => downloadFile(file.id, file.name), index * STAGGER_MS),
-  )
+  for (const [index, file] of files.entries()) {
+    const timer = setTimeout(() => {
+      pendingTimers.delete(timer)
+      downloadFile(file.id, file.name)
+    }, index * STAGGER_MS)
+    pendingTimers.add(timer)
+  }
 }

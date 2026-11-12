@@ -214,4 +214,42 @@ describe('useFolderLoader', () => {
       expect.objectContaining({ background: true }),
     )
   })
+
+  it('skips GET /folders/{id} when the folder and its parent chain are already loaded unless forced', async () => {
+    useItemsStore().upsertItems([
+      {
+        id: 1,
+        parent: null,
+        kind: 'folder',
+        name: 'Root Case',
+        owner: 'alice',
+        modified: '2026-11-01T00:00:00Z',
+      },
+      {
+        id: 2,
+        parent: 1,
+        kind: 'folder',
+        name: 'Child Evidence',
+        owner: 'alice',
+        modified: '2026-11-01T00:00:00Z',
+      },
+    ])
+
+    vi.mocked(api.folders.getFolder).mockResolvedValue(makeDetail(2, makeDetail(1, null)))
+    vi.mocked(api.folders.getSubfolders).mockResolvedValue([])
+    vi.mocked(api.folders.getFolderFiles).mockResolvedValue([])
+
+    const scope = effectScope()
+    const loader = scope.run(() => useFolderLoader())!
+
+    await loader.load(2)
+    expect(api.folders.getSubfolders).toHaveBeenCalledTimes(1)
+    expect(api.folders.getFolderFiles).toHaveBeenCalledTimes(1)
+    expect(api.folders.getFolder).not.toHaveBeenCalled()
+
+    await loader.load(2, { force: true })
+    expect(api.folders.getFolder).toHaveBeenCalledTimes(1)
+
+    scope.stop()
+  })
 })

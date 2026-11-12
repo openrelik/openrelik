@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { downloadFile, downloadFiles } from '@/composables/useDownload'
+import { clearDownloads, downloadFile, downloadFiles } from '@/composables/useDownload'
 import { api } from '@/api'
 
 describe('useDownload', () => {
@@ -32,6 +32,7 @@ describe('useDownload', () => {
   })
 
   afterEach(() => {
+    clearDownloads()
     vi.useRealTimers()
     document.body.innerHTML = ''
   })
@@ -80,5 +81,20 @@ describe('useDownload', () => {
 
     vi.advanceTimersByTime(300)
     expect(clicked.map((entry) => entry.download)).toEqual(['a.log', 'b.log', 'c.log'])
+  })
+
+  it('cancels queued staggered downloads on clearDownloads', () => {
+    downloadFiles([
+      { id: 1, name: 'a.log' },
+      { id: 2, name: 'b.log' },
+      { id: 3, name: 'c.log' },
+    ])
+
+    vi.advanceTimersByTime(0)
+    expect(clicked.map((entry) => entry.download)).toEqual(['a.log'])
+
+    clearDownloads()
+    vi.advanceTimersByTime(1000)
+    expect(clicked.map((entry) => entry.download)).toEqual(['a.log'])
   })
 })
