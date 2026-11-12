@@ -83,8 +83,12 @@ const runs = new Map<number, number>()
 let sessionEpoch = 0
 
 function activityFor(workflowId: number): WorkflowActivity {
-  if (!activity.has(workflowId)) activity.set(workflowId, { ...IDLE })
-  return activity.get(workflowId)!
+  let entry = activity.get(workflowId)
+  if (!entry) {
+    entry = { ...IDLE }
+    activity.set(workflowId, entry)
+  }
+  return entry
 }
 
 /** What is in flight or failed for a workflow; reactive when read in a computed or template. */
@@ -301,9 +305,10 @@ export function addTask(
     const owner = at.joinAll === null ? workflow : findTask(workflow, at.joinAll)
     if (!owner || !canJoinAll(owner.groups)) return null
     const [target, ...others] = owner.groups
-    for (const group of others) target!.tasks.push(...group.tasks)
-    owner.groups = [target!]
-    target!.join = task
+    if (!target) return null
+    for (const group of others) target.tasks.push(...group.tasks)
+    owner.groups = [target]
+    target.join = task
   }
   scheduleSave(workflow)
   return task
@@ -402,7 +407,9 @@ export function removeTask(folderId: number, taskId: string): Edit | null {
     delete group.join
   } else {
     place.at = group.tasks.findIndex((t) => t.id === taskId)
-    task = group.tasks.splice(place.at, 1)[0]!
+    const removed = group.tasks.splice(place.at, 1)[0]
+    if (!removed) return null
+    task = removed
     if (!group.tasks.length && group.join) {
       place.unjoinedId = group.join.id
       group.tasks.push(group.join)
@@ -508,7 +515,8 @@ function unsplit(
   for (const [id, index] of [...from].sort((a, b) => a[1] - b[1])) {
     const at = split.tasks.findIndex((task) => task.id === id)
     if (at === -1) continue
-    group.tasks.splice(Math.min(index, group.tasks.length), 0, split.tasks.splice(at, 1)[0]!)
+    const moved = split.tasks.splice(at, 1)[0]
+    if (moved) group.tasks.splice(Math.min(index, group.tasks.length), 0, moved)
   }
   if (!split.tasks.length) owner.groups.splice(owner.groups.indexOf(split), 1)
   scheduleSave(workflow)
@@ -543,6 +551,7 @@ export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | n
   const [target, ...others] = placed
     .map(({ group }) => group)
     .sort((a, b) => owner.groups.indexOf(a) - owner.groups.indexOf(b))
+  if (!target) return null
   const merged: Merged[] = others.map((group) => ({
     id: group.id,
     index: owner.groups.indexOf(group),
@@ -550,8 +559,8 @@ export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | n
     joinId: group.join?.id,
   }))
   for (const group of others) {
-    target!.tasks.push(...group.tasks)
-    if (group.join) target!.join = group.join
+    target.tasks.push(...group.tasks)
+    if (group.join) target.join = group.join
     owner.groups.splice(owner.groups.indexOf(group), 1)
   }
   scheduleSave(workflow)
@@ -559,10 +568,10 @@ export function mergeGroups(folderId: number, groupIds: string[]): TaskGroup | n
   record(
     folderId,
     `merged ${count(placed.length, 'group')}`,
-    () => unmerge(folderId, parent?.id ?? null, target!.id, merged),
-    () => !!findGroup(folderId, parent?.id ?? null, target!.id),
+    () => unmerge(folderId, parent?.id ?? null, target.id, merged),
+    () => !!findGroup(folderId, parent?.id ?? null, target.id),
   )
-  return target!
+  return target
 }
 
 /** A group among a task's (or the inputs') groups, by id, in the current draft. */

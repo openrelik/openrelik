@@ -93,9 +93,10 @@ function reportOf(raw: ReportRecord | null | undefined): Report | undefined {
  * records matched by uuid. Tasks without a record have not been queued.
  */
 export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRecord[]): Groups {
-  const byUuid = new Map(
-    records.filter((record) => record.uuid).map((record) => [hex(record.uuid!), record]),
-  )
+  const byUuid = new Map<string, WorkflowTaskRecord>()
+  for (const record of records) {
+    if (record.uuid) byUuid.set(hex(record.uuid), record)
+  }
   const fromSpec = (node: SpecTask): Task => {
     const record = byUuid.get(hex(node.uuid ?? ''))
     // Older specs may hold a dict here; only the list form carries options.
@@ -105,7 +106,7 @@ export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRe
       id: node.uuid || hexId(),
       name: node.display_name || node.task_name,
       module: node.task_name,
-      queue: node.queue_name || node.task_name.split('.')[0]!,
+      queue: node.queue_name || node.task_name.split('.')[0] || node.task_name,
       description: node.description,
       status: STATUS[record?.status_short?.toUpperCase() ?? ''] ?? 'pending',
       started: record?.created_at,
@@ -151,9 +152,9 @@ export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRe
       } else if (node.type === 'chord') {
         const tasks = (node.tasks ?? []).filter((t) => t.type === 'task').map(fromSpec)
         const join = node.callback?.type === 'task' ? fromSpec(node.callback) : undefined
-        if (!tasks.length && !join) continue
         // A chord without a header would only be its callback.
-        groups.push(tasks.length ? { id: hexId(), tasks, join } : { id: hexId(), tasks: [join!] })
+        if (tasks.length) groups.push({ id: hexId(), tasks, join })
+        else if (join) groups.push({ id: hexId(), tasks: [join] })
       }
     }
     return groups

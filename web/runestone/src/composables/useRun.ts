@@ -35,7 +35,7 @@ export const runTarget: Ref<RunTarget | null> = customRef((track, trigger) => ({
 }))
 
 const labelOf = (files: Item[]) =>
-  files.length === 1 ? files[0]!.name : count(files.length, 'file')
+  files.length === 1 && files[0] ? files[0].name : count(files.length, 'file')
 
 /** Opens the picker to run one worker on `files`, as a workflow of its own. */
 export function openRun(files: Item[], folderId: number) {
@@ -57,8 +57,8 @@ export function openAddToWorkflow(workflow: Workflow, at: AddAt, anchor?: Anchor
     if (parent === undefined || (parent && !canChainAfter(workflow, parent.id))) return
     label = parent
       ? parent.name
-      : inputs.length === 1
-        ? inputs[0]!.name
+      : inputs.length === 1 && inputs[0]
+        ? inputs[0].name
         : count(inputs.length, 'input file')
   } else if ('beside' in at) {
     const task = findTask(workflow, at.beside)
