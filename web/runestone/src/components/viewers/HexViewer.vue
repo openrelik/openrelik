@@ -7,6 +7,7 @@ import { useByteChunks } from '@/composables/useByteChunks'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
+import { copyToClipboard } from '@/directives/copyToClipboard'
 import {
   decodings,
   hex2,
@@ -85,7 +86,7 @@ const rows = computed(() => {
 
 // Fetch what is on screen; cancel what scrolled away.
 watch(
-  [topRow, visibleRows, () => props.fileId],
+  [topRow, visibleRows, () => props.fileId, () => props.size],
   () => bytes.show(topRow.value * ROW, (topRow.value + visibleRows.value) * ROW - 1),
   { immediate: true },
 )
@@ -104,6 +105,11 @@ watch(
   () => {
     anchor.value = cursor.value = 0
     topRow.value = 0
+    hovered.value = null
+    gotoText.value = ''
+    gotoError.value = false
+    dragging = false
+    pressedOnByte = false
     history.value = { back: [], forward: [] }
     marks.anchor.value = null
   },
@@ -115,6 +121,7 @@ function reveal(offset: number) {
 }
 
 function moveTo(offset: number, extend: boolean) {
+  if (props.size <= 0) return
   cursor.value = Math.min(last.value, Math.max(0, offset))
   if (!extend) anchor.value = cursor.value
   reveal(cursor.value)
@@ -124,7 +131,7 @@ let dragging = false
 /** The press began on a byte, without ⇧: its click unmarks (see `onGridClick`). */
 let pressedOnByte = false
 function onByteDown(event: PointerEvent, offset: number) {
-  if (event.button !== 0) return
+  if (event.button !== 0 || props.size <= 0 || offset > last.value) return
   grid.value?.focus({ preventScroll: true })
   dragging = true
   pressedOnByte = !event.shiftKey
@@ -140,6 +147,7 @@ function onGridClick() {
   pressedOnByte = false
 }
 function onByteEnter(offset: number) {
+  if (props.size <= 0 || offset > last.value) return
   hovered.value = offset
   if (dragging) cursor.value = offset
 }
@@ -197,7 +205,7 @@ const gotoText = ref('')
 const gotoError = ref(false)
 function goTo() {
   const span = parseOffsetRange(gotoText.value)
-  if (!span || span.from > last.value) {
+  if (props.size <= 0 || !span || span.from > last.value) {
     gotoError.value = true
     return
   }
@@ -206,8 +214,11 @@ function goTo() {
   const marked = { from: span.from, to: Math.min(span.to, last.value) }
   marks.set(marked)
   marks.anchor.value = marked
-  jump(marked.from)
-  grid.value?.focus({ preventScroll: true })
+  if (marked.from !== cursor.value) jump(marked.from)
+  else {
+    land(marked.from)
+    grid.value?.focus({ preventScroll: true })
+  }
 }
 
 // --- marked bytes: from the offsets, go-to, or a link ---
@@ -222,7 +233,7 @@ const marks = useMarkedRange(mark, 'offset', {
 const rowSpan = (offset: number) => ({ from: offset, to: Math.min(offset + ROW - 1, last.value) })
 /** The mark is whole rows: only then do the offsets show it, as marked bytes show themselves. */
 const wholeRows = computed(() => {
-  if (!mark.value) return false
+  if (!mark.value || props.size <= 0) return false
   const { from, to } = mark.value
   return from % ROW === 0 && ((to + 1) % ROW === 0 || to === last.value)
 })
@@ -273,11 +284,18 @@ function say(text: string) {
 onUnmounted(() => clearTimeout(noticeTimer))
 
 async function copy(asText: boolean) {
+  if (props.size <= 0) return
   const length = selectionEnd.value - selectionStart.value + 1
   const end = selectionStart.value + Math.min(length, COPY_MAX) - 1
   try {
     const data = await bytes.read(selectionStart.value, end)
-    await navigator.clipboard.writeText(asText ? Array.from(data, printable).join('') : toHex(data))
+    const ok = await copyToClipboard(
+      asText ? Array.from(data, printable).join('') : toHex(data),
+    )
+    if (!ok) {
+      say('Could not copy the selection')
+      return
+    }
     say(
       `Copied ${data.length.toLocaleString('en-US')} bytes as ${asText ? 'text' : 'hex'}` +
         (length > COPY_MAX ? ` (the first ${COPY_MAX / 1024} KiB)` : ''),
@@ -290,6 +308,7 @@ async function copy(asText: boolean) {
 // --- keys, while the grid has focus ---
 
 function onKey(event: KeyboardEvent) {
+  if (event.altKey) return
   const mod = event.metaKey || event.ctrlKey
   const extend = event.shiftKey
   const page = visibleRows.value * ROW
@@ -305,12 +324,12 @@ function onKey(event: KeyboardEvent) {
       mod ? last.value : Math.min(last.value, cursor.value - (cursor.value % ROW) + ROW - 1),
   }
   const move = moves[event.key]
-  if (move) {
+  if (move && props.size > 0) {
     moveTo(move(), extend)
-  } else if (mod && event.key.toLowerCase() === 'c') {
-    copy(extend)
-  } else if (!mod && event.key === 'm' && hasSelection.value) {
-    void markSelection()
+  } else if (mod && event.key.toLowerCase() === 'c' && props.size > 0) {
+    void copy(extend)
+  } else if (!mod && event.key === 'm' && (hasSelection.value || mark.value)) {
+    void copyLink()
   } else if (!mod && event.key === 'o') {
     // `o` for offset: `g` is the app's prompt, everywhere.
     gotoInput.value?.focus()
@@ -335,6 +354,7 @@ function onKey(event: KeyboardEvent) {
 const littleEndian = ref(true)
 /** The bytes from the selection's start (the cursor, when nothing is selected), as far as loaded; up to 8. */
 const atCursor = computed(() => {
+  if (props.size <= 0) return new Uint8Array()
   const out: number[] = []
   const from = selectionStart.value
   for (let offset = from; offset < from + 8 && offset <= last.value; offset++) {
@@ -350,9 +370,13 @@ const cursorReadings = computed(() => readings(atCursor.value, littleEndian.valu
 const decoded = ref<Uint8Array>(new Uint8Array())
 let decodeRun = 0
 watch(
-  [selectionStart, selectionEnd, () => props.fileId],
+  [selectionStart, selectionEnd, () => props.fileId, () => props.size],
   async () => {
     const run = ++decodeRun
+    if (props.size <= 0) {
+      decoded.value = new Uint8Array()
+      return
+    }
     const end = Math.min(selectionEnd.value, selectionStart.value + DECODE_MAX - 1)
     const data = await bytes.read(selectionStart.value, end).catch(() => new Uint8Array())
     if (run === decodeRun) decoded.value = data
@@ -379,12 +403,11 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
       <!-- status and go-to -->
       <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
         <span class="tabular truncate">
-          0x{{ offsetLabel(cursor, width) }}
-          <template v-if="selectionEnd > selectionStart">
-            · {{ (selectionEnd - selectionStart + 1).toLocaleString('en-US') }} bytes selected
-          </template>
-          <template v-if="mark"> · {{ marks.label() }} marked</template>
-          · {{ size.toLocaleString('en-US') }} bytes
+          <template v-if="size > 0">0x{{ offsetLabel(cursor, width) }} · </template
+          ><template v-if="size > 0 && selectionEnd > selectionStart">
+            {{ (selectionEnd - selectionStart + 1).toLocaleString('en-US') }} bytes selected · </template
+          ><template v-if="mark">{{ marks.label() }} marked · </template
+          >{{ size.toLocaleString('en-US') }} bytes
         </span>
         <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{
           notice
@@ -446,11 +469,13 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
-                ? `Not an offset in this file (0 to 0x${last.toString(16)})`
+                ? size > 0
+                  ? `Not an offset in this file (0 to 0x${last.toString(16)})`
+                  : 'Empty file has no offsets'
                 : 'An offset (0x1f0, or decimal), or a range as 0x1f0-0x2a0'
             "
             @input="gotoError = false"
-            @keydown.esc.stop="((gotoText = ''), grid?.focus())"
+            @keydown.esc.stop="((gotoText = ''), (gotoError = false), grid?.focus())"
           />
         </form>
       </div>
@@ -490,6 +515,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           </div>
 
           <div ref="body" class="min-h-0 flex-1 overflow-hidden">
+            <p v-if="size === 0" class="px-3 py-3 font-sans text-ink-muted">Empty file (0 bytes).</p>
             <div v-for="line in rows" :key="line.row" class="flex h-5 items-center">
               <!-- the row's offset: click, ⇧-click or drag to mark its bytes -->
               <span
@@ -583,7 +609,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
       <HexInspector
         v-model:little-endian="littleEndian"
         :selection-start="selectionStart"
-        :selection-length="selectionEnd - selectionStart + 1"
+        :selection-length="size > 0 ? selectionEnd - selectionStart + 1 : 0"
         :width="width"
         :readings="cursorReadings"
         :decodings="selectionDecodings"

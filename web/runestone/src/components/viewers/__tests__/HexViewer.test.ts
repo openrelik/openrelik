@@ -504,4 +504,78 @@ describe('HexViewer', () => {
     await nextTick()
     expect(wrapper.text()).toContain('0x00000000')
   })
+
+  it('handles 0-byte files cleanly, ignores EOF cell enter, clears gotoError on Esc, and lets m copy existing mark', async () => {
+    const writeText = vi.mocked(navigator.clipboard.writeText)
+
+    // 1. 0-byte file
+    const emptyWrapper = mount(HexViewer, {
+      props: { fileId: 17, size: 0 },
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(emptyWrapper)
+    await flushPromises()
+
+    expect(emptyWrapper.text()).toContain('Empty file (0 bytes).')
+    expect(emptyWrapper.text()).not.toContain('0x00000000')
+    expect(sideTarget?.textContent).not.toContain('uint8')
+
+    // goTo("0") rejects on a 0-byte file and Esc clears border-danger
+    const emptyInput = emptyWrapper.get('input[placeholder="go to offset"]')
+    await emptyInput.setValue('0')
+    await emptyWrapper.get('form').trigger('submit')
+    expect(emptyInput.classes()).toContain('border-danger')
+    await emptyInput.trigger('keydown.esc')
+    expect(emptyInput.classes()).not.toContain('border-danger')
+
+    // Ctrl+C on 0-byte file does not copy
+    await emptyWrapper.get('[role="grid"]').trigger('keydown', { key: 'c', ctrlKey: true })
+    await flushPromises()
+    expect(writeText).not.toHaveBeenCalled()
+
+    // 2. Partial final row + goTo current cursor after scroll + Alt key passthrough + 'm' on single-byte mark
+    mockReadRangeFrom(makeSampleBytes(20))
+    const Host = defineComponent({
+      components: { HexViewer },
+      setup() {
+        const mark = ref<Span | null>({ from: 16, to: 16 })
+        return { mark }
+      },
+      template: `<HexViewer :file-id="18" :size="20" v-model:mark="mark" />`,
+    })
+    const partialWrapper = mount(Host, {
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(partialWrapper)
+    await flushPromises()
+    await nextTick()
+
+    // Hovering an invisible EOF cell (> last = 19) does not set cursor or hover past EOF
+    const rows = partialWrapper.get('[role="grid"]').findAll('.flex.h-5.items-center')
+    const secondRowHex = rows[1]!.findAll('span.cursor-default.w-\\[2\\.5ch\\]')
+    await secondRowHex[8]!.trigger('pointerenter') // offset 24 > 19
+    expect(secondRowHex[8]!.classes()).not.toContain('bg-sunken')
+
+    // 'm' copies link to existing single-byte mark #0x10
+    const grid = partialWrapper.get('[role="grid"]')
+    await grid.trigger('keydown', { key: 'm' })
+    await flushPromises()
+    expect(writeText).toHaveBeenLastCalledWith(expect.stringContaining('#0x10'))
+
+    // Alt+ArrowLeft is ignored (not prevented)
+    const altEvent = new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, cancelable: true })
+    grid.element.dispatchEvent(altEvent)
+    expect(altEvent.defaultPrevented).toBe(false)
+
+    // goTo to the current cursor offset after scrolling away still scrolls back to it
+    await grid.trigger('keydown', { key: 'Home', ctrlKey: true })
+    mockReadRangeFrom(makeSampleBytes(512))
+    await partialWrapper.setProps({ size: 512 })
+    await flushPromises()
+    await grid.trigger('wheel', { deltaX: 0, deltaY: 100, deltaMode: 0 })
+    const gotoInput = partialWrapper.get('input[placeholder="go to offset"]')
+    await gotoInput.setValue('0')
+    await partialWrapper.get('form').trigger('submit')
+    expect(partialWrapper.text()).toContain('0x00000000')
+  })
 })
