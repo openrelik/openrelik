@@ -67,13 +67,13 @@ const rendered = computed(() => {
     parsed = { index, lines, blocks: parseMarkdown(index.lines.slice(0, lines).join('\n')) }
   }
   const all = text.done.value && lines === index.lines.length
-  return { blocks: parsed.blocks, lines, all }
+  return { blocks: parsed.blocks, lines, all, oversizedFirstLine: complete > 0 && lines === 0 }
 })
 
 const state = computed<QueryState>(() => ({
   status: text.error.value
     ? 'error'
-    : text.done.value || rendered.value.lines
+    : text.done.value || rendered.value.lines || rendered.value.oversizedFirstLine
       ? 'success'
       : 'loading',
   isFetching: text.reading.value,
@@ -88,6 +88,8 @@ const page = ref<HTMLElement | null>(null)
 
 /** A line to bring on screen once its block is rendered (set by `land`, below). */
 const landing = ref<number | null>(null)
+let landRun = 0
+let unmounted = false
 const marks = useMarkedRange(mark, 'line', {
   land: (span) => land(span.from),
   focus: () => page.value?.focus({ preventScroll: true }),
@@ -103,7 +105,9 @@ async function tryLand() {
   // Still arriving: wait for it. Past what is rendered: the last block will do.
   if (line > rendered.value.lines && text.reading.value) return
   landing.value = null
+  const run = ++landRun
   await nextTick()
+  if (unmounted || run !== landRun) return
   // Blocks off screen are laid out at a guessed height: a pass or two settles the place.
   for (let pass = 0; pass < 3; pass++) {
     const el = page.value
@@ -114,9 +118,10 @@ async function tryLand() {
     const at = block.getBoundingClientRect().top - el.getBoundingClientRect().top
     el.scrollTop += at - el.clientHeight / 3
     await new Promise((done) => requestAnimationFrame(done))
+    if (unmounted || run !== landRun) return
   }
 }
-watch(() => rendered.value.lines, tryLand)
+watch([() => rendered.value.lines, () => text.reading.value], tryLand)
 
 /** The block a point of the selection is in; between blocks, the next one (or the last). */
 function blockAt(node: Node, offset: number): HTMLElement | null {
@@ -186,7 +191,10 @@ function say(message: string) {
   clearTimeout(noticeTimer)
   noticeTimer = setTimeout(() => (notice.value = null), 2500)
 }
-onUnmounted(() => clearTimeout(noticeTimer))
+onUnmounted(() => {
+  unmounted = true
+  clearTimeout(noticeTimer)
+})
 
 async function copyLink() {
   say(await marks.copyLink())
@@ -209,8 +217,16 @@ function onKey(event: KeyboardEvent) {
 // --- the block under the pointer, and its line in the source ---
 
 const hovered = ref<{ line: number; top: number } | null>(null)
+watch(
+  () => props.fileId,
+  () => {
+    hovered.value = null
+    landing.value = null
+    landRun++
+  },
+)
 function onHover(event: PointerEvent) {
-  const block = (event.target as HTMLElement).closest<HTMLElement>('[data-line]')
+  const block = (event.target as Element | null)?.closest?.<HTMLElement>('[data-line]')
   if (!block || !page.value) return
   const box = page.value.getBoundingClientRect()
   hovered.value = {
@@ -229,17 +245,30 @@ function onHover(event: PointerEvent) {
       </span>
       <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{ notice }}</span>
       <span
-        v-else-if="rendered.lines && !rendered.all && !text.reading.value"
+        v-else-if="
+          (rendered.lines || rendered.oversizedFirstLine) && !rendered.all && !text.reading.value
+        "
         class="flex min-w-0 items-center gap-2"
         role="status"
       >
         <span class="truncate">
-          rendered up to line
-          <span class="tabular">{{ rendered.lines.toLocaleString('en-US') }}</span> (the first
-          <span class="tabular">{{ formatSize(RENDER_MAX) }}</span
-          >); the rest is in the source
+          <template v-if="rendered.oversizedFirstLine">
+            line 1 exceeds <span class="tabular">{{ formatSize(RENDER_MAX) }}</span
+            >; view it in the source
+          </template>
+          <template v-else>
+            rendered up to line
+            <span class="tabular">{{ rendered.lines.toLocaleString('en-US') }}</span> (the first
+            <span class="tabular">{{ formatSize(RENDER_MAX) }}</span
+            >); the rest is in the source
+          </template>
         </span>
-        <Button size="row" variant="ghost" class="shrink-0" @click="emit('source', rendered.lines)">
+        <Button
+          size="row"
+          variant="ghost"
+          class="shrink-0"
+          @click="emit('source', rendered.oversizedFirstLine ? 1 : rendered.lines)"
+        >
           Show source
         </Button>
       </span>
@@ -275,7 +304,7 @@ function onHover(event: PointerEvent) {
       <LoadState
         :state="state"
         noun="text"
-        :has-content="rendered.blocks.length > 0"
+        :has-content="rendered.blocks.length > 0 || rendered.oversizedFirstLine"
         @retry="text.loadMore()"
       >
         <template #empty>Nothing to render: the file is empty.</template>
