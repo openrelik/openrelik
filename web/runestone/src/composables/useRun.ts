@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, customRef, type Ref } from 'vue'
 import type { Item } from '@/types/item'
 import type { Worker } from '@/types/worker'
 import type { AddAt } from '@/composables/useWorkflow'
@@ -18,8 +18,11 @@ export function anchorOf(event: Event): Anchor | undefined {
   return { top, bottom, left, right }
 }
 
-export const runTarget = computed({
-  get: () => useRunStore().runTarget,
+export const runTarget: Ref<RunTarget | null> = customRef((track, trigger) => ({
+  get: () => {
+    track()
+    return useModalStore().isModalOpen('run') ? useRunStore().runTarget : null
+  },
   set: (val: RunTarget | null) => {
     useRunStore().runTarget = val
     if (val) {
@@ -27,8 +30,9 @@ export const runTarget = computed({
     } else {
       useModalStore().closeModal('run')
     }
+    trigger()
   },
-})
+}))
 
 const labelOf = (files: Item[]) =>
   files.length === 1 ? files[0]!.name : count(files.length, 'file')

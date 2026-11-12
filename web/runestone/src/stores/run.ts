@@ -48,6 +48,7 @@ export const useRunStore = defineStore('run', () => {
   /** Why the last quick run did not start. */
   const error = ref<string | null>(null)
   let clearTimer: ReturnType<typeof setTimeout> | undefined
+  let runEpoch = 0
 
   function open(target: RunTarget) {
     if (target.add || target.files.length) runTarget.value = target
@@ -58,6 +59,7 @@ export const useRunStore = defineStore('run', () => {
   }
 
   function clearRun() {
+    runEpoch++
     runTarget.value = null
     lastRun.value = null
     error.value = null
@@ -82,22 +84,27 @@ export const useRunStore = defineStore('run', () => {
     }
 
     const { files, folderId } = target
+    const epoch = runEpoch
     try {
       const workflow = await createWorkflow(
         folderId,
         files.map((file) => file.id),
       )
+      if (epoch !== runEpoch) return null
       addTask(workflow.folderId, { after: null }, worker, config)
       // Named for what it does, "Strings on report.pdf", rather than
       // "Untitled workflow"; its folder, still untitled, takes the name too.
       // Before the run, so the run's answer carries the name.
       await renameWorkflow(workflow.folderId, `${worker.name} on ${target.label}`)
+      if (epoch !== runEpoch) return null
       if (!(await runWorkflow(workflow.folderId))) {
+        if (epoch !== runEpoch) return null
         // The draft stays, in its folder, to be run from there.
         const why = workflowActivity(workflow.id).error ?? 'Could not run'
         error.value = `${why} — ${worker.name} is left as a draft in “${workflow.name}”.`
         return null
       }
+      if (epoch !== runEpoch) return null
       followWorkflow(workflow.folderId)
       lastRun.value = {
         folderId: workflow.folderId,
@@ -108,6 +115,7 @@ export const useRunStore = defineStore('run', () => {
       clearTimer = setTimeout(() => (lastRun.value = null), 10_000)
       return workflow.folderId
     } catch (err: unknown) {
+      if (epoch !== runEpoch) return null
       error.value = `Could not run ${worker.name}: ${errorMessage(err, 'request failed')}`
       return null
     }
