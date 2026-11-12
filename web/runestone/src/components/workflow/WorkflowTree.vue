@@ -6,12 +6,12 @@ import { RouterLink } from 'vue-router'
 import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
 import { useItemsStore } from '@/stores/items'
 import { isEmptyFile } from '@/utils/item'
-import { missingOptions } from '@/utils/worker'
+import { missingOptions, workerShortName } from '@/utils/worker'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
-import { canJoin, unchainable } from '@/utils/workflow'
+import { canJoin, canJoinAll, unchainable } from '@/utils/workflow'
 import type { Task, TaskGroup, Workflow } from '@/types/workflow'
-import { formatDuration, formatSize } from '@/utils/format'
+import { count, formatDuration, formatSize } from '@/utils/format'
 import { revealIn } from '@/utils/scroll'
 
 /**
@@ -60,39 +60,45 @@ interface Line {
 interface TaskRow extends Line {
   kind: 'task'
   task: Task
+  parallel: number
+  missing: string[]
+  emptyCount: number
   /** A join: how many tasks it waits for. */
   waitsFor?: number
   /** The last task of its group: offers one more beside it. */
   endsGroup?: boolean
 }
-/** A draft's task: the required options it still lacks. */
-const missing = (task: Task) => missingOptions(task.options, task.config)
 
-/** A draft's "after all": adds a join after a free group. */
+/** A draft's "after all": adds a join after a free group, or across sibling groups. */
 interface JoinRow extends Line {
   kind: 'join'
-  groupId: string
+  at: AddAt
   count: number
+  what: string
 }
 type Row = TaskRow | JoinRow
 
 /** A parent's groups at one level: each group's tasks, then its join (or a row to add one). */
-function flatten(groups: TaskGroup[], guides: boolean[]): Row[] {
-  const entries = groups.flatMap((group, g) => {
-    const offer = !!props.editable && canJoin(group)
-    return [
-      ...group.tasks.map((task, index) => ({
-        kind: 'task' as const,
-        task,
-        newGroup: g > 0 && index === 0,
-        endsGroup: index === group.tasks.length - 1,
-      })),
-      ...(group.join
-        ? [{ kind: 'task' as const, task: group.join, waitsFor: group.tasks.length }]
-        : []),
-      ...(offer ? [{ kind: 'offer' as const, group }] : []),
-    ]
-  })
+function flatten(groups: TaskGroup[], guides: boolean[], parent: Task | null = null): Row[] {
+  const offerJoinAll = !!props.editable && canJoinAll(groups)
+  const entries = [
+    ...groups.flatMap((group, g) => {
+      const offer = !!props.editable && canJoin(group) && !offerJoinAll
+      return [
+        ...group.tasks.map((task, index) => ({
+          kind: 'task' as const,
+          task,
+          newGroup: g > 0 && index === 0,
+          endsGroup: index === group.tasks.length - 1,
+        })),
+        ...(group.join
+          ? [{ kind: 'task' as const, task: group.join, waitsFor: group.tasks.length }]
+          : []),
+        ...(offer ? [{ kind: 'offer' as const, group }] : []),
+      ]
+    }),
+    ...(offerJoinAll ? [{ kind: 'offerAll' as const }] : []),
+  ]
   return entries.flatMap((entry, index): Row[] => {
     const last = index === entries.length - 1
     if (entry.kind === 'offer') {
@@ -103,15 +109,39 @@ function flatten(groups: TaskGroup[], guides: boolean[]): Row[] {
           key: `${group.id}:join`,
           guides,
           last,
-          groupId: group.id,
+          at: { join: group.id },
           count: group.tasks.length,
+          what: `${count(group.tasks.length, 'task')} in this group`,
+        },
+      ]
+    }
+    if (entry.kind === 'offerAll') {
+      const total = groups.reduce((sum, group) => sum + group.tasks.length, 0)
+      return [
+        {
+          kind: 'join',
+          key: `${parent?.id ?? 'input'}:join-all`,
+          guides,
+          last,
+          at: { joinAll: parent?.id ?? null },
+          count: total,
+          what: `${count(total, 'task')} after ${parent?.name ?? 'the inputs'}`,
         },
       ]
     }
     const { task, ...rest } = entry
     return [
-      { ...rest, key: task.id, task, guides, last },
-      ...flatten(task.groups, [...guides, !last]),
+      {
+        ...rest,
+        key: task.id,
+        task,
+        parallel: parallel(task),
+        missing: missingOptions(task.options, task.config),
+        emptyCount: emptyOutputs(task),
+        guides,
+        last,
+      },
+      ...flatten(task.groups, [...guides, !last], task),
     ]
   })
 }
@@ -137,13 +167,16 @@ watch(
   async (id) => {
     if (!id) return
     await nextTick()
-    const row = root.value?.querySelector(`[data-task="${id}"]`)
-    if (root.value && row) revealIn(root.value, row)
+    if (props.producerId !== id || !root.value) return
+    const row = Array.from(root.value.querySelectorAll<HTMLElement>('[data-task]')).find(
+      (el) => el.dataset.task === id,
+    )
+    if (row) revealIn(root.value, row)
   },
 )
 /** Shown on the row's hover or focus, so the tree stays quiet to read. */
 const ADD_AFTER =
-  'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand opacity-0 group-hover:opacity-100 hover:bg-brand-tint focus-visible:opacity-100'
+  'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand hover:bg-brand-tint focus-visible:opacity-100'
 
 /** Like the +, but also kept in sight while its row is selected. */
 const REMOVE =
@@ -175,16 +208,24 @@ const inputs = computed(() =>
           <td class="px-3">
             <span class="flex min-w-0 items-center gap-2">
               <RouterLink
+                v-if="input.parent !== null && input.parent !== undefined"
                 :to="`/folder/${input.parent}/file/${input.id}`"
                 class="flex min-w-0 items-center gap-2 text-ink-secondary hover:text-brand"
               >
                 <File :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
                 <span class="truncate">{{ input.name }}</span>
               </RouterLink>
+              <span v-else class="flex min-w-0 items-center gap-2 text-ink-secondary">
+                <File :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+                <span class="truncate">{{ input.name }}</span>
+              </span>
               <button
                 v-if="editable && i === inputs.length - 1"
                 type="button"
-                :class="ADD_AFTER"
+                :class="[
+                  ADD_AFTER,
+                  rows.length ? 'opacity-0 group-hover:opacity-100' : 'opacity-100',
+                ]"
                 aria-label="Add worker on the inputs"
                 v-tooltip="'Add worker on the inputs'"
                 @click="emit('add', { after: null }, anchorOf($event))"
@@ -204,7 +245,11 @@ const inputs = computed(() =>
         <!-- tasks -->
         <tr v-if="!rows.length">
           <td colspan="5" class="px-3 py-6 text-center text-ink-muted">
-            Empty workflow. Click <span class="font-medium text-ink">+</span> to add a worker.
+            <template v-if="editable && inputs.length"
+              >Empty workflow. Click <span class="font-medium text-ink">+</span> to add a
+              worker.</template
+            >
+            <template v-else>Empty workflow.</template>
           </td>
         </tr>
         <template v-for="row in rows" :key="row.key">
@@ -233,12 +278,12 @@ const inputs = computed(() =>
                   <button
                     type="button"
                     class="flex h-5 min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-control) border border-dashed border-border-strong px-1.5 text-[11px] text-ink-muted hover:border-brand hover:text-brand"
-                    :aria-label="`Add worker after all ${row.count} tasks in this group`"
+                    :aria-label="`Add worker after all ${row.what}`"
                     v-tooltip="{
                       text: 'Add worker after all of them',
                       detail: 'Runs once they have finished, on all their outputs',
                     }"
-                    @click="emit('add', { join: row.groupId }, anchorOf($event))"
+                    @click="emit('add', row.at, anchorOf($event))"
                   >
                     <Merge :size="11" :stroke-width="1.5" class="shrink-0" />
                     after all {{ row.count }}
@@ -296,10 +341,10 @@ const inputs = computed(() =>
                     >{{ row.task.name }}</span
                   >
                   <span
-                    v-if="parallel(row.task) > 1"
+                    v-if="row.parallel > 1"
                     class="tabular shrink-0 text-[11px] text-ink-muted"
                     v-tooltip="'Tasks running in parallel on its output'"
-                    >⇉ {{ parallel(row.task) }}</span
+                    >⇉ {{ row.parallel }}</span
                   >
                   <Merge
                     v-if="row.waitsFor"
@@ -312,7 +357,7 @@ const inputs = computed(() =>
                   <button
                     v-if="editable && !blocked.has(row.task.id)"
                     type="button"
-                    :class="ADD_AFTER"
+                    :class="[ADD_AFTER, 'opacity-0 group-hover:opacity-100']"
                     :aria-label="`Add worker after ${row.task.name}`"
                     v-tooltip="
                       row.task.groups.length
@@ -326,7 +371,7 @@ const inputs = computed(() =>
                   <button
                     v-if="editable && row.endsGroup"
                     type="button"
-                    :class="ADD_AFTER"
+                    :class="[ADD_AFTER, 'opacity-0 group-hover:opacity-100']"
                     :aria-label="`Add worker beside ${row.task.name}`"
                     v-tooltip="{
                       text: 'Add worker beside',
@@ -355,14 +400,12 @@ const inputs = computed(() =>
               </div>
             </td>
             <td class="truncate px-2 text-ink-muted" v-tooltip="row.task.queue">
-              {{ row.task.queue.replace('openrelik-worker-', '') }}
+              {{ workerShortName(row.task.queue) }}
             </td>
             <td class="px-2">
               <!-- a draft's tasks are not queued: what matters is whether they can run -->
-              <span
-                v-if="workflow.draft && missing(row.task).length"
-                class="block truncate text-warning"
-                >needs {{ missing(row.task).join(', ') }}</span
+              <span v-if="workflow.draft && row.missing.length" class="block truncate text-warning"
+                >needs {{ row.missing.join(', ') }}</span
               >
               <TaskStatusBadge v-else-if="!workflow.draft" :status="row.task.status" />
             </td>
@@ -371,8 +414,8 @@ const inputs = computed(() =>
             </td>
             <td class="tabular px-2 pr-3 text-right text-ink-muted">
               <template v-if="row.task.outputs.length"
-                >{{ row.task.outputs.length }} out<template v-if="emptyOutputs(row.task)">
-                  ({{ emptyOutputs(row.task) }} empty)</template
+                >{{ row.task.outputs.length }} out<template v-if="row.emptyCount">
+                  ({{ row.emptyCount }} empty)</template
                 ></template
               >
               <template v-else>–</template>

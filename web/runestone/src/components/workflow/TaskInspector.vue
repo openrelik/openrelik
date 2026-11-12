@@ -86,8 +86,9 @@ const ranOn = computed(() => {
   if (where.parent) return { from: `the outputs of ${where.parent.name}`, files: [] }
   return { from: null, files: workflow.value.inputs }
 })
-/** Input files live in the folder the workflow folder is in. */
+/** Input files live in the folder the workflow folder is in, or in the file's own parent if loaded. */
 const inputsFolder = computed(() => itemsStore.findFolder(props.folderId)?.parent)
+const inputFolder = (fileId: number) => itemsStore.findFile(fileId)?.parent ?? inputsFolder.value
 
 const reportsByFile = computed(
   () =>
@@ -103,10 +104,10 @@ const outputs = computed(() =>
     .filter((item) => item !== undefined)
     .sort(
       (a, b) =>
+        Number(isEmptyFile(a)) - Number(isEmptyFile(b)) ||
         (reportsByFile.value.get(b.id)?.priority ?? -1) -
-        (reportsByFile.value.get(a.id)?.priority ?? -1),
-    )
-    .sort((a, b) => Number(isEmptyFile(a)) - Number(isEmptyFile(b))),
+          (reportsByFile.value.get(a.id)?.priority ?? -1),
+    ),
 )
 /** More than a couple of empty files fold away behind one line. */
 const FOLD_EMPTY_OVER = 2
@@ -120,6 +121,13 @@ const shownOutputs = computed(() =>
   emptyCount.value > FOLD_EMPTY_OVER && !showEmpty.value
     ? outputs.value.filter((file) => !isEmptyFile(file))
     : outputs.value,
+)
+const outputRows = computed(() =>
+  shownOutputs.value.map((file) => ({
+    file,
+    report: reportsByFile.value.get(file.id),
+    empty: isEmptyFile(file),
+  })),
 )
 /** There is more to read than the summary shows. */
 const hasReport = computed(() => !!props.task.report || props.task.fileReports.length > 0)
@@ -141,8 +149,7 @@ function setOption(key: string, value: string) {
 }
 
 function remove() {
-  removeTask(props.folderId, props.task.id)
-  emit('close')
+  if (removeTask(props.folderId, props.task.id)) emit('close')
 }
 </script>
 
@@ -222,8 +229,8 @@ function remove() {
         <ul v-else class="flex flex-col">
           <li v-for="input in ranOn.files" :key="input.id">
             <RouterLink
-              v-if="inputsFolder !== undefined && inputsFolder !== null"
-              :to="`/folder/${inputsFolder}/file/${input.id}`"
+              v-if="inputFolder(input.id) !== undefined && inputFolder(input.id) !== null"
+              :to="`/folder/${inputFolder(input.id)}/file/${input.id}`"
               class="flex h-6 items-center gap-2 text-ink hover:text-brand"
             >
               <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
@@ -240,31 +247,27 @@ function remove() {
       <section v-if="!editable" class="mt-3" aria-label="Outputs">
         <p class="micro-label pb-1">outputs</p>
         <ul v-if="outputs.length" class="flex flex-col">
-          <li v-for="file in shownOutputs" :key="file.id">
+          <li v-for="row in outputRows" :key="row.file.id">
             <RouterLink
-              :to="`/folder/${file.parent}/file/${file.id}`"
+              :to="`/folder/${row.file.parent ?? folderId}/file/${row.file.id}`"
               class="flex h-6 items-center gap-2 hover:text-brand"
-              :class="isEmptyFile(file) ? 'text-ink-muted' : 'text-ink'"
+              :class="row.empty ? 'text-ink-muted' : 'text-ink'"
             >
               <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
-              <span class="truncate">{{ file.name }}</span>
-              <PriorityBadge
-                v-if="reportsByFile.get(file.id)"
-                :priority="reportsByFile.get(file.id)!.priority"
-                class="ml-auto"
-              />
+              <span class="truncate">{{ row.file.name }}</span>
+              <PriorityBadge v-if="row.report" :priority="row.report.priority" class="ml-auto" />
               <span
                 class="tabular shrink-0 text-[11px] text-ink-muted"
-                :class="{ 'ml-auto': !reportsByFile.get(file.id) }"
-                >{{ isEmptyFile(file) ? '—' : formatSize(file.size ?? 0) }}</span
+                :class="{ 'ml-auto': !row.report }"
+                >{{ row.empty ? '—' : formatSize(row.file.size ?? 0) }}</span
               >
             </RouterLink>
             <p
-              v-if="reportsByFile.get(file.id)?.summary"
+              v-if="row.report?.summary"
               class="truncate pb-1 pl-5 text-[11px] text-ink-muted"
               v-overflow-tooltip
             >
-              {{ reportsByFile.get(file.id)!.summary }}
+              {{ row.report.summary }}
             </p>
           </li>
           <li v-if="emptyCount > FOLD_EMPTY_OVER">
@@ -281,7 +284,13 @@ function remove() {
           </li>
         </ul>
         <p v-else class="text-ink-muted">
-          {{ task.status === 'pending' || task.status === 'running' ? 'Not yet.' : 'None.' }}
+          {{
+            task.outputs.length
+              ? `${count(task.outputs.length, 'output file')} (not loaded)`
+              : task.status === 'pending' || task.status === 'running'
+                ? 'Not yet.'
+                : 'None.'
+          }}
         </p>
       </section>
 

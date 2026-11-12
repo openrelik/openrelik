@@ -261,4 +261,54 @@ describe('WorkflowTree', () => {
     await nextTick()
     expect(scrollSpy).toHaveBeenCalled()
   })
+
+  it('offers joinAll for sibling groups, keeps empty-draft + visible, skips null input links, and finds non-CSS producer ids', async () => {
+    const emptyEditable = makeWorkflow({
+      folderId: 9999,
+      inputs: [{ id: 1, name: 'orphan.dd' }],
+      groups: [],
+      draft: true,
+    })
+    const { wrapper } = mountTree({
+      workflow: emptyEditable,
+      selectedId: null,
+      editable: true,
+    })
+
+    // Unknown parent folder does not render broken /folder/null/file/ link.
+    expect(wrapper.find('a').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Empty workflow. Click + to add a worker.')
+    // Empty draft keeps input '+' visible without hover.
+    const addBtn = wrapper.get('button[aria-label="Add worker on the inputs"]')
+    expect(addBtn.classes()).toContain('opacity-100')
+
+    // Read-only empty state omits the "Click + to add a worker." hint.
+    await wrapper.setProps({ editable: false })
+    expect(wrapper.text()).toContain('Empty workflow.')
+    expect(wrapper.text()).not.toContain('Click +')
+
+    // Sibling free groups offer joinAll rather than individual join rows, and non-CSS producerId scrolls.
+    const specialId = 'tree:task"special[1]'
+    const sibWf = makeWorkflow({
+      groups: [
+        makeGroup('sg1', [makeTask('a1', { name: 'A1' }), makeTask('a2', { name: 'A2' })]),
+        makeGroup('sg2', [makeTask(specialId, { name: 'B1' })]),
+      ],
+      draft: true,
+    })
+    await wrapper.setProps({ workflow: sibWf, editable: true })
+    expect(
+      wrapper.find('button[aria-label="Add worker after all 2 tasks in this group"]').exists(),
+    ).toBe(false)
+    const joinAllBtn = wrapper.get(
+      'button[aria-label="Add worker after all 3 tasks after the inputs"]',
+    )
+    await joinAllBtn.trigger('click')
+    expect(wrapper.emitted('add')?.[0]?.[0]).toEqual({ joinAll: null })
+
+    const scrollSpy = vi.spyOn(wrapper.element as HTMLElement, 'scrollBy')
+    await wrapper.setProps({ producerId: specialId })
+    await nextTick()
+    expect(scrollSpy).toHaveBeenCalled()
+  })
 })

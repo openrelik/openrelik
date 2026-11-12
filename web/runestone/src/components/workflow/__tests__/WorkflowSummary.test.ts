@@ -122,4 +122,18 @@ describe('WorkflowSummary', () => {
     expect(wrapper.text()).toContain('Renamed folder')
     expect(wrapper.text()).not.toContain('Fallback workflow')
   })
+
+  it('mutes non-draft summary text when showName is true', () => {
+    const wrapper = mount(WorkflowSummary, {
+      props: {
+        workflow: makeWorkflow({ draft: false }),
+        stats: makeStats({ done: 2, total: 5, failed: 0, elapsed: 45 }),
+        showName: true,
+      },
+      global: { plugins: [pinia, directives, createTestRouter()] },
+    })
+
+    expect(wrapper.text()).toContain('Server workflow name')
+    expect(wrapper.find('span.tabular').classes()).toContain('text-ink-muted')
+  })
 })
