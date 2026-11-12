@@ -14,6 +14,7 @@ import { ensureRole, forgetRoles } from '@/composables/useFolderPermissions'
 import { closeRun } from '@/composables/useRun'
 import { closeShareDialog } from '@/composables/useShareDialog'
 import { clearUploads } from '@/composables/useUploadQueue'
+import { runWorkflow } from '@/composables/useWorkflow'
 import { closeWorkflowDialog } from '@/composables/useWorkflowDialog'
 import { useAuthStore } from '@/stores/auth'
 import { useItemsStore } from '@/stores/items'
@@ -56,6 +57,7 @@ vi.mock('@/api', async (importOriginal) => {
       ...actual.api.workflows,
       get: vi.fn(),
       rename: vi.fn(),
+      run: vi.fn(),
       saveSpec: vi.fn(),
       listTemplates: vi.fn(),
     },
@@ -991,11 +993,30 @@ describe('FolderView', () => {
     await flushPromises()
 
     expect(api.workflows.get).toHaveBeenCalledTimes(2)
-    // Select the task row inside WorkflowTree to open TaskInspector, then close it.
+    // Select the task row inside WorkflowTree to open TaskInspector.
     const taskRow = wrapper.findAll('tr').find((r) => r.text().includes('Strings'))
     expect(taskRow).toBeDefined()
     await taskRow!.trigger('click')
     await nextTick()
+    expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Remove')).toBe(true)
+
+    // While a draft run is in flight, TaskInspector is read-only (hides Remove / Add worker actions).
+    let rejectRun!: (err: Error) => void
+    vi.mocked(api.workflows.run).mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectRun = reject
+      }),
+    )
+    const runPromise = runWorkflow(12)
+    await nextTick()
+    expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Remove')).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Add worker'))).toBe(false)
+
+    rejectRun(new Error('Cancelled'))
+    await runPromise
+    await nextTick()
+    expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Remove')).toBe(true)
+
     const closeTaskBtn = wrapper.get('button[aria-label="Close task"]')
     await closeTaskBtn.trigger('click')
     await nextTick()

@@ -38,6 +38,7 @@ import {
   discardWorkflow,
   followWorkflow,
   loadWorkflow as ensureWorkflow,
+  workflowActivity,
   type AddAt,
 } from '@/composables/useWorkflow'
 import { everyTask, findTask, isActive } from '@/utils/workflow'
@@ -536,9 +537,13 @@ function runPicker() {
   if (folder.value) openRun(runFiles(), folder.value.id)
 }
 
+const workflowEditable = computed(
+  () => !!workflow.value?.draft && !workflowActivity(workflow.value.id).running,
+)
+
 /** The inspector's add buttons: the picker, for this folder's draft. */
 function openAdd(at: AddAt, anchor?: Anchor) {
-  if (workflow.value) openAddToWorkflow(workflow.value, at, anchor)
+  if (workflow.value && workflowEditable.value) openAddToWorkflow(workflow.value, at, anchor)
 }
 
 const runNotice = computed(() =>
@@ -936,7 +941,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <TaskInspector
           :task="task"
           :folder-id="workflow.folderId"
-          :editable="workflow.draft"
+          :editable="workflowEditable"
           class="min-h-0 flex-1"
           @close="taskId = null"
           @add="openAdd"
