@@ -83,6 +83,7 @@ function makeWorkflowRecord(
 
 beforeEach(() => {
   vi.useFakeTimers()
+  vi.mocked(api.workflows.get).mockReset()
   setActivePinia(createPinia())
   clearQueryCache()
 })
@@ -206,6 +207,71 @@ describe('useWorkflowLoader', () => {
     loader.load(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(vi.mocked(api.workflows.get).mock.calls.length).toBe(getCalls + 1)
+
+    scope.stop()
+  })
+
+  it('does not refresh or settle folder B when navigating away from an active folder A', async () => {
+    const folder = ref<Item | undefined>(makeFolder(201, 2001))
+    const refreshedFolders: number[] = []
+
+    vi.mocked(api.workflows.get).mockImplementation(async (id) => {
+      if (id === 2001) return makeWorkflowRecord(2001, 201, 'STARTED')
+      return makeWorkflowRecord(2002, 202, 'SUCCESS')
+    })
+
+    const scope = effectScope()
+    scope.run(() => {
+      useAutoRefresh(() => {
+        if (folder.value) refreshedFolders.push(folder.value.id)
+      })
+      return useWorkflowLoader(() => folder.value)
+    })!
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshedFolders).toEqual([])
+
+    // Navigate from active folder 201 to finished folder 202.
+    folder.value = makeFolder(202, 2002)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshedFolders).toEqual([])
+
+    // Advance well past settle timers: folder 202 is neither immediately refreshed nor settled.
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3)
+    expect(refreshedFolders).toEqual([])
+
+    scope.stop()
+  })
+
+  it('deduplicates refreshListing when an active workflow finishes in the same poll', async () => {
+    const folderId = 301
+    const workflowId = 3001
+    const folder = ref<Item | undefined>(makeFolder(folderId, workflowId))
+    let listingRefreshCount = 0
+
+    vi.mocked(api.workflows.get)
+      .mockResolvedValueOnce(makeWorkflowRecord(workflowId, folderId, 'STARTED', []))
+      .mockResolvedValue(makeWorkflowRecord(workflowId, folderId, 'SUCCESS', []))
+
+    const scope = effectScope()
+    scope.run(() => {
+      useAutoRefresh(() => {
+        listingRefreshCount++
+      })
+      return useWorkflowLoader(() => folder.value)
+    })!
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(listingRefreshCount).toBe(0)
+
+    // Poll at POLL_MS transitions active -> finished AND increments finished count together;
+    // the overlapping watchers refresh the listing once instead of twice.
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(listingRefreshCount).toBe(1)
+
+    // Follow-up settle runs once at POLL_MS later without duplicating the initial completion refresh.
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(listingRefreshCount).toBe(2)
 
     scope.stop()
   })

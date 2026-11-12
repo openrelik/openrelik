@@ -78,6 +78,8 @@ export function useWorkflowLoader(folder: () => Item | undefined): UseWorkflowLo
     return item ? workflowsStore.workflowOf(item.id) : undefined
   })
 
+  let lastListedWorkflow: Workflow | undefined
+
   /** The folder's file listing, fetched again behind what is shown. */
   function refreshListing(): void {
     const current = target.value
@@ -86,6 +88,13 @@ export function useWorkflowLoader(folder: () => Item | undefined): UseWorkflowLo
     // Runs this loader's own refresh too, which cancels a workflow load in
     // flight: callers refresh the listing first and poll after.
     refreshAll()
+  }
+
+  /** Refreshes the listing at most once per workflow snapshot across overlapping watchers. */
+  function refreshListingOnce(current: Workflow | undefined): void {
+    if (current && lastListedWorkflow === current) return
+    if (current) lastListedWorkflow = current
+    refreshListing()
   }
 
   /** The last listing refresh failed (a server hiccup, as a task finishes). */
@@ -113,14 +122,14 @@ export function useWorkflowLoader(folder: () => Item | undefined): UseWorkflowLo
 
   // Poll while something is queued or running; stop when it is done or the view leaves.
   watch(
-    () => !!workflow.value && isActive(workflow.value),
-    (active, wasActive) => {
+    [() => target.value?.folderId, () => !!workflow.value && isActive(workflow.value)] as const,
+    ([folderId, active], [prevFolderId, wasActive]) => {
       clearInterval(timer)
       clearTimeout(settleTimer)
       if (!active) {
-        // Just finished: the listing now, and settled a moment later.
-        if (wasActive) {
-          refreshListing()
+        // Just finished on the same folder: the listing now, and settled a moment later.
+        if (wasActive && folderId !== undefined && folderId === prevFolderId) {
+          refreshListingOnce(workflow.value)
           settleTimer = setTimeout(() => settle(SETTLE_TRIES), POLL_MS)
         }
         return
@@ -149,10 +158,11 @@ export function useWorkflowLoader(folder: () => Item | undefined): UseWorkflowLo
       return `${current.folderId}:${outputs}:${finished}`
     },
     (now, before) => {
-      const folderId = workflow.value?.folderId
+      const current = workflow.value
+      const folderId = current?.folderId
       if (!now || !before || folderId === undefined) return
       if (now.split(':')[0] !== before.split(':')[0]) return
-      refreshListing()
+      refreshListingOnce(current)
     },
   )
 
