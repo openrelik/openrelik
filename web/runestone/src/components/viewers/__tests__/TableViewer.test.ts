@@ -10,6 +10,7 @@ import directives from '@/directives'
 import { useConfirm } from '@/composables/useConfirm'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { hideTooltip } from '@/composables/useTooltip'
+import { useModalStore } from '@/stores/modals'
 import { api } from '@/api'
 import type { Span } from '@/utils/marks'
 import type { TableKind } from '@/utils/preview'
@@ -487,7 +488,101 @@ describe('TableViewer', () => {
     confirm.accept()
     await vi.advanceTimersByTimeAsync(20)
 
-    // 3. Error alert shows when readRange fails
+    // 3. Error alert shows Retry and recovers on click; initial error does not show "No rows."
     expect(cappedWrapper.get('[role="alert"]').text()).toBe('Stream interrupted')
+
+    vi.mocked(api.files.readRange).mockRejectedValueOnce(new Error('Initial read failed'))
+    const errWrapper = mount(TableViewer, {
+      props: { fileId: 52, size: 128, kind: 'csv' },
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(errWrapper)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(errWrapper.get('[role="alert"]').text()).toBe('Initial read failed')
+    expect(errWrapper.text()).not.toContain('No rows.')
+
+    vi.mocked(api.files.readRange).mockResolvedValueOnce(encode('a,b\n1,2\n'))
+    const retryBtn = errWrapper.findAll('button').find((b) => b.text() === 'Retry')!
+    expect(retryBtn).toBeDefined()
+    await retryBtn.trigger('click')
+    await vi.advanceTimersByTimeAsync(20)
+    expect(errWrapper.text()).toContain('1 rows')
+  })
+
+  it('ignores Escape in fullscreen while a modal is open, guards Ctrl+C/mark on text selection, escapes headers, and re-measures widths after header-only chunk', async () => {
+    // 1. Header-only first chunk then data row in second chunk re-measures width
+    const chunk1 = encode('a,b\n')
+    const longVal = 'Z'.repeat(30)
+    const chunk2 = encode(`1,${longVal}\n`)
+    const hugeHeaderFileSize = 1024 * 1024 + chunk2.length
+    vi.mocked(api.files.readRange)
+      .mockResolvedValueOnce(chunk1)
+      .mockResolvedValueOnce(chunk2)
+      .mockResolvedValue(new Uint8Array())
+
+    const w1 = mount(TableViewer, {
+      props: { fileId: 60, size: hugeHeaderFileSize, kind: 'csv' },
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(w1)
+    await vi.advanceTimersByTimeAsync(50)
+    const bHeader = w1.findAll('[role="columnheader"]')[1]!
+    // Width grew beyond header-only `b` (min 6 chars) to accommodate longVal
+    const widthPx = parseInt(/width:\s*(\d+)px/.exec(bHeader.attributes('style') ?? '')?.[1] ?? '0', 10)
+    expect(widthPx).toBeGreaterThan(100)
+
+    // 2. Hostile column header escaped; fullscreen Escape suppressed while modal is open; Ctrl+C without selection is ignored
+    const csvBytes = encode('col\x1b[31m,val\nalpha,1\nbeta,2\n')
+    vi.mocked(api.files.readRange).mockResolvedValue(csvBytes)
+    const mark = ref<Span | null>({ from: 1, to: 1 })
+    const Host = defineComponent({
+      components: { TableViewer },
+      setup: () => ({ mark }),
+      template: `<TableViewer :file-id="61" :size="${csvBytes.length}" kind="csv" v-model:mark="mark" />`,
+    })
+    const w2 = mount(Host, {
+      attachTo: document.body,
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(w2)
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(w2.findAll('[role="columnheader"]')[0]?.text()).toBe('col\\x1b[31m')
+
+    const grid = w2.get('[role="grid"]')
+    // Clear landed cursor, then Ctrl+C when no row is selected does not trigger copyRow
+    await grid.trigger('keydown', { key: 'Escape' })
+    const copySpy = vi.mocked(navigator.clipboard.writeText)
+    copySpy.mockClear()
+    await grid.trigger('keydown', { key: 'c', ctrlKey: true })
+    expect(copySpy).not.toHaveBeenCalled()
+
+    // Non-collapsed text selection also prevents Ctrl+C row overwrite and preserves #R mark on click
+    const rowEl = grid.findAll('div.absolute')[1]!
+    const textNode = rowEl.findAll('span')[1]!.element.firstChild!
+    const sel = window.getSelection()!
+    const domRange = document.createRange()
+    domRange.setStart(textNode, 0)
+    domRange.setEnd(textNode, 3)
+    sel.removeAllRanges()
+    sel.addRange(domRange)
+    await rowEl.trigger('click')
+    expect(mark.value).toEqual({ from: 1, to: 1 })
+    await grid.trigger('keydown', { key: 'c', ctrlKey: true })
+    expect(copySpy).not.toHaveBeenCalled()
+    sel.removeAllRanges()
+
+    // Enter fullscreen, open a modal, press Escape -> fullscreen remains open
+    await grid.trigger('keydown', { key: 'f' })
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]')).not.toBeNull()
+
+    const modals = useModalStore()
+    modals.openModal('confirm')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]')).not.toBeNull()
+    expect(mark.value).toEqual({ from: 1, to: 1 })
+    modals.closeModal('confirm')
   })
 })

@@ -8,6 +8,7 @@ import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { confirmAction } from '@/composables/useConfirm'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { MORE_BYTES, useTableStream } from '@/composables/useTableStream'
+import { useModalStore } from '@/stores/modals'
 import { escapeControls } from '@/utils/bytes'
 import { formatSize } from '@/utils/format'
 import type { Span } from '@/utils/marks'
@@ -115,18 +116,26 @@ const view = computed<number[]>(() => {
 // --- columns: widths from the header and the first rows; draggable ---
 
 const widths = ref<number[]>([])
+const resizedCols = new Set<number>()
+let measuredWithRows = false
 watch(
   () => [columns.value.length, rows.value.length > 0] as const,
   () => {
     const sample = rows.value.slice(0, 200)
     widths.value = columns.value.map((name, index) => {
-      if (widths.value[index] !== undefined && sample.length) return widths.value[index]!
+      if (
+        widths.value[index] !== undefined &&
+        (resizedCols.has(index) || measuredWithRows || !sample.length)
+      ) {
+        return widths.value[index]!
+      }
       const lengths = sample
         .map((row) => (table.cellsOf(row)[index] ?? '').length)
         .sort((a, b) => a - b)
       const typical = lengths[Math.floor(lengths.length * 0.9)] ?? 0
       return Math.round(Math.min(40, Math.max(6, name.length + 2, typical + 1)) * CH + 16)
     })
+    if (sample.length) measuredWithRows = true
   },
   { immediate: true },
 )
@@ -137,6 +146,7 @@ const totalWidth = computed(
 let resizing: { index: number; x: number; width: number } | null = null
 function startResize(event: PointerEvent, index: number) {
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  resizedCols.add(index)
   resizing = { index, x: event.clientX, width: widths.value[index] ?? 100 }
 }
 const endResize = () => (resizing = null)
@@ -199,15 +209,18 @@ watch(
   () => selectedIndex.value !== undefined,
   (selected) => emit('rowSelected', selected),
 )
-watch(
-  () => props.fileId,
-  () => {
-    cursor.value = null
-    filterText.value = filter.value = ''
-    sort.value = null
-    scroller.value?.scrollTo({ top: 0 })
-  },
-)
+watch([() => props.fileId, () => props.kind], () => {
+  cursor.value = null
+  filterText.value = filter.value = ''
+  sort.value = null
+  landing.value = null
+  marks.anchor.value = null
+  widths.value = []
+  resizedCols.clear()
+  measuredWithRows = false
+  scrollTop.value = 0
+  scroller.value?.scrollTo({ top: 0 })
+})
 
 function moveTo(position: number) {
   if (!view.value.length) return
@@ -264,7 +277,9 @@ function onPress(event: PointerEvent) {
 /** A click on a row moves the cursor there, and unmarks the rows, as a click in the text view does. */
 function onRowClick(position: number) {
   cursor.value = position
-  if (mark.value && !pressedInGutter) marks.set(null)
+  if (mark.value && !pressedInGutter && (window.getSelection()?.isCollapsed ?? true)) {
+    marks.set(null)
+  }
   scroller.value?.focus({ preventScroll: true })
 }
 
@@ -295,11 +310,18 @@ async function copyRow() {
 
 // --- full screen: the same table, moved over the window ---
 
+const modalStore = useModalStore()
 const fullscreen = ref(false)
 function toggleFullscreen() {
+  const savedTop = scroller.value?.scrollTop ?? scrollTop.value
   fullscreen.value = !fullscreen.value
-  // Keep the keys working where the table now is.
-  requestAnimationFrame(() => scroller.value?.focus({ preventScroll: true }))
+  // Keep the keys working and preserve scroll position where the table now is.
+  requestAnimationFrame(() => {
+    if (!scroller.value) return
+    scroller.value.scrollTop = savedTop
+    scrollTop.value = savedTop
+    scroller.value.focus({ preventScroll: true })
+  })
 }
 
 /**
@@ -308,7 +330,7 @@ function toggleFullscreen() {
  * sees it; the filter's own Esc (clear the filter) is left alone.
  */
 function onFullscreenKey(event: KeyboardEvent) {
-  if (!fullscreen.value || event.key !== 'Escape') return
+  if (!fullscreen.value || event.key !== 'Escape' || modalStore.hasActiveModal) return
   if (event.target === filterInput.value) return
   if (cursor.value !== null) cursor.value = null
   else if (mark.value) marks.set(null)
@@ -333,8 +355,14 @@ function onKey(event: KeyboardEvent) {
   }
   const mod = event.metaKey || event.ctrlKey
   if (moves[event.key] && !mod) moveTo(moves[event.key]!())
-  else if (mod && event.key.toLowerCase() === 'c') copyRow()
-  else if (!mod && event.key === '/') filterInput.value?.focus()
+  else if (
+    mod &&
+    event.key.toLowerCase() === 'c' &&
+    selectedIndex.value !== undefined &&
+    (window.getSelection()?.isCollapsed ?? true)
+  ) {
+    copyRow()
+  } else if (!mod && event.key === '/') filterInput.value?.focus()
   else if (!mod && event.key === 'f') toggleFullscreen()
   else if (event.key === 'Escape' && cursor.value !== null) cursor.value = null
   else if (event.key === 'Escape' && mark.value) marks.set(null)
@@ -359,7 +387,10 @@ const moreLabel = computed(() =>
 )
 /** Past this, reading the rest asks first: the rows are held in this page's memory. */
 const LOAD_ALL_ASK = 256 * 1024 * 1024
+let alive = true
+onUnmounted(() => (alive = false))
 async function loadAll() {
+  const id = props.fileId
   if (
     remaining.value > LOAD_ALL_ASK &&
     !(await confirmAction({
@@ -370,6 +401,7 @@ async function loadAll() {
   ) {
     return
   }
+  if (!alive || props.fileId !== id) return
   table.loadAll()
 }
 </script>
@@ -405,9 +437,10 @@ async function loadAll() {
             <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{
               notice
             }}</span>
-            <span v-else-if="table.error.value" class="truncate text-danger" role="alert">{{
-              table.error.value
-            }}</span>
+            <span v-else-if="table.error.value" class="flex min-w-0 items-center gap-2">
+              <span class="truncate text-danger" role="alert">{{ table.error.value }}</span>
+              <Button size="row" class="shrink-0" @click="table.loadMore()">Retry</Button>
+            </span>
             <span v-else-if="showReading" class="flex items-center gap-2 truncate">
               <span class="tabular"
                 >reading… {{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }}</span
@@ -510,7 +543,7 @@ async function loadAll() {
                   v-tooltip="{ text: 'Sort by this column', detail: types[index] }"
                   @click="sortBy(index)"
                 >
-                  <span class="truncate">{{ name }}</span>
+                  <span class="truncate">{{ escapeControls(name) }}</span>
                   <span v-if="sort?.column === index" class="shrink-0 text-brand">{{
                     sort.dir === 1 ? '↑' : '↓'
                   }}</span>
@@ -522,6 +555,7 @@ async function loadAll() {
                     @pointerdown.stop="startResize($event, index)"
                     @pointermove="onResize"
                     @pointerup="endResize"
+                    @pointercancel="endResize"
                   />
                 </span>
               </div>
@@ -575,7 +609,10 @@ async function loadAll() {
                   >
                 </div>
               </div>
-              <p v-if="!view.length && !table.reading.value" class="px-3 py-6 text-ink-muted">
+              <p
+                v-if="!view.length && !table.reading.value && !table.error.value"
+                class="px-3 py-6 text-ink-muted"
+              >
                 {{ filter ? 'No rows match the filter.' : 'No rows.' }}
               </p>
             </div>
