@@ -133,4 +133,37 @@ describe('Prompt', () => {
     await nextTick()
     expect(modalStore.isModalOpen('prompt')).toBe(false)
   })
+
+  it('clears line on close to cancel pending server searches and omits aria-activedescendant when empty', async () => {
+    vi.useFakeTimers()
+    try {
+      const router = makeRouter()
+      await router.push('/metrics')
+      await router.isReady()
+
+      const modalStore = useModalStore()
+      const wrapper = mount(Prompt, {
+        global: { plugins: [pinia, router, directives] },
+      })
+      wrappers.push(wrapper)
+
+      modalStore.openModal('prompt')
+      await nextTick()
+      const inputEl = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!
+      inputEl.value = 'zzz-missing'
+      inputEl.dispatchEvent(new Event('input', { bubbles: true }))
+      await nextTick()
+
+      expect(inputEl.getAttribute('aria-activedescendant')).toBeNull()
+
+      // Closing before the 250ms debounce cancels the search so no server call fires.
+      modalStore.closeModal('prompt')
+      await nextTick()
+      vi.advanceTimersByTime(300)
+      await nextTick()
+      expect(api.folders.getAllFolders).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

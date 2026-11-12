@@ -51,6 +51,7 @@ const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { path: '/', name: 'folders', component: StubView },
+    { path: '/login', name: 'login', component: StubView },
     { path: '/folder/:id', name: 'folder', component: StubView },
     { path: '/folder/:folderId/file/:fileId', name: 'file', component: StubView },
     { path: '/metrics', name: 'metrics', component: StubView },
@@ -128,6 +129,7 @@ describe('composables/usePrompt', () => {
 
     expect(labelForPath(null)).toBe('~ (home)')
     expect(labelForPath('/')).toBe('~ (home)')
+    expect(labelForPath('/?page=2')).toBe('~ (home)')
     expect(labelForPath('/folder/2')).toBe('/Cases/IR-01/')
     expect(labelForPath('/folder/2/file/9')).toBe('/Cases/IR-01/syslog.txt')
     // Unknown file falls back to known parent folder, then raw path when folder is unknown.
@@ -354,6 +356,30 @@ describe('composables/usePrompt', () => {
     prompt.line.value = 'mkdir'
     await nextTick()
     expect(prompt.results.value[0]?.label).toBe('mkdir: enter folder name')
+    // Pressing Enter on bare mkdir fills in the trailing space without dismissing.
+    const goCountBeforeEmptyMkdir = onGo.mock.calls.length
+    prompt.handleKey(keyEvent('Enter'))
+    expect(prompt.line.value).toBe('mkdir ')
+    expect(onGo).toHaveBeenCalledTimes(goCountBeforeEmptyMkdir)
+
+    // Folder names starting with 'mkdir' (no whitespace separator) search rather than invoke mkdir.
+    const mkdirLogs = makeItem({ id: 76, kind: 'folder', name: 'mkdir_logs', parent: 1 })
+    const mkdirNotes = makeItem({ id: 75, kind: 'folder', name: 'notes_mkdir_extra', parent: 1 })
+    itemsStore.upsertItems([mkdirLogs, mkdirNotes])
+    prompt.line.value = 'mkdir_logs'
+    expect(prompt.results.value[0]?.mkdir).toBeUndefined()
+    expect(prompt.results.value[0]?.item?.id).toBe(76)
+
+    // Multi-match local search sorts higher-ranked basename matches first.
+    prompt.line.value = 'mkdir'
+    prompt.line.value = 'cd mkdir_'
+    expect(prompt.results.value.map((r) => r.item?.id)).toEqual([76, 75])
+
+    // Sync index reset lets an immediate Enter after changing line act on index 0 without nextTick.
+    prompt.line.value = ''
+    prompt.handleKey(keyEvent('ArrowDown'))
+    prompt.handleKey(keyEvent('ArrowDown'))
+    expect(prompt.index.value).toBe(2)
 
     vi.mocked(api.folders.createFolder).mockResolvedValueOnce({
       id: 77,
@@ -363,7 +389,7 @@ describe('composables/usePrompt', () => {
       parent_id: 1,
     })
     prompt.line.value = 'mkdir "Exports/"'
-    await nextTick()
+    expect(prompt.index.value).toBe(0)
     expect(prompt.results.value[0]?.folderName).toBe('Exports')
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('mkdir Exports')
@@ -371,6 +397,21 @@ describe('composables/usePrompt', () => {
     await flushPromises()
     expect(api.folders.createFolder).toHaveBeenCalledWith('Exports', 1)
     expect(itemsStore.findFolder(77)?.name).toBe('Exports')
+
+    // IME composing events are left alone by handleKey.
+    expect(prompt.handleKey(keyEvent('Enter', { isComposing: true }))).toBe(false)
+
+    // Navigating to /login clears previousPath.
+    await router.push('/login')
+    expect(previousPath.value).toBeNull()
+
+    // On a file route whose parent folder isn't loaded yet, '.' falls back to route folderId.
+    await router.push('/folder/888/file/999')
+    prompt.line.value = '.'
+    prompt.go(prompt.results.value[0])
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/folder/888?focus=999')
+    await router.push('/folder/1')
 
     // 'rm': exact folder name ranks above longer prefix match; Tab completes; go() confirms & deletes.
     prompt.line.value = 'rm Alpha'

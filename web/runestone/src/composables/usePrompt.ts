@@ -51,12 +51,12 @@ export const pathOf = (item: Item) =>
     .join('/') +
   (item.kind === 'folder' ? '/' : '')
 
-let trackingInitialized = false
+const trackedRouters = new WeakSet<object>()
 export const previousPath = ref<string | null>(null)
 
 export function labelForPath(pathStr: string | null): string {
   const itemsStore = useItemsStore()
-  if (!pathStr || pathStr === '/') return '~ (home)'
+  if (!pathStr || pathStr === '/' || pathStr.startsWith('/?')) return '~ (home)'
   const match = pathStr.match(/^\/folder\/(\d+)(?:\/file\/(\d+))?/)
   if (match) {
     const fileId = match[2] ? Number(match[2]) : null
@@ -91,8 +91,8 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   /** The top level is paginated: listing it means the pages loaded so far. */
   const pageSize = () => settingsStore.settings.explorer.pageSize
 
-  if (!trackingInitialized) {
-    trackingInitialized = true
+  if (!trackedRouters.has(router)) {
+    trackedRouters.add(router)
     router.afterEach((to, from) => {
       if (to.name === 'login') {
         previousPath.value = null
@@ -122,6 +122,12 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     return undefined
   })
   const cwdPath = computed(() => (cwd.value ? pathOf(cwd.value).replace(/\/$/, '') : '/'))
+  const fileFolderId = computed(() => {
+    if (route.name !== 'file') return undefined
+    if (cwd.value) return cwd.value.id
+    const parsed = Number(route.params.folderId)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+  })
 
   const query = computed(() => line.value.replace(/^cd\s+/, '').trim())
 
@@ -159,6 +165,8 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     const base = resolved.value.base
     return base ? pathOf(base).replace(/\/$/, '') : '/'
   })
+
+  const isRm = computed(() => /^rm(\s|$)/.test(line.value.trim().toLowerCase()))
 
   /** The line is a command or a jump, not a search. */
   const isCommand = computed(() => {
@@ -256,9 +264,9 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     }
 
     // 3. "mkdir" command
-    if (trimmed.startsWith('mkdir')) {
+    if (/^mkdir(\s|$)/.test(trimmed)) {
       const folderName = raw
-        .replace(/^mkdir\s*/i, '')
+        .replace(/^\s*mkdir\s*/i, '')
         .trim()
         .replace(/^["']|["']$/g, '')
         .replace(/\/+$/, '')
@@ -375,14 +383,14 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     return (byCase ? [byCase, ...matches] : matches).slice(0, 50)
   })
 
-  watch(results, () => (index.value = 0))
+  watch(results, () => (index.value = 0), { flush: 'sync' })
 
   /** Creates a folder in the current one and stays put, like a shell's mkdir.
    *  The placeholder row shows meanwhile and the new folder takes its place;
    *  then the listing is re-read so it matches the server. Failures show in
    *  the explorer. */
   async function mkdir(folderName: string) {
-    const parent = cwd.value?.id ?? null
+    const parent = cwd.value?.id ?? fileFolderId.value ?? null
     const created = await createFolder(parent, folderName)
     if (!created) return
     invalidate(parent === null ? folderKeys.rootPrefix : folderKeys.subfolders(parent))
@@ -391,6 +399,10 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
 
   function go(result: PromptResult | undefined) {
     if (!result) return
+    if (result.mkdir && !result.folderName) {
+      line.value = 'mkdir '
+      return
+    }
     line.value = ''
     onGo(result)
     if (result.mkdir && result.folderName) {
@@ -415,9 +427,10 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     // From a file, `..` and `.` are its folder: back to the listing, with the
     // file under the cursor. From a folder, `..` is its parent.
     if (result.here || (result.up && route.name === 'file')) {
-      if (route.name === 'file' && cwd.value) {
+      const folderId = fileFolderId.value
+      if (route.name === 'file' && folderId !== undefined) {
         router.push({
-          path: `/folder/${cwd.value.id}`,
+          path: `/folder/${folderId}`,
           query: { focus: String(route.params.fileId) },
         })
       }
@@ -454,63 +467,15 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   /** The prompt's own keys. Returns whether it used the key; Esc is the
    *  caller's, since closing means something different in each place. */
   function handleKey(event: KeyboardEvent): boolean {
+    if (event.isComposing) return false
     const last = results.value.length - 1
     const move = (to: number) => (index.value = Math.max(0, Math.min(last, to)))
     const ctrl = event.ctrlKey && !event.metaKey
     if (event.key === 'ArrowDown' || (ctrl && event.key === 'n')) move(index.value + 1)
     else if (event.key === 'ArrowUp' || (ctrl && event.key === 'p')) move(index.value - 1)
     else if (event.key === 'Tab') complete()
-    else if (event.key === 'Enter') {
-      const trimmed = line.value.trim().toLowerCase()
-      if (trimmed.startsWith('mkdir')) {
-        const folderName = line.value
-          .replace(/^mkdir\s*/i, '')
-          .trim()
-          .replace(/^["']|["']$/g, '')
-          .replace(/\/+$/, '')
-        if (folderName) {
-          line.value = ''
-          onGo({
-            item: null,
-            path: folderName,
-            label: `mkdir ${folderName}/`,
-            hits: [],
-            mkdir: true,
-            folderName,
-          })
-          mkdir(folderName)
-          event.preventDefault()
-          return true
-        }
-      }
-      if (trimmed === 'cd' || trimmed === 'cd ~' || query.value === '~') {
-        line.value = ''
-        const res: PromptResult = { item: null, path: '/', label: '~ (home)', hits: [], home: true }
-        onGo(res)
-        if (route.path !== '/') router.push('/')
-        event.preventDefault()
-        return true
-      }
-      if (trimmed === 'cd -' || trimmed === 'cd-' || query.value === '-') {
-        line.value = ''
-        const res: PromptResult = {
-          item: null,
-          path: previousPath.value ?? '/',
-          label: previousPath.value
-            ? `- (${labelForPath(previousPath.value)})`
-            : '- (OLDPWD not set)',
-          hits: [0],
-          prev: true,
-        }
-        onGo(res)
-        if (previousPath.value && route.fullPath !== previousPath.value) {
-          router.push(previousPath.value)
-        }
-        event.preventDefault()
-        return true
-      }
-      go(results.value[index.value])
-    } else if (ctrl && event.key === 'u') line.value = ''
+    else if (event.key === 'Enter') go(results.value[index.value])
+    else if (ctrl && event.key === 'u') line.value = ''
     else return false
     event.preventDefault()
     return true
@@ -524,6 +489,7 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
     line,
     index,
     query,
+    isRm,
     cwd,
     cwdPath,
     scopePath,

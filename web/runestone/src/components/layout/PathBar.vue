@@ -48,7 +48,8 @@ const rootPagesStore = useRootPagesStore()
 
 const input = ref<HTMLInputElement | null>(null)
 const focused = ref(false)
-const { line, index, query, cwdPath, scopePath, results, serverSearch, go, handleKey } = usePrompt()
+const { line, index, query, isRm, cwdPath, scopePath, results, serverSearch, go, handleKey } =
+  usePrompt()
 
 const dropdown = computed(() => focused.value && line.value.trim() !== '')
 
@@ -389,6 +390,7 @@ function onBarClick(event: MouseEvent) {
       :results="results"
       :index="index"
       :query="query"
+      :mode="isRm ? 'rm' : 'search'"
       :cwd-path="cwdPath"
       :scope-path="scopePath"
       :server-search="serverSearch"

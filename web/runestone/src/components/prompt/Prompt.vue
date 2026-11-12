@@ -16,6 +16,7 @@ const {
   line,
   index,
   query,
+  isRm,
   cwdPath,
   scopePath,
   results,
@@ -24,8 +25,7 @@ const {
   handleKey,
 } = usePrompt(() => close())
 
-watch(promptOpen, (open) => {
-  if (!open) return
+watch(promptOpen, () => {
   line.value = ''
   index.value = 0
 })
@@ -58,11 +58,13 @@ function onInputKey(event: KeyboardEvent) {
             v-autofocus
             v-model="line"
             type="text"
+            role="combobox"
             spellcheck="false"
             autocomplete="off"
             aria-label="Find a folder or file"
             aria-controls="prompt-results"
-            :aria-activedescendant="`prompt-${index}`"
+            :aria-expanded="results.length > 0"
+            :aria-activedescendant="results.length ? `prompt-${index}` : undefined"
             class="min-w-0 flex-1 bg-transparent pl-1 font-mono text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
             placeholder="cd, or type to find…"
             @keydown="onInputKey"
@@ -73,6 +75,7 @@ function onInputKey(event: KeyboardEvent) {
           :results="results"
           :index="index"
           :query="query"
+          :mode="isRm ? 'rm' : 'search'"
           :cwd-path="cwdPath"
           :scope-path="scopePath"
           :server-search="serverSearch"
