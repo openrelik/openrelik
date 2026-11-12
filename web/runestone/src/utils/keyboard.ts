@@ -26,7 +26,7 @@ export function promptPassesThrough(event: KeyboardEvent, line: string): boolean
 }
 
 /**
- * Checks if the event target is an active text input or editable element.
+ * Checks if the event target is an active text input, select, or editable element.
  * Checkboxes and radio buttons are not typing. Nor is the PathBar prompt
  * (data-prompt) for the keys it passes through to the listing; for every
  * other key it is, which matters to listeners in the capture phase: they
@@ -37,7 +37,7 @@ export function isTyping(event: KeyboardEvent): boolean {
   if (!(target instanceof HTMLElement)) return false
 
   if (target.isContentEditable) return true
-  if (target instanceof HTMLTextAreaElement) return true
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true
 
   if (target instanceof HTMLInputElement) {
     if (target.type === 'checkbox' || target.type === 'radio') {

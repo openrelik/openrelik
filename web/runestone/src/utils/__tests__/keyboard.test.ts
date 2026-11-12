@@ -50,8 +50,10 @@ describe('isTyping', () => {
     expect(isTyping(keyEvent('j', {}, document.createElement('button')))).toBe(false)
   })
 
-  it('returns true for textarea, text input, and contentEditable elements', () => {
+  it('returns true for textarea, select, text input, and contentEditable elements', () => {
     expect(isTyping(keyEvent('j', {}, document.createElement('textarea')))).toBe(true)
+    expect(isTyping(keyEvent('g', {}, document.createElement('select')))).toBe(true)
+    expect(isTyping(keyEvent('Escape', {}, document.createElement('select')))).toBe(true)
 
     const textInput = document.createElement('input')
     textInput.type = 'text'
