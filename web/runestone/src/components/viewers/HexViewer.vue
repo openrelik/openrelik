@@ -77,9 +77,15 @@ const {
 } = useRowScroller(body, track, () => totalRows.value, ROW_H)
 
 const rows = computed(() => {
-  const out: { row: number; offset: number }[] = []
+  const out: { row: number; offset: number; cells: (number | undefined)[] }[] = []
   for (let i = 0; i < visibleRows.value && topRow.value + i < totalRows.value; i++) {
-    out.push({ row: topRow.value + i, offset: (topRow.value + i) * ROW })
+    const row = topRow.value + i
+    const offset = row * ROW
+    const cells: (number | undefined)[] = []
+    for (let col = 0; col < ROW; col++) {
+      cells.push(offset + col <= last.value ? bytes.byteAt(offset + col) : undefined)
+    }
+    out.push({ row, offset, cells })
   }
   return out
 })
@@ -289,9 +295,7 @@ async function copy(asText: boolean) {
   const end = selectionStart.value + Math.min(length, COPY_MAX) - 1
   try {
     const data = await bytes.read(selectionStart.value, end)
-    const ok = await copyToClipboard(
-      asText ? Array.from(data, printable).join('') : toHex(data),
-    )
+    const ok = await copyToClipboard(asText ? Array.from(data, printable).join('') : toHex(data))
     if (!ok) {
       say('Could not copy the selection')
       return
@@ -515,7 +519,9 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           </div>
 
           <div ref="body" class="min-h-0 flex-1 overflow-hidden">
-            <p v-if="size === 0" class="px-3 py-3 font-sans text-ink-muted">Empty file (0 bytes).</p>
+            <p v-if="size === 0" class="px-3 py-3 font-sans text-ink-muted">
+              Empty file (0 bytes).
+            </p>
             <div v-for="line in rows" :key="line.row" class="flex h-5 items-center">
               <!-- the row's offset: click, ⇧-click or drag to mark its bytes -->
               <span
@@ -534,7 +540,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
               <!-- hex -->
               <span class="flex shrink-0">
                 <span
-                  v-for="i in COLUMN_OFFSETS"
+                  v-for="(byte, i) in line.cells"
                   :key="i"
                   class="w-[2.5ch] cursor-default text-center"
                   :class="[
@@ -543,21 +549,17 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
                     isCursor(line.offset + i)
                       ? 'outline outline-1 outline-brand -outline-offset-1'
                       : '',
-                    bytes.byteAt(line.offset + i) === undefined ? 'text-ink-muted/50' : 'text-ink',
+                    byte === undefined ? 'text-ink-muted/50' : 'text-ink',
                   ]"
                   @pointerdown="onByteDown($event, line.offset + i)"
                   @pointerenter="onByteEnter(line.offset + i)"
-                  >{{
-                    bytes.byteAt(line.offset + i) === undefined
-                      ? '··'
-                      : hex2(bytes.byteAt(line.offset + i)!)
-                  }}</span
+                  >{{ byte === undefined ? '··' : hex2(byte) }}</span
                 >
               </span>
               <!-- text: the same bytes -->
               <span class="ml-4 flex shrink-0 pr-3">
                 <span
-                  v-for="i in COLUMN_OFFSETS"
+                  v-for="(byte, i) in line.cells"
                   :key="i"
                   class="w-[1ch] cursor-default text-center"
                   :class="[
@@ -565,20 +567,15 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
                     isCursor(line.offset + i)
                       ? 'outline outline-1 outline-brand -outline-offset-1'
                       : '',
-                    bytes.byteAt(line.offset + i) === undefined
+                    byte === undefined
                       ? 'text-ink-muted/50'
-                      : bytes.byteAt(line.offset + i)! >= 0x20 &&
-                          bytes.byteAt(line.offset + i)! <= 0x7e
+                      : byte >= 0x20 && byte <= 0x7e
                         ? 'text-ink'
                         : 'text-ink-muted/60',
                   ]"
                   @pointerdown="onByteDown($event, line.offset + i)"
                   @pointerenter="onByteEnter(line.offset + i)"
-                  >{{
-                    bytes.byteAt(line.offset + i) === undefined
-                      ? '·'
-                      : printable(bytes.byteAt(line.offset + i)!)
-                  }}</span
+                  >{{ byte === undefined ? '·' : printable(byte) }}</span
                 >
               </span>
             </div>
