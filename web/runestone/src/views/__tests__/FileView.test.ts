@@ -205,6 +205,47 @@ describe('FileView', () => {
 
     expect(wrapper.text()).toContain('No file 101.')
     expect(api.folders.getFolder).not.toHaveBeenCalled()
+
+    // Escape on malformed folderId navigates back to '/' instead of '/folder/NaN?focus=undefined'
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/')
+  })
+
+  it('shows error + Retry on non-404 folder listing failure and recovers when retried', async () => {
+    vi.mocked(api.folders.getFolder).mockResolvedValue(childEvidenceFolder)
+    vi.mocked(api.folders.getSubfolders).mockResolvedValue([])
+    vi.mocked(api.folders.getFolderFiles)
+      .mockRejectedValueOnce(
+        new ApiError({ status: 0, statusText: '', message: 'Network unavailable' }),
+      )
+      .mockResolvedValueOnce([{ ...markdownListingFile, magic_mime: undefined }])
+    vi.mocked(api.files.getFile).mockResolvedValue({ ...markdownFileDetail, magic_mime: null })
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push('/folder/10/file/101')
+    await router.isReady()
+
+    wrapper = mount(FileView, {
+      props: { folderId: '10', fileId: '101' },
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Network unavailable')
+    expect(wrapper.text()).not.toContain('No file 101.')
+
+    const retryBtn = wrapper.findAll('button').find((b) => b.text() === 'Retry')!
+    await retryBtn.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('findings.md')
+    // Missing MIME omits leading middot in StatusBar
+    expect(wrapper.find('footer').text()).not.toContain('· 28 B')
+    expect(wrapper.find('footer').text()).toContain('28 B')
   })
 
   it('loads file details + parent breadcrumbs, switches viewer modes, and toggles the side panel', async () => {
@@ -302,11 +343,18 @@ describe('FileView', () => {
     await flushPromises()
 
     // Clicking a table row updates rowSelected and switches unpinned sideTab to Inspector.
-    const dataCells = wrapper.findAll('td')
-    if (dataCells.length > 0) {
-      await dataCells[0]!.trigger('click')
-      await flushPromises()
-    }
+    const gridRows = wrapper.get('[role="grid"]').findAll('div.absolute')
+    expect(gridRows.length).toBeGreaterThan(0)
+    await gridRows[0]!.trigger('click')
+    await flushPromises()
+    const sideTabs = wrapper.get('aside[aria-label="Side panel"]').findAll('[role="tab"]')
+    expect(sideTabs[1]?.attributes('aria-selected')).toBe('true')
+
+    // Mark row 1 via the gutter so #R1 is active for the Escape-mark tests below.
+    await wrapper.get('[data-gutter]').trigger('pointerdown', { button: 0 })
+    window.dispatchEvent(new PointerEvent('pointerup'))
+    await flushPromises()
+    expect(router.currentRoute.value.hash).toBe('#R1')
 
     // Download via toolbar button and 'd' shortcut.
     const downloadBtn = wrapper
@@ -355,5 +403,52 @@ describe('FileView', () => {
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/folder/10')
     expect(router.currentRoute.value.query.focus).toBe('102')
+  })
+
+  it('does not let queued writeUrl clobber a route change in the same tick and resets pinned tab across same-view files', async () => {
+    const csv2: FolderFile = { ...csvListingFile, id: 103, display_name: 'second.csv' }
+    vi.mocked(api.folders.getFolder).mockResolvedValue(childEvidenceFolder)
+    vi.mocked(api.folders.getSubfolders).mockResolvedValue([])
+    vi.mocked(api.folders.getFolderFiles).mockResolvedValue([csvListingFile, csv2])
+    vi.mocked(api.files.getFile).mockResolvedValue(csvFileDetail)
+    vi.mocked(api.files.readRange).mockResolvedValue(
+      new TextEncoder().encode('host,pid\nworkstation,4120\n'),
+    )
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push('/folder/10/file/102')
+    await router.isReady()
+
+    wrapper = mount(FileView, {
+      props: { folderId: '10', fileId: '102' },
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+    await flushPromises()
+
+    // Select a row -> Inspector, then pin Details
+    const gridRows = wrapper.get('[role="grid"]').findAll('div.absolute')
+    await gridRows[0]!.trigger('click')
+    await flushPromises()
+    const sideTabs = wrapper.get('aside[aria-label="Side panel"]').findAll('[role="tab"]')
+    await sideTabs[0]!.trigger('click')
+    expect(sideTabs[0]!.attributes('aria-selected')).toBe('true')
+
+    // Switch to another CSV (same 'table' view) and select row 0 -> pinned was reset so Inspector activates again
+    await wrapper.setProps({ fileId: '103' })
+    await flushPromises()
+    await wrapper.get('[role="grid"]').findAll('div.absolute')[0]!.trigger('click')
+    await flushPromises()
+    expect(sideTabs[1]!.attributes('aria-selected')).toBe('true')
+
+    // Unmount immediately after triggering a mark write -> microtask must not replace the next route
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    wrapper.unmount()
+    wrapper = null
+    await router.push('/metrics')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/metrics')
   })
 })

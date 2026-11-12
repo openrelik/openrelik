@@ -151,7 +151,12 @@ function showSource(line: number) {
       >
         {{ tabs[0]!.label }}
       </h2>
-      <div v-else class="flex items-stretch" role="tablist" aria-label="Show the file as">
+      <div
+        v-else-if="tabs.length > 1"
+        class="flex items-stretch"
+        role="tablist"
+        aria-label="Show the file as"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.view"
@@ -185,7 +190,7 @@ function showSource(line: number) {
       @row-selected="emit('rowSelected', $event)"
     />
     <TextViewer
-      v-if="textFor === file.id"
+      v-if="views.includes('text') && textFor === file.id"
       v-show="view === 'text'"
       v-model:mark="lineMark"
       :file-id="file.id"
