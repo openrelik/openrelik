@@ -206,23 +206,23 @@ const READING_MAX = 8
       </g>
 
       <!-- the series: a light fill under a line; a lone point as a dot -->
-      <g v-for="series in lines" :key="series.name">
-        <path v-if="series.area" :d="series.area" :fill="series.color" fill-opacity="0.18" />
+      <g v-for="item in lines" :key="item.name">
+        <path v-if="item.area" :d="item.area" :fill="item.color" fill-opacity="0.18" />
         <path
-          v-if="series.points.length > 1"
-          :d="series.line"
+          v-if="item.points.length > 1"
+          :d="item.line"
           fill="none"
-          :stroke="series.color"
+          :stroke="item.color"
           stroke-width="1.5"
           stroke-linejoin="round"
         />
         <circle
-          v-for="point in series.points.length === 1 ? series.points : []"
+          v-for="point in item.points.length === 1 ? item.points : []"
           :key="point[0]"
           :cx="x(point[0])"
           :cy="y(point[1])"
           r="2.5"
-          :fill="series.color"
+          :fill="item.color"
         />
       </g>
 
