@@ -10,7 +10,7 @@ Companion documents:
   - [`file-view-ideas.md`](docs/ideas/file-view-ideas.md): planned file-view features (strings, JSON tree, timeline, entropy, archives).
   - [`evidence-lineage.md`](docs/ideas/evidence-lineage.md): a lineage record for every task, so any derived file can be traced to the code, rules and input bytes that produced it.
 - [`docs/test-plan.md`](docs/test-plan.md): the original unit and component test plan (Vitest); see §6 below for running and adding tests across the full suite.
-- [`docs/code-review-plan.md`](docs/code-review-plan.md): the planned code review for simplicity, split into sessions.
+- [`docs/code-review-plan.md`](docs/code-review-plan.md): the 11-slice codebase review plan (`ponytail-review`: correctness, safety, scale, tests, speed, and lean code).
 
 ---
 
@@ -85,7 +85,7 @@ File contents and worker reports are untrusted (this is a forensics tool: the fi
 
 ### Development Setup
 - `npm run dev` serves on `http://localhost:5173` and proxies `/api` and `/auth` to an OpenRelik server on `http://localhost:8710` (`vite.config.ts`).
-- Environment overrides (`src/api/config.ts`): `VITE_OPENRELIK_SERVER_URL`, `VITE_OPENRELIK_API_VERSION` (default `v1`), `VITE_OPENRELIK_AUTH_METHODS` (comma-separated, default `local`), `VITE_USE_MOCK_API` (`true` enables a mock login in dev only).
+- Environment overrides (`src/api/config.ts`): `VITE_OPENRELIK_SERVER_URL`, `VITE_OPENRELIK_API_VERSION` (default `v1`), `VITE_USE_MOCK_API` (`true` enables a mock login in dev only).
 - Import alias: `@/` → `src/`.
 
 ---
@@ -193,7 +193,7 @@ Registered globally by the plugin in `src/directives/index.ts`:
 
 #### 8. API (`src/api/`)
 - `client.ts`: the one HTTP client (native `fetch`): base URL, CSRF tokens, shared 401 refresh-and-retry, 30 s timeout, in-flight request counting (`onActivity`), reachability (`onReachability`), and chunked uploads with byte progress (`upload()`, the only XHR path).
-- `endpoints/*.ts`: one typed module per server area (`auth`, `configs`, `directory`, `files`, `folders`, `metrics`, `taskqueue`, `users`, `workflows`), exposed as `api.<area>` from `src/api/index.ts`.
+- `endpoints/*.ts`: one typed module per server area (`auth`, `directory`, `files`, `folders`, `metrics`, `taskqueue`, `users`, `workflows`), exposed as `api.<area>` from `src/api/index.ts`.
 - `errors.ts`: every failed request rejects with an `ApiError` (`status` 0 means it never reached the server); show messages with `errorMessage(err, fallback)`.
 - `session.ts`: guarded `sessionStorage` access. For browser storage use this or `useRemembered` (localStorage): both survive blocked storage (private windows), where a bare `localStorage` access throws.
 
