@@ -563,7 +563,11 @@ describe('HexViewer', () => {
     expect(writeText).toHaveBeenLastCalledWith(expect.stringContaining('#0x10'))
 
     // Alt+ArrowLeft is ignored (not prevented)
-    const altEvent = new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, cancelable: true })
+    const altEvent = new KeyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      altKey: true,
+      cancelable: true,
+    })
     grid.element.dispatchEvent(altEvent)
     expect(altEvent.defaultPrevented).toBe(false)
 

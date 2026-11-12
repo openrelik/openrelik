@@ -287,15 +287,18 @@ describe('MarkdownViewer', () => {
       full.slice(start, end + 1),
     )
 
-    const wrapper = mountViewer({ fileId: 110, size: total, mark: { from: 99999, to: 99999 } }, true)
+    const wrapper = mountViewer(
+      { fileId: 110, size: total, mark: { from: 99999, to: 99999 } },
+      true,
+    )
     const docEl = wrapper.get('[role="document"]').element as HTMLElement
     vi.spyOn(docEl, 'clientHeight', 'get').mockReturnValue(300)
-    const blockSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
-      function (this: HTMLElement) {
+    const blockSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
         if (this.hasAttribute('data-end')) return new DOMRect(0, 600, 400, 20)
         return new DOMRect(0, 0, 400, 300)
-      },
-    )
+      })
 
     await flushPromises()
     await vi.advanceTimersByTimeAsync(100)

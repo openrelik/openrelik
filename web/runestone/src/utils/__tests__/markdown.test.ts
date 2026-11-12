@@ -162,7 +162,9 @@ describe('forensic safety', () => {
       expect(rendered).toContain('‹U+001B›')
       expect(rendered).toContain('‹U+007F›')
       expect(rendered).toContain('‹U+009B›')
-      expect(rendered).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u061C\u2060]/)
+      expect(rendered).not.toMatch(
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u061C\u2060]/,
+      )
     }
   })
 })

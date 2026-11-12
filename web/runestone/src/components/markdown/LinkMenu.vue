@@ -103,7 +103,8 @@ function onKey(event: KeyboardEvent) {
   const step: Record<string, number> = { ArrowDown: 1, j: 1, ArrowUp: -1, k: -1 }
   if (event.key in step && list.length) {
     const delta = step[event.key]!
-    const next = at === -1 ? (delta > 0 ? 0 : list.length - 1) : (at + delta + list.length) % list.length
+    const next =
+      at === -1 ? (delta > 0 ? 0 : list.length - 1) : (at + delta + list.length) % list.length
     list[next]?.focus()
   } else if (event.key === 'Escape') {
     closeLinkMenu(true)
