@@ -9,6 +9,7 @@ export function useKeyboardShortcuts() {
   const modalStore = useModalStore()
 
   function handleKeyDown(event: KeyboardEvent) {
+    if (event.defaultPrevented) return
     const isCmd = isCommandModifier(event)
 
     // 1. If any modal is active, let Escape close the topmost modal

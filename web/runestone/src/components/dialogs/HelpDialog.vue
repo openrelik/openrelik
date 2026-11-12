@@ -4,6 +4,7 @@ import { onMounted, onUnmounted } from 'vue'
 
 import KeyHint from '@/components/base/KeyHint.vue'
 import { useHelp } from '@/composables/useHelp'
+import { useModalStore } from '@/stores/modals'
 
 /**
  * Every keyboard shortcut, on one sheet, grouped by where it works.
@@ -13,13 +14,21 @@ import { useHelp } from '@/composables/useHelp'
  * otherwise swallow the key. `?` or Esc closes it; nothing reaches the page
  * behind while it is open.
  */
+const modalStore = useModalStore()
 const { helpOpen, close } = useHelp()
 
 function onKey(event: KeyboardEvent) {
-  if (helpOpen.value && event.key === '?') {
+  if (
+    modalStore.activeModal === 'help' &&
+    event.key === '?' &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey
+  ) {
     close()
     event.preventDefault()
     event.stopPropagation()
+    event.stopImmediatePropagation()
   }
 }
 onMounted(() => window.addEventListener('keydown', onKey))
@@ -73,6 +82,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
       { keys: ['⇧F10', '≣'], does: 'Actions for the highlighted row (also right-click, or ⋯)' },
       { keys: ['/'], does: 'Filter this folder' },
       { keys: ['⇧R'], does: 'Refresh this folder from the server' },
+      { keys: ['n'], does: 'Create a new folder' },
       { keys: ['u'], does: 'Upload files here (or drop them on the listing)' },
       { keys: ['s'], does: 'Share this folder' },
       { keys: ['F2', 'e'], does: 'Rename highlighted folder or file' },

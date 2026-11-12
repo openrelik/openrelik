@@ -29,6 +29,13 @@ describe('promptPassesThrough', () => {
     },
   )
 
+  it('passes ? through only when the prompt line is empty and unmodified', () => {
+    expect(promptPassesThrough(keyEvent('?'), '')).toBe(true)
+    expect(promptPassesThrough(keyEvent('?'), 'abc')).toBe(false)
+    expect(promptPassesThrough(keyEvent('?', { metaKey: true }), '')).toBe(false)
+    expect(promptPassesThrough(keyEvent('?', { altKey: true }), '')).toBe(false)
+  })
+
   it('keeps non-listing keys in the prompt even when empty', () => {
     expect(promptPassesThrough(keyEvent('a'), '')).toBe(false)
     expect(promptPassesThrough(keyEvent('Escape'), '')).toBe(false)

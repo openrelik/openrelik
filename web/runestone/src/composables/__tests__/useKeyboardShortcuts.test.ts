@@ -116,6 +116,29 @@ describe('composables/useKeyboardShortcuts', () => {
       expect(modalStore.isModalOpen('help')).toBe(true)
       modalStore.closeAllModals()
 
+      // Empty data-prompt input passes '?' through to open help, while non-empty swallows it.
+      const promptInput = document.createElement('input')
+      promptInput.dataset.prompt = ''
+      promptInput.value = ''
+      document.body.append(promptInput)
+      try {
+        press(promptInput, '?')
+        expect(modalStore.isModalOpen('help')).toBe(true)
+        modalStore.closeAllModals()
+
+        promptInput.value = 'query'
+        press(promptInput, '?')
+        expect(modalStore.isModalOpen('help')).toBe(false)
+      } finally {
+        promptInput.remove()
+      }
+
+      // Already defaultPrevented events are ignored.
+      const handled = new KeyboardEvent('keydown', { key: '?', bubbles: true, cancelable: true })
+      handled.preventDefault()
+      window.dispatchEvent(handled)
+      expect(modalStore.isModalOpen('help')).toBe(false)
+
       // After unmount, window listener is removed.
       wrapper.unmount()
       press(window, '?')

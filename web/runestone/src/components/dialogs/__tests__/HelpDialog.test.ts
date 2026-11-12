@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { nextTick } from 'vue'
+import { defineComponent, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils'
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import HelpDialog from '@/components/dialogs/HelpDialog.vue'
 import directives from '@/directives'
 import { helpOpen, useHelp } from '@/composables/useHelp'
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useModalStore } from '@/stores/modals'
 
 const pinia = createPinia()
@@ -107,5 +108,43 @@ describe('HelpDialog', () => {
     expect(event.defaultPrevented).toBe(true)
     expect(helpOpen.value).toBe(false)
     expect(body.find('[role="dialog"]').exists()).toBe(false)
+  })
+
+  it('closes cleanly with ? when paired with useKeyboardShortcuts and ignores ? when another modal is on top', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    // Mount HelpDialog inside a parent running useKeyboardShortcuts (same listener order as App.vue).
+    const AppShell = defineComponent({
+      components: { HelpDialog },
+      setup() {
+        useKeyboardShortcuts()
+        return {}
+      },
+      template: '<HelpDialog />',
+    })
+    wrapper = mount(AppShell, {
+      attachTo: document.body,
+      global: { plugins: [pinia, directives, router] },
+    })
+
+    const modalStore = useModalStore()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', cancelable: true }))
+    await nextTick()
+    expect(modalStore.isModalOpen('help')).toBe(true)
+
+    // With another modal stacked on top, ? must not close HelpDialog underneath.
+    modalStore.openModal('settings')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', cancelable: true }))
+    await nextTick()
+    expect(modalStore.isModalOpen('help')).toBe(true)
+    modalStore.closeModal('settings')
+
+    // Now HelpDialog is topmost again; ? closes it without useKeyboardShortcuts re-opening it.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', cancelable: true }))
+    await nextTick()
+    expect(modalStore.isModalOpen('help')).toBe(false)
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
   })
 })

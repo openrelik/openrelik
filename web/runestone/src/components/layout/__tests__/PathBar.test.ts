@@ -262,7 +262,8 @@ describe('PathBar', () => {
     modalStore.triggerPrompt()
     expect(document.activeElement).toBe(promptInput.element)
 
-    // Empty line passes navigation keys (e.g. ArrowDown) through without stopping propagation.
+    // Empty line passes navigation keys (e.g. ArrowDown) and '?' through without stopping propagation,
+    // and lets Cmd+, / Cmd+K bubble even when the prompt has text.
     let propagated = false
     const onBubble = () => {
       propagated = true
@@ -271,8 +272,21 @@ describe('PathBar', () => {
     promptInput.element.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
     )
-    window.removeEventListener('keydown', onBubble)
     expect(propagated).toBe(true)
+
+    propagated = false
+    promptInput.element.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }))
+    expect(propagated).toBe(true)
+
+    await promptInput.setValue('sys')
+    propagated = false
+    promptInput.element.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true }),
+    )
+    expect(propagated).toBe(true)
+
+    window.removeEventListener('keydown', onBubble)
+    await promptInput.setValue('')
 
     // Typing opens PromptResults dropdown; ArrowDown moves active option; first Escape clears line; second Escape blurs.
     await promptInput.trigger('focus')

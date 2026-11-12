@@ -15,12 +15,13 @@ const LISTING_KEYS = new Set([
 ])
 
 /**
- * Whether the path prompt lets a key through to the page: a listing key on an
- * empty line, or ⌘⏎ (runs a worker on the highlighted file). Every other key
- * is the prompt's.
+ * Whether the path prompt lets a key through to the page: a listing key or `?`
+ * on an empty line, or ⌘⏎ (runs a worker on the highlighted file). Every other
+ * key is the prompt's.
  */
 export function promptPassesThrough(event: KeyboardEvent, line: string): boolean {
   if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') return true
+  if (!line && event.key === '?' && !event.metaKey && !event.ctrlKey && !event.altKey) return true
   return !line && LISTING_KEYS.has(event.key)
 }
 

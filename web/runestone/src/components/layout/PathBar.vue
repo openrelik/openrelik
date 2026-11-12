@@ -11,7 +11,7 @@ import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useSettingsStore } from '@/stores/settings'
-import { promptPassesThrough } from '@/utils/keyboard'
+import { isCommandModifier, promptPassesThrough } from '@/utils/keyboard'
 
 /**
  * Where you are, as a shell prompt: `/CLI Test Folder/evidence $ ▌`.
@@ -63,6 +63,8 @@ const dropdown = computed(() => focused.value && line.value.trim() !== '')
  */
 function onInputKey(event: KeyboardEvent) {
   if (promptPassesThrough(event, line.value)) return
+  // Global command shortcuts (⌘,, ⌘K) must still reach the window handler.
+  if (isCommandModifier(event) && (event.key === ',' || event.key.toLowerCase() === 'k')) return
   event.stopPropagation()
   if (handleKey(event)) return
   if (event.key === 'Escape') {
