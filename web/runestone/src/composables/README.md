@@ -125,7 +125,7 @@ Registers a view's refresh callback (`(options: { force: boolean }) => void`) fo
 
 ### `useConnection`
 
-Tracks app-wide connectivity (`online`, `offline`, `unreachable`) by combining `navigator.onLine` / browser `online`–`offline` events with the API client's `onReachability` signal so broken proxies or timeouts surface even when `navigator.onLine` stays `true`.
+Tracks app-wide connectivity (`online`, `offline`, `unreachable`) by combining `navigator.onLine` / browser `online`–`offline` events with the API client's `onReachability` signal so broken proxies or timeouts surface even when `navigator.onLine` stays `true`. Also exports `connectionIsConstrained()` to detect `saveData` or `2g`/`slow-2g` links.
 
 ### `useFolderLoader`
 
@@ -174,4 +174,32 @@ Uploads files into a folder in chunks (`POST /files/upload`), module-scoped so a
 
 Files and folders dropped on an element: counts `dragenter`/`dragleave` instead of toggling (they fire per child), ignores drags that carry no files, and reports the drop even where dropping is not allowed so the caller can explain why. It hands over the dropped **entries**, taken while the drag data still exists, so folders can be walked.
 
-A dropped folder is recreated on the server by `useUploadQueue.enqueueDrop()` and its files are uploaded into it — at the top level too, where only loose files have nowhere to go. Everything in the folder comes along, hidden files included. A drop of more than 500 files is cut short, and says so.
+A dropped folder is recreated on the server by `useUploadQueue.enqueueDrop()` and its files are uploaded into it — at the top level too, where only loose files have nowhere to go. Everything in the folder comes along, hidden files included. Above `LARGE_DROP` (200 files), `enqueue()` and `enqueueDrop()` ask for confirmation before starting rather than truncating the drop.
+
+### `useUploadPanel`
+
+Auto-opens the `'uploads'` modal when uploads start (`activeCount > 0`) unless minimized for the current batch, and closes it when the queue empties unless opened manually.
+
+### `useFolderPrefetch`
+
+Schedules background subfolder/file prefetching after the cursor or hover rests on a row for 150 ms (`MAX_CONCURRENT = 2`, only the latest candidate queues), skipping offline, unreachable, or constrained links and cancelling queued work on navigation.
+
+### `useFolderPermissions`
+
+Loads and caches the operator's `FolderRole` (`Owner`, `Editor`, `Viewer`, `No Access`) per folder (`ROLE_STALE_MS = 5 min`), exposes reactive target permissions for the selection bar, and checks `canDeleteItem` against parent folder ownership or the uploader's username (`ownerUsername`).
+
+### `useItemActions`
+
+Builds the context-sensitive action list shared by the selection toolbar and row context menu (`open`, `workflow`, `run`, `download`, `share`, `rename`, `case`, `copy-id`, `delete`), gated by selection shape, current folder, role, and admin status.
+
+### `useCaseRef`
+
+Resolves top-level case folder references (`/case/:ref`) via `useQueryCache`, saves or clears a folder's `case_ref`, tracks 409 ownership conflicts (`takenBy`), and forgets stale lookups on change or deletion (`forgetCases`, `clearCaseLookups`).
+
+### `useConfirm`
+
+Coordinates `<ConfirmDialog />` across the app for destructive confirmations (`confirmAction`) and single-line text prompts (`askForText`), resolving safely on confirm, cancel, Escape, or `clearConfirm()`.
+
+### `useDownload`
+
+Streams downloads directly to disk using hidden `_blank` anchor clicks (`downloadFile`), staggers multi-file batches by 300 ms (`downloadFiles`), and clears pending batch timers on sign-out (`clearDownloads`).

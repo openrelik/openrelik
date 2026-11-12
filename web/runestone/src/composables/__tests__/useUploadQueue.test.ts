@@ -5,9 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const connectionStatus = ref<'online' | 'offline' | 'unreachable'>('online')
 
-vi.mock('@/composables/useConnection', () => ({
-  useConnection: () => ({ status: connectionStatus }),
-}))
+vi.mock('@/composables/useConnection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/composables/useConnection')>()
+  return {
+    ...actual,
+    useConnection: () => ({ status: connectionStatus }),
+  }
+})
 
 import { useConfirm } from '@/composables/useConfirm'
 import { folderKeys } from '@/composables/useFolderLoader'

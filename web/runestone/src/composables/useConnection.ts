@@ -34,6 +34,24 @@ const status = computed<ConnectionStatus>(() => {
   return serverReachable.value ? 'online' : 'unreachable'
 })
 
+/** The Network Information API is not in every browser, nor in the DOM typings. */
+interface NetworkInformation {
+  saveData?: boolean
+  effectiveType?: string
+}
+
+/** Whether the browser asks to save data or reports a 2G connection. */
+export function connectionIsConstrained(): boolean {
+  const connection = (globalThis.navigator as { connection?: NetworkInformation } | undefined)
+    ?.connection
+  if (!connection) return false
+  return (
+    connection.saveData === true ||
+    connection.effectiveType === '2g' ||
+    connection.effectiveType === 'slow-2g'
+  )
+}
+
 export interface UseConnectionReturn {
   status: ComputedRef<ConnectionStatus>
 }

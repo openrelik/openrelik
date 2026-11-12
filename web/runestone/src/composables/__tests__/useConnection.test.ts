@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reachabilityHandlers = new Set<(reachable: boolean) => void>()
 
@@ -12,7 +12,14 @@ vi.mock('@/api', () => ({
 }))
 
 import { onReachability } from '@/api'
-import { useConnection } from '@/composables/useConnection'
+import { connectionIsConstrained, useConnection } from '@/composables/useConnection'
+
+function setNavigatorConnection(value: { saveData?: boolean; effectiveType?: string } | undefined) {
+  Object.defineProperty(globalThis.navigator, 'connection', {
+    value,
+    configurable: true,
+  })
+}
 
 function emitReachability(reachable: boolean): void {
   for (const listener of reachabilityHandlers) listener(reachable)
@@ -20,8 +27,13 @@ function emitReachability(reachable: boolean): void {
 
 describe('composables/useConnection', () => {
   beforeEach(() => {
+    setNavigatorConnection(undefined)
     window.dispatchEvent(new Event('online'))
     emitReachability(true)
+  })
+
+  afterEach(() => {
+    setNavigatorConnection(undefined)
   })
 
   it('tracks online, offline, and unreachable transitions and subscribes once', () => {
@@ -47,5 +59,21 @@ describe('composables/useConnection', () => {
     // Next request succeeds -> back to online.
     emitReachability(true)
     expect(status.value).toBe('online')
+  })
+
+  it('detects constrained network connections via saveData and effectiveType', () => {
+    expect(connectionIsConstrained()).toBe(false)
+
+    setNavigatorConnection({ saveData: false, effectiveType: '4g' })
+    expect(connectionIsConstrained()).toBe(false)
+
+    setNavigatorConnection({ saveData: true, effectiveType: '4g' })
+    expect(connectionIsConstrained()).toBe(true)
+
+    setNavigatorConnection({ effectiveType: '2g' })
+    expect(connectionIsConstrained()).toBe(true)
+
+    setNavigatorConnection({ effectiveType: 'slow-2g' })
+    expect(connectionIsConstrained()).toBe(true)
   })
 })

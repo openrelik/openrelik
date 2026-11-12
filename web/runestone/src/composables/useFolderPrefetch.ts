@@ -17,29 +17,12 @@
  */
 
 import { onScopeDispose } from 'vue'
-import { useConnection } from '@/composables/useConnection'
+import { connectionIsConstrained, useConnection } from '@/composables/useConnection'
 import { prefetchFolderContents } from '@/composables/useFolderLoader'
 
 /** How long the cursor or mouse must rest on a folder before it is prefetched. */
 export const PREFETCH_DELAY_MS = 150
 const MAX_CONCURRENT = 2
-
-/** The Network Information API is not in every browser, nor in the DOM typings. */
-interface NetworkInformation {
-  saveData?: boolean
-  effectiveType?: string
-}
-
-export function connectionIsConstrained(): boolean {
-  const connection = (globalThis.navigator as { connection?: NetworkInformation } | undefined)
-    ?.connection
-  if (!connection) return false
-  return (
-    connection.saveData === true ||
-    connection.effectiveType === '2g' ||
-    connection.effectiveType === 'slow-2g'
-  )
-}
 
 export interface UseFolderPrefetchReturn {
   /** The folder now under the cursor or mouse (null: none). Prefetched if it stays there. */

@@ -3,20 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const connectionStatus = ref<'online' | 'offline' | 'unreachable'>('online')
 
-vi.mock('@/composables/useConnection', () => ({
-  useConnection: () => ({ status: connectionStatus }),
-}))
+vi.mock('@/composables/useConnection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/composables/useConnection')>()
+  return {
+    ...actual,
+    useConnection: () => ({ status: connectionStatus }),
+  }
+})
 
 vi.mock('@/composables/useFolderLoader', () => ({
   prefetchFolderContents: vi.fn(),
 }))
 
 import { prefetchFolderContents } from '@/composables/useFolderLoader'
-import {
-  connectionIsConstrained,
-  PREFETCH_DELAY_MS,
-  useFolderPrefetch,
-} from '@/composables/useFolderPrefetch'
+import { PREFETCH_DELAY_MS, useFolderPrefetch } from '@/composables/useFolderPrefetch'
 
 function setNavigatorConnection(value: { saveData?: boolean; effectiveType?: string } | undefined) {
   Object.defineProperty(globalThis.navigator, 'connection', {
@@ -35,22 +35,6 @@ describe('useFolderPrefetch', () => {
   afterEach(() => {
     setNavigatorConnection(undefined)
     vi.useRealTimers()
-  })
-
-  it('detects constrained network connections via saveData and effectiveType', () => {
-    expect(connectionIsConstrained()).toBe(false)
-
-    setNavigatorConnection({ saveData: false, effectiveType: '4g' })
-    expect(connectionIsConstrained()).toBe(false)
-
-    setNavigatorConnection({ saveData: true, effectiveType: '4g' })
-    expect(connectionIsConstrained()).toBe(true)
-
-    setNavigatorConnection({ effectiveType: '2g' })
-    expect(connectionIsConstrained()).toBe(true)
-
-    setNavigatorConnection({ effectiveType: 'slow-2g' })
-    expect(connectionIsConstrained()).toBe(true)
   })
 
   it('waits for hover delay, skips when offline or constrained, and cancels on null', () => {

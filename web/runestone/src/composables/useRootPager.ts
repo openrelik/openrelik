@@ -15,9 +15,8 @@
 
 import { computed, onScopeDispose, ref, watch, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useConnection } from '@/composables/useConnection'
+import { connectionIsConstrained, useConnection } from '@/composables/useConnection'
 import { folderKeys, prefetchRootPage } from '@/composables/useFolderLoader'
-import { connectionIsConstrained } from '@/composables/useFolderPrefetch'
 import { queryState } from '@/composables/useQueryCache'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useSettingsStore } from '@/stores/settings'

@@ -24,8 +24,7 @@
 
 import { computed, reactive, readonly, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { api, ApiError, errorMessage, type UploadedFile } from '@/api'
-import { useConnection } from '@/composables/useConnection'
-import { connectionIsConstrained } from '@/composables/useFolderPrefetch'
+import { connectionIsConstrained, useConnection } from '@/composables/useConnection'
 import { folderKeys, mapFileToItem } from '@/composables/useFolderLoader'
 import { canUpload, ensureRole, roleOf } from '@/composables/useFolderPermissions'
 import { markFresh, queryState } from '@/composables/useQueryCache'
