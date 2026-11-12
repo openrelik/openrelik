@@ -42,11 +42,18 @@ describe('PromptResults', () => {
     itemsStore.upsertItems([folder, childFile, bareFile, wfFolder])
 
     const results: PromptResult[] = [
-      { item: folder, path: '/evidence/', label: 'evidence/', hits: [0, 1] },
-      { item: wfFolder, path: '/plaso-run/', label: 'plaso-run/', hits: [] },
-      { item: childFile, path: '/evidence/syslog.txt', label: 'syslog.txt', hits: [] },
-      { item: bareFile, path: '/evidence/raw.bin', label: 'raw.bin', hits: [] },
+      { kind: 'item', item: folder, path: '/evidence/', label: 'evidence/', hits: [0, 1] },
+      { kind: 'item', item: wfFolder, path: '/plaso-run/', label: 'plaso-run/', hits: [] },
       {
+        kind: 'item',
+        item: childFile,
+        path: '/evidence/syslog.txt',
+        label: 'syslog.txt',
+        hits: [],
+      },
+      { kind: 'item', item: bareFile, path: '/evidence/raw.bin', label: 'raw.bin', hits: [] },
+      {
+        kind: 'item',
         item: folder,
         path: '/case/',
         label: '/case/',
@@ -54,6 +61,7 @@ describe('PromptResults', () => {
         caseRef: 'INC-42',
       },
       {
+        kind: 'item',
         item: makeItem({ id: 9, kind: 'folder', name: 'remote-dir' }),
         path: 'remote-dir',
         label: 'remote-dir/',
@@ -105,11 +113,10 @@ describe('PromptResults', () => {
       {
         results: [
           {
-            item: null,
+            kind: 'mkdir',
             path: 'logs',
             label: 'mkdir logs/',
             hits: [],
-            mkdir: true,
             folderName: 'logs',
           },
         ],
@@ -118,7 +125,13 @@ describe('PromptResults', () => {
       },
       {
         results: [
-          { item: null, path: 'mkdir ', label: 'mkdir: enter folder name', hits: [], mkdir: true },
+          {
+            kind: 'mkdir',
+            path: 'mkdir ',
+            label: 'mkdir: enter folder name',
+            hits: [],
+            folderName: null,
+          },
         ],
         query: 'mkdir',
         expected: 'mkdir: create folder',
@@ -126,28 +139,28 @@ describe('PromptResults', () => {
       {
         results: [
           {
+            kind: 'rm',
             item: makeItem({ id: 3, kind: 'folder', name: 'old' }),
             path: 'rm old',
             label: 'rm old/',
             hits: [],
-            rm: true,
           },
         ],
         query: 'rm old',
         expected: 'rm: delete folder in /work',
       },
       {
-        results: [{ item: null, path: '~', label: '~ (home)', hits: [], home: true }],
+        results: [{ kind: 'home', path: '~', label: '~ (home)', hits: [] }],
         query: '~',
         expected: 'cd: home',
       },
       {
-        results: [{ item: null, path: '/', label: '- (~)', hits: [], prev: true }],
+        results: [{ kind: 'prev', path: '/', label: '- (~)', hits: [] }],
         query: '-',
         expected: 'cd: previous directory',
       },
       {
-        results: [{ item: null, path: '..', label: '..', hits: [], up: true }],
+        results: [{ kind: 'up', path: '..', label: '..', hits: [] }],
         query: '',
         expected: 'contents of /work',
       },
@@ -233,6 +246,7 @@ describe('PromptResults', () => {
   it('keys same-named remote folders uniquely and shows 50+ indicator at cap', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const results: PromptResult[] = Array.from({ length: 50 }, (_, idx) => ({
+      kind: 'item',
       item: makeItem({ id: 100 + idx, kind: 'folder', name: 'evidence' }),
       path: 'evidence',
       label: 'evidence/',

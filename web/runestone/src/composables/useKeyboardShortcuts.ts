@@ -5,7 +5,7 @@ import { isCommandModifier, isTyping } from '@/utils/keyboard'
 /**
  * Coordinates application-level global keyboard shortcuts and modal escape handling.
  */
-export function useKeyboardShortcuts() {
+export function useKeyboardShortcuts(): void {
   const modalStore = useModalStore()
 
   function handleKeyDown(event: KeyboardEvent) {

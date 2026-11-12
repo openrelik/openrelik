@@ -200,13 +200,16 @@ describe('composables/usePrompt', () => {
     prompt.line.value = 'cd ../evid'
     expect(prompt.query.value).toBe('../evid')
     expect(prompt.scopePath.value).toBe('/Cases')
-    expect(prompt.results.value[0]?.item?.id).toBe(12)
-    expect(prompt.results.value[0]?.path).toBe('../Evidence/')
+    expect(prompt.results.value[0]).toMatchObject({
+      kind: 'item',
+      item: { id: 12 },
+      path: '../Evidence/',
+    })
 
     // '/' prefix resolves from instance root.
     prompt.line.value = '/Cases/Triage/disk'
     expect(prompt.scopePath.value).toBe('/')
-    expect(prompt.results.value[0]?.item?.id).toBe(50)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 50 } })
 
     // go() on file pushes file route; go(undefined) is a no-op.
     prompt.go(undefined)
@@ -218,15 +221,15 @@ describe('composables/usePrompt', () => {
     // Standing on a file: first '../' resolves to the file's own folder (/Cases/Triage), second '../' to /Cases.
     prompt.line.value = '../disk'
     expect(prompt.scopePath.value).toBe('/Cases/Triage')
-    expect(prompt.results.value[0]?.item?.id).toBe(50)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 50 } })
 
     prompt.line.value = '../../evid'
     expect(prompt.scopePath.value).toBe('/Cases')
-    expect(prompt.results.value[0]?.item?.id).toBe(12)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 12 } })
 
     // '.' and '..' from a file return to its containing folder with ?focus=<fileId>.
     prompt.line.value = '.'
-    expect(prompt.results.value[0]?.here).toBe(true)
+    expect(prompt.results.value[0]?.kind).toBe('here')
     prompt.go(prompt.results.value[0])
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe('/folder/11?focus=50')
@@ -333,7 +336,7 @@ describe('composables/usePrompt', () => {
     // 'cd -' Tab-completes and Enter jumps to previousPath (/folder/2).
     prompt.line.value = '-'
     await nextTick()
-    expect(prompt.results.value[0]?.prev).toBe(true)
+    expect(prompt.results.value[0]?.kind).toBe('prev')
     expect(prompt.results.value[0]?.label).toContain('/RootCase/Alpha/')
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('cd -')
@@ -344,7 +347,7 @@ describe('composables/usePrompt', () => {
     // 'cd ~' Tab-completes and Enter jumps home ('/').
     prompt.line.value = '~'
     await nextTick()
-    expect(prompt.results.value[0]?.home).toBe(true)
+    expect(prompt.results.value[0]?.kind).toBe('home')
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('cd ~')
     prompt.handleKey(keyEvent('Enter'))
@@ -367,13 +370,14 @@ describe('composables/usePrompt', () => {
     const mkdirNotes = makeItem({ id: 75, kind: 'folder', name: 'notes_mkdir_extra', parent: 1 })
     itemsStore.upsertItems([mkdirLogs, mkdirNotes])
     prompt.line.value = 'mkdir_logs'
-    expect(prompt.results.value[0]?.mkdir).toBeUndefined()
-    expect(prompt.results.value[0]?.item?.id).toBe(76)
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'item', item: { id: 76 } })
 
     // Multi-match local search sorts higher-ranked basename matches first.
     prompt.line.value = 'mkdir'
     prompt.line.value = 'cd mkdir_'
-    expect(prompt.results.value.map((r) => r.item?.id)).toEqual([76, 75])
+    expect(
+      prompt.results.value.map((r) => (r.kind === 'item' || r.kind === 'rm' ? r.item.id : null)),
+    ).toEqual([76, 75])
 
     // Sync index reset lets an immediate Enter after changing line act on index 0 without nextTick.
     prompt.line.value = ''
@@ -390,7 +394,7 @@ describe('composables/usePrompt', () => {
     })
     prompt.line.value = 'mkdir "Exports/"'
     expect(prompt.index.value).toBe(0)
-    expect(prompt.results.value[0]?.folderName).toBe('Exports')
+    expect(prompt.results.value[0]).toMatchObject({ kind: 'mkdir', folderName: 'Exports' })
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('mkdir Exports')
     prompt.handleKey(keyEvent('Enter'))
@@ -416,7 +420,9 @@ describe('composables/usePrompt', () => {
     // 'rm': exact folder name ranks above longer prefix match; Tab completes; go() confirms & deletes.
     prompt.line.value = 'rm Alpha'
     await nextTick()
-    expect(prompt.results.value.map((r) => r.item?.name)).toEqual(['Alpha', 'AlphaArchive'])
+    expect(
+      prompt.results.value.map((r) => (r.kind === 'rm' || r.kind === 'item' ? r.item.name : null)),
+    ).toEqual(['Alpha', 'AlphaArchive'])
     prompt.handleKey(keyEvent('Tab'))
     expect(prompt.line.value).toBe('rm Alpha')
 

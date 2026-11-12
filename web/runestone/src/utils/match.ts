@@ -22,7 +22,8 @@ export function matchPath(query: string, text: string): PathMatch | null {
 
   const trimmed = t.replace(/\/$/, '')
   const base = trimmed.lastIndexOf('/') + 1
-  const at = trimmed.indexOf(q, base) >= 0 ? trimmed.indexOf(q, base) : t.indexOf(q)
+  const baseAt = trimmed.indexOf(q, base)
+  const at = baseAt >= 0 ? baseAt : t.indexOf(q)
   if (at < 0) return null
 
   const inBase = at >= base ? 200 : 100

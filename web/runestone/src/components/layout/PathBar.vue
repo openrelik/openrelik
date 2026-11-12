@@ -270,7 +270,7 @@ function onBarClick(event: MouseEvent) {
             :data-separator="at"
             class="cursor-pointer rounded-(--radius-check) px-1 text-ink-muted hover:bg-surface hover:text-brand"
             :class="{ 'bg-surface text-brand': openAt === at }"
-            :aria-label="`Folders in ${at < 0 ? 'root' : path[at]!.name}`"
+            :aria-label="`Folders in ${path[at]!.name}`"
             v-tooltip="'Folders at this level'"
             aria-haspopup="menu"
             :aria-expanded="openAt === at"
@@ -286,7 +286,7 @@ function onBarClick(event: MouseEvent) {
             @keydown="onMenuKey"
           >
             <p class="px-3 pb-1 text-[11px] text-ink-muted">
-              folders in {{ at < 0 ? '/' : `${path[at]!.name}/` }}
+              folders in {{ `${path[at]!.name}/` }}
             </p>
             <RouterLink
               v-for="entry in entries"
