@@ -211,4 +211,36 @@ describe('ItemMenu', () => {
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     expect(wrapper.emitted('close')).toHaveLength(2)
   })
+
+  it('keeps focus inside the menu container when header is clicked and wraps ArrowUp to the last item', async () => {
+    const { actions } = makeActions()
+    wrapper = mount(ItemMenu, {
+      attachTo: document.body,
+      props: {
+        item: makeItem(),
+        actions,
+        x: 40,
+        y: 40,
+      },
+      global: { plugins: [directives] },
+    })
+
+    await nextTick()
+    await nextTick()
+
+    const body = new DOMWrapper(document.body)
+    const menu = body.get('[role="menu"]')
+    expect(menu.attributes('tabindex')).toBe('-1')
+
+    // Simulate focus falling onto the menu container itself (e.g. clicking the header)
+    ;(menu.element as HTMLElement).focus()
+    expect(document.activeElement).toBe(menu.element)
+
+    const items = menu.findAll('[role="menuitem"]')
+    await menu.trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(items[items.length - 1]?.element)
+
+    await menu.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
 })

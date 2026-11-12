@@ -130,6 +130,7 @@ let cancelling = false
 const DEFAULT_FOLDER_NAME = 'Untitled folder'
 
 async function startCreateFolder() {
+  cancelRename()
   isCreating.value = true
   cancelling = false
   const existingNames = props.rows.map((r) => r.name)
@@ -171,16 +172,20 @@ const renamingKey = ref<string | null>(null)
 const renamingName = ref('')
 const renameInput = ref<HTMLInputElement | null>(null)
 let cancellingRename = false
+let renameAttempt = 0
 
 function setRenameInput(el: unknown) {
-  if (el) renameInput.value = el as HTMLInputElement
+  renameInput.value = el as HTMLInputElement | null
 }
 
 async function startRename(item: Item) {
   // One rename at a time per folder: the previous name is still being saved.
   if (isSaving(item)) return
+  cancelNewFolder()
+  const attempt = ++renameAttempt
   // No rights, no input: nobody should type a name the server would refuse.
   if (props.mayRename && !(await props.mayRename(item))) return
+  if (attempt !== renameAttempt || !props.rows.some((r) => itemKey(r) === itemKey(item))) return
   renamingKey.value = itemKey(item)
   renamingName.value = item.name
   cancellingRename = false
@@ -215,6 +220,7 @@ function commitRename() {
 }
 
 function cancelRename() {
+  renameAttempt++
   cancellingRename = true
   renameInput.value?.blur()
   renamingKey.value = null
@@ -291,6 +297,7 @@ defineExpose({
   focusFilter,
   filterInput,
   startCreateFolder,
+  cancelCreateFolder: cancelNewFolder,
   isCreating,
   startRename,
   cancelRename,

@@ -332,6 +332,29 @@ describe('FolderTable', () => {
     await nextTick()
     expect(wrapper.emitted('rename')?.[1]).toEqual([folder, 'archived-logs'])
 
+    // Ignores stale mayRename resolution if cancelled while pending
+    let resolvePendingRename!: (allowed: boolean) => void
+    mayRename.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolvePendingRename = resolve
+        }),
+    )
+    const pendingPromise = wrapper.vm.startRename(folder)
+    wrapper.vm.cancelRename()
+    resolvePendingRename(true)
+    await pendingPromise
+    expect(wrapper.vm.renamingKey).toBeNull()
+
+    // Starting create cancels any active rename, and cancelCreateFolder dismisses create input
+    await wrapper.vm.startRename(folder)
+    expect(wrapper.vm.renamingKey).toBe(itemKey(folder))
+    await wrapper.vm.startCreateFolder()
+    expect(wrapper.vm.renamingKey).toBeNull()
+    expect(wrapper.vm.isCreating).toBe(true)
+    wrapper.vm.cancelCreateFolder()
+    expect(wrapper.vm.isCreating).toBe(false)
+
     wrapper.unmount()
   })
 

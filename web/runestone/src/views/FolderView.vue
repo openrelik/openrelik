@@ -67,10 +67,9 @@ const atRoot = computed(() => props.id === undefined)
 const folderId = computed(() =>
   props.id !== undefined && /^\d+$/.test(props.id) ? Number(props.id) : undefined,
 )
-const folder = computed(() => {
-  if (atRoot.value) return undefined
-  return itemsStore.findFolder(Number(props.id))
-})
+const folder = computed(() =>
+  folderId.value !== undefined ? itemsStore.findFolder(folderId.value) : undefined,
+)
 const crumbs = computed(() => (folder.value ? itemsStore.pathTo(folder.value) : []))
 
 const filter = ref('')
@@ -465,22 +464,28 @@ function onRowClick(event: MouseEvent, index: number) {
   else pick(index)
 }
 
+/** The cursor on the ".." row, back up to the parent. */
+const UP = -1
+const isWorkflowFolder = computed(() => folder.value?.workflowId !== undefined)
+let cursorPlacedIn: string | undefined
+let focusHandledFor: string | undefined
+
 // A new location — another folder, or another top-level page: selection,
-// filter and task belong to the old one. Coming back up, the cursor lands on
-// the folder just left.
+// filter, popovers, inline editors and task belong to the old one. Coming back
+// up, the cursor lands on the folder just left.
 watch([() => props.id, () => (atRoot.value ? pager.page.value : 0)], (_, [previous]) => {
   clearSelection()
   filter.value = ''
   taskId.value = null
+  menu.value = null
+  caseSheet.value = null
+  table.value?.cancelCreateFolder()
+  table.value?.cancelRename()
+  cursorPlacedIn = undefined
+  focusHandledFor = undefined
   const from = rows.value.findIndex((row) => row.kind === 'folder' && String(row.id) === previous)
   cursor.value = Math.max(0, from)
 })
-
-// Only a file page links back here with a focus: the id is a file's.
-const focus = rows.value.findIndex(
-  (row) => row.kind === 'file' && String(row.id) === route.query.focus,
-)
-if (focus >= 0) cursor.value = focus
 
 /**
  * A workflow folder opens with the cursor on "..", not on its first file:
@@ -489,10 +494,6 @@ if (focus >= 0) cursor.value = focus
  * per visit, and not over a cursor placed on purpose (a `focus` link, or the
  * subfolder just left).
  */
-/** The cursor on the ".." row, back up to the parent. */
-const UP = -1
-const isWorkflowFolder = computed(() => folder.value?.workflowId !== undefined)
-let cursorPlacedIn: string | undefined
 watch(
   [() => props.id, isWorkflowFolder],
   ([id, workflowFolder]) => {
@@ -501,6 +502,25 @@ watch(
     if (route.query.focus) return
     const row = rows.value[cursor.value]
     if (!row || row.kind === 'file') cursor.value = UP
+  },
+  { immediate: true },
+)
+
+// Only a file page links back here with a focus: the id is a file's.
+// Applied once per visit as soon as the rows load (including cold links and reused views).
+watch(
+  [() => props.id, () => route.query.focus, rows, () => listing.value.status],
+  ([id, focusParam, list, status]) => {
+    if (typeof focusParam !== 'string' || !focusParam) return
+    const visitKey = `${id ?? ''}:${focusParam}`
+    if (focusHandledFor === visitKey) return
+    const idx = list.findIndex((row) => row.kind === 'file' && String(row.id) === focusParam)
+    if (idx >= 0) {
+      cursor.value = idx
+      focusHandledFor = visitKey
+    } else if (status === 'success') {
+      focusHandledFor = visitKey
+    }
   },
   { immediate: true },
 )
@@ -552,6 +572,7 @@ function open(item: Item | undefined) {
 }
 
 async function startCreateFolder() {
+  if (!atRoot.value && !folder.value) return
   // `n` comes here too, past the toolbar's disabled button: say why, like a refused drop.
   if (newFolderBlocked.value) {
     dropRefusal.value = `${newFolderBlocked.value}.`
@@ -567,7 +588,8 @@ async function startCreateFolder() {
 }
 
 async function handleCreateFolder(name: string) {
-  const parentId = atRoot.value ? null : (folder.value?.id ?? null)
+  if (!atRoot.value && folderId.value === undefined) return
+  const parentId = atRoot.value ? null : folderId.value!
   const created = await createFolder(parentId, name)
   if (!created) return
   await nextTick()
@@ -594,14 +616,16 @@ async function deleteItems(items: Item[]) {
 
   const gone = new Set(deleted.map(itemKey))
   selected.value = new Set([...selected.value].filter((key) => !gone.has(key)))
-  if (current && gone.has(itemKey(current))) router.push(upTo)
+  if (current && folderId.value === current.id && gone.has(itemKey(current))) router.push(upTo)
 }
 
 /** Discards the draft workflow this folder holds, with the folder, and moves up. */
 async function discard() {
   const current = folder.value
   const upTo = parentPath.value
-  if (current && (await discardWorkflow(current.id))) router.push(upTo)
+  if (current && (await discardWorkflow(current.id)) && folderId.value === current.id) {
+    router.push(upTo)
+  }
 }
 
 /** Delete / ⌘⌫: the selection, or the highlighted row. */
@@ -627,7 +651,9 @@ function handleRename(item: Item, name: string) {
 const KEYS: Record<string, () => void> = {
   // The keyboard's menu key: the cursor row's menu, at its button.
   ContextMenu: () => table.value?.openMenuFor(cursor.value),
-  ArrowDown: () => (cursor.value = Math.min(rows.value.length - 1, cursor.value + 1)),
+  ArrowDown: () => {
+    if (rows.value.length) cursor.value = Math.min(rows.value.length - 1, cursor.value + 1)
+  },
   ArrowUp: () => (cursor.value = Math.max(atRoot.value ? 0 : UP, cursor.value - 1)),
   Home: () => (cursor.value = 0),
   End: () => (cursor.value = Math.max(0, rows.value.length - 1)),
@@ -663,8 +689,20 @@ const KEYS: Record<string, () => void> = {
   Backspace: deleteCurrent,
   R: refresh,
   Escape: () => {
+    if (table.value?.isCreating) {
+      table.value.cancelCreateFolder()
+      return
+    }
     if (table.value?.renamingKey) {
       table.value.cancelRename()
+      return
+    }
+    if (caseSheet.value) {
+      caseSheet.value = null
+      return
+    }
+    if (menu.value) {
+      menu.value = null
       return
     }
     if (taskId.value) {
@@ -690,6 +728,15 @@ function onKey(event: KeyboardEvent) {
   // If a modal dialog is currently open, let it handle its own input. A key it
   // already handled (the Esc that just closed it) must not act here as well.
   if (modalStore.hasActiveModal || event.defaultPrevented) return
+
+  if (caseSheet.value || menu.value) {
+    if (event.key === 'Escape') {
+      if (caseSheet.value) caseSheet.value = null
+      else menu.value = null
+      event.preventDefault()
+    }
+    return
+  }
 
   if (isTyping(event)) {
     if (event.target === table.value?.filterInput) {
@@ -929,7 +976,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       :task="task"
       :tracing="tracing"
       :produced-count="produced.size"
-      :selected-count="selected.size"
+      :selected-count="selectedItems.length"
       :selected-bytes="selectedBytes"
     />
   </section>
