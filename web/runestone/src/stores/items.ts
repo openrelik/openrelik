@@ -119,17 +119,23 @@ export const useItemsStore = defineStore('items', () => {
 
   /** Adds items to the reactive items store, replacing any of the same kind and id. */
   function upsertItems(incoming: Item[]): void {
+    const byKey = new Map<string, number>()
+    const next = [...items.value]
+    for (let i = 0; i < next.length; i++) byKey.set(itemKey(next[i]!), i)
+
     for (const item of incoming) {
-      const index = items.value.findIndex(
-        (existing) => existing.kind === item.kind && existing.id === item.id,
-      )
-      if (index === -1) items.value.push(item)
-      else {
+      const key = itemKey(item)
+      const index = byKey.get(key)
+      if (index === undefined) {
+        byKey.set(key, next.length)
+        next.push(item)
+      } else {
         // Listings do not carry a file's details (hashes, magic): keep those loaded.
-        const { hashes, magicText } = items.value[index]!
-        items.value[index] = { hashes, magicText, ...item }
+        const { hashes, magicText } = next[index]!
+        next[index] = { hashes, magicText, ...item }
       }
     }
+    items.value = next
   }
 
   /**

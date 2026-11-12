@@ -213,4 +213,31 @@ describe('stores/items', () => {
     expect(store.findFile(2)?.name).toBe('keep-me.log')
     expect(store.findFolder(4)?.name).toBe('Sibling')
   })
+
+  it('indexes existing items once per upsertItems batch while preserving loaded details and in-batch order', () => {
+    const store = useItemsStore()
+    store.upsertItems([
+      makeFolder(1, null, { name: 'Root' }),
+      makeFile(10, 1, {
+        name: 'image.dd',
+        hashes: { md5: 'abc', sha1: 'def', sha256: '123' },
+        magicText: 'raw disk',
+      }),
+    ])
+
+    store.upsertItems([
+      makeFile(10, 1, { name: 'image-renamed.dd' }),
+      makeFile(11, 1, { name: 'first.txt' }),
+      // Duplicate id in same incoming batch overwrites the earlier new entry cleanly
+      makeFile(11, 1, { name: 'updated.txt' }),
+    ])
+
+    expect(store.items).toHaveLength(3)
+    expect(store.findFile(10)).toMatchObject({
+      name: 'image-renamed.dd',
+      hashes: { md5: 'abc', sha1: 'def', sha256: '123' },
+      magicText: 'raw disk',
+    })
+    expect(store.findFile(11)?.name).toBe('updated.txt')
+  })
 })

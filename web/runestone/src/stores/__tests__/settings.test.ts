@@ -124,4 +124,31 @@ describe('stores/settings', () => {
     await nextTick()
     expect(store.settings.explorer.showEmptyFiles).toBe(true)
   })
+
+  it('ignores non-object JSON payloads, invalid section types, and unsupported theme values', () => {
+    mockMatchMedia(true)
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(['not', 'an', 'object']))
+    expect(useSettingsStore().settings).toEqual({
+      appearance: { theme: 'system' },
+      ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
+      explorer: { pageSize: 40, showEmptyFiles: false },
+    })
+
+    // Fresh pinia store per invalid payload
+    setActivePinia(createPinia())
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        appearance: { theme: 'sepia' },
+        ai: 'bad-section',
+        explorer: { pageSize: '100', showEmptyFiles: 'yes' },
+      }),
+    )
+    expect(useSettingsStore().settings).toEqual({
+      appearance: { theme: 'system' },
+      ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
+      explorer: { pageSize: 40, showEmptyFiles: false },
+    })
+  })
 })
