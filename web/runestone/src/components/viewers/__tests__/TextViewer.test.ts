@@ -505,12 +505,15 @@ describe('TextViewer', () => {
 
     // Scrollbar thumb drag & track click
     const thumb = fallbackWrapper.get('.cursor-grab')
-    ;(thumb.element as HTMLElement & { setPointerCapture: (id: number) => void }).setPointerCapture =
-      vi.fn()
+    ;(
+      thumb.element as HTMLElement & { setPointerCapture: (id: number) => void }
+    ).setPointerCapture = vi.fn()
     await thumb.trigger('pointerdown', { clientY: 0, pointerId: 1 })
     await thumb.trigger('pointermove', { clientY: 80 })
     await thumb.trigger('pointerup')
-    expect(Number(fallbackWrapper.findAll('[data-row]')[0]?.attributes('data-row'))).toBeGreaterThan(0)
+    expect(
+      Number(fallbackWrapper.findAll('[data-row]')[0]?.attributes('data-row')),
+    ).toBeGreaterThan(0)
 
     // 3. loadAll confirmation ignored if unmounted before accepting
     const hugeSize = 300 * 1024 * 1024

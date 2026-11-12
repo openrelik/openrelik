@@ -251,7 +251,12 @@ describe('FileContent', () => {
     expect(mimeWrapper.find('[aria-label="File text"]').exists()).toBe(true)
 
     await mimeWrapper.setProps({
-      file: makeFile({ id: 16, name: 'data.txt', mime: 'application/octet-stream', size: textSize }),
+      file: makeFile({
+        id: 16,
+        name: 'data.txt',
+        mime: 'application/octet-stream',
+        size: textSize,
+      }),
     })
     await flushPromises()
     expect(mimeWrapper.find('[aria-label="File text"]').exists()).toBe(false)

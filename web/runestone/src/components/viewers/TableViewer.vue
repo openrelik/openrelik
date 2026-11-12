@@ -2,15 +2,12 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Copy, Maximize, Minimize } from '@/components/icons'
 
+import StreamStatusBar from '@/components/viewers/StreamStatusBar.vue'
 import TableDetail from '@/components/viewers/TableDetail.vue'
-import Button from '@/components/base/Button.vue'
-import { useDelayedFlag } from '@/composables/useDelayedFlag'
-import { confirmAction } from '@/composables/useConfirm'
 import { useMarkedRange } from '@/composables/useMarkedRange'
-import { MORE_BYTES, useTableStream } from '@/composables/useTableStream'
+import { useTableStream } from '@/composables/useTableStream'
 import { useModalStore } from '@/stores/modals'
 import { escapeControls } from '@/utils/bytes'
-import { formatSize } from '@/utils/format'
 import type { Span } from '@/utils/marks'
 import type { TableKind } from '@/utils/preview'
 import { compareKeys, sortKey } from '@/utils/table'
@@ -49,7 +46,6 @@ const table = useTableStream(
   () => props.kind,
 )
 const { rows, columns, types } = table
-const showReading = useDelayedFlag(() => table.reading.value)
 
 // --- filter and sort: a view over the rows read so far ---
 
@@ -378,32 +374,6 @@ const rowsLabel = computed(() => {
     : `${total} rows`
 })
 const sortedPartly = computed(() => !!sort.value && !table.done.value)
-
-/** Bytes of the file not read yet. */
-const remaining = computed(() => Math.max(0, props.size - table.bytesRead.value))
-/** What "load more" reads: a round "10 MB", or what is left when that is less. */
-const moreLabel = computed(() =>
-  remaining.value > MORE_BYTES ? `${MORE_BYTES / 1_000_000} MB` : formatSize(remaining.value),
-)
-/** Past this, reading the rest asks first: the rows are held in this page's memory. */
-const LOAD_ALL_ASK = 256 * 1024 * 1024
-let alive = true
-onUnmounted(() => (alive = false))
-async function loadAll() {
-  const id = props.fileId
-  if (
-    remaining.value > LOAD_ALL_ASK &&
-    !(await confirmAction({
-      title: 'Load the full file?',
-      message: `That reads ${formatSize(remaining.value)} more into this page. The browser may slow down or run out of memory; loading 10 MB at a time, or filtering what is loaded, is lighter.`,
-      confirmLabel: 'Load full file',
-    }))
-  ) {
-    return
-  }
-  if (!alive || props.fileId !== id) return
-  table.loadAll()
-}
 </script>
 
 <template>
@@ -434,46 +404,19 @@ async function loadAll() {
                 }}-separated
               </template>
             </span>
-            <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{
-              notice
-            }}</span>
-            <span v-else-if="table.error.value" class="flex min-w-0 items-center gap-2">
-              <span class="truncate text-danger" role="alert">{{ table.error.value }}</span>
-              <Button size="row" class="shrink-0" @click="table.loadMore()">Retry</Button>
-            </span>
-            <span v-else-if="showReading" class="flex items-center gap-2 truncate">
-              <span class="tabular"
-                >reading… {{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }}</span
-              >
-              <button
-                type="button"
-                class="cursor-pointer text-brand hover:underline"
-                v-tooltip="'Stop reading; the rows read so far stay'"
-                @click="table.stop()"
-              >
-                stop
-              </button>
-            </span>
-            <span v-else-if="table.capped.value" class="flex min-w-0 items-center gap-2">
-              <span class="tabular truncate"
-                >{{ formatSize(table.bytesRead.value) }} of {{ formatSize(size) }} read</span
-              >
-              <!-- two choices: a step, or the rest -->
-              <Button size="row" class="shrink-0" @click="table.loadMore()">
-                Load {{ moreLabel }} more
-              </Button>
-              <Button
-                size="row"
-                :tooltip="{
-                  text: `Read the remaining ${formatSize(remaining)}`,
-                  detail: 'Kept in this page',
-                }"
-                class="shrink-0"
-                @click="loadAll"
-              >
-                Load full file
-              </Button>
-            </span>
+            <StreamStatusBar
+              :file-id="fileId"
+              :size="size"
+              :bytes-read="table.bytesRead.value"
+              :reading="table.reading.value"
+              :capped="table.capped.value"
+              :error="table.error.value"
+              :notice="notice"
+              stop-tooltip="Stop reading; the rows read so far stay"
+              @stop="table.stop()"
+              @load-more="table.loadMore()"
+              @load-all="table.loadAll()"
+            />
             <span v-if="sortedPartly" class="shrink-0 text-warning">sorted: rows read so far</span>
             <button
               v-if="mark"

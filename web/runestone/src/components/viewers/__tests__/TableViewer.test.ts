@@ -528,7 +528,10 @@ describe('TableViewer', () => {
     await vi.advanceTimersByTimeAsync(50)
     const bHeader = w1.findAll('[role="columnheader"]')[1]!
     // Width grew beyond header-only `b` (min 6 chars) to accommodate longVal
-    const widthPx = parseInt(/width:\s*(\d+)px/.exec(bHeader.attributes('style') ?? '')?.[1] ?? '0', 10)
+    const widthPx = parseInt(
+      /width:\s*(\d+)px/.exec(bHeader.attributes('style') ?? '')?.[1] ?? '0',
+      10,
+    )
     expect(widthPx).toBeGreaterThan(100)
 
     // 2. Hostile column header escaped; fullscreen Escape suppressed while modal is open; Ctrl+C without selection is ignored
@@ -575,13 +578,17 @@ describe('TableViewer', () => {
     // Enter fullscreen, open a modal, press Escape -> fullscreen remains open
     await grid.trigger('keydown', { key: 'f' })
     await nextTick()
-    expect(document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]')).not.toBeNull()
+    expect(
+      document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]'),
+    ).not.toBeNull()
 
     const modals = useModalStore()
     modals.openModal('confirm')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await nextTick()
-    expect(document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]')).not.toBeNull()
+    expect(
+      document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]'),
+    ).not.toBeNull()
     expect(mark.value).toEqual({ from: 1, to: 1 })
     modals.closeModal('confirm')
   })

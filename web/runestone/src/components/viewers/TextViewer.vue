@@ -2,18 +2,15 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Copy } from '@/components/icons'
 
-import Button from '@/components/base/Button.vue'
+import StreamStatusBar from '@/components/viewers/StreamStatusBar.vue'
 import TextRow from '@/components/viewers/TextRow.vue'
 import TextSearchBar from '@/components/viewers/TextSearchBar.vue'
-import { confirmAction } from '@/composables/useConfirm'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
-import { MORE_BYTES } from '@/composables/useRangeText'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
 import { useTextSearch } from '@/composables/useTextSearch'
 import { useTextStream } from '@/composables/useTextStream'
 import { useModalStore } from '@/stores/modals'
-import { formatSize } from '@/utils/format'
 import { parseLineRange, ROW_CHARS, shownOffset, sourceOffset } from '@/utils/lines'
 import { hasColumns, sameSpan, type Span } from '@/utils/marks'
 
@@ -40,8 +37,6 @@ const props = defineProps<{
 const range = defineModel<Span | null>('mark', { default: null })
 
 const ROW_H = 20
-/** Past this, reading the rest asks first: the lines are held in this page's memory. */
-const LOAD_ALL_ASK = 256 * 1024 * 1024
 
 const text = useTextStream(() => ({ id: props.fileId, size: props.size }))
 const showReading = useDelayedFlag(() => text.reading.value)
@@ -497,27 +492,6 @@ const linesLabel = computed(() => {
   const count = text.lineCount.value
   return `${count.toLocaleString('en-US')} ${count === 1 ? 'line' : 'lines'}`
 })
-const remaining = computed(() => Math.max(0, props.size - text.bytesRead.value))
-const moreLabel = computed(() =>
-  remaining.value > MORE_BYTES ? `${MORE_BYTES / 1_000_000} MB` : formatSize(remaining.value),
-)
-let alive = true
-onUnmounted(() => (alive = false))
-async function loadAll() {
-  const id = props.fileId
-  if (
-    remaining.value > LOAD_ALL_ASK &&
-    !(await confirmAction({
-      title: 'Load the full file?',
-      message: `That reads ${formatSize(remaining.value)} more into this page. The browser may slow down or run out of memory; loading 10 MB at a time is lighter.`,
-      confirmLabel: 'Load full file',
-    }))
-  ) {
-    return
-  }
-  if (!alive || props.fileId !== id) return
-  text.loadAll()
-}
 </script>
 
 <template>
@@ -527,43 +501,19 @@ async function loadAll() {
       <span class="tabular shrink-0">
         {{ linesLabel }}<template v-if="range"> · {{ marks.label() }}</template>
       </span>
-      <span v-if="notice" class="truncate text-ink-secondary" aria-live="polite">{{ notice }}</span>
-      <span v-else-if="text.error.value" class="flex min-w-0 items-center gap-2">
-        <span class="truncate text-danger" role="alert">{{ text.error.value }}</span>
-        <Button size="row" class="shrink-0" @click="text.loadMore()">Retry</Button>
-      </span>
-      <span v-else-if="showReading" class="flex min-w-0 items-center gap-2">
-        <span class="tabular truncate"
-          >reading… {{ formatSize(text.bytesRead.value) }} of {{ formatSize(size) }}</span
-        >
-        <button
-          type="button"
-          class="cursor-pointer text-brand hover:underline"
-          v-tooltip="'Stop reading; the lines read so far stay'"
-          @click="text.stop()"
-        >
-          stop
-        </button>
-      </span>
-      <span v-else-if="text.capped.value" class="flex min-w-0 items-center gap-2">
-        <span class="tabular truncate"
-          >{{ formatSize(text.bytesRead.value) }} of {{ formatSize(size) }} read</span
-        >
-        <Button size="row" class="shrink-0" @click="text.loadMore()">
-          Load {{ moreLabel }} more
-        </Button>
-        <Button
-          size="row"
-          :tooltip="{
-            text: `Read the remaining ${formatSize(remaining)}`,
-            detail: 'Kept in this page',
-          }"
-          class="shrink-0"
-          @click="loadAll"
-        >
-          Load full file
-        </Button>
-      </span>
+      <StreamStatusBar
+        :file-id="fileId"
+        :size="size"
+        :bytes-read="text.bytesRead.value"
+        :reading="text.reading.value"
+        :capped="text.capped.value"
+        :error="text.error.value"
+        :notice="notice"
+        stop-tooltip="Stop reading; the lines read so far stay"
+        @stop="text.stop()"
+        @load-more="text.loadMore()"
+        @load-all="text.loadAll()"
+      />
 
       <div class="ml-auto flex shrink-0 items-center gap-3">
         <!-- mousedown kept from the page: pressing it must not clear the selection it links to -->
