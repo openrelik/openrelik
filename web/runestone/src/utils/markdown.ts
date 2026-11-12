@@ -60,13 +60,26 @@ export const TABLE_COLUMNS_MAX = 100
 /** List items deeper than this are drawn at this depth. */
 export const LIST_DEPTH_MAX = 8
 
-/** Characters that hide or reorder text: bidi controls, zero-width, the BOM. */
-const HIDDEN = /[​-‏‪-‮⁦-⁩﻿]/g
-const reveal = (text: string) =>
-  text.replace(
-    HIDDEN,
+/**
+ * Characters that hide or reorder text (bidi controls including ALM,
+ * zero-width and invisible formatters, soft hyphen, BOM) plus non-whitespace
+ * C0/C1 control characters.
+ */
+const HIDDEN =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g
+const HIDDEN_WITH_WS =
+  /[\u0000-\u001F\u007F-\u009F\u00AD\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g
+
+/**
+ * Replaces hidden bidi/zero-width/control characters with visible `‹U+XXXX›`
+ * markers so untrusted text cannot disguise itself or inject control codes.
+ */
+export function revealHidden(text: string, includeWhitespaceControls = false): string {
+  return text.replace(
+    includeWhitespaceControls ? HIDDEN_WITH_WS : HIDDEN,
     (char) => `‹U+${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}›`,
   )
+}
 
 // A URL may hold one level of parentheses: `(x)` in `https://…/Foo_(bar)`.
 const URL_PART = String.raw`((?:[^\s()]|\([^\s()]*\))+)(?:\s+"[^"]*")?`
@@ -89,7 +102,8 @@ const INLINE = new RegExp(
   'giu',
 )
 
-export function parseInline(text: string): Inline[] {
+export function parseInline(raw: string): Inline[] {
+  const text = revealHidden(raw)
   if (text.length > INLINE_MAX) return [{ type: 'text', text }]
   const out: Inline[] = []
   const push = (value: string) => {
@@ -119,18 +133,19 @@ export function parseInline(text: string): Inline[] {
 function paragraphInlines(lines: string[]): Inline[] {
   const out: Inline[] = []
   lines.forEach((line, i) => {
-    const hard = / {2,}$|\\$/.test(line)
-    out.push(...parseInline(line.trim().replace(/\\$/, '')))
+    const hard = line.endsWith('  ') || line.endsWith('\\')
+    const trimmed = line.trim()
+    out.push(...parseInline(trimmed.endsWith('\\') ? trimmed.slice(0, -1) : trimmed))
     if (i < lines.length - 1) out.push(hard ? { type: 'break' } : { type: 'text', text: ' ' })
   })
   return out
 }
 
 const BULLET = /^( *)([*+-]|\d{1,9}[.)])(?:[ \t]+(.*))?$/
-const FENCE = /^( {0,3})(`{3,}|~{3,})\s*([^`\s]*)/
+const FENCE = /^( {0,3})(`{3,}|~{3,})[ \t]*([^\s]*)(.*)$/
 const ATX = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/
 const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
-const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
+const TABLE_RULE = /^[ \t]*(?:\|[ \t]*)?:?-+:?(?:[ \t]*\|[ \t]*:?-+:?)*(?:[ \t]*\|)?[ \t]*$/
 
 /** A table row's cells: split on unescaped pipes, the outer ones dropped. */
 function splitRow(row: string): string[] {
@@ -140,11 +155,12 @@ function splitRow(row: string): string[] {
   return cells.map((cell) => cell.trim().replace(/\\\|/g, '|'))
 }
 
-/** Whether lines `i` and `i + 1` start a table: a row, then a rule of dashes. */
+/** Whether lines `i` and `i + 1` start a table: a non-empty row, then a rule of dashes. */
 const tableAt = (lines: string[], i: number) =>
   lines[i]!.includes('|') &&
   TABLE_RULE.test(lines[i + 1] ?? '') &&
-  (lines[i + 1]!.includes('|') || lines[i]!.trim().startsWith('|'))
+  (lines[i + 1]!.includes('|') || lines[i]!.trim().startsWith('|')) &&
+  splitRow(lines[i]!).length > 0
 
 /** Whether a line starts a block that ends a paragraph. */
 const interrupts = (lines: string[], i: number) => {
@@ -162,7 +178,7 @@ const interrupts = (lines: string[], i: number) => {
 const indentOf = (line: string) => line.length - line.trimStart().length
 
 export function parseMarkdown(source: string): Block[] {
-  const lines = reveal(source)
+  const lines = revealHidden(source)
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length)))
@@ -177,7 +193,8 @@ export function parseMarkdown(source: string): Block[] {
     }
 
     const fence = FENCE.exec(line)
-    if (fence) {
+    // CommonMark forbids backticks in the info string of a backtick fence.
+    if (fence && !(fence[2]![0] === '`' && (fence[3]!.includes('`') || fence[4]!.includes('`')))) {
       const [, indent, open, lang] = fence
       const close = new RegExp(`^ {0,3}${open![0] === '`' ? '`' : '~'}{${open!.length},}\\s*$`)
       const body: string[] = []
@@ -242,8 +259,12 @@ export function parseMarkdown(source: string): Block[] {
           const next = lines[i]!
           // A blank line between items keeps the list going.
           if (!next.trim()) {
-            const after = lines.slice(i + 1).find((l) => l.trim())
-            if (after && BULLET.test(after)) continue
+            let k = i + 1
+            while (k < lines.length && !lines[k]!.trim()) k++
+            if (k < lines.length && BULLET.test(lines[k]!)) {
+              i = k - 1
+              continue
+            }
             break
           }
           // An indented line goes on with the item above.
