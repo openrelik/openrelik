@@ -16,6 +16,12 @@ export function openTaskReport(task: Task, folderId: number): void {
   useModalStore().openModal('report')
 }
 
+/** Clears the currently displayed task report (sign-out). */
+export function clearTaskReport(): void {
+  shown.value = null
+  useModalStore().closeModal('report')
+}
+
 export function useTaskReport(): {
   report: ComputedRef<{ task: Task; folderId: number } | null>
   close: () => void

@@ -80,6 +80,7 @@ const saveTimers = new Map<number, ReturnType<typeof setTimeout>>()
 const saves = new Map<number, Promise<boolean>>()
 /** Runs sent per workflow, so a load that overlapped one can tell. */
 const runs = new Map<number, number>()
+let sessionEpoch = 0
 
 function activityFor(workflowId: number): WorkflowActivity {
   if (!activity.has(workflowId)) activity.set(workflowId, { ...IDLE })
@@ -603,6 +604,7 @@ function saveDraft(folderId: number): Promise<boolean> {
   if (inFlight) return inFlight.then(() => saveDraft(folderId))
   if (!unsaved.has(id)) return Promise.resolve(!workflowActivity(id).saveError)
 
+  const epoch = sessionEpoch
   const state = activityFor(id)
   unsaved.delete(id)
   state.saving = true
@@ -610,15 +612,18 @@ function saveDraft(folderId: number): Promise<boolean> {
   const save = api.workflows
     .saveSpec(folderId, id, specFromTasks(workflow))
     .then(() => {
+      if (epoch !== sessionEpoch) return false
       markFresh(workflowKeys.workflow(id))
       return true
     })
     .catch((err: unknown) => {
+      if (epoch !== sessionEpoch) return false
       unsaved.add(id)
       state.saveError = errorMessage(err, 'request failed')
       return false
     })
     .finally(() => {
+      if (epoch !== sessionEpoch) return
       state.saving = false
       saves.delete(id)
     })
@@ -654,25 +659,29 @@ export async function runWorkflow(folderId: number): Promise<boolean> {
 
   // The run stores the spec itself; a save landing after it would overwrite
   // the spec with uuids no task record has.
+  const epoch = sessionEpoch
   clearTimeout(saveTimers.get(id))
   saveTimers.delete(id)
   unsaved.delete(id)
   await saves.get(id)
+  if (epoch !== sessionEpoch) return false
 
   try {
     const spec = withFreshUuids(specFromTasks(workflow))
     const record = await api.workflows.run(folderId, id, spec)
+    if (epoch !== sessionEpoch) return false
     workflowsStore.upsertWorkflow({ ...mapWorkflow(record), draft: false })
     state.saveError = null
     markFresh(workflowKeys.workflow(id))
     return true
   } catch (err: unknown) {
+    if (epoch !== sessionEpoch) return false
     state.error = `Could not run: ${errorMessage(err, 'request failed')}`
     // Still a draft: keep the server's copy of it current.
     scheduleSave(workflow)
     return false
   } finally {
-    state.running = false
+    if (epoch === sessionEpoch) state.running = false
   }
 }
 
@@ -765,6 +774,22 @@ export async function discardWorkflow(folderId: number): Promise<boolean> {
 }
 
 const followed = new Set<number>()
+const followTimers = new Map<number, ReturnType<typeof setTimeout>>()
+
+/** Forgets workflow edits, save timers, and active polls (sign-out). */
+export function clearWorkflowState(): void {
+  sessionEpoch++
+  for (const timer of saveTimers.values()) clearTimeout(timer)
+  saveTimers.clear()
+  for (const timer of followTimers.values()) clearTimeout(timer)
+  followTimers.clear()
+  unsaved.clear()
+  saves.clear()
+  runs.clear()
+  followed.clear()
+  activity.clear()
+  dismissEdits()
+}
 
 /**
  * Keeps a started workflow current while it runs, wherever the user is: a
@@ -776,17 +801,24 @@ export function followWorkflow(folderId: number): void {
   const workflow = workflowsStore.workflowOf(folderId)
   if (!workflow || followed.has(workflow.id)) return
   const id = workflow.id
+  const epoch = sessionEpoch
   followed.add(id)
   const tick = () => {
+    followTimers.delete(id)
+    if (epoch !== sessionEpoch) return
     const current = workflowsStore.workflowOf(folderId)
     if (!current || !isActive(current)) {
       followed.delete(id)
       return
     }
     loadWorkflow(folderId, id, { force: true, background: true }).then(
-      () => setTimeout(tick, POLL_MS),
+      () => {
+        if (epoch === sessionEpoch && followed.has(id)) {
+          followTimers.set(id, setTimeout(tick, POLL_MS))
+        }
+      },
       () => followed.delete(id),
     )
   }
-  setTimeout(tick, POLL_MS)
+  followTimers.set(id, setTimeout(tick, POLL_MS))
 }

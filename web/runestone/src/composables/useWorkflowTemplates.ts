@@ -134,6 +134,12 @@ export interface UseWorkflowTemplatesReturn {
   error: Readonly<Ref<string | null>>
 }
 
+/** Forgets loaded workflow templates and errors (sign-out). */
+export function clearWorkflowTemplates(): void {
+  templates.value = []
+  error.value = null
+}
+
 export function useWorkflowTemplates(): UseWorkflowTemplatesReturn {
   return { templates, state: computed(() => queryState(KEY)), error: readonly(error) }
 }

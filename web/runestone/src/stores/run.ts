@@ -57,6 +57,14 @@ export const useRunStore = defineStore('run', () => {
     runTarget.value = null
   }
 
+  function clearRun() {
+    runTarget.value = null
+    lastRun.value = null
+    error.value = null
+    clearTimeout(clearTimer)
+    clearTimer = undefined
+  }
+
   /**
    * Picked in the picker: adds the worker to the draft, or — a quick run —
    * makes a workflow of just that worker over the files and runs it. Returns
@@ -111,6 +119,7 @@ export const useRunStore = defineStore('run', () => {
     error,
     open,
     close,
+    clearRun,
     start,
   }
 })

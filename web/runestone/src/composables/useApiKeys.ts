@@ -50,6 +50,11 @@ export interface UseApiKeysReturn {
   state: ComputedRef<QueryState>
 }
 
+/** Forgets the loaded API key list (sign-out). */
+export function clearApiKeys(): void {
+  keys.value = []
+}
+
 export function useApiKeys(): UseApiKeysReturn {
   return { keys, state: computed(() => queryState(KEY)) }
 }

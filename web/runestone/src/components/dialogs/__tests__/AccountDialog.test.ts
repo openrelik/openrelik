@@ -308,4 +308,34 @@ describe('AccountDialog', () => {
     expect(accountOpen.value).toBe(false)
     expect(logoutSpy).toHaveBeenCalled()
   })
+
+  it('clears a revealed new API key secret when modals close on sign-out', async () => {
+    vi.mocked(api.users.listApiKeys).mockResolvedValue([])
+    vi.mocked(api.users.createApiKey).mockResolvedValueOnce({
+      display_name: 'Transient Key',
+      token: 'ork_transient_secret',
+    })
+    const body = mountDialog()
+    openAccount()
+    await nextTick()
+    await flushPromises()
+
+    await body
+      .findAll('button')
+      .find((b) => b.text().includes('Create API key'))!
+      .trigger('click')
+    await body.get('form input').setValue('Transient Key')
+    await body.get('form').trigger('submit')
+    await flushPromises()
+    expect(body.find('textarea[aria-label="The new API key"]').exists()).toBe(true)
+
+    useAuthStore().setUser(null)
+    await nextTick()
+    expect(accountOpen.value).toBe(false)
+
+    openAccount()
+    await nextTick()
+    await flushPromises()
+    expect(body.find('textarea[aria-label="The new API key"]').exists()).toBe(false)
+  })
 })

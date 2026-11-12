@@ -1,9 +1,27 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ensure, markFresh, queryState } from '@/composables/useQueryCache'
+import { loadApiKeys, useApiKeys } from '@/composables/useApiKeys'
+import { confirmAction, useConfirm } from '@/composables/useConfirm'
+import { useGroupStacks } from '@/composables/useGroupStacks'
+import { openLinkMenu, useLinkMenu } from '@/composables/useLinkMenu'
+import { previousPath } from '@/composables/usePrompt'
+import {
+  loadAccess,
+  loadGroups,
+  openShareDialog,
+  useShareDialog,
+} from '@/composables/useShareDialog'
+import { openTaskReport, useTaskReport } from '@/composables/useTaskReport'
+import { loadWorkers, useWorkers } from '@/composables/useWorkers'
+import { addTask, loadWorkflow } from '@/composables/useWorkflow'
+import { openWorkflowDialog, useWorkflowDialog } from '@/composables/useWorkflowDialog'
+import { loadTemplates, useWorkflowTemplates } from '@/composables/useWorkflowTemplates'
 import { useAuthStore } from '@/stores/auth'
 import { useItemsStore } from '@/stores/items'
+import { useModalStore } from '@/stores/modals'
 import { useRootPagesStore } from '@/stores/rootPages'
+import { useRunStore } from '@/stores/run'
 import { useWorkflowsStore } from '@/stores/workflows'
 import { api, ApiError, readSession, writeSession, type User } from '@/api'
 
@@ -205,5 +223,155 @@ describe('stores/auth', () => {
     expect(useWorkflowsStore().workflows.size).toBe(0)
     expect(queryState('folders:root:s40:p1').status).toBe('idle')
     expect(assign).toHaveBeenCalledWith('/login')
+  })
+
+  it('closes overlays and wipes module-scoped session state on setUser(null)', async () => {
+    const auth = useAuthStore()
+    auth.setUser(operatorAlice)
+    writeSession('csrfToken', 'csrf-alice')
+
+    // Populate overlays and confirm dialog.
+    const folder = {
+      id: 10,
+      parent: null,
+      kind: 'folder' as const,
+      name: 'Alice Case',
+      owner: 'Alice',
+      modified: '2026-04-01T00:00:00Z',
+    }
+    useItemsStore().upsertItems([folder])
+    const pendingConfirm = confirmAction({
+      title: 'Delete?',
+      message: 'Confirm action',
+      confirmLabel: 'Delete',
+    })
+    openShareDialog(folder)
+    openTaskReport(
+      {
+        id: 't1',
+        name: 'Strings',
+        module: 'strings',
+        queue: 'strings',
+        status: 'success',
+        outputs: [],
+        fileReports: [],
+        options: [],
+        config: {},
+        groups: [],
+      },
+      10,
+    )
+    openWorkflowDialog(
+      [
+        {
+          id: 20,
+          parent: 10,
+          kind: 'file',
+          name: 'disk.img',
+          owner: 'Alice',
+          modified: '2026-04-01T00:00:00Z',
+        },
+      ],
+      10,
+    )
+    openLinkMenu({} as HTMLElement, 'https://secret.internal', 'link')
+    useModalStore().openModal('account')
+    useRunStore().open({ label: 'disk.img', files: [], folderId: 10 })
+    useGroupStacks().openStack('g1')
+    previousPath.value = '/folder/10'
+
+    // Populate module-scoped caches for API keys, share access/groups, workers, templates.
+    vi.spyOn(api.users, 'listApiKeys').mockResolvedValueOnce([
+      {
+        id: 1,
+        display_name: 'Alice CLI Key',
+        description: null,
+        token_exp: '2026-12-01T00:00:00Z',
+        created_at: '2026-04-01T00:00:00Z',
+      },
+    ])
+    vi.spyOn(api.folders, 'getFolder').mockResolvedValueOnce({
+      id: 10,
+      uuid: 'folder-10',
+      name: 'Alice Case',
+      display_name: 'Alice Case',
+      user_roles: [],
+      group_roles: [],
+      parent: null,
+    })
+    vi.spyOn(api.directory, 'listGroups').mockResolvedValueOnce([{ id: 5, name: 'DFIR' }])
+    vi.spyOn(api.taskqueue, 'registeredTasks').mockResolvedValueOnce([
+      { task_name: 'strings', display_name: 'Strings', queue_name: 'strings', task_config: [] },
+    ])
+    vi.spyOn(api.workflows, 'listTemplates').mockResolvedValueOnce([
+      {
+        id: 8,
+        display_name: 'Triage',
+        description: null,
+        spec_json: '{}',
+        user_id: 1,
+      },
+    ])
+
+    await Promise.all([loadApiKeys(), loadAccess(10), loadGroups(), loadWorkers(), loadTemplates()])
+
+    // Simulate a failed 401 workflow draft save before signing out.
+    useWorkflowsStore().upsertWorkflow({
+      id: 77,
+      folderId: 10,
+      name: 'Draft',
+      created: '2026-04-01T00:00:00Z',
+      inputs: [],
+      groups: [{ id: 'g1', tasks: [] }],
+      draft: true,
+    })
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(api.workflows, 'saveSpec').mockRejectedValueOnce(
+        new ApiError({ status: 401, statusText: 'Unauthorized', message: 'Expired' }),
+      )
+      addTask(
+        10,
+        { after: null },
+        { id: 'strings', name: 'Strings', description: '', queue: 'strings', options: [] },
+        {},
+      )
+      await vi.advanceTimersByTimeAsync(700)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    // Wipe session (as onUnauthorized does without page reload).
+    auth.setUser(null)
+
+    await expect(pendingConfirm).resolves.toBe(false)
+    expect(readSession('csrfToken')).toBeNull()
+    expect(useModalStore().hasActiveModal).toBe(false)
+    expect(useConfirm().isOpen.value).toBe(false)
+    expect(useLinkMenu().state.value).toBeNull()
+    expect(useShareDialog().shareTarget.value).toBeNull()
+    expect(useShareDialog().accessOf(10)).toEqual([])
+    expect(useShareDialog().groups.value).toEqual([])
+    expect(useTaskReport().report.value).toBeNull()
+    expect(useWorkflowDialog().workflowTarget.value).toBeNull()
+    expect(useRunStore().runTarget).toBeNull()
+    expect(useApiKeys().keys.value).toEqual([])
+    expect(useWorkers().workers.value).toEqual([])
+    expect(useWorkflowTemplates().templates.value).toEqual([])
+    expect(useGroupStacks().isStacked({ id: 'g1', tasks: [] })).toBe(false)
+    expect(previousPath.value).toBeNull()
+
+    // After another operator signs in, a subsequent workflow load must not be skipped as unsaved.
+    vi.spyOn(api.workflows, 'get').mockResolvedValueOnce({
+      id: 77,
+      uuid: 'wf-77',
+      display_name: 'Reloaded Workflow',
+      spec_json: '{}',
+      tasks: [],
+      files: [],
+      folder: { id: 10 },
+    })
+    await loadWorkflow(10, 77)
+    expect(useWorkflowsStore().workflowOf(10)?.name).toBe('Reloaded Workflow')
   })
 })

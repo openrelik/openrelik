@@ -252,3 +252,12 @@ export function openShareDialog(folder: Item) {
 export function closeShareDialog() {
   useShareDialog().close()
 }
+
+/** Forgets cached folder access, groups, and user search results (sign-out). */
+export function clearShareDialog(): void {
+  target.value = null
+  access.clear()
+  groups.value = []
+  userResults.clear()
+  useModalStore().closeModal('share')
+}

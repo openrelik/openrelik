@@ -47,12 +47,12 @@ const copied = ref(false)
 const warned = ref(false)
 
 watch(accountOpen, (open) => {
-  if (!open) return
   creating.value = false
   name.value = description.value = ''
   error.value = null
   newKey.value = null
-  loadApiKeys()
+  copied.value = warned.value = false
+  if (open) loadApiKeys()
 })
 
 async function startCreate() {

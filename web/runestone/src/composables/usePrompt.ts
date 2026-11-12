@@ -71,6 +71,11 @@ export function labelForPath(pathStr: string | null): string {
   return pathStr
 }
 
+/** Forgets the last visited route for `cd -` (sign-out). */
+export function clearPromptState(): void {
+  previousPath.value = null
+}
+
 /**
  * Terminal prompt navigation logic: fuzzy path matching,
  * directory traversal (`cd`), autocompletion, and modal state.
@@ -89,7 +94,11 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}) {
   if (!trackingInitialized) {
     trackingInitialized = true
     router.afterEach((to, from) => {
-      if (from.name && to.path !== from.path) {
+      if (to.name === 'login') {
+        previousPath.value = null
+        return
+      }
+      if (from.name && from.name !== 'login' && to.path !== from.path) {
         previousPath.value = from.fullPath
       }
     })

@@ -309,6 +309,14 @@ async function confirmDeleteItems(items: Item[]): Promise<Item[]> {
   return confirmed ? deleteItems(targets) : []
 }
 
+/** Clears pending folder mutation indicators and last error (sign-out). */
+export function clearFolderActions(): void {
+  error.value = null
+  pendingCreates.splice(0)
+  savingIds.clear()
+  deletingKeys.clear()
+}
+
 export function useFolderActions(): UseFolderActionsReturn {
   return {
     error: readonly(error),

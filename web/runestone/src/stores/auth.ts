@@ -6,15 +6,37 @@
 
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api, errorMessage, readSession, removeSession, writeSession, type User } from '@/api'
-import { forgetRoles } from '@/composables/useFolderPermissions'
+import {
+  api,
+  clearCsrfToken,
+  errorMessage,
+  readSession,
+  removeSession,
+  writeSession,
+  type User,
+} from '@/api'
+import { clearApiKeys } from '@/composables/useApiKeys'
 import { clearCaseLookups } from '@/composables/useCaseRef'
+import { clearConfirm } from '@/composables/useConfirm'
+import { clearFolderActions } from '@/composables/useFolderActions'
+import { forgetRoles } from '@/composables/useFolderPermissions'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
-import { clearUploads } from '@/composables/useUploadQueue'
+import { clearGroupStacks } from '@/composables/useGroupStacks'
+import { closeLinkMenu } from '@/composables/useLinkMenu'
+import { clearPromptState } from '@/composables/usePrompt'
 import { clearQueryCache } from '@/composables/useQueryCache'
+import { clearShareDialog } from '@/composables/useShareDialog'
+import { clearTaskReport } from '@/composables/useTaskReport'
 import { forgetTextFiles } from '@/composables/useTextStream'
+import { clearUploads } from '@/composables/useUploadQueue'
+import { clearWorkers } from '@/composables/useWorkers'
+import { clearWorkflowState } from '@/composables/useWorkflow'
+import { closeWorkflowDialog } from '@/composables/useWorkflowDialog'
+import { clearWorkflowTemplates } from '@/composables/useWorkflowTemplates'
 import { useItemsStore } from '@/stores/items'
+import { useModalStore } from '@/stores/modals'
 import { useRootPagesStore } from '@/stores/rootPages'
+import { useRunStore } from '@/stores/run'
 import { useWorkflowsStore } from '@/stores/workflows'
 
 const STORAGE_USER_KEY = 'openrelik.auth.user'
@@ -44,15 +66,30 @@ export const useAuthStore = defineStore('auth', () => {
       writeSession(STORAGE_USER_KEY, JSON.stringify(newUser))
     } else {
       removeSession(STORAGE_USER_KEY)
+      clearCsrfToken()
+      useModalStore().closeAllModals()
+      clearConfirm()
+      closeLinkMenu()
       // The next operator must not see this one's folders, even for a moment.
       clearQueryCache()
       useItemsStore().clearItems()
       useRootPagesStore().clearRootPages()
       useWorkflowsStore().forgetWorkflows()
+      useRunStore().clearRun()
+      clearApiKeys()
+      clearShareDialog()
+      clearTaskReport()
+      closeWorkflowDialog()
+      clearWorkflowState()
+      clearWorkflowTemplates()
+      clearWorkers()
+      clearFolderActions()
       clearFolderSearch()
+      clearGroupStacks()
       forgetTextFiles()
       clearCaseLookups()
       forgetRoles()
+      clearPromptState()
       // Bytes must not keep flowing on a session that just ended.
       clearUploads()
     }

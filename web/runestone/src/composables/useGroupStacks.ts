@@ -50,6 +50,11 @@ export interface UseGroupStacksReturn {
 
 const inputsKey = (workflowId: number) => `inputs:${workflowId}`
 
+/** Forgets group stack preferences (sign-out). */
+export function clearGroupStacks(): void {
+  chosen.clear()
+}
+
 export function useGroupStacks(): UseGroupStacksReturn {
   const isStacked = (group: TaskGroup) =>
     stackable(group) &&

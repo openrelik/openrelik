@@ -72,6 +72,17 @@ export interface UseConfirmReturn {
   text: Ref<string>
 }
 
+/** Resolves any open confirmation with `false` and closes it (sign-out). */
+export function clearConfirm(): void {
+  text.value = ''
+  if (resolve) {
+    settle(false)
+    return
+  }
+  request.value = null
+  useModalStore().closeModal('confirm')
+}
+
 export function useConfirm(): UseConfirmReturn {
   const modalStore = useModalStore()
   return {

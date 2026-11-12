@@ -52,9 +52,12 @@ export async function findCaseFolder(input: string, signal?: AbortSignal): Promi
   return caseFolders.get(ref) ?? null
 }
 
-/** Forgets every case lookup (sign-out). */
+/** Forgets every case lookup and pending reference state (sign-out). */
 export function clearCaseLookups(): void {
   caseFolders.clear()
+  savingIds.clear()
+  error.value = null
+  takenBy.value = null
 }
 
 /** Lookups of these references are out of date: they moved, or were freed. */

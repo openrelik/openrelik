@@ -35,6 +35,11 @@ export interface UseWorkersReturn {
   available: ComputedRef<Set<string> | null>
 }
 
+/** Forgets the loaded worker registry (sign-out). */
+export function clearWorkers(): void {
+  workers.value = []
+}
+
 export function useWorkers(): UseWorkersReturn {
   const state = computed(() => queryState(KEY))
   return {
