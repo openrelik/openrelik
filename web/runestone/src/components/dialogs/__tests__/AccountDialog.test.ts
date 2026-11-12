@@ -338,4 +338,113 @@ describe('AccountDialog', () => {
     await flushPromises()
     expect(body.find('textarea[aria-label="The new API key"]').exists()).toBe(false)
   })
+
+  it('ignores Escape while ConfirmDialog is active, clears create error on cancel, and guards in-flight create and concurrent revokes', async () => {
+    vi.mocked(api.users.listApiKeys).mockResolvedValue([
+      makeKey(11, 'Key One', new Date(NOW + 5 * DAY).toISOString()),
+      makeKey(12, 'Key Two', new Date(NOW + 6 * DAY).toISOString()),
+    ])
+    const body = mountDialog()
+    openAccount()
+    await nextTick()
+    await flushPromises()
+
+    // Trigger create error then cancel: error clears
+    vi.mocked(api.users.createApiKey).mockRejectedValueOnce(makeApiError('Quota reached', 400))
+    await body
+      .findAll('button')
+      .find((b) => b.text().includes('Create API key'))!
+      .trigger('click')
+    await body.get('form input').setValue('Temp')
+    await body.get('form').trigger('submit')
+    await flushPromises()
+    expect(body.find('[role="alert"]').exists()).toBe(true)
+
+    await body
+      .get('form')
+      .findAll('button')
+      .find((b) => b.text() === 'Cancel')!
+      .trigger('click')
+    expect(body.find('[role="alert"]').exists()).toBe(false)
+
+    // With create form open and ConfirmDialog stacked on top, Escape is not intercepted by AccountDialog
+    await body
+      .findAll('button')
+      .find((b) => b.text().includes('Create API key'))!
+      .trigger('click')
+    await body.get('button[aria-label="Revoke Key One"]').trigger('click')
+    await nextTick()
+    expect(useModalStore().activeModal).toBe('confirm')
+
+    const escOnConfirm = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+    window.dispatchEvent(escOnConfirm)
+    await nextTick()
+    expect(escOnConfirm.defaultPrevented).toBe(false)
+    expect(body.find('form').exists()).toBe(true)
+    useConfirm().cancel()
+    await flushPromises()
+
+    // Concurrent revokes keep each row's own pending state
+    let resolveFirstDelete!: () => void
+    let resolveSecondDelete!: () => void
+    vi.mocked(api.users.deleteApiKey)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstDelete = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecondDelete = resolve
+          }),
+      )
+
+    await body.get('button[aria-label="Revoke Key One"]').trigger('click')
+    await nextTick()
+    useConfirm().accept()
+    await flushPromises()
+
+    await body.get('button[aria-label="Revoke Key Two"]').trigger('click')
+    await nextTick()
+    useConfirm().accept()
+    await flushPromises()
+
+    const btn1 = body.get('button[aria-label="Revoke Key One"]').element as HTMLButtonElement
+    const btn2 = body.get('button[aria-label="Revoke Key Two"]').element as HTMLButtonElement
+    expect(btn1.disabled).toBe(true)
+    expect(btn2.disabled).toBe(true)
+
+    resolveFirstDelete()
+    await flushPromises()
+    expect(body.find('button[aria-label="Revoke Key One"]').exists()).toBe(false)
+    expect(
+      (body.get('button[aria-label="Revoke Key Two"]').element as HTMLButtonElement).disabled,
+    ).toBe(true)
+
+    resolveSecondDelete()
+    await flushPromises()
+    expect(body.find('button[aria-label="Revoke Key Two"]').exists()).toBe(false)
+
+    // Closing dialog while createApiKey is in flight discards late secret
+    let resolveCreate!: (val: { display_name: string; token: string }) => void
+    vi.mocked(api.users.createApiKey).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        }),
+    )
+    await body.get('form input').setValue('Late Key')
+    await body.get('form').trigger('submit')
+    accountOpen.value = false
+    await nextTick()
+
+    resolveCreate({ display_name: 'Late Key', token: 'ork_late_secret' })
+    await flushPromises()
+    openAccount()
+    await nextTick()
+    await flushPromises()
+    expect(body.find('textarea[aria-label="The new API key"]').exists()).toBe(false)
+  })
 })

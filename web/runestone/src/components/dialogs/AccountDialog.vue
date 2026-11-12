@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { Copy, KeyRound, LogOut, Plus, Trash2, TriangleAlert, User, X } from '@/components/icons'
 
 import Button from '@/components/base/Button.vue'
@@ -15,6 +15,7 @@ import {
 import { confirmAction } from '@/composables/useConfirm'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useAuthStore } from '@/stores/auth'
+import { useModalStore } from '@/stores/modals'
 import { stamp } from '@/utils/format'
 
 /**
@@ -27,6 +28,7 @@ import { stamp } from '@/utils/format'
  * is held only in this dialog until then, never stored.
  */
 const auth = useAuthStore()
+const modals = useModalStore()
 const { keys, state } = useApiKeys()
 
 const close = () => (accountOpen.value = false)
@@ -45,15 +47,24 @@ const error = ref<string | null>(null)
 const newKey = ref<{ name: string; token: string } | null>(null)
 const copied = ref(false)
 const warned = ref(false)
+const deletingIds = reactive(new Set<number>())
+let openGeneration = 0
 
-watch(accountOpen, (open) => {
-  creating.value = false
-  name.value = description.value = ''
-  error.value = null
-  newKey.value = null
-  copied.value = warned.value = false
-  if (open) loadApiKeys()
-})
+watch(
+  [accountOpen, () => auth.user?.id],
+  ([open, userId]) => {
+    openGeneration++
+    creating.value = false
+    saving.value = false
+    name.value = description.value = ''
+    error.value = null
+    newKey.value = null
+    copied.value = warned.value = false
+    deletingIds.clear()
+    if (open && userId !== undefined) loadApiKeys()
+  },
+  { flush: 'sync' },
+)
 
 async function startCreate() {
   creating.value = true
@@ -62,20 +73,30 @@ async function startCreate() {
   nameInput.value?.focus()
 }
 
+function cancelCreate() {
+  creating.value = false
+  error.value = null
+}
+
 async function create() {
-  if (!name.value.trim() || saving.value) return
+  const trimmedName = name.value.trim()
+  if (!trimmedName || saving.value) return
+  const generation = openGeneration
+  const userId = auth.user?.id
   saving.value = true
   error.value = null
   try {
-    const token = await createApiKey(name.value, description.value)
-    newKey.value = { name: name.value.trim(), token }
+    const token = await createApiKey(trimmedName, description.value)
+    if (generation !== openGeneration || !accountOpen.value || auth.user?.id !== userId) return
+    newKey.value = { name: trimmedName, token }
     copied.value = warned.value = false
     creating.value = false
     name.value = description.value = ''
   } catch (err: unknown) {
+    if (generation !== openGeneration || !accountOpen.value || auth.user?.id !== userId) return
     error.value = `Could not create the key: ${errorMessage(err, 'request failed')}`
   } finally {
-    saving.value = false
+    if (generation === openGeneration) saving.value = false
   }
 }
 
@@ -100,13 +121,13 @@ function done() {
  * modal handler would): it says why instead. Caught before that handler.
  */
 function onKey(event: KeyboardEvent) {
-  if (!accountOpen.value || event.key !== 'Escape') return
+  if (!accountOpen.value || modals.activeModal !== 'account' || event.key !== 'Escape') return
   if (newKey.value) {
     warned.value = true
     event.preventDefault()
     event.stopImmediatePropagation()
   } else if (creating.value) {
-    creating.value = false
+    cancelCreate()
     event.preventDefault()
     event.stopImmediatePropagation()
   }
@@ -121,24 +142,28 @@ function onBackdrop() {
 
 // --- revoking ---
 
-const deleting = ref<number | null>(null)
-
 async function revoke(key: ApiKeyRecord) {
+  if (deletingIds.has(key.id)) return
+  const generation = openGeneration
+  const userId = auth.user?.id
   const confirmed = await confirmAction({
     title: `Revoke “${key.display_name}”?`,
     message: 'Anything using this key stops working at once. This cannot be undone.',
     confirmLabel: 'Revoke',
     danger: true,
   })
-  if (!confirmed) return
-  deleting.value = key.id
+  if (!confirmed || generation !== openGeneration || !accountOpen.value || auth.user?.id !== userId)
+    return
+  deletingIds.add(key.id)
   error.value = null
   try {
     await deleteApiKey(key.id)
   } catch (err: unknown) {
-    error.value = `Could not revoke “${key.display_name}”: ${errorMessage(err, 'request failed')}`
+    if (generation === openGeneration && accountOpen.value && auth.user?.id === userId) {
+      error.value = `Could not revoke “${key.display_name}”: ${errorMessage(err, 'request failed')}`
+    }
   } finally {
-    deleting.value = null
+    deletingIds.delete(key.id)
   }
 }
 
@@ -299,7 +324,7 @@ const user = computed(() => auth.user)
                 >
                   {{ showSaving ? 'Creating…' : 'Create key' }}
                 </Button>
-                <Button size="row" variant="ghost" @click="creating = false">Cancel</Button>
+                <Button size="row" variant="ghost" @click="cancelCreate">Cancel</Button>
               </div>
             </form>
 
@@ -322,7 +347,7 @@ const user = computed(() => auth.user)
                 v-for="key in keys"
                 :key="key.id"
                 class="flex items-center gap-3 px-3 py-2"
-                :class="{ 'opacity-50': deleting === key.id }"
+                :class="{ 'opacity-50': deletingIds.has(key.id) }"
               >
                 <KeyRound :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
                 <div class="min-w-0 flex-1">
@@ -340,7 +365,7 @@ const user = computed(() => auth.user)
                   class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted transition-colors hover:bg-danger-tint hover:text-danger"
                   :aria-label="`Revoke ${key.display_name}`"
                   v-tooltip="'Revoke key'"
-                  :disabled="deleting === key.id"
+                  :disabled="deletingIds.has(key.id)"
                   @click="revoke(key)"
                 >
                   <Trash2 :size="13" :stroke-width="1.5" />
