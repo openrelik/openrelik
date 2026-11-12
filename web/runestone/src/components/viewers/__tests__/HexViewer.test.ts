@@ -538,10 +538,11 @@ describe('HexViewer', () => {
     const Host = defineComponent({
       components: { HexViewer },
       setup() {
+        const size = ref(20)
         const mark = ref<Span | null>({ from: 16, to: 16 })
-        return { mark }
+        return { size, mark }
       },
-      template: `<HexViewer :file-id="18" :size="20" v-model:mark="mark" />`,
+      template: `<HexViewer :file-id="18" :size="size" v-model:mark="mark" />`,
     })
     const partialWrapper = mount(Host, {
       global: { plugins: [createPinia(), directives, makeRouter()] },
@@ -574,7 +575,7 @@ describe('HexViewer', () => {
     // goTo to the current cursor offset after scrolling away still scrolls back to it
     await grid.trigger('keydown', { key: 'Home', ctrlKey: true })
     mockReadRangeFrom(makeSampleBytes(512))
-    await partialWrapper.setProps({ size: 512 })
+    ;(partialWrapper.vm as { size: number }).size = 512
     await flushPromises()
     await grid.trigger('wheel', { deltaX: 0, deltaY: 100, deltaMode: 0 })
     const gotoInput = partialWrapper.get('input[placeholder="go to offset"]')
