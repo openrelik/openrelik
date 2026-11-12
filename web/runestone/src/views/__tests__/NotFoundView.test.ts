@@ -4,8 +4,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { api, ApiError, type FolderDetail } from '@/api'
 import NotFoundView from '@/views/NotFoundView.vue'
 import directives from '@/directives'
+import { caseLookupError, clearCaseLookups } from '@/composables/useCaseRef'
 import { clearQueryCache } from '@/composables/useQueryCache'
 
 vi.mock('@/api', async (importOriginal) => {
@@ -14,6 +16,10 @@ vi.mock('@/api', async (importOriginal) => {
     ...actual,
     api: {
       ...actual.api,
+      folders: {
+        ...actual.api.folders,
+        getCaseFolder: vi.fn(),
+      },
     },
   }
 })
@@ -23,6 +29,7 @@ function buildRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'folders', component: { template: '<div>Home</div>' } },
+      { path: '/folder/:id', name: 'folder', component: { template: '<div>Folder</div>' } },
       { path: '/metrics', name: 'metrics', component: { template: '<div>Metrics</div>' } },
       { path: '/case/:ref(.*)', name: 'case', component: NotFoundView },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView },
@@ -34,7 +41,9 @@ let wrapper: VueWrapper | null = null
 
 beforeEach(() => {
   clearQueryCache()
+  clearCaseLookups()
   setActivePinia(createPinia())
+  vi.mocked(api.folders.getCaseFolder).mockReset()
 })
 
 afterEach(() => {
@@ -86,5 +95,49 @@ describe('NotFoundView', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.fullPath).toBe('/')
+  })
+
+  it('shows case lookup failure message and retries resolution on Retry', async () => {
+    const router = buildRouter()
+    await router.push('/case/ir-2026/042')
+    await router.isReady()
+    caseLookupError.value = 'Backend database unavailable'
+
+    wrapper = mount(NotFoundView, {
+      global: {
+        plugins: [createPinia(), router, directives],
+      },
+    })
+
+    expect(wrapper.get('h1').text()).toBe('Case Lookup Failed')
+    expect(wrapper.text()).toContain('Backend database unavailable')
+    expect(wrapper.text()).toContain('lookup failed')
+
+    // First retry fails with a new error
+    vi.mocked(api.folders.getCaseFolder).mockRejectedValueOnce(
+      new ApiError({ status: 503, statusText: 'Service Unavailable', message: 'Still starting' }),
+    )
+    const retryButton = wrapper.findAll('button').find((b) => b.text() === 'Retry')
+    expect(retryButton).toBeDefined()
+    await retryButton!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Still starting')
+
+    // Second retry succeeds and opens the resolved folder
+    const resolved: FolderDetail = {
+      id: 42,
+      uuid: 'case-42',
+      display_name: 'IR 042',
+      case_ref: 'ir-2026/042',
+      parent: null,
+    }
+    vi.mocked(api.folders.getCaseFolder).mockResolvedValueOnce(resolved)
+    const retryAgain = wrapper.findAll('button').find((b) => b.text() === 'Retry')
+    expect(retryAgain).toBeDefined()
+    await retryAgain!.trigger('click')
+    await flushPromises()
+
+    expect(api.folders.getCaseFolder).toHaveBeenCalledTimes(2)
+    expect(router.currentRoute.value.fullPath).toBe('/folder/42')
   })
 })

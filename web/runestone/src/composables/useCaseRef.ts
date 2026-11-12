@@ -21,6 +21,8 @@ import { normalizeCaseRef, takenByFolderId } from '@/utils/caseRef'
 const caseFolders = reactive(new Map<string, number | null>())
 const savingIds = reactive(new Set<number>())
 const error = ref<string | null>(null)
+/** Error from the last `/case/:ref` route lookup when it failed rather than 404'd. */
+export const caseLookupError = ref<string | null>(null)
 /** The folder that already has the case, after a 409 that named one. */
 const takenBy = ref<number | null>(null)
 
@@ -57,6 +59,7 @@ export function clearCaseLookups(): void {
   caseFolders.clear()
   savingIds.clear()
   error.value = null
+  caseLookupError.value = null
   takenBy.value = null
 }
 

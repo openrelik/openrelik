@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, ApiError, type FolderDetail, type User } from '@/api'
-import { clearCaseLookups } from '@/composables/useCaseRef'
+import { caseLookupError, clearCaseLookups } from '@/composables/useCaseRef'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import router from '@/router'
 import { useAuthStore } from '@/stores/auth'
@@ -133,7 +133,7 @@ describe('router', () => {
     // Return to another route so entering /case/:ref again runs beforeEnter
     await router.push('/')
 
-    // Unexpected server error -> warns and stays on 'case' (NotFoundView)
+    // Unexpected server error -> warns, stays on 'case', and exposes lookup error for Retry
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(api.folders.getCaseFolder).mockRejectedValueOnce(
       new ApiError({ status: 500, statusText: 'Server Error', message: 'DB offline' }),
@@ -141,6 +141,26 @@ describe('router', () => {
     await router.push('/case/ir-2024/boom')
     expect(router.currentRoute.value.name).toBe('case')
     expect(warnSpy).toHaveBeenCalledWith('[router] Case lookup failed:', expect.any(ApiError))
+    expect(caseLookupError.value).toBe('DB offline')
+
+    await router.push('/')
+    expect(caseLookupError.value).toBeNull()
+  })
+
+  it('redirects to login instead of NotFoundView when /case lookup drops auth session', async () => {
+    const authStore = useAuthStore()
+    authStore.setUser(operator)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    vi.mocked(api.folders.getCaseFolder).mockImplementationOnce(async () => {
+      authStore.setUser(null)
+      throw new ApiError({ status: 401, statusText: 'Unauthorized', message: 'Expired' })
+    })
+
+    await router.push('/case/ir-2024/007')
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query.redirect).toBe('/case/ir-2024/007')
+    expect(warnSpy).toHaveBeenCalled()
   })
 
   // Regression: `/case/:ref(.*)` resolves in `beforeEach` rather than per-route `beforeEnter`

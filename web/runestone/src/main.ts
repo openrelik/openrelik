@@ -5,7 +5,7 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import directives from './directives'
-import router from './router'
+import router, { pendingNavigationPath } from './router'
 import { onUnauthorized } from './api'
 import { useAuthStore } from './stores/auth'
 
@@ -23,8 +23,12 @@ onUnauthorized(() => {
   authStore.setUser(null)
 
   const current = router.currentRoute.value
-  if (current.name === 'login') return
-  router.push({ name: 'login', query: { redirect: current.fullPath } })
+  const target = pendingNavigationPath() ?? current.fullPath
+  if (current.name === 'login' && !pendingNavigationPath()) return
+  router.push({
+    name: 'login',
+    query: target && target !== '/' ? { redirect: target } : undefined,
+  })
 })
 
 app.mount('#app')

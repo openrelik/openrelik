@@ -142,5 +142,28 @@ describe('main.ts', () => {
     expect(authStore.isAuthenticated).toBe(false)
     expect(router.currentRoute.value.name).toBe('login')
     expect(router.currentRoute.value.query).toEqual({ redirect: '/unknown-workspace?tab=1' })
+
+    // 4. Authenticated while a route navigation is still pending in beforeEach -> keeps pending path
+    let holdLookup: (() => void) | undefined
+    const beforeEachStop = router.beforeEach(async (to) => {
+      if (to.path === '/pending-target') {
+        await new Promise<void>((resolve) => {
+          holdLookup = resolve
+        })
+      }
+      return true
+    })
+    authStore.setUser(user)
+    const pendingNav = router.push('/pending-target?tab=2')
+    await flushPromises()
+
+    unauthorizedCallback?.()
+    holdLookup?.()
+    await pendingNav.catch(() => {})
+    await flushPromises()
+    beforeEachStop()
+
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query).toEqual({ redirect: '/pending-target?tab=2' })
   })
 })

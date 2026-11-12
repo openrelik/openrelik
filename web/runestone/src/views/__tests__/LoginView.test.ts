@@ -223,4 +223,31 @@ describe('LoginView', () => {
     expect((passInput.element as HTMLInputElement).value).toBe('')
     expect(document.activeElement).toBe(userInput.element)
   })
+
+  it.each([
+    'https://evil.example/phish',
+    '//evil.example/phish',
+    '/\\evil.example/phish',
+    '/login?redirect=/folder/1',
+  ])('falls back to / for unsafe redirect query %s', async (unsafeRedirect) => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push({ name: 'login', query: { redirect: unsafeRedirect } })
+    await router.isReady()
+
+    vi.mocked(api.auth.login).mockResolvedValueOnce(operatorAlice)
+
+    wrapper = mount(LoginView, {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+
+    await wrapper.get('input[name="username"]').setValue('alice')
+    await wrapper.get('input[name="password"]').setValue('secret')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/')
+  })
 })

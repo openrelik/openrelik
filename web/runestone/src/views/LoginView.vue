@@ -32,6 +32,18 @@ function resetForm() {
   usernameInput.value?.focus()
 }
 
+/** Accepts only same-origin non-login app paths so a tampered query cannot bounce off-site. */
+function safeRedirectTarget(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//')) return '/'
+  try {
+    const url = new URL(raw, 'http://localhost')
+    if (url.origin !== 'http://localhost' || url.pathname === '/login') return '/'
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return '/'
+  }
+}
+
 async function handleLogin() {
   errorMessage.value = ''
 
@@ -45,8 +57,7 @@ async function handleLogin() {
 
   try {
     await authStore.login(trimmedUser, password.value)
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    router.push(redirect)
+    await router.push(safeRedirectTarget(route.query.redirect))
   } catch (err: unknown) {
     errorMessage.value = toMessage(err, 'Authentication failed.')
   } finally {

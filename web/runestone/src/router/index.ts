@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { findCaseFolder } from '@/composables/useCaseRef'
+import { errorMessage } from '@/api'
+import { caseLookupError, findCaseFolder } from '@/composables/useCaseRef'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -47,6 +48,13 @@ const router = createRouter({
   ],
 })
 
+let pendingPath: string | null = null
+
+/** Target path of an in-flight navigation before it commits, for 401 redirects during guards/load. */
+export function pendingNavigationPath(): string | null {
+  return pendingPath
+}
+
 /**
  * Authentication Navigation Guard
  *
@@ -54,6 +62,8 @@ const router = createRouter({
  * Unauthenticated users are redirected to /login with redirect preservation.
  */
 router.beforeEach(async (to) => {
+  pendingPath = to.name === 'login' ? null : to.fullPath
+  caseLookupError.value = null
   const authStore = useAuthStore()
 
   // 1. Allow unauthenticated access to /login; redirect to home only if actively authenticated
@@ -84,15 +94,32 @@ router.beforeEach(async (to) => {
   // 3. Resolve /case/:ref on every navigation (including param-only changes on 'case').
   if (to.name === 'case') {
     const ref = String(to.params.ref)
-    const id = await findCaseFolder(ref).catch((err: unknown) => {
+    try {
+      const id = await findCaseFolder(ref)
+      // No such case (or none this user can see): the page says not found.
+      return id === null ? true : { path: `/folder/${id}`, replace: true }
+    } catch (err: unknown) {
       console.warn('[router] Case lookup failed:', err)
-      return null
-    })
-    // No such case (or none this user can see): the page says not found.
-    return id === null ? true : { path: `/folder/${id}`, replace: true }
+      if (!authStore.isAuthenticated) {
+        return {
+          name: 'login',
+          query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : undefined,
+        }
+      }
+      caseLookupError.value = errorMessage(err, 'Unable to look up case.')
+      return true
+    }
   }
 
   return true
+})
+
+router.afterEach(() => {
+  pendingPath = null
+})
+
+router.onError(() => {
+  pendingPath = null
 })
 
 export default router
