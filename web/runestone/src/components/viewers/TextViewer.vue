@@ -202,7 +202,10 @@ const wholeLines = computed(() => !!range.value && !hasColumns(range.value))
  */
 const painted: { ranges: Range[]; highlight: Highlight | null } = {
   ranges: [],
-  highlight: typeof CSS !== 'undefined' && 'highlights' in CSS ? new Highlight() : null,
+  highlight:
+    typeof Highlight !== 'undefined' && typeof CSS !== 'undefined' && 'highlights' in CSS
+      ? new Highlight()
+      : null,
 }
 /** The text node and offset at a position in a row's shown text. */
 /** Line numbers show the mark only for whole lines: exact text is shown by its own tint. */
@@ -240,9 +243,15 @@ function paintMark() {
     highlight?.add(stretch)
   }
 }
-watch([rows, range], paintMark, { flush: 'post' })
+watch([rows, range], paintMark, { immediate: true, flush: 'post' })
 onMounted(() => painted.highlight && CSS.highlights.set('text-mark', painted.highlight))
-onUnmounted(() => CSS.highlights?.delete('text-mark'))
+onUnmounted(() => {
+  painted.highlight?.clear()
+  painted.ranges = []
+  if (painted.highlight && CSS.highlights?.get('text-mark') === painted.highlight) {
+    CSS.highlights.delete('text-mark')
+  }
+})
 
 // --- exact text: the selection on screen, marked and linked ---
 
@@ -301,8 +310,17 @@ function onTextRelease() {
   marks.set(span)
   marks.anchor.value = span
 }
-onMounted(() => document.addEventListener('pointerup', onTextRelease))
-onUnmounted(() => document.removeEventListener('pointerup', onTextRelease))
+function cancelPress() {
+  pressing = false
+}
+onMounted(() => {
+  document.addEventListener('pointerup', onTextRelease)
+  document.addEventListener('pointercancel', cancelPress)
+})
+onUnmounted(() => {
+  document.removeEventListener('pointerup', onTextRelease)
+  document.removeEventListener('pointercancel', cancelPress)
+})
 
 /** Marks the selected text, shows the mark in place of the selection, and copies a link to it. */
 async function markSelection() {
@@ -314,6 +332,7 @@ async function markSelection() {
   marks.anchor.value = span
   // The mark shows once the selection's own highlight is gone.
   window.getSelection()?.removeAllRanges()
+  selected.value = null
   say(await marks.copyLink(span))
 }
 
@@ -375,6 +394,10 @@ watch(
     if (body.value) body.value.scrollLeft = 0
     marks.anchor.value = null
     landing.value = null
+    selected.value = null
+    pressing = false
+    gotoText.value = ''
+    gotoError.value = false
   },
 )
 
@@ -439,6 +462,7 @@ function onKey(event: KeyboardEvent) {
   else if (event.key === 'Escape' && selected.value) {
     // The selection goes first: what stays is its mark.
     window.getSelection()?.removeAllRanges()
+    selected.value = null
   } else if (event.key === 'Escape' && range.value) {
     marks.set(null)
   } else return
@@ -477,7 +501,10 @@ const remaining = computed(() => Math.max(0, props.size - text.bytesRead.value))
 const moreLabel = computed(() =>
   remaining.value > MORE_BYTES ? `${MORE_BYTES / 1_000_000} MB` : formatSize(remaining.value),
 )
+let alive = true
+onUnmounted(() => (alive = false))
 async function loadAll() {
+  const id = props.fileId
   if (
     remaining.value > LOAD_ALL_ASK &&
     !(await confirmAction({
@@ -488,6 +515,7 @@ async function loadAll() {
   ) {
     return
   }
+  if (!alive || props.fileId !== id) return
   text.loadAll()
 }
 </script>
@@ -657,6 +685,7 @@ async function loadAll() {
           @pointerdown.stop="onThumbDown"
           @pointermove="onThumbMove"
           @pointerup="onThumbUp"
+          @pointercancel="onThumbUp"
         />
       </div>
     </div>

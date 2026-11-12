@@ -431,4 +431,102 @@ describe('TextViewer', () => {
     await body.trigger('keydown', { key: 'Escape' })
     expect(wrapper.emitted('update:mark')?.at(-1)).toEqual([null])
   })
+
+  it('paints cached exact marks on mount, cleans up owned CSS highlights on unmount, clears double-Escape selection/goto state, and guards unmounted loadAll', async () => {
+    // 1. Pre-warm useTextStream cache for fileId 250, then unmount and remount with exact mark at line 1
+    const size = mockLines(['first line content', 'second line content'])
+    const warm = mountTextViewer({ fileId: 250, size })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    warm.unmount()
+
+    const cachedWrapper = mountTextViewer({
+      fileId: 250,
+      size,
+      mark: { kind: 'line', from: 1, fromCol: 1, to: 1, toCol: 6 } as unknown as Span,
+    })
+    await flushPromises()
+    const highlightsMap = (CSS as unknown as { highlights: Map<string, MockHighlight> }).highlights
+    const firstHighlight = highlightsMap.get('text-mark')
+    expect(firstHighlight?.ranges.length).toBeGreaterThan(0)
+
+    // A second TextViewer takes ownership of 'text-mark'; unmounting the first must NOT delete the second's entry
+    const secondWrapper = mountTextViewer({ fileId: 251, size })
+    await flushPromises()
+    const secondHighlight = highlightsMap.get('text-mark')
+    expect(secondHighlight).not.toBe(firstHighlight)
+
+    cachedWrapper.unmount()
+    expect(firstHighlight?.ranges).toHaveLength(0)
+    expect(highlightsMap.get('text-mark')).toBe(secondHighlight)
+
+    secondWrapper.unmount()
+    expect(highlightsMap.has('text-mark')).toBe(false)
+
+    // 2. Fallback when Highlight API is absent + double-Escape sync clear + goto reset on fileId change
+    vi.stubGlobal('Highlight', undefined)
+    const lines = Array.from({ length: 30 }, (_, i) => `item ${i + 1}`)
+    const lSize = mockLines(lines)
+    const fallbackWrapper = mountTextViewer({
+      fileId: 252,
+      size: lSize,
+      mark: { from: 1, fromCol: 1, to: 1, toCol: 5 },
+    })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    expect(fallbackWrapper.findAll('[data-gutter]')[0]?.classes()).toContain('bg-warning-tint')
+
+    const body = fallbackWrapper.get('[aria-label="File text"]')
+    const row0 = fallbackWrapper.get('[data-row="0"]')
+    const textNode = row0.element.querySelector('span')!.firstChild!
+    const sel = window.getSelection()!
+    const domRange = document.createRange()
+    domRange.setStart(textNode, 0)
+    domRange.setEnd(textNode, 4)
+    sel.removeAllRanges()
+    sel.addRange(domRange)
+    document.dispatchEvent(new Event('selectionchange'))
+
+    // 1st Escape clears selection immediately; 2nd Escape clears mark without waiting for selectionchange
+    await body.trigger('keydown', { key: 'Escape' })
+    await body.trigger('keydown', { key: 'Escape' })
+    expect(fallbackWrapper.emitted('update:mark')?.at(-1)).toEqual([null])
+
+    // Trigger goto error, then switch fileId -> gotoText and gotoError reset
+    const gotoInput = fallbackWrapper.get('input[placeholder="go to line"]')
+    await gotoInput.setValue('999')
+    await fallbackWrapper.get('form').trigger('submit')
+    expect(gotoInput.classes()).toContain('border-danger')
+
+    await fallbackWrapper.setProps({ fileId: 253, size: lSize })
+    await flushPromises()
+    expect((gotoInput.element as HTMLInputElement).value).toBe('')
+    expect(gotoInput.classes()).not.toContain('border-danger')
+
+    // Scrollbar thumb drag & track click
+    const thumb = fallbackWrapper.get('.cursor-grab')
+    ;(thumb.element as HTMLElement & { setPointerCapture: (id: number) => void }).setPointerCapture =
+      vi.fn()
+    await thumb.trigger('pointerdown', { clientY: 0, pointerId: 1 })
+    await thumb.trigger('pointermove', { clientY: 80 })
+    await thumb.trigger('pointerup')
+    expect(Number(fallbackWrapper.findAll('[data-row]')[0]?.attributes('data-row'))).toBeGreaterThan(0)
+
+    // 3. loadAll confirmation ignored if unmounted before accepting
+    const hugeSize = 300 * 1024 * 1024
+    vi.mocked(api.files.readRange).mockResolvedValue(new Uint8Array(1024 * 1024).fill(65))
+    const hugeWrapper = mountTextViewer({ fileId: 254, size: hugeSize })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(50)
+    await flushPromises()
+
+    const loadFullBtn = hugeWrapper.findAll('button').find((b) => b.text() === 'Load full file')!
+    await loadFullBtn.trigger('click')
+    expect(useConfirm().isOpen.value).toBe(true)
+    const callsBefore = vi.mocked(api.files.readRange).mock.calls.length
+    hugeWrapper.unmount()
+    useConfirm().accept()
+    await flushPromises()
+    expect(vi.mocked(api.files.readRange).mock.calls.length).toBe(callsBefore)
+  })
 })
