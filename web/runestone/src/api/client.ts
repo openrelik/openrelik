@@ -31,7 +31,7 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
    * hands back the unread response, for a caller that checks the status and
    * headers before deciding to read the body (byte ranges).
    */
-  responseType?: 'auto' | 'blob' | 'response'
+  responseType?: 'auto' | 'response'
   /** Do not try to refresh the session on 401 (used by login). */
   skipAuthRefresh?: boolean
   /** Do not attach an X-CSRF-Token header (used by endpoints outside the session). */
@@ -449,9 +449,6 @@ async function receive<T>(endpoint: string, options: RequestOptions): Promise<T>
   const response = await send(endpoint, options)
 
   if (options.responseType === 'response') return response as T
-  if (options.responseType === 'blob') {
-    return (await response.blob()) as T
-  }
 
   const text = await readBody(() => response.text(), options.signal)
   const contentType = response.headers.get('Content-Type') || ''
@@ -629,8 +626,4 @@ export const httpClient = {
     return request<T>(endpoint, { ...options, method: 'DELETE' })
   },
   upload,
-  /** Downloads a binary blob; shares the refresh and error handling of every other call. */
-  downloadBlob(endpoint: string, params?: QueryParams): Promise<Blob> {
-    return request<Blob>(endpoint, { method: 'GET', params, responseType: 'blob' })
-  },
 }

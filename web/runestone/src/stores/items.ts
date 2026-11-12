@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import type { Item, Stats } from '@/types/item'
+import type { Item } from '@/types/item'
 import { itemKey } from '@/utils/item'
 
 /**
@@ -48,30 +48,6 @@ export const useItemsStore = defineStore('items', () => {
       .filter((item) => item.parent === parent && item.kind === 'folder')
       .sort((a, b) => a.name.localeCompare(b.name))
   }
-
-  /** Everything below a folder, all the way down. */
-  function statsOf(id: number): Stats {
-    const stats: Stats = { folders: 0, files: 0, bytes: 0 }
-    for (const child of items.value.filter((item) => item.parent === id)) {
-      if (child.kind === 'file') {
-        stats.files++
-        stats.bytes += child.size ?? 0
-      } else {
-        const below = statsOf(child.id)
-        stats.folders += 1 + below.folders
-        stats.files += below.files
-        stats.bytes += below.bytes
-      }
-    }
-    return stats
-  }
-
-  /** "/CLI Test Folder/evidence" — the path as a string, for copying. */
-  const pathString = (item: Item): string =>
-    '/' +
-    pathTo(item)
-      .map((item) => item.name)
-      .join('/')
 
   /** Everything below a folder, all the way down, in depth-first order. */
   function descendantsOf(id: number): Item[] {
@@ -163,8 +139,6 @@ export const useItemsStore = defineStore('items', () => {
     childrenOf,
     pathTo,
     subfoldersOf,
-    statsOf,
-    pathString,
     descendantsOf,
     renameItem,
     upsertListed,

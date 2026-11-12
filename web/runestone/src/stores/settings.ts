@@ -74,30 +74,14 @@ function readStoredSettings(): Settings {
 }
 
 /** Applies a theme choice to the page; resolves `system` to what the OS prefers. */
-function applyTheme(choice: ThemeChoice): 'light' | 'dark' {
-  if (typeof document === 'undefined') return 'light'
+function applyTheme(choice: ThemeChoice): void {
+  if (typeof document === 'undefined') return
   const light = choice === 'system' ? window.matchMedia(LIGHT_QUERY).matches : choice === 'light'
   document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark')
-  return light ? 'light' : 'dark'
 }
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Settings>(readStoredSettings())
-  const isOpen = ref(false)
-  /** The theme on screen, `system` resolved: for content the server renders (file previews). */
-  const resolvedTheme = ref<'light' | 'dark'>('light')
-
-  function open() {
-    isOpen.value = true
-  }
-
-  function close() {
-    isOpen.value = false
-  }
-
-  function toggle() {
-    isOpen.value = !isOpen.value
-  }
 
   // Persist changes to localStorage
   watch(
@@ -113,27 +97,16 @@ export const useSettingsStore = defineStore('settings', () => {
   )
 
   // Apply theme on change
-  watch(
-    () => settings.value.appearance.theme,
-    (theme) => (resolvedTheme.value = applyTheme(theme)),
-    { immediate: true },
-  )
+  watch(() => settings.value.appearance.theme, applyTheme, { immediate: true })
 
   // Listen to OS color scheme changes when theme is set to 'system'
   if (typeof window !== 'undefined') {
     window.matchMedia(LIGHT_QUERY).addEventListener('change', () => {
-      if (settings.value.appearance.theme === 'system') {
-        resolvedTheme.value = applyTheme('system')
-      }
+      if (settings.value.appearance.theme === 'system') applyTheme('system')
     })
   }
 
   return {
     settings,
-    resolvedTheme,
-    isOpen,
-    open,
-    close,
-    toggle,
   }
 })

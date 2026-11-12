@@ -5,7 +5,6 @@
  */
 
 import { authApi } from './endpoints/auth'
-import { configsApi } from './endpoints/configs'
 import { directoryApi } from './endpoints/directory'
 import { filesApi } from './endpoints/files'
 import { foldersApi } from './endpoints/folders'
@@ -18,7 +17,6 @@ import { apiConfig } from './config'
 
 export const api = {
   auth: authApi,
-  configs: configsApi,
   directory: directoryApi,
   files: filesApi,
   folders: foldersApi,
@@ -32,7 +30,6 @@ export const api = {
 
 export default api
 export * from './types'
-export type { SystemConfig } from './endpoints/configs'
 export type { ApiKeyRecord, NewApiKey } from './endpoints/users'
 export type { MetricSeries, MetricsQuery } from './endpoints/metrics'
 export { apiConfig } from './config'

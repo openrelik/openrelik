@@ -44,7 +44,7 @@ describe('stores/settings', () => {
     document.documentElement.removeAttribute('data-theme')
   })
 
-  it('initializes with defaults, applies OS theme, and toggles open/close state', async () => {
+  it('initializes with defaults, applies OS theme, and tracks OS scheme changes', async () => {
     const media = mockMatchMedia(false)
     const store = useSettingsStore()
 
@@ -52,12 +52,10 @@ describe('stores/settings', () => {
     expect(store.settings.explorer.pageSize).toBe(40)
     expect(store.settings.explorer.showEmptyFiles).toBe(false)
     expect(store.settings.appearance.theme).toBe('system')
-    expect(store.resolvedTheme).toBe('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
 
     // OS switches to light while theme is 'system'
     media.setLight(true)
-    expect(store.resolvedTheme).toBe('light')
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
 
     // Explicit theme overrides OS changes and persists to localStorage
@@ -65,10 +63,9 @@ describe('stores/settings', () => {
     store.settings.explorer.pageSize = 100
     await nextTick()
 
-    expect(store.resolvedTheme).toBe('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
     media.setLight(true)
-    expect(store.resolvedTheme).toBe('dark')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
 
     const persisted = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
       explorer?: { pageSize?: number }
@@ -76,14 +73,6 @@ describe('stores/settings', () => {
     }
     expect(persisted.explorer?.pageSize).toBe(100)
     expect(persisted.appearance?.theme).toBe('dark')
-
-    expect(store.isOpen).toBe(false)
-    store.open()
-    expect(store.isOpen).toBe(true)
-    store.close()
-    expect(store.isOpen).toBe(false)
-    store.toggle()
-    expect(store.isOpen).toBe(true)
   })
 
   it('merges partial stored settings and sanitizes unsupported pageSize values back to 40', () => {

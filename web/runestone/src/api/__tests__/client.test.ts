@@ -453,7 +453,7 @@ describe('api/client', () => {
   })
 
   describe('convenience methods, body formats, response parsing, and error branches', () => {
-    it('supports httpClient.put, httpClient.downloadBlob, responseType response, empty bodies, and plain text', async () => {
+    it('supports httpClient.put, responseType response, empty bodies, and plain text', async () => {
       writeSession('csrfToken', 'csrf-put')
       fetchSpy.mockResolvedValueOnce(jsonResponse({ case_ref: 'ir-1' }))
 
@@ -463,18 +463,6 @@ describe('api/client', () => {
       expect(updated).toEqual({ case_ref: 'ir-1' })
       expect(fetchSpy.mock.calls[0]?.[1]?.method).toBe('PUT')
       expect(headerOf(fetchSpy.mock.calls[0]?.[1], 'X-CSRF-Token')).toBe('csrf-put')
-
-      // downloadBlob
-      fetchSpy.mockResolvedValueOnce(
-        new Response(new Uint8Array([1, 2, 3]), {
-          status: 200,
-          headers: { 'Content-Type': 'application/octet-stream' },
-        }),
-      )
-      const blob = await httpClient.downloadBlob('/files/9/download', { raw: true })
-      expect(blob).toBeInstanceOf(Blob)
-      expect(blob.size).toBe(3)
-      expect(urlOf(fetchSpy.mock.calls[1]?.[0] ?? '')).toBe('/api/v1/files/9/download?raw=true')
 
       // responseType: 'response'
       fetchSpy.mockResolvedValueOnce(new Response('partial', { status: 206 }))

@@ -19,7 +19,6 @@ vi.mock('@/api', async (importOriginal) => {
       config: {
         ...actual.api.config,
         useMockApi: false,
-        authMethods: ['local'],
       },
       auth: {
         ...actual.api.auth,

@@ -73,16 +73,13 @@ describe('api/endpoints', () => {
     })
   })
 
-  describe('configsApi, directoryApi, metricsApi, taskqueueApi, and usersApi', () => {
-    it('routes system configs, directory search/groups, metrics, registered tasks, and API keys', async () => {
+  describe('directoryApi, metricsApi, taskqueueApi, and usersApi', () => {
+    it('routes directory search/groups, metrics, registered tasks, and API keys', async () => {
       const getSpy = vi.spyOn(httpClient, 'get').mockResolvedValue([])
       const postSpy = vi.spyOn(httpClient, 'post').mockResolvedValue([])
       const deleteSpy = vi.spyOn(httpClient, 'delete').mockResolvedValue(undefined)
       const controller = new AbortController()
       const callOpts = { signal: controller.signal, background: true }
-
-      await api.configs.system(callOpts)
-      expect(getSpy).toHaveBeenLastCalledWith('/configs/system/', callOpts)
 
       await api.directory.searchUsers('alice', callOpts)
       expect(postSpy).toHaveBeenLastCalledWith(

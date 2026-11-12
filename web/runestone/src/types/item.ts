@@ -34,9 +34,3 @@ export interface Hashes {
   sha1: string
   sha256: string
 }
-
-export interface Stats {
-  folders: number
-  files: number
-  bytes: number
-}

@@ -106,7 +106,7 @@ describe('stores/items', () => {
     expect(store.subfoldersOf(2).map((item) => item.name)).toEqual(['beta', 'zeta'])
   })
 
-  it('computes pathTo and pathString from root down to the target item', () => {
+  it('computes pathTo from root down to the target item', () => {
     const store = useItemsStore()
     const root = makeFolder(1, null, { name: 'IR-2026' })
     const sub = makeFolder(2, 1, { name: 'hosts' })
@@ -114,11 +114,9 @@ describe('stores/items', () => {
     store.upsertItems([root, sub, leaf])
 
     expect(store.pathTo(leaf).map((item) => item.name)).toEqual(['IR-2026', 'hosts', 'ntfs.dd'])
-    expect(store.pathString(leaf)).toBe('/IR-2026/hosts/ntfs.dd')
-    expect(store.pathString(root)).toBe('/IR-2026')
   })
 
-  it('computes recursive statsOf and depth-first descendantsOf across nested trees', () => {
+  it('computes depth-first descendantsOf across nested trees', () => {
     const store = useItemsStore()
     store.upsertItems([
       makeFolder(1, null, { name: 'Root' }),
@@ -130,12 +128,6 @@ describe('stores/items', () => {
       makeFile(12, 4, { name: 'deep.bin', size: 650, modified: '2026-01-01T00:00:00Z' }),
       makeFile(13, 4, { name: 'unsized.bin', size: undefined, modified: '2026-01-02T00:00:00Z' }),
     ])
-
-    expect(store.statsOf(1)).toEqual({
-      folders: 3,
-      files: 4,
-      bytes: 1000,
-    })
 
     expect(store.descendantsOf(1).map((item) => `${item.kind}:${item.id}`)).toEqual([
       'folder:3',
