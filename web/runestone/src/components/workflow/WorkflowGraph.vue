@@ -18,20 +18,34 @@ import TaskStatusIcon from '@/components/workflow/TaskStatusIcon.vue'
 
 import { useItemsStore } from '@/stores/items'
 import { isEmptyFile } from '@/utils/item'
-import { missingOptions } from '@/utils/worker'
-import { foldable, stackable, useGroupStacks } from '@/composables/useGroupStacks'
+import { foldable, useGroupStacks } from '@/composables/useGroupStacks'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
 import type { TooltipOptions } from '@/composables/useTooltip'
 import {
-  canJoin,
-  canJoinAll,
-  everyGroup,
-  groupOf,
-  mergeProblem,
-  STATUS_LABEL,
-  unchainable,
-} from '@/utils/workflow'
+  buildGraphEdges,
+  buildGraphGhosts,
+  buildGroupBesides,
+  buildGroupBoxes,
+  buildStackSummary,
+  buildStackToggles,
+  computeGraphLayout,
+  GROUP_PAD,
+  isBoxedGroup,
+  NODE_H,
+  NODE_W,
+  nodeOutPoint,
+  nodeX,
+  nodeY,
+  PAD,
+  ROW_GAP,
+  groupPadOf,
+  statusOfNode,
+  taskNeedsText,
+  type GraphGroupNode,
+  type GraphNode,
+} from '@/components/workflow/graphLayout'
+import { everyGroup, groupOf, mergeProblem, STATUS_LABEL, unchainable } from '@/utils/workflow'
 import type { Task, TaskGroup, TaskStatus, Workflow, WorkflowInput } from '@/types/workflow'
 import { count, formatDuration, formatSize } from '@/utils/format'
 import { isTyping } from '@/utils/keyboard'
@@ -110,78 +124,8 @@ function nodeFacts(task: Task): string {
   return facts.join(' · ')
 }
 
-const NODE_W = 196
-const NODE_H = 44
-const COL_GAP = 64
-/** Between tasks in a column; also a group box's padding, so a box's tasks sit evenly spaced. */
-const ROW_GAP = 16
-const PAD = 32
-const GROUP_PAD = ROW_GAP
-/** Clear space around a group's box in its column, from another group or a join. */
-const GROUP_SPACING = 24
-/** Between two blocks in a column: a row's gap, unless one is a box that needs clear space. */
-const gapBetween = (aBoxed: boolean, bBoxed: boolean) =>
-  aBoxed || bBoxed ? GROUP_SPACING : ROW_GAP
-
-interface Node {
-  key: string
-  task?: Task
-  depth: number
-  /** Distance from the canvas top, once placed. */
-  top: number
-  groups: GroupNode[]
-  /** The "after all" button of a draft, where a join would go. */
-  ghost?: boolean
-  /** A join: how many tasks it waits for. */
-  waitsFor?: number
-  /**
-   * A draft's "after all" for siblings in separate groups (`canJoinAll`):
-   * adding there merges them into one group and joins it.
-   */
-  fan?: Node
-  /** A large group drawn as one stacked card: the group it stands for. */
-  /** A stacked card: the group it belongs to, with only the tasks it folds. */
-  stack?: TaskGroup
-}
-
-interface GroupNode {
-  group: TaskGroup
-  members: Node[]
-  /** Runs after all the members' lines; a ghost is the button that adds one. */
-  join?: Node
-}
-
 /** The node under the pointer: a draft shows its remove button while it is. */
 const hovered = ref<string | null>(null)
-
-/** The deepest column a node or anything after it reaches. */
-const deepest = (node: Node): number =>
-  Math.max(
-    node.depth,
-    ...node.groups.flatMap(({ members, join }) => [
-      ...members.map(deepest),
-      join ? deepest(join) : 0,
-    ]),
-    node.fan ? deepest(node.fan) : 0,
-  )
-
-/** The nodes an edge into a join starts from: the last of each line. */
-const tails = (node: Node): Node[] =>
-  node.groups.length
-    ? node.groups.flatMap(({ members, join }) =>
-        join && !join.ghost ? tails(join) : members.flatMap(tails),
-      )
-    : [node]
-
-/**
- * A group of two or more is drawn in a box, which pads it on every side — a
- * stacked group too, so it still reads as a group: only its tasks are folded.
- */
-const boxed = ({ members }: GroupNode) => members.length > 1 || !!members[0]?.stack
-const padOf = (group: GroupNode) => (boxed(group) ? GROUP_PAD : 0)
-/** A group's height, box included. */
-const blockOf = (group: GroupNode) =>
-  group.members.length * NODE_H + (group.members.length - 1) * ROW_GAP + 2 * padOf(group)
 
 const {
   isStacked: stacked,
@@ -233,185 +177,18 @@ function stackTip(stack: TaskGroup): TooltipOptions {
   return { text: shown.join(', '), detail: 'Click to show them' }
 }
 
-/** One status for a stack: the most pressing of its tasks'. */
-function stackStatus(group: TaskGroup): TaskStatus {
-  const has = (status: TaskStatus) => group.tasks.some((task) => task.status === status)
-  return has('failed')
-    ? 'failed'
-    : has('running')
-      ? 'running'
-      : has('pending')
-        ? 'pending'
-        : has('skipped')
-          ? 'skipped'
-          : 'success'
-}
+const statusOf = statusOfNode
+const needs = taskNeedsText
+const stackSummary = (group: TaskGroup) => buildStackSummary(group, props.workflow.draft)
 
-/** A node's status: its task's, or its stack's. */
-const statusOf = (node: Node): TaskStatus => node.task?.status ?? stackStatus(node.stack!)
-
-/**
- * A draft's tasks have no status yet (none is queued): what they show instead
- * is whether they can run — the options they still need.
- */
-const needs = (task: Task): string => {
-  const missing = missingOptions(task.options, task.config)
-  return missing.length ? `needs ${missing.join(', ')}` : ''
-}
-
-/** "Strings ×7", or "7 workers" when they differ; with how far they got. */
-function stackSummary(group: TaskGroup) {
-  const [first] = group.tasks
-  const same = group.tasks.every((task) => task.module === first!.module)
-  const by = (status: TaskStatus) => group.tasks.filter((task) => task.status === status).length
-  const needing = group.tasks.filter((task) => needs(task)).length
-  const parts = props.workflow.draft
-    ? needing
-      ? [`${needing} need options`]
-      : []
-    : [`${by('success')}/${group.tasks.length} done`]
-  // Failures first: they are what a truncated line must not hide.
-  if (by('failed')) parts.push(`${by('failed')} failed`)
-  if (by('running')) parts.push(`${by('running')} running`)
-  if (by('skipped')) parts.push(`${by('skipped')} ${STATUS_LABEL.skipped}`)
-  return {
-    name: same ? first!.name : count(group.tasks.length, 'worker'),
-    times: same ? `×${group.tasks.length}` : '',
-    line: parts.join(' · '),
-    bar: (['success', 'running', 'failed', 'pending', 'skipped'] as TaskStatus[])
-      .map((status) => ({ status, share: by(status) / group.tasks.length }))
-      .filter(({ share }) => share > 0),
-  }
-}
-
-const layout = computed(() => {
-  // 1. The shape: which node goes in which column.
-  const shape = (task: Task, depth: number): Node =>
-    withFan(
-      { key: task.id, task, depth, top: 0, groups: shapeGroups(task.groups, depth + 1) },
-      task.groups,
-    )
-  /** Siblings in separate groups get one "after all" for them all, after the deepest of them. */
-  const withFan = (node: Node, groups: TaskGroup[]): Node => {
-    if (!props.editable || !canJoinAll(groups)) return node
-    const column = Math.max(...node.groups.flatMap(({ members }) => members.map(deepest))) + 1
-    node.fan = { key: `${node.key}:join-all`, depth: column, top: 0, groups: [], ghost: true }
-    return node
-  }
-  const shapeGroups = (groups: TaskGroup[], depth: number): GroupNode[] =>
-    groups.map((group) => {
-      // A stack folds the tasks with nothing after them into one card, below
-      // the ones that have workers after them: their lines stay in sight.
-      const folded = stacked(group) ? foldable(group) : []
-      const members = [
-        ...group.tasks.filter((task) => !folded.includes(task)).map((task) => shape(task, depth)),
-        ...(folded.length
-          ? [
-              {
-                key: `${group.id}:stack`,
-                depth,
-                top: 0,
-                groups: [],
-                stack: { id: group.id, tasks: folded },
-              },
-            ]
-          : []),
-      ]
-      // As in the original editor: a callback is offered after a free group (two
-      // or more with nothing chained after them), and nothing is chained after
-      // a group's tasks once it has one.
-      // Not when its siblings share one: that one joins them all.
-      const ghost = !!props.editable && canJoin(group) && !canJoinAll(groups)
-      if (!group.join && !ghost) return { group, members }
-      const column = Math.max(depth, ...members.map(deepest)) + 1
-      const join: Node = ghost
-        ? { key: `${group.id}:join`, depth: column, top: 0, groups: [], ghost }
-        : { ...shape(group.join!, column), waitsFor: group.tasks.length }
-      return { group, members, join }
-    })
-
-  const root: Node = withFan(
-    { key: 'input', depth: 0, top: PAD, groups: shapeGroups(props.workflow.groups, 1) },
-    props.workflow.groups,
-  )
-
-  // 2. The heights: each column keeps where it is free from.
-  // Per column: where its last block ends, and whether that block is a box.
-  const end: { at: number; boxed: boolean }[] = []
-  let bottom = PAD + NODE_H
-  /**
-   * Room in a column for a block of `height`, from `from` down. Boxes keep
-   * clear of what is next to them; plain tasks only keep a row's gap, so a
-   * lone follow-on task stays level with the task before it.
-   */
-  const take = (column: number, from: number, height: number, boxed = false) => {
-    const last = end[column]
-    const top = Math.max(from, last ? last.at + gapBetween(last.boxed, boxed) : PAD)
-    end[column] = { at: top + height, boxed }
-    bottom = Math.max(bottom, top + height)
-    return top
-  }
-  const middleOf = (members: Node[]) => (members[0]!.top + members.at(-1)!.top + NODE_H) / 2
-
-  /** A node's groups in the next column, as one stack level with `center` if there is room. */
-  const placeGroups = (groups: GroupNode[], column: number, center: number | null, fan?: Node) => {
-    if (!groups.length) return
-    const blocks = groups.map(blockOf)
-    const gaps = groups
-      .slice(1)
-      .reduce((sum, group, index) => sum + gapBetween(boxed(groups[index]!), boxed(group)), 0)
-    const total = blocks.reduce((sum, height) => sum + height, 0) + gaps
-    let from = center === null ? -Infinity : center - total / 2
-    groups.forEach((group, index) => {
-      const top = take(column, from, blocks[index]!, boxed(group)) + padOf(group)
-      group.members.forEach((member, at) => (member.top = top + at * (NODE_H + ROW_GAP)))
-      // The next group follows right below, where the column is now free.
-      from = -Infinity
-    })
-    for (const group of groups) {
-      for (const member of group.members)
-        placeGroups(member.groups, column + 1, member.top + NODE_H / 2, member.fan)
-      if (!group.join) continue
-      const join = group.join
-      join.top = take(join.depth, middleOf(group.members) - NODE_H / 2, NODE_H)
-      placeGroups(join.groups, join.depth + 1, join.top + NODE_H / 2, join.fan)
-    }
-    if (fan) {
-      const members = groups.flatMap((group) => group.members)
-      fan.top = take(fan.depth, middleOf(members) - NODE_H / 2, NODE_H)
-    }
-  }
-  // The first tasks go level with the inputs where they can; when they are
-  // taller, the inputs move down to their middle instead. Either way the
-  // line between them runs straight.
-  const span = inputSpan.value
-  const pad = inputPad.value
-  placeGroups(root.groups, 1, PAD + pad + span / 2, root.fan)
-  const first = root.groups.flatMap((group) => group.members)
-  root.top = Math.max(PAD + pad, first.length ? middleOf(first) - span / 2 : 0)
-  bottom = Math.max(bottom, root.top + span + pad)
-
-  const nodes: Node[] = []
-  const placed: GroupNode[] = []
-  const walk = (node: Node) => {
-    nodes.push(node)
-    for (const group of node.groups) {
-      placed.push(group)
-      group.members.forEach(walk)
-      if (group.join) walk(group.join)
-    }
-    if (node.fan) nodes.push(node.fan)
-  }
-  walk(root)
-
-  const depth = Math.max(...nodes.map((node) => node.depth))
-  return {
-    nodes,
-    groups: placed,
-    width: PAD * 2 + (depth + 1) * NODE_W + depth * COL_GAP,
-    height: bottom + PAD,
-  }
-})
+const layout = computed(() =>
+  computeGraphLayout(props.workflow, {
+    editable: !!props.editable,
+    isStacked: stacked,
+    inputSpan: inputSpan.value,
+    inputPad: inputPad.value,
+  }),
+)
 
 /** A click on empty canvas, not on a node or a control, clears the selection. */
 function clickCanvas(event: MouseEvent) {
@@ -500,16 +277,16 @@ const pickedLone = computed(
   () =>
     new Set(
       layout.value.groups
-        .filter((placed) => !boxed(placed) && pickedGroups.value.includes(placed.group.id))
+        .filter((placed) => !isBoxedGroup(placed) && pickedGroups.value.includes(placed.group.id))
         .flatMap(({ group }) => group.tasks.map((task) => task.id)),
     ),
 )
 const isPicked = (taskId: string) => picked.value.includes(taskId) || pickedLone.value.has(taskId)
 
 /** Where an offer opens: under a group's box, or its lone task. */
-const under = (placed: GroupNode) => ({
-  left: x(placed.members[0]!) - padOf(placed),
-  top: y(placed.members.at(-1)!) + NODE_H + padOf(placed) + 12,
+const under = (placed: GraphGroupNode) => ({
+  left: nodeX(placed.members[0]!) - groupPadOf(placed),
+  top: nodeY(placed.members.at(-1)!) + NODE_H + groupPadOf(placed) + 12,
 })
 
 /** What the picked tasks can become, and where the offer shows: under their group's box. */
@@ -518,7 +295,7 @@ const splitOffer = computed(() => {
   const placed = layout.value.groups.find(({ group }) =>
     group.tasks.some((task) => task.id === picked.value[0]),
   )
-  if (!placed || !boxed(placed)) return null
+  if (!placed || !isBoxedGroup(placed)) return null
   const tasks = placed.group.tasks.filter((task) => picked.value.includes(task.id))
   return {
     count: tasks.length,
@@ -536,7 +313,7 @@ const mergeOffer = computed(() => {
   const placed = layout.value.groups.filter(({ group }) => pickedGroups.value.includes(group.id))
   if (placed.length < 2) return null
   const lowest = placed.reduce((low, next) =>
-    y(next.members.at(-1)!) > y(low.members.at(-1)!) ? next : low,
+    nodeY(next.members.at(-1)!) > nodeY(low.members.at(-1)!) ? next : low,
   )
   return {
     count: placed.length,
@@ -581,97 +358,20 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey, { capture: true }))
 onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }))
 
-const x = (node: Node) => PAD + node.depth * (NODE_W + COL_GAP)
-const y = (node: Node) => node.top
+const x = nodeX
+const y = nodeY
+const outOf = (node: GraphNode) => nodeOutPoint(node, inputSpan.value, inputPad.value)
 
-/**
- * From one node to the next. Into a join the edge runs straight along its
- * line's row through the columns that line no longer uses, then bends in the
- * last gap.
- */
-/** The shape every edge has: straight along its row, then a bend in the last gap. */
-function curve(x1: number, y1: number, x2: number, y2: number): string {
-  // From a box's edge the gap is narrower: the bend takes what there is.
-  const bendFrom = Math.max(x1, x2 - COL_GAP)
-  const bend = (x2 - bendFrom) / 2
-  return `M ${x1} ${y1} H ${bendFrom} C ${bendFrom + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`
-}
-
-/** Where a node's edges leave from: its right edge, or the middle of the inputs' box. */
-const outOf = (node: Node) =>
-  node.key === 'input'
-    ? { x: x(node) + NODE_W + inputPad.value, y: y(node) + inputSpan.value / 2 }
-    : { x: x(node) + NODE_W, y: y(node) + NODE_H / 2 }
-
-function edge(from: Node, to: Node) {
-  const start = outOf(from)
-  return {
-    key: `${from.key}-${to.key}`,
-    d: curve(start.x, start.y, x(to), y(to) + NODE_H / 2),
-    status: statusOf(to),
-  }
-}
-
-/**
- * Into a boxed group, one edge to the box: all of its tasks get the same
- * input. Out of it, into its join, one edge per task — each sends its own
- * result, and the join gets them all.
- */
-const edges = computed(() =>
-  layout.value.nodes.flatMap((parent) =>
-    parent.groups.flatMap((placed) => {
-      const { group, members, join } = placed
-      const into = boxed(placed)
-        ? [
-            {
-              key: `${parent.key}-${group.id}`,
-              d: curve(
-                outOf(parent).x,
-                outOf(parent).y,
-                x(members[0]!) - GROUP_PAD,
-                (y(members[0]!) + y(members.at(-1)!) + NODE_H) / 2,
-              ),
-              status: stackStatus(group),
-            },
-          ]
-        : members.map((member) => edge(parent, member))
-      const out = join && !join.ghost ? members.flatMap(tails).map((tail) => edge(tail, join)) : []
-      return [...into, ...out]
-    }),
-  ),
-)
+const edges = computed(() => buildGraphEdges(layout.value, inputSpan.value, inputPad.value))
 
 /** Tasks without a right-edge +: members of a group a join waits for. */
 const blocked = computed(() => unchainable(props.workflow))
 
 /** Every group that can be stacked gets a toggle on its box's corner: stack it, or show its tasks. */
-const toggles = computed(() =>
-  layout.value.groups
-    .filter(({ group }) => stackable(group))
-    .map(({ group, members }) => ({
-      key: `${group.id}:toggle`,
-      groupId: group.id,
-      open: !stacked(group),
-      count: group.tasks.length,
-      left: x(members[0]!) + NODE_W + GROUP_PAD - 8,
-      top: y(members[0]!) - GROUP_PAD - 8,
-    })),
-)
+const toggles = computed(() => buildStackToggles(layout.value, stacked))
 
 /** A dashed box around every group of two or more, and every stack. */
-const boxes = computed(() =>
-  layout.value.groups.filter(boxed).map(({ group, members }) => {
-    const first = members[0]!
-    const last = members.at(-1)!
-    return {
-      key: group.id,
-      left: x(first) - GROUP_PAD,
-      top: y(first) - GROUP_PAD,
-      width: NODE_W + GROUP_PAD * 2,
-      height: y(last) - y(first) + NODE_H + GROUP_PAD * 2,
-    }
-  }),
-)
+const boxes = computed(() => buildGroupBoxes(layout.value))
 
 /** The box around several input files, and what its toggle does. */
 const inputsBox = computed(() => {
@@ -687,65 +387,9 @@ const inputsBox = computed(() => {
   }
 })
 
-/**
- * Where each "after all" button goes: after a free group, with a dashed line
- * from its box; or after siblings in separate groups, with a dashed line from
- * each, so it shows what the worker would wait for.
- */
-const ghosts = computed(() => [
-  ...layout.value.groups
-    .filter(({ join }) => join?.ghost)
-    .map((placed) => {
-      const { group, members } = placed
-      const join = placed.join!
-      return {
-        key: join.key,
-        at: { join: group.id } as AddAt,
-        count: group.tasks.length,
-        what: 'tasks in this group',
-        left: x(join),
-        top: y(join),
-        link: `M ${x(members[0]!) + NODE_W + padOf(placed)} ${y(join) + NODE_H / 2} H ${x(join)}`,
-      }
-    }),
-  ...layout.value.nodes
-    .filter((node) => node.fan)
-    .map((node) => {
-      const fan = node.fan!
-      const members = node.groups.flatMap((group) => group.members)
-      const tasks = node.groups.flatMap((group) => group.group.tasks)
-      return {
-        key: fan.key,
-        at: { joinAll: node.task?.id ?? null } as AddAt,
-        count: tasks.length,
-        what: `tasks after ${node.task?.name ?? 'the inputs'}`,
-        left: x(fan),
-        top: y(fan),
-        link: members
-          .map((member) => curve(outOf(member).x, outOf(member).y, x(fan), y(fan) + NODE_H / 2))
-          .join(' '),
-      }
-    }),
-])
+const ghosts = computed(() => buildGraphGhosts(layout.value, inputSpan.value, inputPad.value))
 
-/**
- * The + that adds one more task to a group: on the bottom edge of its box, or
- * of its only task. Shown while one of the group's tasks is hovered or
- * selected, so a large chart stays quiet.
- */
-const besides = computed(() =>
-  layout.value.groups.map((placed) => {
-    const last = placed.members.at(-1)!
-    return {
-      key: `${placed.group.id}:beside`,
-      after: placed.group.tasks.at(-1)!,
-      // A stack's card counts as one of its tasks.
-      ids: [...placed.group.tasks.map((task) => task.id), last.key],
-      left: x(last) + NODE_W / 2 - 8,
-      top: y(last) + NODE_H + (boxed(placed) ? GROUP_PAD : 0) - 8,
-    }
-  }),
-)
+const besides = computed(() => buildGroupBesides(layout.value))
 
 // --- zoom -------------------------------------------------------------------
 
