@@ -178,7 +178,7 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toContain('Invalid username or password')
-    expect(wrapper.get('button[type="submit"]').text()).toContain('Sign in')
+    expect(wrapper.get('button[type="submit"]').text()).toContain('Login')
   })
 
   it('dismisses error message first on Escape, then resets form fields on a second Escape', async () => {
