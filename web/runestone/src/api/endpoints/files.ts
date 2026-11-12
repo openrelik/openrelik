@@ -2,8 +2,9 @@
  * Files API
  */
 
-import { httpClient, type RequestOptions, type UploadOptions } from '../client'
+import { httpClient, readBody, type RequestOptions, type UploadOptions } from '../client'
 import { apiConfig } from '../config'
+import { ApiError } from '../errors'
 import type { FileDetail, UploadedFile } from '../types'
 
 /** Where a chunk belongs. The server takes these as query parameters. */
@@ -54,9 +55,13 @@ export const filesApi = {
       const range = /^bytes (\d+)-(\d+)\//.exec(response.headers.get('Content-Range') ?? '')
       if (response.status !== 206 || Number(range?.[1]) !== start || Number(range?.[2]) > end) {
         controller.abort()
-        throw new Error('The server did not answer with the requested byte range')
+        throw new ApiError({
+          status: response.status,
+          statusText: response.statusText,
+          message: 'The server did not answer with the requested byte range',
+        })
       }
-      return new Uint8Array(await response.arrayBuffer())
+      return new Uint8Array(await readBody(() => response.arrayBuffer(), controller.signal))
     } finally {
       options.signal?.removeEventListener('abort', abort)
     }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/api'
+import { api, ApiError } from '@/api'
 import { httpClient } from '@/api/client'
 import { readSession, writeSession } from '@/api/session'
 import type { WorkflowSpec } from '@/api/types'
@@ -232,6 +232,17 @@ describe('api/endpoints', () => {
       await expect(
         api.files.readRange(5, 0, 10, { signal: abortedController.signal }),
       ).rejects.toThrow()
+
+      // Mid-body arrayBuffer drop converts to ApiError(status: 0, Network Error)
+      getSpy.mockResolvedValueOnce({
+        status: 206,
+        statusText: 'Partial Content',
+        headers: new Headers({ 'Content-Range': 'bytes 0-3/10' }),
+        arrayBuffer: vi.fn().mockRejectedValueOnce(new TypeError('stream reset')),
+      } as unknown as Response)
+      await expect(api.files.readRange(5, 0, 3)).rejects.toSatisfy(
+        (err: unknown) => err instanceof ApiError && err.status === 0,
+      )
     })
   })
 

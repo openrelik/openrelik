@@ -280,6 +280,24 @@ describe('api/client', () => {
       expect(unauthorized).not.toHaveBeenCalled()
     })
 
+    it('invokes onUnauthorized when a retried request still answers 401 after refresh succeeds', async () => {
+      writeSession('csrfToken', 'old-csrf')
+      const unauthorized = vi.fn()
+      onUnauthorized(unauthorized)
+
+      fetchSpy
+        .mockResolvedValueOnce(jsonResponse({ detail: 'Expired' }, 401, 'Unauthorized'))
+        .mockResolvedValueOnce(jsonResponse({ new_csrf_token: 'rotated-csrf' }))
+        .mockResolvedValueOnce(jsonResponse({ detail: 'Account disabled' }, 401, 'Unauthorized'))
+
+      await expect(httpClient.get('/users/me/')).rejects.toMatchObject({
+        status: 401,
+        detail: 'Account disabled',
+      })
+      expect(unauthorized).toHaveBeenCalledTimes(1)
+      expect(readSession('csrfToken')).toBeNull()
+    })
+
     it('invokes onUnauthorized, clears CSRF token, and rejects with ApiError when refresh fails', async () => {
       writeSession('csrfToken', 'old-csrf')
       const unauthorized = vi.fn()
@@ -791,6 +809,104 @@ describe('api/client', () => {
       })
       await vi.advanceTimersByTimeAsync(1_500)
       await stallAssertion
+    })
+
+    it('does not open or send an XHR if upload is aborted while fetching CSRF token', async () => {
+      vi.useRealTimers()
+      clearCsrfToken()
+      let resolveCsrf: ((res: Response) => void) | undefined
+      fetchSpy.mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveCsrf = resolve
+          }),
+      )
+      const instances = installMockXhr(() => {})
+
+      const controller = new AbortController()
+      const pending = upload('/files/upload', { body: new FormData(), signal: controller.signal })
+
+      await vi.waitFor(() => {
+        expect(resolveCsrf).toBeDefined()
+      })
+      controller.abort()
+      resolveCsrf?.(jsonResponse('late-csrf'))
+
+      await expect(pending).rejects.toSatisfy(
+        (err: unknown) => err instanceof DOMException && err.name === 'AbortError',
+      )
+      expect(instances).toHaveLength(0)
+    })
+  })
+
+  describe('mid-body drops, malformed JSON, and auth endpoint timeouts', () => {
+    it('turns mid-body response.text() drops into ApiError(status: 0) and flips reachability', async () => {
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: true }))
+      await httpClient.get('/health')
+
+      const reachabilityLog: boolean[] = []
+      const unsubscribe = onReachability((value) => reachabilityLog.push(value))
+      try {
+        const brokenResponse = {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({ 'Content-Type': 'application/json' }),
+          text: vi.fn().mockRejectedValueOnce(new TypeError('network error')),
+        } as unknown as Response
+        fetchSpy.mockResolvedValueOnce(brokenResponse)
+
+        await expect(httpClient.get('/folders/')).rejects.toMatchObject({
+          status: 0,
+          statusText: 'Network Error',
+        })
+        expect(reachabilityLog).toEqual([true, false])
+      } finally {
+        unsubscribe()
+        fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: true }))
+        await httpClient.get('/health')
+      }
+    })
+
+    it('turns truncated JSON payloads into ApiError instead of raw SyntaxError', async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response('{"truncated', {
+          status: 200,
+          statusText: 'OK',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+
+      await expect(httpClient.get('/folders/')).rejects.toSatisfy(
+        (err: unknown) =>
+          err instanceof ApiError &&
+          err.status === 200 &&
+          err.message === 'Invalid JSON response from server',
+      )
+    })
+
+    it('times out hung /auth/csrf and /auth/refresh calls instead of hanging forever', async () => {
+      vi.useFakeTimers()
+
+      fetchSpy.mockImplementationOnce(pendingFetch)
+      const csrfPromise = fetchCsrfToken()
+      const csrfAssertion = expect(csrfPromise).rejects.toMatchObject({
+        status: 0,
+        statusText: 'Timeout',
+      })
+      await vi.advanceTimersByTimeAsync(30_000)
+      await csrfAssertion
+
+      fetchSpy
+        .mockResolvedValueOnce(jsonResponse({ detail: 'Expired' }, 401, 'Unauthorized'))
+        .mockImplementationOnce(pendingFetch)
+      const unauthorized = vi.fn()
+      onUnauthorized(unauthorized)
+      const apiPromise = httpClient.get('/users/me/')
+      const apiAssertion = expect(apiPromise).rejects.toMatchObject({ status: 401 })
+      await vi.advanceTimersByTimeAsync(30_000)
+      await apiAssertion
+      expect(unauthorized).toHaveBeenCalledTimes(1)
     })
   })
 })

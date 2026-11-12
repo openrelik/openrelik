@@ -156,12 +156,18 @@ function appendQueryParams(urlStr: string, params?: QueryParams): string {
  * Requires an authenticated session; resolves to null when the server has none.
  */
 export async function fetchCsrfToken(): Promise<string | null> {
-  const response = await fetch(resolveUrl('/auth/csrf'), { credentials: 'include' })
+  const response = await fetchWithTimeout(resolveUrl('/auth/csrf'), {})
   if (!response.ok) throw await toApiError(response)
 
-  const token = (await response.json()) as string | null
+  const text = await readBody(() => response.text())
+  const token = parseResponseText<string | null>(
+    response.status,
+    response.statusText,
+    response.headers.get('Content-Type') || '',
+    text,
+  )
   if (token) writeSession(CSRF_STORAGE_KEY, token)
-  return token
+  return token ?? null
 }
 
 /**
@@ -193,14 +199,21 @@ function getCsrfToken(): Promise<string | null> {
 function refreshSession(): Promise<boolean> {
   refreshPromise ??= (async () => {
     try {
-      const response = await fetch(resolveUrl('/auth/refresh'), { credentials: 'include' })
+      const response = await fetchWithTimeout(resolveUrl('/auth/refresh'), {})
       if (!response.ok) {
         clearCsrfToken()
         return false
       }
 
       sessionGeneration++
-      const data = (await response.json()) as { new_csrf_token?: string }
+      const text = await readBody(() => response.text())
+      const data =
+        parseResponseText<{ new_csrf_token?: string }>(
+          response.status,
+          response.statusText,
+          response.headers.get('Content-Type') || '',
+          text,
+        ) ?? {}
       if (data.new_csrf_token) {
         writeSession(CSRF_STORAGE_KEY, data.new_csrf_token)
       } else {
@@ -264,14 +277,86 @@ function networkFailure(): ApiError {
   })
 }
 
+/** Runs `fetch` with a response-header timeout, turning failures into `ApiError`. */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<Response> {
+  // The timeout only covers waiting for the response headers; it is cleared once they arrive.
+  const timeout = new AbortController()
+  const timer = timeoutMs > 0 ? setTimeout(() => timeout.abort(), timeoutMs) : undefined
+  const signal = init.signal ? AbortSignal.any([init.signal, timeout.signal]) : timeout.signal
+
+  try {
+    const response = await fetch(url, { ...init, signal, credentials: 'include' })
+    setReachable(true)
+    return response
+  } catch (networkError) {
+    if (timeout.signal.aborted && !init.signal?.aborted) {
+      setReachable(false)
+      throw new ApiError({
+        status: 0,
+        statusText: 'Timeout',
+        message: `The server did not respond within ${timeoutMs / 1000}s`,
+      })
+    }
+    // Let aborts through untouched so callers can tell cancellation from failure.
+    if (networkError instanceof DOMException && networkError.name === 'AbortError') {
+      throw networkError
+    }
+    throw networkFailure()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Wraps a response body read so mid-stream network drops become
+ * `ApiError(status: 0)` and flip reachability, while caller aborts pass through.
+ */
+export async function readBody<T>(read: () => Promise<T>, signal?: AbortSignal | null): Promise<T> {
+  try {
+    return await read()
+  } catch (err: unknown) {
+    if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+      throw err
+    }
+    throw networkFailure()
+  }
+}
+
+/** Parses JSON or text response bodies, turning malformed JSON into `ApiError`. */
+function parseResponseText<T>(
+  status: number,
+  statusText: string,
+  contentType: string,
+  text: string,
+): T {
+  if (!text) return undefined as unknown as T
+  if (!/[/+]json\b/.test(contentType)) return text as T
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new ApiError({
+      status,
+      statusText,
+      message: 'Invalid JSON response from server',
+      data: text,
+    })
+  }
+}
+
 /**
  * Whether a 401 is worth retrying: another request refreshed the session after
  * this one was sent, or this one refreshes it now. Shared by both paths so the
  * session rules cannot drift apart.
  */
 async function recoverSession(generation: number, alreadyRetried: boolean): Promise<boolean> {
-  if (alreadyRetried) return false
-  if (generation !== sessionGeneration || (await refreshSession())) return true
+  if (!alreadyRetried && (generation !== sessionGeneration || (await refreshSession()))) {
+    return true
+  }
+  clearCsrfToken()
   unauthorizedHandler?.()
   return false
 }
@@ -313,40 +398,12 @@ async function send(
     body = JSON.stringify(rawBody)
   }
 
-  // The timeout only covers waiting for the response headers; it is cleared once they arrive.
-  const timeout = new AbortController()
-  const timer = timeoutMs > 0 ? setTimeout(() => timeout.abort(), timeoutMs) : undefined
-  const signal = init.signal ? AbortSignal.any([init.signal, timeout.signal]) : timeout.signal
-
   const generation = sessionGeneration
-  let response: Response
-  try {
-    response = await fetch(resolveUrl(endpoint, params), {
-      ...init,
-      method,
-      headers,
-      body,
-      signal,
-      credentials: 'include',
-    })
-  } catch (networkError) {
-    if (timeout.signal.aborted && !init.signal?.aborted) {
-      setReachable(false)
-      throw new ApiError({
-        status: 0,
-        statusText: 'Timeout',
-        message: `The server did not respond within ${timeoutMs / 1000}s`,
-      })
-    }
-    // Let aborts through untouched so callers can tell cancellation from failure.
-    if (networkError instanceof DOMException && networkError.name === 'AbortError') {
-      throw networkError
-    }
-    throw networkFailure()
-  } finally {
-    clearTimeout(timer)
-  }
-  setReachable(true)
+  const response = await fetchWithTimeout(
+    resolveUrl(endpoint, params),
+    { ...init, method, headers, body },
+    timeoutMs,
+  )
 
   // 3. 401 Unauthorized: refresh the session once and retry.
   if (
@@ -396,11 +453,9 @@ async function receive<T>(endpoint: string, options: RequestOptions): Promise<T>
     return (await response.blob()) as T
   }
 
-  const text = await response.text()
-  if (!text) return undefined as unknown as T
-
+  const text = await readBody(() => response.text(), options.signal)
   const contentType = response.headers.get('Content-Type') || ''
-  return (/[/+]json\b/.test(contentType) ? JSON.parse(text) : text) as T
+  return parseResponseText<T>(response.status, response.statusText, contentType, text)
 }
 
 /** How long an upload may make no progress at all before it is given up on. */
@@ -450,6 +505,7 @@ async function sendUpload<T>(
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
   const csrfToken = skipCsrf ? null : await getCsrfToken()
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
   const generation = sessionGeneration
 
   const answer = await new Promise<UploadAnswer>((resolve, reject) => {
@@ -538,8 +594,7 @@ async function sendUpload<T>(
   }
 
   // Intermediate chunks answer with an empty body; the last one carries the file.
-  if (!answer.text) return undefined as T
-  return (/[/+]json\b/.test(answer.contentType) ? JSON.parse(answer.text) : answer.text) as T
+  return parseResponseText<T>(answer.status, answer.statusText, answer.contentType, answer.text)
 }
 
 /**
