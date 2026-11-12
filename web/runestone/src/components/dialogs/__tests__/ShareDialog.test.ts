@@ -292,4 +292,75 @@ describe('ShareDialog', () => {
     })
     expect(body.find('[role="dialog"]').exists()).toBe(false)
   })
+
+  it('shows user search errors with Retry, cancels pending search on close, and ignores stale save resolution', async () => {
+    const body = mountDialog()
+    openShareDialog(makeFolderItem(50))
+    await nextTick()
+    await flushPromises()
+
+    const dialog = body.get('[role="dialog"]')
+    const personInput = dialog.get('input[aria-label="Add people"]')
+
+    // Search failure shows alert with Retry instead of "No one matches"
+    vi.mocked(api.directory.searchUsers).mockRejectedValueOnce(
+      new ApiError({ status: 503, statusText: 'Unavailable', message: 'Directory down' }),
+    )
+    await personInput.trigger('focus')
+    await personInput.setValue('dave')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+
+    expect(dialog.text()).not.toContain('No one matches')
+    expect(dialog.get('[role="alert"]').text()).toContain('Could not search users: Directory down')
+
+    vi.mocked(api.directory.searchUsers).mockResolvedValueOnce([
+      { id: 8, username: 'dave', display_name: 'Dave Analyst' },
+    ])
+    await dialog.get('[role="alert"] button').trigger('click')
+    await flushPromises()
+    expect(dialog.text()).toContain('Dave Analyst')
+
+    // Closing while debounce timer is pending cancels the search request
+    vi.mocked(api.directory.searchUsers).mockClear()
+    await personInput.setValue('eve')
+    closeShareDialog()
+    await nextTick()
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    expect(api.directory.searchUsers).not.toHaveBeenCalled()
+
+    // Closing mid-save and reopening another folder ignores the stale save completion
+    let resolveShare!: (value: FolderDetail) => void
+    vi.mocked(api.folders.share).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveShare = resolve
+        }),
+    )
+    openShareDialog(makeFolderItem(51))
+    await nextTick()
+    await flushPromises()
+
+    const d2 = body.get('[role="dialog"]')
+    await d2.get('select[aria-label="Role of Bob Editor"]').setValue('Viewer')
+    await d2
+      .findAll('button')
+      .find((b) => b.text() === 'Save')!
+      .trigger('click')
+
+    // User cancels folder 51 mid-save and opens folder 52
+    closeShareDialog()
+    await nextTick()
+    openShareDialog(makeFolderItem(52))
+    await nextTick()
+    await flushPromises()
+
+    resolveShare(makeFolderDetail(51))
+    await flushPromises()
+
+    // Folder 52 stays open and is not closed or overwritten by folder 51's save
+    expect(body.find('[role="dialog"]').exists()).toBe(true)
+    expect(body.get('[role="dialog"]').text()).toContain('Case IR-2026')
+  })
 })

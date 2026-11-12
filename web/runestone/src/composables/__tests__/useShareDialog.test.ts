@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { clearQueryCache } from '@/composables/useQueryCache'
+import { ensureRole, forgetRoles, roleOf } from '@/composables/useFolderPermissions'
 import {
   closeShareDialog,
   loadAccess,
@@ -24,6 +25,7 @@ vi.mock('@/api', async (importOriginal) => {
       folders: {
         ...actual.api.folders,
         getFolder: vi.fn(),
+        getMyFolderRole: vi.fn(),
         share: vi.fn(),
         removeRole: vi.fn(),
       },
@@ -52,7 +54,9 @@ describe('useShareDialog', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     clearQueryCache()
+    forgetRoles()
     closeShareDialog()
+    vi.mocked(api.folders.getMyFolderRole).mockResolvedValue('Owner')
   })
 
   it('opens and closes the share modal with the target folder', () => {
@@ -261,5 +265,60 @@ describe('useShareDialog', () => {
     const failMsg = await saveAccess(99, [], [after[2]!])
     expect(failMsg).toBe('Denied')
     expect(api.folders.getFolder).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates and refreshes useFolderPermissions role cache after saveAccess', async () => {
+    vi.mocked(api.folders.getMyFolderRole).mockResolvedValueOnce('Editor')
+    await ensureRole(77)
+    expect(roleOf(77)).toBe('Editor')
+
+    vi.mocked(api.folders.removeRole).mockResolvedValue(undefined)
+    vi.mocked(api.folders.getFolder).mockResolvedValue({
+      id: 77,
+      uuid: 'u-77',
+      display_name: 'Case 77',
+      parent: null,
+      user_roles: [],
+      group_roles: [],
+    })
+    vi.mocked(api.folders.getMyFolderRole).mockResolvedValueOnce('Viewer')
+
+    await saveAccess(
+      77,
+      [
+        {
+          key: 'user:2',
+          type: 'user',
+          id: 2,
+          name: 'Bob',
+          detail: 'bob',
+          role: 'Editor',
+          roleIds: [5],
+        },
+      ],
+      [],
+    )
+    expect(roleOf(77)).toBe('Viewer')
+
+    // If role reload fails (e.g. operator revoked own access), stale role is cleared instead of kept.
+    vi.mocked(api.folders.getMyFolderRole).mockRejectedValueOnce(
+      new ApiError({ status: 403, statusText: 'Forbidden', message: 'Forbidden' }),
+    )
+    await saveAccess(77, [], [])
+    expect(roleOf(77)).toBeUndefined()
+  })
+
+  it('bounds userResults cache to at most 100 queries', async () => {
+    const dialog = useShareDialog()
+    for (let i = 0; i < 105; i++) {
+      vi.mocked(api.directory.searchUsers).mockResolvedValueOnce([
+        { id: i, display_name: `User ${i}`, username: `u${i}` },
+      ])
+      await searchUsers(`query-${i}`)
+    }
+    expect(dialog.usersFor('query-0')).toEqual([])
+    expect(dialog.usersFor('query-4')).toEqual([])
+    expect(dialog.usersFor('query-5')).toHaveLength(1)
+    expect(dialog.usersFor('query-104')).toHaveLength(1)
   })
 })

@@ -55,6 +55,7 @@ const state = computed(() => (folderId.value === undefined ? null : accessState(
 const saving = ref(false)
 const showSaving = useDelayedFlag(() => saving.value)
 const error = ref<string | null>(null)
+let saveGeneration = 0
 
 // Adding people and groups
 const personQuery = ref('')
@@ -65,17 +66,34 @@ const groupRole = ref<ShareRole>('Editor')
 const showGroupMenu = ref(false)
 const personInput = ref<HTMLInputElement | null>(null)
 
+const SEARCH_DELAY_MS = 250
+/** The query searched for, a moment after typing stops. */
+const searched = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+let searchController: AbortController | undefined
+
+function stopUserSearch() {
+  clearTimeout(searchTimer)
+  searchTimer = undefined
+  searchController?.abort()
+  searchController = undefined
+}
+
 watch(
   [isOpen, folderId],
   ([open, id]) => {
-    if (!open || id === undefined) return
+    saveGeneration++
+    stopUserSearch()
+    saving.value = false
     baseline.value = []
     collaborators.value = []
     personQuery.value = ''
+    searched.value = ''
     groupQuery.value = ''
     showPersonMenu.value = false
     showGroupMenu.value = false
     error.value = null
+    if (!open || id === undefined) return
     loadAccess(id)
     loadGroups()
     ensureRole(id).catch(() => {})
@@ -99,34 +117,40 @@ const has = (key: string) => collaborators.value.some((c) => c.key === key)
 
 // --- people: searched on the server as you type ---
 
-const SEARCH_DELAY_MS = 250
-/** The query searched for, a moment after typing stops. */
-const searched = ref('')
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-let searchController: AbortController | undefined
-watch(personQuery, (query) => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    searched.value = query.trim()
-    searchController?.abort()
-    searchController = new AbortController()
-    searchUsers(searched.value, searchController.signal)
-  }, SEARCH_DELAY_MS)
-})
-onScopeDispose(() => {
-  clearTimeout(searchTimer)
+function runUserSearch(query: string) {
+  searched.value = query
   searchController?.abort()
+  searchController = new AbortController()
+  searchUsers(query, searchController.signal)
+}
+
+watch(personQuery, (query) => {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    stopUserSearch()
+    searched.value = ''
+    return
+  }
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => runUserSearch(trimmed), SEARCH_DELAY_MS)
 })
+onScopeDispose(stopUserSearch)
 
 const foundUsers = computed(() =>
   searched.value ? usersFor(searched.value).filter((u) => !has(`user:${u.id}`)) : [],
 )
+const userSearchError = computed(() => (searched.value ? usersState(searched.value).error : null))
 const searching = computed(
   () =>
     personQuery.value.trim() !== searched.value ||
     (!!searched.value && usersState(searched.value).isFetching),
 )
 const showSearching = useDelayedFlag(() => searching.value)
+
+function retryUserSearch() {
+  if (!searched.value) return
+  runUserSearch(searched.value)
+}
 
 function addPerson(user: DirectoryUser | undefined) {
   if (!user || has(`user:${user.id}`)) return
@@ -177,9 +201,11 @@ async function save() {
   const id = folderId.value
   if (id === undefined || saving.value) return
   if (!dirty.value) return close()
+  const token = ++saveGeneration
   saving.value = true
   error.value = null
   const failed = await saveAccess(id, baseline.value, collaborators.value)
+  if (token !== saveGeneration || !isOpen.value || folderId.value !== id) return
   saving.value = false
   if (failed) {
     // The list now shows what the server has, partly saved or not.
@@ -297,11 +323,22 @@ function onKeydown(event: KeyboardEvent) {
                       user.username
                     }}</span>
                   </button>
-                  <p v-if="!foundUsers.length" class="px-3 py-1.5 text-ink-muted">
-                    <span :class="{ invisible: searching && !showSearching }">{{
-                      searching ? 'Searching…' : 'No one matches'
-                    }}</span>
-                  </p>
+                  <template v-if="!foundUsers.length">
+                    <p v-if="searching" class="px-3 py-1.5 text-ink-muted">
+                      <span :class="{ invisible: !showSearching }">Searching…</span>
+                    </p>
+                    <p
+                      v-else-if="userSearchError"
+                      role="alert"
+                      class="flex items-center gap-2 px-3 py-1.5 text-danger"
+                    >
+                      <span class="min-w-0 truncate"
+                        >Could not search users: {{ userSearchError }}</span
+                      >
+                      <Button size="row" @click="retryUserSearch">Retry</Button>
+                    </p>
+                    <p v-else class="px-3 py-1.5 text-ink-muted">No one matches</p>
+                  </template>
                 </div>
               </div>
 
