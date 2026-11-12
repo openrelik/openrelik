@@ -88,7 +88,7 @@ export function parseLineRange(text: string): Span | null {
   if (!match) return null
   const a = Number(match[1])
   const b = match[2] === undefined ? a : Number(match[2])
-  if (a < 1 || b < 1) return null
+  if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 1 || b < 1) return null
   return { from: Math.min(a, b), to: Math.max(a, b) }
 }
 

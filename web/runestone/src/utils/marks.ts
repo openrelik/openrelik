@@ -31,12 +31,14 @@ export interface Mark extends Span {
 
 const hex = (offset: number) => `0x${offset.toString(16)}`
 
+const safePos = (n: number): boolean => Number.isSafeInteger(n) && n >= 1
+
 /** The mark in a URL hash; null when the hash is not one. */
 export function parseMark(hash: string): Mark | null {
   const text = /^#L(\d+)C(\d+)-L(\d+)C(\d+)$/i.exec(hash)
   if (text) {
     const [l1, c1, l2, c2] = text.slice(1).map(Number) as [number, number, number, number]
-    if (l1 < 1 || l2 < 1 || c1 < 1 || c2 < 1) return null
+    if (![l1, c1, l2, c2].every(safePos)) return null
     // Written backwards, the ends swap: the mark still reads forwards.
     const forwards = l1 < l2 || (l1 === l2 && c1 <= c2)
     const [from, fromCol, to, toCol] = forwards ? [l1, c1, l2, c2] : [l2, c2, l1, c1]
@@ -47,7 +49,7 @@ export function parseMark(hash: string): Mark | null {
   if (numbered) {
     const a = Number(numbered[2])
     const b = numbered[3] === undefined ? a : Number(numbered[3])
-    if (a < 1 || b < 1) return null
+    if (!safePos(a) || !safePos(b)) return null
     const kind = numbered[1]!.toUpperCase() === 'L' ? 'line' : 'row'
     return { kind, from: Math.min(a, b), to: Math.max(a, b) }
   }
@@ -55,6 +57,7 @@ export function parseMark(hash: string): Mark | null {
   if (bytes) {
     const a = parseInt(bytes[1]!, 16)
     const b = bytes[2] === undefined ? a : parseInt(bytes[2], 16)
+    if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b)) return null
     return { kind: 'offset', from: Math.min(a, b), to: Math.max(a, b) }
   }
   return null

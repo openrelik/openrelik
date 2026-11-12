@@ -243,6 +243,24 @@ describe('readings', () => {
       const futureS = NOW / 1000 + 3600
       view.setUint32(0, futureS, le)
       expect(byLabel(readings(buf, le, NOW), 'unix time').plausible).toBe(false)
+
+      // Invalid DOS calendar dates (Feb 31 and Apr 31) must not roll over to March/May
+      view.setUint16(0, dosTimeWord, le)
+      view.setUint16(2, ((2024 - 1980) << 9) | (2 << 5) | 31, le)
+      expect(byLabel(readings(buf, le, NOW), 'dos date/time')).toEqual({
+        label: 'dos date/time',
+        value: '–',
+        note: 'local',
+        plausible: false,
+      })
+
+      view.setUint16(2, ((2024 - 1980) << 9) | (4 << 5) | 31, le)
+      expect(byLabel(readings(buf, le, NOW), 'dos date/time')).toEqual({
+        label: 'dos date/time',
+        value: '–',
+        note: 'local',
+        plausible: false,
+      })
     },
   )
 })

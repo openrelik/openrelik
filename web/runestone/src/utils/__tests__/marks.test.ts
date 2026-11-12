@@ -113,4 +113,13 @@ describe('spanOf and sameSpan', () => {
     ).toBe(true)
     expect(sameSpan({ from: 1, to: 2, fromCol: 4, toCol: 8 }, { from: 1, to: 2 })).toBe(false)
   })
+
+  it('rejects marks exceeding MAX_SAFE_INTEGER in lines, columns, rows, and byte offsets', () => {
+    expect(parseMark('#L9007199254740992')).toBeNull()
+    expect(parseMark('#L1-L9007199254740992')).toBeNull()
+    expect(parseMark('#R9007199254740992')).toBeNull()
+    expect(parseMark('#L9007199254740992C1-L9007199254740992C2')).toBeNull()
+    expect(parseMark('#0xffffffffffffff')).toBeNull()
+    expect(parseMark('#0x0-0xffffffffffffff')).toBeNull()
+  })
 })

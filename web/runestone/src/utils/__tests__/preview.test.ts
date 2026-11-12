@@ -7,6 +7,9 @@ describe('isTextMime and previewOf', () => {
     ['text/plain', true],
     ['text/html', true],
     ['application/json', true],
+    ['application/json; charset=utf-8', true],
+    ['APPLICATION/JSONL', true],
+    ['application/csv; header=present', true],
     ['application/javascript', true],
     ['application/x-ndjson', true],
     ['application/octet-stream', false],
@@ -28,6 +31,7 @@ describe('isMarkdown', () => {
     expect(isMarkdown({ name: 'README.md' })).toBe(true)
     expect(isMarkdown({ name: 'report.MARKDOWN' })).toBe(true)
     expect(isMarkdown({ name: 'output.txt', mime: 'text/markdown' })).toBe(true)
+    expect(isMarkdown({ name: 'output.txt', mime: 'Text/Markdown; charset=utf-8' })).toBe(true)
     expect(isMarkdown({ name: 'output.txt', mime: 'text/x-markdown' })).toBe(true)
     expect(isMarkdown({ name: 'notes.txt', mime: 'text/plain' })).toBe(false)
   })
@@ -76,8 +80,9 @@ describe('tableKindOf', () => {
     expect(tableKindOf({ name: 'events.ndjson' })).toBe('jsonl')
 
     expect(tableKindOf({ name: 'export', mime: 'application/csv' })).toBe('csv')
+    expect(tableKindOf({ name: 'export', mime: 'TEXT/CSV; charset=utf-8' })).toBe('csv')
     expect(tableKindOf({ name: 'export', mime: 'text/tab-separated-values' })).toBe('tsv')
-    expect(tableKindOf({ name: 'export', mime: 'application/jsonl' })).toBe('jsonl')
+    expect(tableKindOf({ name: 'export', mime: 'application/jsonl; charset=utf-8' })).toBe('jsonl')
     expect(tableKindOf({ name: 'notes.txt', mime: 'text/plain' })).toBeNull()
     expect(tableKindOf({ name: 'unknown' })).toBeNull()
   })
