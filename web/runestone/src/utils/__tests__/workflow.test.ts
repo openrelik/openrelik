@@ -650,39 +650,41 @@ describe('isActive and runStats across workflow lifecycles', () => {
   })
 
   it('handles spec edge cases: missing queue_name/uuid, empty/callback-only chords, and empty-header groups', () => {
-    const fallbackSpec: WorkflowSpec = {
-      workflow: {
-        type: 'chain',
-        isRoot: true,
-        tasks: [
-          {
-            type: 'task',
-            uuid: '',
-            task_name: 'openrelik-worker-yara.tasks.scan',
-            queue_name: '',
-            display_name: '',
-            task_config: [],
-            tasks: [],
-          },
-          {
-            type: 'chord',
-            // Empty chord with no tasks or callback is skipped cleanly.
-          },
-          {
-            type: 'chord',
-            callback: {
+    const fallbackSpec = parseSpec(
+      JSON.stringify({
+        workflow: {
+          type: 'chain',
+          isRoot: true,
+          tasks: [
+            {
               type: 'task',
-              uuid: 'cb-uuid',
-              task_name: 'openrelik-worker-merge.tasks.merge',
-              queue_name: 'merge-q',
-              display_name: 'Merge',
+              uuid: '',
+              task_name: 'openrelik-worker-yara.tasks.scan',
+              queue_name: '',
+              display_name: '',
               task_config: [],
               tasks: [],
             },
-          },
-        ],
-      },
-    }
+            {
+              type: 'chord',
+              // Empty chord with no tasks or callback is skipped cleanly.
+            },
+            {
+              type: 'chord',
+              callback: {
+                type: 'task',
+                uuid: 'cb-uuid',
+                task_name: 'openrelik-worker-merge.tasks.merge',
+                queue_name: 'merge-q',
+                display_name: 'Merge',
+                task_config: [],
+                tasks: [],
+              },
+            },
+          ],
+        },
+      }),
+    )
 
     const records: WorkflowTaskRecord[] = [
       { id: 1, uuid: null, display_name: 'Ignored', status_short: 'SUCCESS' },

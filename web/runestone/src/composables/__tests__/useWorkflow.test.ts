@@ -29,7 +29,13 @@ import {
 } from '@/composables/useWorkflow'
 import { useItemsStore } from '@/stores/items'
 import { useWorkflowsStore } from '@/stores/workflows'
-import { ApiError, api, type WorkflowRecord, type WorkflowSpec } from '@/api'
+import {
+  ApiError,
+  api,
+  type WorkflowRecord,
+  type WorkflowSpec,
+  type WorkflowTemplateRecord,
+} from '@/api'
 import type { Worker } from '@/types/worker'
 import type { Task, TaskGroup, Workflow } from '@/types/workflow'
 
@@ -1104,14 +1110,14 @@ describe('workflow race guards, sign-out cleanup, and edit/follow lifecycle', ()
 
     // 4. saveAsTemplate does not mutate templates after sign-out.
     const wfForTpl = seedWorkflow([makeGroup('g1', [makeTask('t1')])], false)
-    const tplGate = createDeferred<{ id: number; display_name: string }>()
+    const tplGate = createDeferred<WorkflowTemplateRecord>()
     vi.mocked(api.workflows.createTemplate).mockReturnValueOnce(tplGate.promise)
     const tplPromise = saveAsTemplate(wfForTpl.folderId)
     confirm.text.value = 'My Template'
     confirm.accept()
     await Promise.resolve()
     clearWorkflowState()
-    tplGate.resolve({ id: 99, display_name: 'My Template' })
+    tplGate.resolve({ id: 99, display_name: 'My Template', spec_json: '{}', user_id: 1 })
     expect(await tplPromise).toBeNull()
     expect(useWorkflowTemplates().templates.value.some((t) => t.id === 99)).toBe(false)
 

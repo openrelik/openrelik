@@ -394,7 +394,7 @@ describe('RunDialog', () => {
           label: 'Mode',
           type: 'select',
           items: ['fast', 'deep'],
-          default_value: 'fast',
+          value: 'fast',
         },
       ],
       display_name: 'Triage Select',
