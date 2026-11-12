@@ -186,4 +186,31 @@ describe('useTextStream', () => {
     forgetTextFiles()
     reopenHuge.stop()
   })
+
+  it('does not re-cache a forgotten file on scope dispose and treats readUntil(<=0) as a no-op', async () => {
+    const sample = new TextEncoder().encode('alpha\nbeta\n')
+    vi.mocked(api.files.readRange).mockResolvedValue(sample)
+
+    const scope = effectScope()
+    const stream = scope.run(() => useTextStream(() => ({ id: 99, size: sample.length })))!
+    await vi.runAllTimersAsync()
+    expect(stream.lineCount.value).toBe(2)
+
+    const callsAfterOpen = vi.mocked(api.files.readRange).mock.calls.length
+    stream.readUntil(0)
+    stream.readUntil(-5)
+    expect(vi.mocked(api.files.readRange).mock.calls.length).toBe(callsAfterOpen)
+
+    // Simulate sign-out clearing caches before FileView unmounts and stops its scope.
+    forgetTextFiles()
+    scope.stop()
+
+    // Reopening the file must fetch again rather than reading a re-kept stale entry.
+    vi.mocked(api.files.readRange).mockClear()
+    const nextScope = effectScope()
+    nextScope.run(() => useTextStream(() => ({ id: 99, size: sample.length })))
+    await vi.runAllTimersAsync()
+    expect(api.files.readRange).toHaveBeenCalledTimes(1)
+    nextScope.stop()
+  })
 })

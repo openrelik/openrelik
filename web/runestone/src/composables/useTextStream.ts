@@ -65,7 +65,9 @@ function newFile(key: string, id: number, size: number): TextFile {
 /** A view lets go of a file: once no view shows it, it stops reading and is kept. */
 function keep(file: TextFile) {
   const known = shown.get(file.key)
-  if (known && --known.views > 0) return
+  // forgetTextFiles() already dropped this entry on sign-out: never re-cache it on unmount.
+  if (!known) return
+  if (--known.views > 0) return
   shown.delete(file.key)
   file.reader.stop()
   if (file.reader.bytesRead.value > KEEP_MAX) return
@@ -142,6 +144,7 @@ export function useTextStream(file: () => { id: number; size: number }): UseText
     done: computed(() => reader().done.value),
     error: computed(() => reader().error.value),
     readUntil(line) {
+      if (line < 1) return
       const idx = index()
       const arrived = () => idx.lines.length > line || (idx.lines.length === line && !idx.open)
       if (!arrived()) reader().read(0, arrived)

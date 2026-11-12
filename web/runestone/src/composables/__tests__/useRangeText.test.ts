@@ -206,4 +206,52 @@ describe('createRangeText', () => {
     expect(reader.done.value).toBe(true)
     expect(content).toBe('recovered line\n')
   })
+
+  it('falls back to windows-1252 when a single-chunk file ends in invalid UTF-8 bytes and handles stop during yield', async () => {
+    // 0xe9 is invalid alone at EOF in UTF-8 -> should fall back to windows-1252 ('café').
+    vi.mocked(api.files.readRange).mockResolvedValueOnce(new Uint8Array([0x63, 0x61, 0x66, 0xe9]))
+
+    let decoded = ''
+    let sawLast = false
+    const reader = createRangeText({ id: 6, size: 4 }, (text, last) => {
+      decoded += text
+      sawLast = last
+    })
+
+    reader.read(FIRST_BYTES)
+    await vi.runAllTimersAsync()
+    expect(decoded).toBe('café')
+    expect(sawLast).toBe(true)
+    expect(reader.done.value).toBe(true)
+
+    // Stopping during the inter-chunk setTimeout(0) yield stops before chunk 2 is requested.
+    vi.mocked(api.files.readRange).mockReset()
+    vi.mocked(api.files.readRange).mockImplementation(async (_id, start, end) =>
+      new Uint8Array(end - start + 1).fill(0x61),
+    )
+
+    const multi = createRangeText({ id: 7, size: CHUNK_SIZE * 2 }, () => {})
+    multi.read(FIRST_BYTES)
+    // Allow chunk 0 fetch to resolve and enter the setTimeout(0) yield, then stop before timer fires.
+    await Promise.resolve()
+    await Promise.resolve()
+    multi.stop()
+    await vi.runAllTimersAsync()
+
+    expect(api.files.readRange).toHaveBeenCalledTimes(1)
+    expect(multi.reading.value).toBe(false)
+    expect(multi.capped.value).toBe(true)
+
+    // Calling loadMore/loadAll after done is a no-op; calling while reading is also a no-op.
+    multi.loadAll()
+    await Promise.resolve()
+    // Calling loadMore while reading does nothing.
+    multi.loadMore()
+    await vi.runAllTimersAsync()
+    expect(multi.done.value).toBe(true)
+    const callsAtDone = vi.mocked(api.files.readRange).mock.calls.length
+    multi.loadMore()
+    multi.loadAll()
+    expect(vi.mocked(api.files.readRange).mock.calls.length).toBe(callsAtDone)
+  })
 })
