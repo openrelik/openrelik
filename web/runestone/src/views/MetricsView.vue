@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch, type Ref } from 'vue'
 import { RotateCcw } from '@/components/icons'
 
 import Button from '@/components/base/Button.vue'
@@ -54,10 +54,20 @@ const CHARTS = [
   { title: 'Retried tasks', metric: 'celery_task_retried_total', aggregate: false },
 ]
 
+function useValidChoice(
+  key: string,
+  fallback: number,
+  options: readonly { value: number }[],
+): Ref<number> {
+  const choice = useRemembered(key, fallback)
+  if (!options.some((option) => option.value === choice.value)) choice.value = fallback
+  return choice
+}
+
 // The choices are remembered: the page reopens as it was left.
-const range = useRemembered('openrelik.metrics.range', 3600)
-const step = useRemembered('openrelik.metrics.step', 60)
-const every = useRemembered('openrelik.metrics.refresh', 0)
+const range = useValidChoice('openrelik.metrics.range', 3600, RANGES)
+const step = useValidChoice('openrelik.metrics.step', 60, STEPS)
+const every = useValidChoice('openrelik.metrics.refresh', 0, REFRESH)
 
 /** A new period brings its own step and resolution; the resolution can then be changed. */
 watch(range, (value) => {
@@ -81,7 +91,13 @@ watch(
   every,
   (seconds) => {
     clearInterval(timer)
-    if (seconds > 0) timer = setInterval(() => refreshNow(true), seconds * 1000)
+    if (seconds > 0) {
+      timer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return
+        refreshNow(true)
+      }, seconds * 1000)
+    }
   },
   { immediate: true },
 )

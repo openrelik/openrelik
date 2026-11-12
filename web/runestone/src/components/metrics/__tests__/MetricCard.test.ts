@@ -122,4 +122,85 @@ describe('MetricCard', () => {
 
     wrapper.unmount()
   })
+
+  it('reuses cached series on remount within freshness window and hides stale range data while loading a new range', async () => {
+    const now = Date.now()
+    const payload: MetricSeries[] = [
+      {
+        name: 'openrelik-worker-strings.tasks',
+        data: [
+          [now - 30_000, 2],
+          [now - 5_000, 7],
+        ],
+      },
+      {
+        name: 'openrelik-worker-yara.tasks',
+        data: [
+          [now - 30_000, 1],
+          [now - 5_000, 3],
+        ],
+      },
+    ]
+    const tasksSpy = vi.spyOn(api.metrics, 'tasks').mockResolvedValueOnce(payload)
+
+    const first = mount(MetricCard, {
+      props: {
+        title: 'Cached metric',
+        metric: 'celery_task_received_total',
+        aggregate: false,
+        range: 3600,
+        step: 60,
+        resolution: '1m',
+        refresh: 0,
+      },
+      global: { plugins: [directives] },
+    })
+
+    await vi.waitFor(() => {
+      expect(first.find('svg').exists()).toBe(true)
+      expect(first.text()).toContain('strings')
+    })
+    first.unmount()
+
+    // Remounting within 30s must render cached series with zero extra API calls.
+    const second = mount(MetricCard, {
+      props: {
+        title: 'Cached metric',
+        metric: 'celery_task_received_total',
+        aggregate: false,
+        range: 3600,
+        step: 60,
+        resolution: '1m',
+        refresh: 0,
+      },
+      global: { plugins: [directives] },
+    })
+    await flushPromises()
+    expect(tasksSpy).toHaveBeenCalledTimes(1)
+    expect(second.find('svg').exists()).toBe(true)
+    expect(second.text()).toContain('strings')
+
+    // Switching to an unloaded range must not show the old range's chart while loading,
+    // and must use background: false even if props.background was true from an earlier auto-refresh.
+    let resolveNext!: (val: MetricSeries[]) => void
+    tasksSpy.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveNext = resolve
+        }),
+    )
+    await second.setProps({ range: 86400, step: 3600, resolution: '1h', background: true })
+    await flushPromises()
+    expect(second.find('svg').exists()).toBe(false)
+    expect(tasksSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ range: 86400 }),
+      expect.objectContaining({ background: false }),
+    )
+
+    resolveNext([])
+    await flushPromises()
+    expect(second.text()).toContain('No counts in this period.')
+
+    second.unmount()
+  })
 })

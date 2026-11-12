@@ -29,6 +29,12 @@ describe('niceTicks', () => {
     expect(ticks.at(-1)).toBe(1)
     expect(ticks.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('guards non-finite bounds and non-positive tick counts', () => {
+    expect(niceTicks(Number.NaN, 10)).toEqual([0, 1])
+    expect(niceTicks(0, Number.POSITIVE_INFINITY)).toEqual([0, 1])
+    expect(niceTicks(0, 5, 0)).toEqual([0, 5])
+  })
 })
 
 describe('formatValue', () => {
@@ -74,6 +80,12 @@ describe('timeTicks', () => {
     const instant = new Date(2026, 2, 10, 12, 0, 0).getTime()
     const ticks = timeTicks(instant, instant, 5)
     expect(Array.isArray(ticks)).toBe(true)
+  })
+
+  it('returns empty array for non-finite bounds or non-positive count', () => {
+    expect(timeTicks(Number.NaN, 1000, 5)).toEqual([])
+    expect(timeTicks(0, Number.POSITIVE_INFINITY, 5)).toEqual([])
+    expect(timeTicks(0, 60_000, 0)).toEqual([])
   })
 })
 

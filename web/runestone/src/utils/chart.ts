@@ -4,9 +4,11 @@
 
 /** Round numbers for a value axis from 0 (or below) to `max`: about `count` of them. */
 export function niceTicks(min: number, max: number, count = 4): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return [0, 1]
+  const steps = Math.max(1, Math.floor(count))
   const low = Math.min(0, min)
   const high = max > low ? max : low + 1
-  const raw = (high - low) / count
+  const raw = (high - low) / steps
   const magnitude = 10 ** Math.floor(Math.log10(raw))
   const step =
     [1, 2, 2.5, 5, 10].map((m) => m * magnitude).find((candidate) => candidate >= raw) ??
@@ -15,9 +17,9 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
   for (let value = Math.floor(low / step) * step; value <= high + step * 1e-9; value += step) {
     ticks.push(Number(value.toPrecision(12)))
   }
-  if (ticks[ticks.length - 1]! < high)
-    ticks.push(Number((ticks[ticks.length - 1]! + step).toPrecision(12)))
-  return ticks
+  const last = ticks[ticks.length - 1]
+  if (last !== undefined && last < high) ticks.push(Number((last + step).toPrecision(12)))
+  return ticks.length ? ticks : [0, 1]
 }
 
 /** A value as an axis or tooltip shows it: whole numbers plain, others to two places, large ones short. */
@@ -47,6 +49,7 @@ const TIME_STEPS = [
 
 /** Round times between `start` and `end` (ms) for a time axis: about `count` of them. */
 export function timeTicks(start: number, end: number, count = 5): number[] {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || count <= 0) return []
   const span = Math.max(1, end - start)
   const step = TIME_STEPS.find((candidate) => span / candidate <= count) ?? span / count
   const ticks: number[] = []
