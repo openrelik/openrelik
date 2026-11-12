@@ -16,8 +16,8 @@ This directory houses reusable, stateful Vue composables. They encapsulate keybo
 | [`useWorkflow`](#useworkflow)                   | Creates workflows, edits drafts (saved behind the edit), runs them; per-workflow saving/running state.            |
 | [`useWorkflowLoader`](#useworkflowloader)       | Loads the workflow of the folder on screen and polls it in the background while tasks run.                        |
 | [`useWorkers`](#useworkers)                     | The workers online, from the server's task registry, cached for five minutes.                                     |
-| [`useSettings`](#usesettings)                   | User settings reactive access (`theme`, `density`, AI features) and `SettingsDialog` state.                       |
-| [`useHelp`](#usehelp)                           | Reactive state and controls for opening/closing the `HelpDialog` shortcut sheet.                                  |
+| [`useSettings`](#usesettings)                   | User settings reactive access (`appearance.theme`, `ai`, `explorer`) and `SettingsDialog` state.                  |
+| [`useHelp`](#usehelp)                           | Reactive state and controls (`UseHelpReturn`) for opening/closing the `HelpDialog` shortcut sheet.                |
 | [`useTooltip`](#usetooltip)                     | Singleton tooltip coordinator with warmup/cooldown grouping, auto-placement, shortcut parsing, and edge clamping. |
 | [`useQueryCache`](#usequerycache)               | Shared cache of which server listings are loaded and how fresh they are (stale-while-revalidate).                 |
 | [`useAutoRefresh`](#useautorefresh)             | Coalesced focus, visibility, and online refresh trigger for active views via the query cache.                     |
@@ -27,9 +27,32 @@ This directory houses reusable, stateful Vue composables. They encapsulate keybo
 | [`useFolderSearch`](#usefoldersearch)           | Server-side folder search for the prompt (`/folders/all/?q=`): debounced, cached, cancellable.                    |
 | [`useUploadQueue`](#useuploadqueue)             | Chunked uploads: 3 files at a time, sequential chunks, retries, cancel, in-session resume.                        |
 | [`useDropZone`](#usedropzone)                   | Files and folders dropped on an element, without the usual drag-and-drop traps.                                   |
+| [`useUploadPanel`](#useuploadpanel)             | Auto-opens and closes the uploads modal as active queue items start and finish.                                   |
+| [`useFolderPrefetch`](#usefolderprefetch)       | Debounced background prefetching for hovered/focused folder rows.                                                 |
+| [`useFolderPermissions`](#usefolderpermissions) | Cached per-folder operator roles (`FolderRole`) and item deletion checks.                                         |
+| [`useItemActions`](#useitemactions)             | Shared action list for the selection toolbar and row context menu.                                                |
+| [`useCaseRef`](#usecaseref)                     | Case reference lookup (`/case/:ref`), save/clear mutations, and 409 conflict handling.                            |
+| [`useConfirm`](#useconfirm)                     | App-wide confirmation and single-line text prompt modal coordinator.                                              |
+| [`useDownload`](#usedownload)                   | Direct browser file downloads, staggered multi-file batches, and sign-out cleanup.                                |
 | [`useFolderActions`](#usefolderactions)         | Creates and renames folders on the server, with pending rows, in-flight saves and the last error.                 |
 | [`useDelayedFlag`](#usedelayedflag)             | Loading-indicator timing: shown after 200 ms, then kept at least 300 ms.                                          |
 | [`useNetworkActivity`](#usenetworkactivity)     | App-wide "loading…"/"saving…" from the API client's count of requests in flight.                                  |
+| [`useGroupStacks`](#usegroupstacks)             | Session memory of collapsed/expanded workflow graph task stacks and input file cards.                             |
+| [`usePanelWidth`](#usepanelwidth)               | Draggable, viewport-clamped, remembered width for resizable side panels.                                          |
+| [`useTaskReport`](#usetaskreport)               | Singleton modal state for viewing a task's inspection reports.                                                    |
+| [`useWorkflowDialog`](#useworkflowdialog)       | Modal state and open/close bridge for creating a new workflow on selected files.                                  |
+| [`useWorkflowTemplates`](#useworkflowtemplates) | Query-cached saved workflow templates with inline rename, delete, and creation updates.                           |
+| [`useFileDetails`](#usefiledetails)             | Loads full file metadata (hashes, libmagic, MIME) and polls briefly while background hashing finishes.            |
+| [`useRangeText`](#userangetext)                 | Sequential 1 MiB byte-range text decoder (`UTF-16` / `UTF-8` / `Windows-1252`) with pause/resume.                 |
+| [`useTextStream`](#usetextstream)               | Streaming line indexer over `useRangeText` with shared open views and LRU cache for recently visited files.       |
+| [`useTableStream`](#usetablestream)             | Streaming CSV, TSV, and JSONL row parser over `useRangeText` with incremental type inference.                     |
+| [`useTextSearch`](#usetextsearch)               | Incremental, sliced plain-text/regex finder over streamed lines (`MAX_HITS` capped).                              |
+| [`useByteChunks`](#usebytechunks)               | Bounded 64 KiB byte-range LRU chunk cache with directional lookahead and abort for hex viewing.                   |
+| [`useRowScroller`](#userowscroller)             | Row-indexed virtual scrollbar state and wheel/thumb/track gesture handling for large files.                       |
+| [`useMarkedRange`](#usemarkedrange)             | Gutter click/Shift-click/drag line, row, or byte mark selection and URL hash link copying.                        |
+| [`useLinkMenu`](#uselinkmenu)                   | Singleton menu state for untrusted links and images inside rendered Markdown.                                     |
+| [`useApiKeys`](#useapikeys)                     | Query-cached personal API key list and one-shot creation/revocation for `AccountDialog`.                          |
+| [`useShareDialog`](#usesharedialog)             | Query-cached folder collaborator ACLs, group/user search, and diffed role updates for `ShareDialog`.              |
 
 ---
 
@@ -43,18 +66,18 @@ Coordinates application-wide keyboard shortcuts at the `window` level.
 
 ### `usePrompt`
 
-Powers both the pop-up quick-open prompt (`Prompt.vue`) and the inline terminal path prompt (`PathBar.vue`).
+Powers both the pop-up quick-open prompt (`Prompt.vue`) and the inline terminal path prompt (`PathBar.vue`), returning a typed `UsePromptReturn` handle whose entries are `PromptResult` discriminated-union members (`up`, `here`, `home`, `prev`, `mkdir`, `rm`, `item`) guarded by helpers such as `isRm`.
 
-- Implements directory-relative and absolute path resolution (`/`, `../`, `cd`).
+- Implements directory-relative and absolute path resolution (`/`, `../`, `cd`), `mkdir`, and `rm` (`confirmAction` deletion in the current folder).
 - Performs ranked fuzzy matching with hit-highlight indices against the folder hierarchy.
 - Manages keyboard traversal (`Tab` completion, `↑`/`↓` / `^P`/`^N` navigation, `Enter` navigation).
 
 ### `useRowSelection`
 
-Manages row selection and active cursor state for tabular listings (e.g. `FolderTable.vue`).
+Manages row selection and active cursor state for tabular listings (e.g. `FolderTable.vue`), typed via `UseRowSelectionReturn`.
 
 - Supports single-row selection, checkbox toggling, and select-all.
-- Handles anchor-based contiguous range selections using `Shift+Click` and `Shift+Arrow` keys.
+- Handles anchor-based contiguous range selections using `Shift+Click` and `Shift+Arrow` keys, keeping `anchorKey` by row key so background refreshes inserting or removing other rows do not break an active range.
 - Automatically computes aggregate statistics (e.g. total selected bytes).
 
 ### `useRemembered`
@@ -95,12 +118,12 @@ The task registry (`GET /taskqueue/tasks/registered`) as `Worker`s, sorted by na
 
 Bridge composable for application configuration preferences.
 
-- Exposes reactive settings (`theme`, `density`, `ai`) connected to `useSettingsStore`.
-- Controls the visibility and opening/closing of `SettingsDialog.vue`.
+- Exposes reactive settings (`appearance.theme`, `ai`, `explorer`) connected to `useSettingsStore`.
+- Controls the visibility and opening/closing of `SettingsDialog.vue` (`settingsOpen`, `openSettings`, `closeSettings`).
 
 ### `useHelp`
 
-Lightweight bridge composable controlling the visibility of the keyboard shortcuts help dialog (`HelpDialog.vue`).
+Lightweight bridge composable controlling the visibility of the keyboard shortcuts help dialog (`HelpDialog.vue`), typed via `UseHelpReturn`.
 
 ### `useTooltip`
 
@@ -203,3 +226,67 @@ Coordinates `<ConfirmDialog />` across the app for destructive confirmations (`c
 ### `useDownload`
 
 Streams downloads directly to disk using hidden `_blank` anchor clicks (`downloadFile`), staggers multi-file batches by 300 ms (`downloadFiles`), and clears pending batch timers on sign-out (`clearDownloads`).
+
+### `useGroupStacks`
+
+Module-scoped session state (`UseGroupStacksReturn`) remembering which `TaskGroup` cards (`STACK_MIN = 3`) and multi-file input cards in `WorkflowGraph.vue` are stacked or open across views and folders.
+
+### `usePanelWidth`
+
+Manages draggable, remembered (`useRemembered`) side-panel widths (`PanelWidth`: `width`, `start`, `move`, `end`, `step`, `reset`) clamped between a minimum width and `viewportWidth * maxShare`.
+
+### `useTaskReport`
+
+Module-scoped modal coordinator (`openTaskReport`, `clearTaskReport`, `useTaskReport`) for viewing a task's findings in `TaskReportDialog.vue`, aligned with the modal stack so `Escape` and sign-out clear it cleanly.
+
+### `useWorkflowDialog`
+
+Module-scoped modal state and helpers (`useWorkflowDialog`, `openWorkflowDialog`) for launching `WorkflowDialog.vue` on selected files, gated on the `'workflow'` modal stack entry.
+
+### `useWorkflowTemplates`
+
+Loads saved workflow templates through `useQueryCache`, parses each spec via `workflowSpec.ts` into summary worker counts, and applies inline optimistic/confirmed updates for template save, rename, and delete.
+
+### `useFileDetails`
+
+Loads full file metadata (MD5/SHA-1/SHA-256 hashes, libmagic text, `dataType`, `mime`) through `useQueryCache`, merges it into `useItemsStore`, and briefly polls every 3 s while background hashing completes after upload.
+
+### `useRangeText`
+
+Creates a sequential 1 MiB byte-range text reader (`createRangeText`) for `FIRST_BYTES` (5 MB) / `MORE_BYTES` (10 MB) streaming, sniffing `UTF-16` BOM, `UTF-8`, or `Windows-1252` on the first chunk and supporting pause/resume/cancel.
+
+### `useTextStream`
+
+Indexes streamed lines (`utils/lines.ts`) over `useRangeText` for text and Markdown viewers, sharing open streams across views (e.g. rendered Markdown and source) and keeping up to `KEEP_FILES` (3) files under `KEEP_MAX` (64 MiB) in an LRU cache cleared on sign-out (`forgetTextFiles`).
+
+### `useTableStream`
+
+Parses CSV, TSV, and JSONL files incrementally as decoded text arrives (`useRangeText` + `utils/table.ts`), sniffing delimiters and inferring column types from the first `TYPE_SAMPLE` rows.
+
+### `useTextSearch`
+
+Searches loaded lines incrementally in `SLICE_LINES` (20,000-line) yields (`utils/textSearch.ts`), capping kept matches at `MAX_HITS` (10,000), continuing across newly arrived lines, and jumping to hits from the visible cursor position.
+
+### `useByteChunks`
+
+Maintains a bounded `MAX_CHUNKS` (32 × 64 KiB = 2 MiB) LRU cache backed by `useQueryCache` (`api.files.readRange`), pre-fetching one chunk in the scroll direction and aborting off-screen requests.
+
+### `useRowScroller`
+
+Drives virtual row-number scrolling (`UseRowScrollerReturn`) for hex and text viewers using `ResizeObserver`, sub-row trackpad wheel accumulation, and custom thumb/track pointer dragging.
+
+### `useMarkedRange`
+
+Handles gutter line/row/byte range marking (`UseMarkedRangeReturn`) via click, `Shift+Click`, and vertical pointer drag across viewers, scrolling to incoming URL hash marks and copying shareable URL hash links.
+
+### `useLinkMenu`
+
+Singleton coordinator (`openLinkMenu`, `closeLinkMenu`, `useLinkMenu`) for `LinkMenu.vue`, ensuring untrusted links and images inside rendered Markdown carry no `href` and only open or copy after explicit operator review.
+
+### `useApiKeys`
+
+Loads the user's API keys sorted by earliest expiry through `useQueryCache`, exposing one-shot token creation (`createApiKey`) and revocation (`deleteApiKey`) plus `AccountDialog` modal helpers.
+
+### `useShareDialog`
+
+Singleton coordinator (`openShareDialog`, `useShareDialog`) for `ShareDialog.vue` that loads folder ACLs and group directories via `useQueryCache`, searches directory users, and translates collaborator additions, removals, and role changes into folder share/unshare API calls.
