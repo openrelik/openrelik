@@ -6,6 +6,7 @@ import { Copy, ExternalLink, ImageOff } from '@/components/icons'
 import { closeLinkMenu, useLinkMenu } from '@/composables/useLinkMenu'
 import { copyToClipboard } from '@/directives/copyToClipboard'
 import { linkTarget } from '@/utils/links'
+import { revealHidden } from '@/utils/markdown'
 
 /**
  * What a link in rendered Markdown offers when clicked: where it really
@@ -25,36 +26,43 @@ const route = useRoute()
 
 const target = computed(() => (state.value ? linkTarget(state.value.url) : null))
 const host = computed(() => (target.value?.openable ? target.value.host : null))
+const displayUrl = computed(() => (state.value ? revealHidden(state.value.url, true) : ''))
 
 const menu = ref<HTMLElement | null>(null)
 const position = ref({ left: 0, top: 0 })
 const copied = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearCopyTimer() {
+  clearTimeout(copyTimer)
+  copyTimer = undefined
+}
 
 const MARGIN = 8
 const GAP = 4
 
-watch(
-  () => state.value?.anchor,
-  async (anchor) => {
-    copied.value = false
-    if (!anchor) return
-    const box = anchor.getBoundingClientRect()
-    position.value = { left: box.left, top: box.bottom + GAP }
-    await nextTick()
-    const el = menu.value
-    if (!el) return
-    const { width, height } = el.getBoundingClientRect()
-    position.value = {
-      left: Math.max(MARGIN, Math.min(box.left, window.innerWidth - width - MARGIN)),
-      // No room below: above the link instead.
-      top:
-        box.bottom + GAP + height + MARGIN > window.innerHeight
-          ? Math.max(MARGIN, box.top - GAP - height)
-          : box.bottom + GAP,
-    }
-    el.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')?.focus()
-  },
-)
+watch(state, async (opened) => {
+  clearCopyTimer()
+  copied.value = false
+  if (!opened) return
+  const { anchor } = opened
+  const box = anchor.getBoundingClientRect()
+  position.value = { left: box.left, top: box.bottom + GAP }
+  await nextTick()
+  if (state.value !== opened) return
+  const el = menu.value
+  if (!el) return
+  const { width, height } = el.getBoundingClientRect()
+  position.value = {
+    left: Math.max(MARGIN, Math.min(box.left, window.innerWidth - width - MARGIN)),
+    // No room below: above the link instead.
+    top:
+      box.bottom + GAP + height + MARGIN > window.innerHeight
+        ? Math.max(MARGIN, box.top - GAP - height)
+        : box.bottom + GAP,
+  }
+  el.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')?.focus()
+})
 
 // It hangs under its link: when the link moves away (a scroll, a resize, another page), it goes.
 const close = () => state.value && closeLinkMenu()
@@ -62,14 +70,23 @@ function onScroll(event: Event) {
   if (menu.value?.contains(event.target as Node)) return
   close()
 }
+function onWindowKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !state.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  closeLinkMenu(true)
+}
 watch(() => route.fullPath, close)
 onMounted(() => {
   window.addEventListener('scroll', onScroll, true)
   window.addEventListener('resize', close)
+  window.addEventListener('keydown', onWindowKeydown, true)
 })
 onUnmounted(() => {
+  clearCopyTimer()
   window.removeEventListener('scroll', onScroll, true)
   window.removeEventListener('resize', close)
+  window.removeEventListener('keydown', onWindowKeydown, true)
 })
 
 function items(): HTMLElement[] {
@@ -81,12 +98,13 @@ function items(): HTMLElement[] {
 }
 
 function onKey(event: KeyboardEvent) {
-  event.stopPropagation()
   const list = items()
   const at = list.indexOf(document.activeElement as HTMLElement)
   const step: Record<string, number> = { ArrowDown: 1, j: 1, ArrowUp: -1, k: -1 }
-  if (event.key in step) {
-    list[(at + step[event.key]! + list.length) % list.length]?.focus()
+  if (event.key in step && list.length) {
+    const delta = step[event.key]!
+    const next = at === -1 ? (delta > 0 ? 0 : list.length - 1) : (at + delta + list.length) % list.length
+    list[next]?.focus()
   } else if (event.key === 'Escape') {
     closeLinkMenu(true)
   } else if (event.key === 'Tab') {
@@ -95,16 +113,27 @@ function onKey(event: KeyboardEvent) {
     return
   }
   event.preventDefault()
+  event.stopPropagation()
 }
 
 async function copy() {
-  if (!state.value) return
-  copied.value = await copyToClipboard(state.value.url)
-  if (copied.value) setTimeout(() => closeLinkMenu(true), 600)
+  const opened = state.value
+  if (!opened) return
+  const ok = await copyToClipboard(opened.url)
+  if (state.value !== opened) return
+  copied.value = ok
+  if (ok) {
+    clearCopyTimer()
+    copyTimer = setTimeout(() => {
+      copyTimer = undefined
+      closeLinkMenu(true)
+    }, 600)
+  }
 }
 
 function open() {
   if (!target.value?.openable) return
+  clearCopyTimer()
   window.open(target.value.href, '_blank', 'noopener,noreferrer')
   closeLinkMenu()
 }
@@ -142,7 +171,7 @@ function open() {
               state.kind === 'image' ? 'Image, not loaded' : (host ?? 'Not a web link')
             }}</span>
           </p>
-          <p class="line-clamp-3 text-[11px] break-all text-ink-muted">{{ state.url }}</p>
+          <p class="line-clamp-3 text-[11px] break-all text-ink-muted">{{ displayUrl }}</p>
         </div>
         <div class="pt-1">
           <button
@@ -182,11 +211,11 @@ function open() {
             </button>
             <p class="px-3 pt-0.5 pb-1 pl-8 text-[11px] text-ink-muted">
               {{
-                target?.openable
-                  ? 'The site will see your IP address.'
-                  : target && !target.openable
-                    ? target.reason
-                    : ''
+                target
+                  ? target.openable
+                    ? 'The site will see your IP address.'
+                    : target.reason
+                  : ''
               }}
             </p>
           </template>

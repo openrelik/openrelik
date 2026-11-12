@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ImageOff } from '@/components/icons'
 import { openLinkMenu } from '@/composables/useLinkMenu'
-import type { Inline } from '@/utils/markdown'
+import { revealHidden, type Inline } from '@/utils/markdown'
 
 /**
  * One line of parsed markdown: text, code, bold and emphasis, never HTML.
@@ -41,7 +41,7 @@ function onOpen(event: Event, url: string, kind: 'link' | 'image') {
       data-click-outside-ignore
       class="cursor-pointer text-ink underline decoration-ink-muted decoration-dashed underline-offset-2 outline-none hover:decoration-ink focus-visible:rounded-(--radius-check) focus-visible:ring-1 focus-visible:ring-brand"
       :class="{ 'break-all': part.text === part.url }"
-      v-tooltip="part.text === part.url ? undefined : part.url"
+      v-tooltip="part.text === part.url ? undefined : revealHidden(part.url, true)"
       @click="onOpen($event, part.url, 'link')"
       @keydown="onOpen($event, part.url, 'link')"
       >{{ part.text }}</span
@@ -53,7 +53,7 @@ function onOpen(event: Event, url: string, kind: 'link' | 'image') {
       aria-haspopup="menu"
       data-click-outside-ignore
       class="cursor-pointer text-ink-muted underline decoration-dashed underline-offset-2 outline-none hover:text-ink-secondary focus-visible:rounded-(--radius-check) focus-visible:ring-1 focus-visible:ring-brand"
-      v-tooltip="part.url"
+      v-tooltip="revealHidden(part.url, true)"
       @click="onOpen($event, part.url, 'image')"
       @keydown="onOpen($event, part.url, 'image')"
       ><ImageOff

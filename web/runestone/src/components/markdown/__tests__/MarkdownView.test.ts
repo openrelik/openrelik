@@ -110,20 +110,22 @@ describe('MarkdownView untrusted DOM safety', () => {
 describe('MarkdownView document line ranges and marking', () => {
   const DOCUMENT_SOURCE = [
     '# Heading on line 1',
+    '## Subheading',
+    '### Detail heading',
     '',
-    'Paragraph starting on line 3',
-    'and ending on line 4.',
-    '- list item on line 5',
-    '- list item on line 6',
+    'Paragraph with `code`, **bold**, *em*,\\',
+    'and hard break.',
+    '- list item on line 7',
+    '- list item on line 8',
     '',
-    'Trailing paragraph on line 8.',
+    'Trailing paragraph on line 10.',
   ].join('\n')
 
-  it('sets data-line and data-end on blocks and marks only blocks overlapping lines 3–5', () => {
+  it('sets data-line and data-end on blocks and marks only blocks overlapping lines 5–7', () => {
     const wrapper = mountMarkdown({
       source: DOCUMENT_SOURCE,
       variant: 'document',
-      marked: { from: 3, to: 5 },
+      marked: { from: 5, to: 7 },
     })
 
     const blocks = [...wrapper.element.querySelectorAll('[data-line]')]
@@ -136,10 +138,16 @@ describe('MarkdownView document line ranges and marking', () => {
       })),
     ).toEqual([
       { tag: 'h1', line: '1', end: '1', marked: false },
-      { tag: 'p', line: '3', end: '4', marked: true },
-      { tag: 'ul', line: '5', end: '6', marked: true },
-      { tag: 'p', line: '8', end: '8', marked: false },
+      { tag: 'h2', line: '2', end: '2', marked: false },
+      { tag: 'h3', line: '3', end: '3', marked: false },
+      { tag: 'p', line: '5', end: '6', marked: true },
+      { tag: 'ul', line: '7', end: '8', marked: true },
+      { tag: 'p', line: '10', end: '10', marked: false },
     ])
+    expect(wrapper.find('code').text()).toBe('code')
+    expect(wrapper.find('strong').text()).toBe('bold')
+    expect(wrapper.find('em').text()).toBe('em')
+    expect(wrapper.find('br').exists()).toBe(true)
   })
 
   it('omits line attributes in the report variant', () => {
