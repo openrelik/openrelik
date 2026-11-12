@@ -183,4 +183,20 @@ describe('collectDrop', () => {
     const brokenDir = mockDirectoryEntry('unreadable', [], new Error('I/O failure'))
     await expect(collectDrop([brokenDir])).rejects.toThrow('I/O failure')
   })
+
+  it('skips entries that are neither a file nor a directory', async () => {
+    const unsupported = {
+      isFile: false,
+      isDirectory: false,
+      name: 'symlink',
+      fullPath: '/symlink',
+      filesystem: {} as FileSystem,
+      getParent: () => {},
+    } as FileSystemEntry
+    const valid = mockFileEntry('valid.log')
+
+    const dropped = await collectDrop([unsupported, valid])
+    expect(dropped.folders).toEqual([])
+    expect(dropped.loose.map((f) => f.name)).toEqual(['valid.log'])
+  })
 })

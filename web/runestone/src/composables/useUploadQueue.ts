@@ -37,6 +37,7 @@ import {
   chunkCount,
   chunkRange,
   collectDrop,
+  type DropContents,
   LARGE_DROP,
   uploadIdentifier,
 } from '@/utils/upload'
@@ -82,6 +83,7 @@ const error = ref<string | null>(null)
 const controllers = new Map<string, AbortController>()
 const running = new Set<string>()
 let nextKey = 0
+let sessionGen = 0
 
 const isAbort = (err: unknown): boolean => err instanceof DOMException && err.name === 'AbortError'
 const statusOf = (err: unknown): number | null => (err instanceof ApiError ? err.status : null)
@@ -110,6 +112,7 @@ function remove(key: string): void {
 
 /** Aborts everything and empties the queue (sign-out). */
 export function clearUploads(): void {
+  sessionGen++
   for (const controller of controllers.values()) controller.abort()
   controllers.clear()
   running.clear()
@@ -317,35 +320,35 @@ async function confirmLarge(fileCount: number, folderCount: number): Promise<boo
 }
 
 async function enqueue(folderId: number, files: File[]): Promise<void> {
-  if (!(await confirmLarge(files.length, 0))) return
-  return queueFiles(folderId, files)
+  clearError()
+  const gen = sessionGen
+  if (!(await confirmLarge(files.length, 0)) || gen !== sessionGen) return
+  const failure = await queueFiles(folderId, files, gen)
+  if (failure && gen === sessionGen) error.value = failure
 }
 
-/** Queues files without asking: the caller has already confirmed the size. */
-async function queueFiles(folderId: number, files: File[]): Promise<void> {
-  clearError()
-  if (!files.length) return
+/** Queues files without asking: returns the refusal reason without wiping sibling errors. */
+async function queueFiles(folderId: number, files: File[], gen: number): Promise<string | null> {
+  if (!files.length || gen !== sessionGen) return null
 
   const empty = files.filter((file) => file.size === 0)
   const usable = files.filter((file) => file.size > 0)
-  if (empty.length) {
-    // The server can never assemble an empty file, so it never starts.
-    error.value =
-      empty.length === 1
-        ? `Cannot upload “${empty[0]!.name}”: the file is empty.`
-        : `Cannot upload ${empty.length} empty files.`
-  }
-  if (!usable.length) return
+  const emptyError = empty.length
+    ? empty.length === 1
+      ? `Cannot upload “${empty[0]!.name}”: the file is empty.`
+      : `Cannot upload ${empty.length} empty files.`
+    : null
+  if (!usable.length) return emptyError
 
   try {
     await ensureRole(folderId)
   } catch (err: unknown) {
-    error.value = `Could not check permissions: ${errorMessage(err, 'request failed')}`
-    return
+    if (gen !== sessionGen) return null
+    return `Could not check permissions: ${errorMessage(err, 'request failed')}`
   }
+  if (gen !== sessionGen) return null
   if (!canUpload(roleOf(folderId))) {
-    error.value = 'Only an owner or editor can upload to this folder.'
-    return
+    return 'Only an owner or editor can upload to this folder.'
   }
 
   const chunkSize = CHUNK_BYTES()
@@ -367,6 +370,7 @@ async function queueFiles(folderId: number, files: File[]): Promise<void> {
     })
   }
   pump()
+  return emptyError
 }
 
 /**
@@ -376,15 +380,26 @@ async function queueFiles(folderId: number, files: File[]): Promise<void> {
  */
 async function enqueueDrop(parent: number | null, entries: FileSystemEntry[]): Promise<void> {
   clearError()
-  const dropped = await collectDrop(entries)
+  const gen = sessionGen
+  let dropped: DropContents
+  try {
+    dropped = await collectDrop(entries)
+  } catch (err: unknown) {
+    if (gen === sessionGen) {
+      error.value = `Could not read dropped files: ${errorMessage(err, 'read failed')}`
+    }
+    return
+  }
+  if (gen !== sessionGen) return
 
   // Nothing is left out quietly: a drop this size is worth a moment's thought.
   const total = dropped.loose.length + dropped.nested.length
-  if (!(await confirmLarge(total, dropped.folders.length))) return
+  if (!(await confirmLarge(total, dropped.folders.length)) || gen !== sessionGen) return
 
   const notes: string[] = []
+  let firstError: string | null = null
 
-  const { createFolder } = useFolderActions()
+  const { createFolder, error: folderError, clearError: clearFolderError } = useFolderActions()
   // Folder path (as dropped) → its id on the server.
   const created = new Map<string, number>()
   for (const path of dropped.folders) {
@@ -393,8 +408,11 @@ async function enqueueDrop(parent: number | null, entries: FileSystemEntry[]): P
     // Its parent failed: skip this one too, quietly — the parent already said why.
     if (path.length > 1 && parentId === null) continue
     const folder = await createFolder(parentId, path.at(-1)!)
+    if (gen !== sessionGen) return
     if (folder) created.set(path.join('/'), folder.id)
+    else firstError ??= folderError.value
   }
+  if (firstError) clearFolderError()
 
   const byFolder = new Map<number, File[]>()
   for (const { path, file } of dropped.nested) {
@@ -411,10 +429,15 @@ async function enqueueDrop(parent: number | null, entries: FileSystemEntry[]): P
     )
   }
 
-  for (const [folderId, files] of byFolder) await queueFiles(folderId, files)
+  for (const [folderId, files] of byFolder) {
+    const failure = await queueFiles(folderId, files, gen)
+    if (gen !== sessionGen) return
+    firstError ??= failure
+  }
 
-  // enqueue() reports its own refusals; only add what it cannot know.
-  if (notes.length) error.value = `${notes.join('; ')}.`
+  // Surface the first real failure across folders/files, or else any placement notes.
+  if (firstError) error.value = firstError
+  else if (notes.length) error.value = `${notes.join('; ')}.`
 }
 
 function cancel(key: string): void {

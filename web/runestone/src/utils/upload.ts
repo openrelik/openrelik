@@ -86,6 +86,7 @@ export async function collectDrop(entries: FileSystemEntry[]): Promise<DropConte
       else result.loose.push(file)
       return
     }
+    if (!entry.isDirectory) return
 
     const here = [...path, entry.name]
     result.folders.push(here)

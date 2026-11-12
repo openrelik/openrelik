@@ -322,4 +322,90 @@ describe('useUploadQueue', () => {
     )
     expect(queue.error.value).toBe('1 loose file needs a folder.')
   })
+
+  it('preserves earlier folder and empty-file errors across multi-folder drops and catches unreadable entries', async () => {
+    vi.mocked(api.folders.getMyFolderRole).mockResolvedValue('Owner')
+    vi.mocked(api.folders.createFolder).mockImplementation(async (name, parentId) => {
+      if (name === 'Fails') {
+        throw new ApiError({ status: 409, statusText: 'Conflict', message: 'Already exists' })
+      }
+      return {
+        id: name === 'EmptyDir' ? 600 : 601,
+        uuid: `u-${name}`,
+        display_name: name,
+        parent_id: parentId,
+        parent: null,
+      } as FolderDetail
+    })
+    vi.mocked(api.files.uploadChunk).mockResolvedValue({ id: 90, display_name: 'ok.txt' })
+
+    const queue = useUploadQueue()
+
+    // 1) Folder creation failure in tree 1 is preserved when tree 2 succeeds
+    const failDir = makeDirEntry('Fails', [])
+    const okDir = makeDirEntry('OkDir', [makeFileEntry(new File(['ok'], 'ok.txt'))])
+    await queue.enqueueDrop(null, [failDir, okDir])
+    await new Promise((r) => setTimeout(r, 0))
+    expect(queue.error.value).toContain('Could not create “Fails”')
+
+    // 2) Empty-file error in tree 1 is preserved when tree 2 queues valid files
+    const emptyDir = makeDirEntry('EmptyDir', [makeFileEntry(new File([], 'zero.bin'))])
+    await queue.enqueueDrop(null, [emptyDir, okDir])
+    await new Promise((r) => setTimeout(r, 0))
+    expect(queue.error.value).toBe('Cannot upload “zero.bin”: the file is empty.')
+
+    // 3) Read failure from collectDrop surfaces through queue error instead of rejecting
+    const brokenEntry: FileSystemFileEntry = {
+      isFile: true,
+      isDirectory: false,
+      name: 'locked.bin',
+      fullPath: '/locked.bin',
+      filesystem: {} as FileSystem,
+      getParent: vi.fn(),
+      file: (_ok, err) => err?.(new Error('Permission denied') as DOMException),
+    }
+    await queue.enqueueDrop(null, [brokenEntry])
+    expect(queue.error.value).toBe('Could not read dropped files: Permission denied')
+  })
+
+  it('aborts in-flight enqueue and enqueueDrop operations if clearUploads runs during awaits', async () => {
+    let resolveRole: ((role: 'Owner') => void) | undefined
+    vi.mocked(api.folders.getMyFolderRole).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRole = resolve
+        }),
+    )
+
+    const queue = useUploadQueue()
+    const pendingEnqueue = queue.enqueue(10, [new File(['abc'], 'a.txt')])
+    await vi.waitFor(() => expect(resolveRole).toBeDefined())
+    clearUploads()
+    resolveRole!('Owner')
+    await pendingEnqueue
+    expect(queue.all.value).toHaveLength(0)
+
+    let resolveCreate: ((folder: FolderDetail) => void) | undefined
+    vi.mocked(api.folders.createFolder).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        }),
+    )
+    const dirA = makeDirEntry('DirA', [])
+    const dirB = makeDirEntry('DirB', [])
+    const pendingDrop = queue.enqueueDrop(null, [dirA, dirB])
+    await vi.waitFor(() => expect(resolveCreate).toBeDefined())
+    clearUploads()
+    resolveCreate!({
+      id: 700,
+      uuid: 'u-700',
+      display_name: 'DirA',
+      parent_id: null,
+      parent: null,
+    } as FolderDetail)
+    await pendingDrop
+    expect(api.folders.createFolder).toHaveBeenCalledTimes(1)
+    expect(queue.all.value).toHaveLength(0)
+  })
 })
