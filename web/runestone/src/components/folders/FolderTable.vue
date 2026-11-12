@@ -411,9 +411,23 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 : undefined
             "
           >
+            <!-- Paginated by the server, which only orders by creation: plain labels. -->
+            <span
+              v-if="!sortable"
+              class="micro-label"
+              v-tooltip="
+                column.key === 'modified' ? 'Newest created first, across pages' : undefined
+              "
+              >{{ column.label }}</span
+            >
             <!-- The filter matches names, so it lives in their header. No filter at
                  the root: the top-level list is found through the prompt. -->
-            <div v-if="column.key === 'name' && !atRoot" class="flex min-w-0 items-center gap-2">
+            <div
+              v-else
+              :class="
+                column.key === 'name' && !atRoot ? 'flex min-w-0 items-center gap-2' : 'contents'
+              "
+            >
               <button
                 type="button"
                 class="micro-label inline-flex shrink-0 cursor-pointer items-center gap-1 hover:text-ink"
@@ -437,6 +451,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 />
               </button>
               <input
+                v-if="column.key === 'name' && !atRoot"
                 :ref="(el) => (filterInput = el as HTMLInputElement | null)"
                 v-model="filter"
                 type="search"
@@ -445,38 +460,6 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 class="h-5 w-full max-w-52 min-w-0 rounded-(--radius-control) border border-border-strong bg-surface px-1.5 font-normal text-ink placeholder:text-ink-muted"
               />
             </div>
-            <!-- Paginated by the server, which only orders by creation: plain labels. -->
-            <span
-              v-if="!sortable"
-              class="micro-label"
-              v-tooltip="
-                column.key === 'modified' ? 'Newest created first, across pages' : undefined
-              "
-              >{{ column.label }}</span
-            >
-            <button
-              v-else-if="column.key !== 'name' || atRoot"
-              type="button"
-              class="micro-label inline-flex cursor-pointer items-center gap-1 hover:text-ink"
-              :class="{ 'text-ink-secondary': sort.key === column.key }"
-              v-tooltip="
-                sort.key === column.key
-                  ? {
-                      text: sort.dir === 1 ? 'Sorted ascending' : 'Sorted descending',
-                      detail: 'Click to invert',
-                    }
-                  : 'Sort by this column'
-              "
-              @click="emit('sort', column.key as SortKey)"
-            >
-              {{ column.label }}
-              <component
-                :is="sort.dir === 1 ? ArrowUp : ArrowDown"
-                v-if="sort.key === column.key"
-                :size="10"
-                :stroke-width="2"
-              />
-            </button>
           </th>
           <th><span class="sr-only">actions</span></th>
         </tr>
