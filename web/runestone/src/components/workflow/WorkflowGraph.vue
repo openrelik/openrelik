@@ -10,7 +10,7 @@ import {
   Plus,
   X,
 } from '@/components/icons'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
@@ -44,6 +44,7 @@ import {
   taskNeedsText,
   type GraphGroupNode,
   type GraphNode,
+  type StackSummary,
 } from '@/components/workflow/graphLayout'
 import { everyGroup, groupOf, mergeProblem, STATUS_LABEL, unchainable } from '@/utils/workflow'
 import type { Task, TaskGroup, TaskStatus, Workflow, WorkflowInput } from '@/types/workflow'
@@ -177,9 +178,9 @@ function stackTip(stack: TaskGroup): TooltipOptions {
   return { text: shown.join(', '), detail: 'Click to show them' }
 }
 
+const arrowId = useId()
 const statusOf = statusOfNode
 const needs = taskNeedsText
-const stackSummary = (group: TaskGroup) => buildStackSummary(group, props.workflow.draft)
 
 const layout = computed(() =>
   computeGraphLayout(props.workflow, {
@@ -189,6 +190,16 @@ const layout = computed(() =>
     inputPad: inputPad.value,
   }),
 )
+
+const stackSummaries = computed(() => {
+  const map = new Map<string, StackSummary>()
+  for (const node of layout.value.nodes) {
+    if (node.stack) map.set(node.stack.id, buildStackSummary(node.stack, props.workflow.draft))
+  }
+  return map
+})
+const stackSummary = (group: TaskGroup): StackSummary =>
+  stackSummaries.value.get(group.id) ?? buildStackSummary(group, props.workflow.draft)
 
 /** A click on empty canvas, not on a node or a control, clears the selection. */
 function clickCanvas(event: MouseEvent) {
@@ -405,7 +416,7 @@ function zoom(step: number) {
 /** Everything in view at once — never enlarged past 100%. */
 function fit() {
   const el = viewport.value
-  if (!el) return
+  if (!el || el.clientWidth <= 0 || ((props.capped || props.fill) && el.clientHeight <= 0)) return
   const byWidth = el.clientWidth / layout.value.width
   const byHeight = props.capped || props.fill ? el.clientHeight / layout.value.height : Infinity
   scale.value = clamp(Math.min(1, byWidth, byHeight))
@@ -570,7 +581,7 @@ const BAR: Record<TaskStatus, string> = {
           >
             <defs>
               <marker
-                id="arrow"
+                :id="arrowId"
                 viewBox="0 0 6 6"
                 refX="5"
                 refY="3"
@@ -587,7 +598,7 @@ const BAR: Record<TaskStatus, string> = {
               :d="edge.d"
               fill="none"
               stroke-width="1.25"
-              marker-end="url(#arrow)"
+              :marker-end="`url(#${arrowId})`"
               :class="workflow.draft ? DRAFT_EDGE : EDGE[edge.status]"
             />
             <path
@@ -1012,6 +1023,7 @@ const BAR: Record<TaskStatus, string> = {
       <button
         type="button"
         class="tabular w-10 cursor-pointer text-center text-[11px] text-ink-secondary hover:text-ink"
+        aria-label="Reset zoom to 100%"
         v-tooltip="'Reset to 100%'"
         @click="scale = 1"
       >

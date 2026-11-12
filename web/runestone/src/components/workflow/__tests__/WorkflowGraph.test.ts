@@ -389,16 +389,23 @@ describe('WorkflowGraph', () => {
       fill: true,
     })
 
+    const zoomGroup = wrapper.get('[role="group"][aria-label="Zoom"]')
+    // Initial auto-fit on an unmeasured 0x0 container does not shrink scale to 30%.
+    await nextTick()
+    expect(wrapper.get('button[aria-label="Reset zoom to 100%"]').text()).toBe('100%')
+
+    await wrapper.get('button[aria-label="Fit to view"]').trigger('click')
+    expect(zoomGroup.text()).toContain('100%')
+
     const viewport = wrapper.get('.overflow-auto').element as HTMLElement
     Object.defineProperty(viewport, 'clientWidth', { value: 300, configurable: true })
     Object.defineProperty(viewport, 'clientHeight', { value: 200, configurable: true })
 
-    const zoomGroup = wrapper.get('[role="group"][aria-label="Zoom"]')
     await wrapper.get('button[aria-label="Fit to view"]').trigger('click')
     expect(zoomGroup.text()).not.toContain('100%')
 
     // Reset to 100% by clicking the percentage readout button.
-    const readout = zoomGroup.findAll('button')[1]!
+    const readout = wrapper.get('button[aria-label="Reset zoom to 100%"]')
     await readout.trigger('click')
     expect(readout.text()).toBe('100%')
 
@@ -413,5 +420,36 @@ describe('WorkflowGraph', () => {
     await wrapper.setProps({ producerId: 't1' })
     await nextTick()
     expect(scrollSpy).toHaveBeenCalled()
+  })
+
+  it('gives each WorkflowGraph instance a distinct SVG arrow marker id within the same app', () => {
+    const wf = makeWorkflow({ groups: [makeGroup('g1', [makeTask('t1')])] })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
+    })
+    const Dual = {
+      components: { WorkflowGraph },
+      setup: () => ({ wf }),
+      template:
+        '<div><WorkflowGraph :workflow="wf" :selected-id="null" :capped="true" /><WorkflowGraph :workflow="wf" :selected-id="null" :capped="false" /></div>',
+    }
+    const wrapper = mount(Dual, {
+      global: {
+        plugins: [pinia, router],
+        directives: { tooltip: () => {} },
+      },
+    })
+    const graphs = wrapper.findAllComponents(WorkflowGraph)
+    expect(graphs).toHaveLength(2)
+    const idA = graphs[0]!.get('marker').attributes('id')
+    const idB = graphs[1]!.get('marker').attributes('id')
+    expect(idA).toBeTruthy()
+    expect(idB).toBeTruthy()
+    expect(idA).not.toBe(idB)
+    expect(graphs[0]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${idA})`)
+    expect(graphs[1]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${idB})`)
   })
 })

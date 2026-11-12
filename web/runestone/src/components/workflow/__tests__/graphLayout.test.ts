@@ -209,4 +209,51 @@ describe('graphLayout', () => {
       line: '1 need options',
     })
   })
+
+  it('skips empty groups safely and curves ghost join links when the join sits lower than group middle', () => {
+    // Empty groups should not crash layout or ghost generation.
+    const withEmpty = makeWorkflow({
+      draft: true,
+      groups: [makeGroup('g-empty', []), makeGroup('g-real', [makeTask('r1'), makeTask('r2')])],
+    })
+    const emptySafe = computeGraphLayout(withEmpty, {
+      editable: true,
+      isStacked: () => false,
+      inputSpan: NODE_H,
+      inputPad: 0,
+    })
+    expect(emptySafe.groups).toHaveLength(1)
+    expect(emptySafe.groups[0]?.group.id).toBe('g-real')
+
+    // A preceding sibling's deeper branch occupies the join column past g-top's midpoint,
+    // pushing g-top's ghost join downward so its link curves smoothly from the group's middle.
+    const tallAbove = makeTask('a0', {
+      groups: [
+        makeGroup('g-ac', [
+          makeTask('ac1'),
+          makeTask('ac2'),
+          makeTask('ac3'),
+          makeTask('ac4'),
+          makeTask('ac5'),
+        ]),
+      ],
+    })
+    const gTop = makeGroup('g-top', [makeTask('t1'), makeTask('t2')])
+    const wf = makeWorkflow({
+      draft: true,
+      groups: [makeGroup('g-above', [tallAbove]), gTop],
+    })
+    const layout = computeGraphLayout(wf, {
+      editable: true,
+      isStacked: () => false,
+      inputSpan: NODE_H,
+      inputPad: 0,
+    })
+    const ghosts = buildGraphGhosts(layout, NODE_H, 0)
+    const topGhost = ghosts.find((g) => 'join' in g.at && g.at.join === 'g-top')
+    expect(topGhost).toBeDefined()
+    // Cubic Bezier curve connects group midpoint y (168) to pushed-down join midpoint y (394).
+    expect(topGhost!.link).toContain(' C ')
+    expect(topGhost!.link).toMatch(/^M [\d.]+ 168 .* 394$/)
+  })
 })

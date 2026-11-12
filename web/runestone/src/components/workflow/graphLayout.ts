@@ -234,34 +234,36 @@ export function computeGraphLayout(workflow: Workflow, options: LayoutOptions): 
   }
 
   const shapeGroups = (groups: TaskGroup[], depth: number): GraphGroupNode[] =>
-    groups.map((group) => {
-      // A stack folds the tasks with nothing after them into one card, below
-      // the ones that have workers after them: their lines stay in sight.
-      const folded = isStacked(group) ? foldable(group) : []
-      const members: GraphNode[] = [
-        ...group.tasks.filter((task) => !folded.includes(task)).map((task) => shape(task, depth)),
-        ...(folded.length
-          ? [
-              {
-                key: `${group.id}:stack`,
-                depth,
-                top: 0,
-                groups: [],
-                stack: { id: group.id, tasks: folded },
-              },
-            ]
-          : []),
-      ]
-      // A callback is offered after a free group, and nothing is chained after
-      // a group's tasks once it has one; not when siblings share a join-all.
-      const ghost = editable && canJoin(group) && !canJoinAll(groups)
-      if (!group.join && !ghost) return { group, members }
-      const column = Math.max(depth, ...members.map(deepestColumn)) + 1
-      const join: GraphNode = ghost
-        ? { key: `${group.id}:join`, depth: column, top: 0, groups: [], ghost }
-        : { ...shape(group.join!, column), waitsFor: group.tasks.length }
-      return { group, members, join }
-    })
+    groups
+      .filter((group) => group.tasks.length > 0)
+      .map((group) => {
+        // A stack folds the tasks with nothing after them into one card, below
+        // the ones that have workers after them: their lines stay in sight.
+        const folded = isStacked(group) ? foldable(group) : []
+        const members: GraphNode[] = [
+          ...group.tasks.filter((task) => !folded.includes(task)).map((task) => shape(task, depth)),
+          ...(folded.length
+            ? [
+                {
+                  key: `${group.id}:stack`,
+                  depth,
+                  top: 0,
+                  groups: [],
+                  stack: { id: group.id, tasks: folded },
+                },
+              ]
+            : []),
+        ]
+        // A callback is offered after a free group, and nothing is chained after
+        // a group's tasks once it has one; not when siblings share a join-all.
+        const ghost = editable && canJoin(group) && !canJoinAll(groups)
+        if (!group.join && !ghost) return { group, members }
+        const column = Math.max(depth, ...members.map(deepestColumn)) + 1
+        const join: GraphNode = ghost
+          ? { key: `${group.id}:join`, depth: column, top: 0, groups: [], ghost }
+          : { ...shape(group.join!, column), waitsFor: group.tasks.length }
+        return { group, members, join }
+      })
 
   const root: GraphNode = withFan(
     { key: 'input', depth: 0, top: PAD, groups: shapeGroups(workflow.groups, 1) },
@@ -430,7 +432,12 @@ export function buildGraphGhosts(
           what: 'tasks in this group',
           left: nodeX(join),
           top: nodeY(join),
-          link: `M ${nodeX(members[0]!) + NODE_W + groupPadOf(placed)} ${nodeY(join) + NODE_H / 2} H ${nodeX(join)}`,
+          link: edgeCurve(
+            nodeX(members[0]!) + NODE_W + groupPadOf(placed),
+            (nodeY(members[0]!) + nodeY(members.at(-1)!) + NODE_H) / 2,
+            nodeX(join),
+            nodeY(join) + NODE_H / 2,
+          ),
         }
       }),
     ...layout.nodes
