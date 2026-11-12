@@ -9,6 +9,7 @@ import WorkflowGraph from '@/components/workflow/WorkflowGraph.vue'
 import { useGroupStacks } from '@/composables/useGroupStacks'
 import directives from '@/directives'
 import { useItemsStore } from '@/stores/items'
+import { useModalStore } from '@/stores/modals'
 import type { Task, TaskGroup, Workflow } from '@/types/workflow'
 
 vi.mock('@/api')
@@ -173,18 +174,6 @@ describe('WorkflowGraph', () => {
   })
 
   it('stacks and expands multiple input files and large task groups', async () => {
-    useItemsStore().upsertItems([
-      {
-        id: 11,
-        parent: 10,
-        kind: 'file',
-        name: 'f1.dd',
-        owner: 'Alice',
-        modified: '2026-11-01T00:00:00Z',
-        size: 1024,
-      },
-    ])
-
     // 5 tasks of the same module (>= STACK_MIN=3) start stacked as "Strings ×5".
     const sameModuleTasks = [1, 2, 3, 4, 5].map((n) =>
       makeTask(`s${n}`, {
@@ -205,6 +194,26 @@ describe('WorkflowGraph', () => {
       groups: [makeGroup('g-stack-1', sameModuleTasks)],
       draft: false,
     })
+
+    useItemsStore().upsertItems([
+      {
+        id: workflow.folderId,
+        parent: 10,
+        kind: 'folder',
+        name: workflow.name,
+        owner: 'Alice',
+        modified: '2026-11-01T00:00:00Z',
+      },
+      {
+        id: 11,
+        parent: 10,
+        kind: 'file',
+        name: 'f1.dd',
+        owner: 'Alice',
+        modified: '2026-11-01T00:00:00Z',
+        size: 1024,
+      },
+    ])
 
     const { wrapper } = mountGraph({
       workflow,
@@ -451,5 +460,66 @@ describe('WorkflowGraph', () => {
     expect(idA).not.toBe(idB)
     expect(graphs[0]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${idA})`)
     expect(graphs[1]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${idB})`)
+  })
+
+  it('respects active modals on Escape, prunes stale picks, skips broken input links, and finds non-CSS producer ids', async () => {
+    const t1 = makeTask('t1', { name: 'T1' })
+    const t2 = makeTask('t2', { name: 'T2' })
+    const t3 = makeTask('t3', { name: 'T3' })
+    const specialId = 'task:with"quotes[and]spaces'
+    const tSpecial = makeTask(specialId, { name: 'Special' })
+    const workflow = makeWorkflow({
+      id: 201,
+      folderId: 9999,
+      // Unknown file & folder parent -> input must not render /folder/undefined/file/ links.
+      inputs: [{ id: 8888, name: 'orphan.dd' }],
+      groups: [makeGroup('g-three', [t1, t2, t3]), makeGroup('g-special', [tSpecial])],
+      draft: true,
+    })
+    useGroupStacks().openStack('g-three')
+
+    const { wrapper } = mountGraph({
+      workflow,
+      selectedId: 't1',
+      capped: true,
+      editable: true,
+    })
+
+    // No broken RouterLink rendered when parent folder is unknown.
+    expect(wrapper.findAll('a')).toHaveLength(0)
+    expect(wrapper.text()).toContain('orphan.dd')
+
+    // Pick [t1, t2], then open a modal: Escape must NOT clear graph picks while modal is active.
+    await wrapper.get('button[data-task="t2"]').trigger('click', { metaKey: true })
+    expect(wrapper.find('[aria-label="Picked tasks"]').exists()).toBe(true)
+
+    const modalStore = useModalStore()
+    modalStore.openModal('help')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[aria-label="Picked tasks"]').exists()).toBe(true)
+    modalStore.closeModal('help')
+
+    // Removing t2 leaves only t1 in picked and keeps Split offer honest; removing editable clears picks.
+    await wrapper.setProps({
+      workflow: makeWorkflow({
+        id: 201,
+        folderId: 9999,
+        inputs: [{ id: 8888, name: 'orphan.dd' }],
+        groups: [makeGroup('g-three', [t1, t3]), makeGroup('g-special', [tSpecial])],
+        draft: true,
+      }),
+    })
+    expect(wrapper.get('[aria-label="Picked tasks"]').text()).toContain('1 task selected')
+
+    await wrapper.setProps({ editable: false })
+    expect(wrapper.find('[aria-label="Picked tasks"]').exists()).toBe(false)
+
+    // Non-CSS-identifier producerId scrolls cleanly via dataset lookup without querySelector syntax errors.
+    const viewport = wrapper.get('.overflow-auto').element as HTMLElement
+    const scrollSpy = vi.spyOn(viewport, 'scrollBy')
+    await wrapper.setProps({ producerId: specialId })
+    await nextTick()
+    expect(scrollSpy).toHaveBeenCalled()
   })
 })

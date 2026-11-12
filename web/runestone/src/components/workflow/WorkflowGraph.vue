@@ -17,6 +17,7 @@ import Button from '@/components/base/Button.vue'
 import TaskStatusIcon from '@/components/workflow/TaskStatusIcon.vue'
 
 import { useItemsStore } from '@/stores/items'
+import { useModalStore } from '@/stores/modals'
 import { isEmptyFile } from '@/utils/item'
 import { foldable, useGroupStacks } from '@/composables/useGroupStacks'
 import { anchorOf, type Anchor } from '@/composables/useRun'
@@ -108,6 +109,7 @@ const emit = defineEmits<{
 }>()
 
 const itemsStore = useItemsStore()
+const modalStore = useModalStore()
 /** Outputs with no bytes, among those loaded: a worker that found nothing, said quietly. */
 const emptyOutputs = (task: Task) =>
   task.outputs.filter((id) => {
@@ -246,6 +248,49 @@ function letGo() {
   pickedGroups.value = []
 }
 
+function clearPicks(): boolean {
+  if (!picked.value.length && !pickedGroups.value.length) return false
+  letGo()
+  return true
+}
+defineExpose({ clearPicks })
+
+watch(
+  () => props.workflow.id,
+  () => {
+    letGo()
+    hovered.value = null
+  },
+)
+
+watch(
+  () => [props.workflow, props.editable] as const,
+  ([workflow, editable]) => {
+    if (!editable) {
+      letGo()
+      hovered.value = null
+      return
+    }
+    const groups = everyGroup(workflow)
+    const liveTasks = new Set(groups.flatMap(({ group }) => group.tasks.map((t) => t.id)))
+    const boxedTasks = new Set(
+      groups
+        .filter(({ group }) => group.tasks.length > 1)
+        .flatMap(({ group }) => group.tasks.map((t) => t.id)),
+    )
+    const liveGroups = new Set(groups.map(({ group }) => group.id))
+    picked.value = picked.value.filter((id) => boxedTasks.has(id))
+    pickedGroups.value = pickedGroups.value.filter((id) => liveGroups.has(id))
+    if (
+      hovered.value &&
+      !liveTasks.has(hovered.value) &&
+      !layout.value.nodes.some((n) => n.key === hovered.value)
+    ) {
+      hovered.value = null
+    }
+  },
+)
+
 function clickTask(event: MouseEvent, task: Task) {
   const placed = groupOf(props.workflow, task.id)
   const member = placed && placed.group.join?.id !== task.id
@@ -356,12 +401,16 @@ function merge() {
   emit('merge', ids)
 }
 
-/** Esc lets go of what is picked first. */
+/** Esc lets go of what is picked first, when no modal sits above the canvas. */
 function onKey(event: KeyboardEvent) {
-  if (event.key !== 'Escape' || isTyping(event)) return
+  if (modalStore.hasActiveModal) return
+  if (event.key !== 'Escape' || isTyping(event) || event.target instanceof HTMLSelectElement) return
   if (!picked.value.length && !pickedGroups.value.length) return
   // Collapsed, the chart stays mounted but out of sight: Esc is not its to take.
-  if (!viewport.value?.checkVisibility({ visibilityProperty: true })) return
+  const visible =
+    viewport.value?.checkVisibility?.({ visibilityProperty: true }) ??
+    !viewport.value?.closest('[inert]')
+  if (!visible) return
   letGo()
   event.preventDefault()
   event.stopImmediatePropagation()
@@ -428,8 +477,11 @@ watch(
   async (id) => {
     if (!id) return
     await nextTick()
-    const node = viewport.value?.querySelector(`[data-task="${id}"]`)
-    if (viewport.value && node) revealIn(viewport.value, node)
+    if (props.producerId !== id || !viewport.value) return
+    const node = Array.from(viewport.value.querySelectorAll<HTMLElement>('[data-task]')).find(
+      (el) => el.dataset.task === id,
+    )
+    if (node) revealIn(viewport.value, node)
   },
 )
 
@@ -440,9 +492,21 @@ onMounted(async () => {
 })
 
 const input = computed(() => props.workflow.inputs[0])
-/** An input's page: inputs come from the folder the workflow was made in. */
-const inputLink = (file: WorkflowInput) =>
-  `/folder/${itemsStore.findFile(file.id)?.parent ?? itemsStore.findFolder(props.workflow.folderId)?.parent}/file/${file.id}`
+/** An input's page, only when its parent folder is known; null keeps the node non-navigable. */
+const inputLinks = computed(
+  () =>
+    new Map(
+      props.workflow.inputs.map((file) => {
+        const parent =
+          itemsStore.findFile(file.id)?.parent ??
+          itemsStore.findFolder(props.workflow.folderId)?.parent
+        return [
+          file.id,
+          parent !== null && parent !== undefined ? `/folder/${parent}/file/${file.id}` : null,
+        ] as const
+      }),
+    ),
+)
 const sizeOf = (file: WorkflowInput) => itemsStore.findFile(file.id)?.size ?? 0
 const inputBytes = computed(() =>
   props.workflow.inputs.reduce((sum, file) => sum + sizeOf(file), 0),
@@ -614,11 +678,13 @@ const BAR: Record<TaskStatus, string> = {
           <!-- nodes -->
           <template v-for="node in layout.nodes" :key="node.key">
             <template v-if="node.key === 'input' && input">
-              <!-- one input file: a node that opens it -->
-              <RouterLink
+              <!-- one input file: a node that opens it when its parent folder is known -->
+              <component
                 v-if="!manyInputs"
-                :to="inputLink(input)"
-                class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5 hover:border-brand"
+                :is="inputLinks.get(input.id) ? RouterLink : 'div'"
+                v-bind="inputLinks.get(input.id) ? { to: inputLinks.get(input.id)! } : {}"
+                class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5"
+                :class="inputLinks.get(input.id) ? 'hover:border-brand' : 'cursor-default'"
                 :style="{
                   left: `${x(node)}px`,
                   top: `${y(node)}px`,
@@ -633,15 +699,17 @@ const BAR: Record<TaskStatus, string> = {
                 <span class="tabular truncate text-[11px] text-ink-muted">
                   input<template v-if="inputBytes"> · {{ formatSize(inputBytes) }}</template>
                 </span>
-              </RouterLink>
+              </component>
 
               <!-- several, opened: a node for each file -->
               <template v-else-if="inputsOpen">
-                <RouterLink
+                <component
                   v-for="(file, row) in workflow.inputs"
                   :key="file.id"
-                  :to="inputLink(file)"
-                  class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5 hover:border-brand"
+                  :is="inputLinks.get(file.id) ? RouterLink : 'div'"
+                  v-bind="inputLinks.get(file.id) ? { to: inputLinks.get(file.id)! } : {}"
+                  class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5"
+                  :class="inputLinks.get(file.id) ? 'hover:border-brand' : 'cursor-default'"
                   :style="{
                     left: `${x(node)}px`,
                     top: `${y(node) + row * (NODE_H + ROW_GAP)}px`,
@@ -656,7 +724,7 @@ const BAR: Record<TaskStatus, string> = {
                   <span v-if="sizeOf(file)" class="tabular truncate text-[11px] text-ink-muted">
                     {{ formatSize(sizeOf(file)) }}
                   </span>
-                </RouterLink>
+                </component>
               </template>
 
               <!-- several, stacked: one card; opens on click -->
