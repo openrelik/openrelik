@@ -1124,10 +1124,7 @@ describe('workflow race guards, sign-out cleanup, and edit/follow lifecycle', ()
     expect(api.folders.deleteFolder).not.toHaveBeenCalled()
 
     // 6. followWorkflow stops polling when clearWorkflowState runs before timer fires.
-    const active = seedWorkflow(
-      [makeGroup('g1', [makeTask('t1', { status: 'running' })])],
-      false,
-    )
+    const active = seedWorkflow([makeGroup('g1', [makeTask('t1', { status: 'running' })])], false)
     const callsBeforeFollow = vi.mocked(api.workflows.get).mock.calls.length
     followWorkflow(active.folderId)
     clearWorkflowState()
@@ -1136,20 +1133,14 @@ describe('workflow race guards, sign-out cleanup, and edit/follow lifecycle', ()
   })
 
   it('ignores inactive workflows in followWorkflow and does not schedule a post-completion poll', async () => {
-    const finished = seedWorkflow(
-      [makeGroup('g1', [makeTask('t1', { status: 'success' })])],
-      false,
-    )
+    const finished = seedWorkflow([makeGroup('g1', [makeTask('t1', { status: 'success' })])], false)
     const callsBefore = vi.mocked(api.workflows.get).mock.calls.length
     followWorkflow(finished.folderId)
     await vi.advanceTimersByTimeAsync(POLL_MS * 3)
     expect(vi.mocked(api.workflows.get).mock.calls.length).toBe(callsBefore)
 
     // One poll sees the task finish; no further poll is scheduled.
-    const active = seedWorkflow(
-      [makeGroup('g1', [makeTask('t2', { status: 'running' })])],
-      false,
-    )
+    const active = seedWorkflow([makeGroup('g1', [makeTask('t2', { status: 'running' })])], false)
     vi.mocked(api.workflows.get).mockResolvedValueOnce({
       ...makeWorkflowRecord(active.id, active.folderId),
       spec_json: JSON.stringify({

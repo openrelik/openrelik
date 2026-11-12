@@ -697,10 +697,7 @@ describe('isActive and runStats across workflow lifecycles', () => {
     expect(parsed.groups[1]?.tasks[0]?.status).toBe('success')
 
     // specFromTasks skips groups whose tasks array is empty.
-    const wf = makeWorkflow([
-      makeGroup('empty', []),
-      makeGroup('real', [makeTask('t1')]),
-    ])
+    const wf = makeWorkflow([makeGroup('empty', []), makeGroup('real', [makeTask('t1')])])
     const serialized = specFromTasks(wf)
     expect(serialized.workflow.tasks).toHaveLength(1)
   })
