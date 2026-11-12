@@ -112,6 +112,11 @@ function present(target: HTMLElement, options: TooltipOptions) {
  * tooltip was open moments ago). Keyboard focus passes 0: focus is intent.
  */
 export function showTooltip(target: HTMLElement, input: TooltipInput, delay = COLD_DELAY) {
+  const options = parseTooltip(input)
+  if (!options.text) {
+    if (currentTarget === target) hideTooltip(target)
+    return
+  }
   if (currentTarget === target && state.visible) {
     hideTimer = clear(hideTimer)
     return
@@ -120,9 +125,6 @@ export function showTooltip(target: HTMLElement, input: TooltipInput, delay = CO
   showTimer = clear(showTimer)
   hideTimer = clear(hideTimer)
   cooldownTimer = clear(cooldownTimer)
-
-  const options = parseTooltip(input)
-  if (!options.text) return
 
   showTimer = setTimeout(
     () => {
@@ -142,10 +144,11 @@ export function showTooltip(target: HTMLElement, input: TooltipInput, delay = CO
  */
 export function updateTooltip(target: HTMLElement, input: TooltipInput) {
   if (currentTarget !== target || !state.visible) return
-  const { text, detail } = parseTooltip(input)
+  const { text, detail, placement } = parseTooltip(input)
   if (!text) return
   state.text = text
   state.detail = detail ?? ''
+  state.preferred = placement ?? 'top'
   state.anchor = target.getBoundingClientRect()
   state.revision++
 }

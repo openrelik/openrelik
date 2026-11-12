@@ -166,10 +166,20 @@ describe('composables/useTooltip', () => {
     expect(state.text).toBe('Copied!')
 
     const prevRev = state.revision
-    updateTooltip(anchor, { text: 'Copied SHA-256', detail: '64 hex chars' })
+    updateTooltip(anchor, { text: 'Copied SHA-256', detail: '64 hex chars', placement: 'bottom' })
     expect(state.text).toBe('Copied SHA-256')
     expect(state.detail).toBe('64 hex chars')
+    expect(state.preferred).toBe('bottom')
     expect(state.revision).toBe(prevRev + 1)
+
+    // Hovering/calling showTooltip with empty text for another target does not cancel pending HIDE_GRACE
+    hideTooltip(anchor, HIDE_GRACE)
+    showTooltip(other, { text: '' })
+    vi.advanceTimersByTime(HIDE_GRACE)
+    expect(state.visible).toBe(false)
+
+    // Re-flash to verify other target hide is ignored while anchor is active
+    flashTooltip(anchor, 'Copied SHA-256', 600)
 
     // hideTooltip for a different target does nothing.
     hideTooltip(other)

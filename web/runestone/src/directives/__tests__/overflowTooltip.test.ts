@@ -152,6 +152,20 @@ describe('vOverflowTooltip', () => {
     el.dispatchEvent(new FocusEvent('focusout'))
     expect(state.visible).toBe(false)
 
+    // Update custom binding while visible updates live tooltip, then shrinking hides it
+    el.dispatchEvent(new FocusEvent('focusin'))
+    vi.advanceTimersByTime(0)
+    expect(state.visible).toBe(true)
+    custom.value = 'Live updated overflow label'
+    await nextTick()
+    expect(state.text).toBe('Live updated overflow label')
+
+    mockDimensions(el, { scrollWidth: 50, clientWidth: 50, scrollHeight: 20, clientHeight: 20 })
+    custom.value = 'Fits now'
+    await nextTick()
+    expect(state.visible).toBe(false)
+    mockDimensions(el, { scrollWidth: 50, clientWidth: 50, scrollHeight: 60, clientHeight: 20 })
+
     // Unmount hides active tooltip and removes listeners
     el.dispatchEvent(new FocusEvent('focusin'))
     vi.advanceTimersByTime(0)

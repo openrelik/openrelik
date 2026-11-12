@@ -6,7 +6,7 @@
  * window, so the content beside it always has room, and remembered per panel.
  */
 
-import { computed, type ComputedRef } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, type ComputedRef } from 'vue'
 
 import { useRemembered } from '@/composables/useRemembered'
 
@@ -16,6 +16,8 @@ export interface PanelWidth {
   start: (event: PointerEvent) => void
   move: (event: PointerEvent) => void
   end: () => void
+  /** Adjust width by `delta` px (positive widens), clamped to bounds. */
+  step: (delta: number) => void
   /** Back to the panel's default width. */
   reset: () => void
 }
@@ -27,8 +29,18 @@ export function usePanelWidth(
 ): PanelWidth {
   const { initial, min, maxShare = 0.6 } = options
   const stored = useRemembered(key, initial)
+  const viewportWidth = ref(typeof window === 'undefined' ? initial : window.innerWidth)
+  const syncViewport = () => {
+    viewportWidth.value = window.innerWidth
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', syncViewport, { passive: true })
+    if (getCurrentScope()) {
+      onScopeDispose(() => window.removeEventListener('resize', syncViewport))
+    }
+  }
   const clamp = (px: number) =>
-    Math.round(Math.min(window.innerWidth * maxShare, Math.max(min, px)))
+    Math.round(Math.min(viewportWidth.value * maxShare, Math.max(min, px)))
   const width = computed(() => clamp(stored.value))
 
   let drag: { x: number; width: number } | null = null
@@ -36,6 +48,7 @@ export function usePanelWidth(
     width,
     start(event) {
       ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+      syncViewport()
       drag = { x: event.clientX, width: width.value }
     },
     // The edge is on the panel's left: dragging left widens it.
@@ -44,6 +57,10 @@ export function usePanelWidth(
     },
     end() {
       drag = null
+    },
+    step(delta) {
+      syncViewport()
+      stored.value = clamp(width.value + delta)
     },
     reset() {
       stored.value = initial

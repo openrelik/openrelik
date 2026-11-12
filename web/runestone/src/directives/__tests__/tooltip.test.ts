@@ -143,6 +143,12 @@ describe('vTooltip', () => {
     expect(state.detail).toBe('65%')
     expect(state.revision).toBe(revBefore + 1)
 
+    // Change placement -> updates live preferred placement
+    tip.value = { text: 'Uploading', detail: '65%', placement: 'right' }
+    await nextTick()
+    expect(state.preferred).toBe('right')
+    expect(state.revision).toBe(revBefore + 2)
+
     // Clearing binding value hides the tooltip
     tip.value = undefined
     await nextTick()

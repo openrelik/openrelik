@@ -1,5 +1,5 @@
 import type { Directive } from 'vue'
-import { flashTooltip, hideTooltip, showTooltip } from '@/composables/useTooltip'
+import { flashTooltip, hideTooltip, isKeyboardFocus, showTooltip } from '@/composables/useTooltip'
 
 export type CopyValue = string | number | { text: string; hint?: string }
 
@@ -10,6 +10,8 @@ interface CopyElement extends HTMLElement {
     onKeyDown: (e: KeyboardEvent) => void
     onPointerEnter: () => void
     onPointerLeave: () => void
+    onFocusIn: (e: FocusEvent) => void
+    onFocusOut: () => void
   }
   _copyFeedbackTimer?: ReturnType<typeof setTimeout> | null
   _tooltipListeners?: unknown
@@ -90,17 +92,17 @@ export const vCopyToClipboard: Directive<CopyElement, CopyValue | undefined> = {
       if (!text) return
 
       const ok = await copyToClipboard(text)
-      if (ok) {
-        if (!binding.modifiers.silent) {
-          flashTooltip(el, 'Copied!')
-        }
-        el.setAttribute('data-copied', 'true')
-        if (el._copyFeedbackTimer) clearTimeout(el._copyFeedbackTimer)
-        el._copyFeedbackTimer = setTimeout(() => {
-          el.removeAttribute('data-copied')
-          el._copyFeedbackTimer = null
-        }, 1500)
+      if (!ok || !el._copyListeners) return
+
+      if (!binding.modifiers.silent) {
+        flashTooltip(el, 'Copied!')
       }
+      el.setAttribute('data-copied', 'true')
+      if (el._copyFeedbackTimer) clearTimeout(el._copyFeedbackTimer)
+      el._copyFeedbackTimer = setTimeout(() => {
+        el.removeAttribute('data-copied')
+        el._copyFeedbackTimer = null
+      }, 1500)
     }
 
     const onPointerEnter = () => {
@@ -119,6 +121,21 @@ export const vCopyToClipboard: Directive<CopyElement, CopyValue | undefined> = {
       }
     }
 
+    const onFocusIn = (e: FocusEvent) => {
+      if (el._tooltipListeners) return
+      if (!el.hasAttribute('data-copied') && isKeyboardFocus(e)) {
+        const { hint } = resolveCopyData(el, el._copyValue)
+        showTooltip(el, hint, 0)
+      }
+    }
+
+    const onFocusOut = () => {
+      if (el._tooltipListeners) return
+      if (!el.hasAttribute('data-copied')) {
+        hideTooltip(el)
+      }
+    }
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
@@ -130,12 +147,16 @@ export const vCopyToClipboard: Directive<CopyElement, CopyValue | undefined> = {
     el.addEventListener('keydown', onKeyDown)
     el.addEventListener('pointerenter', onPointerEnter)
     el.addEventListener('pointerleave', onPointerLeave)
+    el.addEventListener('focusin', onFocusIn)
+    el.addEventListener('focusout', onFocusOut)
 
     el._copyListeners = {
       onClick: triggerCopy,
       onKeyDown,
       onPointerEnter,
       onPointerLeave,
+      onFocusIn,
+      onFocusOut,
     }
   },
 
@@ -144,6 +165,7 @@ export const vCopyToClipboard: Directive<CopyElement, CopyValue | undefined> = {
   },
 
   unmounted(el) {
+    hideTooltip(el)
     if (el._copyFeedbackTimer) {
       clearTimeout(el._copyFeedbackTimer)
       el._copyFeedbackTimer = null
@@ -153,6 +175,8 @@ export const vCopyToClipboard: Directive<CopyElement, CopyValue | undefined> = {
       el.removeEventListener('keydown', el._copyListeners.onKeyDown)
       el.removeEventListener('pointerenter', el._copyListeners.onPointerEnter)
       el.removeEventListener('pointerleave', el._copyListeners.onPointerLeave)
+      el.removeEventListener('focusin', el._copyListeners.onFocusIn)
+      el.removeEventListener('focusout', el._copyListeners.onFocusOut)
       delete el._copyListeners
     }
     delete el._copyValue

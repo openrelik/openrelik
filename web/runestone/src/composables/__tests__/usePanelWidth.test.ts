@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { nextTick } from 'vue'
+import { effectScope, nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { usePanelWidth } from '@/composables/usePanelWidth'
@@ -81,5 +81,38 @@ describe('composables/usePanelWidth', () => {
 
     // 1000 * 0.6 = 600 max.
     expect(panel.width.value).toBe(600)
+  })
+
+  it('steps width cleanly, re-clamps on window resize, and removes listener on scope dispose', async () => {
+    const scope = effectScope()
+    const panel = scope.run(() =>
+      usePanelWidth('panel.resize', { initial: 320, min: 240, maxShare: 0.6 }),
+    )!
+
+    panel.step(200)
+    await nextTick()
+    expect(panel.width.value).toBe(520)
+
+    // Narrow window -> width re-clamps live to 700 * 0.6 = 420
+    Object.defineProperty(window, 'innerWidth', {
+      value: 700,
+      configurable: true,
+      writable: true,
+    })
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
+    expect(panel.width.value).toBe(420)
+
+    scope.stop()
+
+    // Disposed scope stops updating width on subsequent resize events
+    Object.defineProperty(window, 'innerWidth', {
+      value: 500,
+      configurable: true,
+      writable: true,
+    })
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
+    expect(panel.width.value).toBe(420)
   })
 })

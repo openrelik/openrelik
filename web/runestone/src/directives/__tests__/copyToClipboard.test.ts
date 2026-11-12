@@ -230,16 +230,55 @@ describe('vCopyToClipboard', () => {
     el.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }))
     vi.advanceTimersByTime(100)
 
-    // Trigger copy so _copyFeedbackTimer is active when unmounting
+    // Trigger copy so _copyFeedbackTimer and flash tooltip are active when unmounting
     await wrapper.get('[data-testid="both"]').trigger('click')
     await Promise.resolve()
     expect(el.getAttribute('data-copied')).toBe('true')
+    expect(state.visible).toBe(true)
 
     wrapper.unmount()
+    expect(state.visible).toBe(false)
 
     // Clicking detached element after unmount does not copy again
     writeTextMock.mockClear()
     el.dispatchEvent(new MouseEvent('click'))
     expect(writeTextMock).not.toHaveBeenCalled()
+  })
+
+  it('shows hint on keyboard focus and skips flashTooltip if unmounted before async copy settles', async () => {
+    let resolveCopy!: () => void
+    writeTextMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCopy = resolve
+        }),
+    )
+
+    const Comp = defineComponent({
+      directives: { copy: vCopyToClipboard },
+      template: `<span v-copy="{ text: 'hash-1', hint: 'Copy hash' }" data-testid="target">hash</span>`,
+    })
+
+    const wrapper = track(mount(Comp, { attachTo: document.body }))
+    const el = wrapper.get('[data-testid="target"]').element as HTMLElement
+    const { state } = useTooltip()
+
+    vi.spyOn(el, 'matches').mockImplementation((sel) => sel === ':focus-visible')
+    el.dispatchEvent(new FocusEvent('focusin'))
+    vi.advanceTimersByTime(0)
+    expect(state.visible).toBe(true)
+    expect(state.text).toBe('Copy hash')
+
+    el.dispatchEvent(new FocusEvent('focusout'))
+    expect(state.visible).toBe(false)
+
+    // Unmount while clipboard write is still pending
+    await wrapper.trigger('click')
+    wrapper.unmount()
+    resolveCopy()
+    await flushPromises()
+
+    expect(state.visible).toBe(false)
+    expect(el.hasAttribute('data-copied')).toBe(false)
   })
 })

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 
-import { revealIn } from '@/utils/scroll'
+import { revealIn, revealInContainer } from '@/utils/scroll'
 
 function mockRect(el: Element, rect: { top: number; left: number; width: number; height: number }) {
   vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
@@ -49,5 +49,40 @@ describe('revealIn', () => {
     revealIn(container, target)
     // target.right (430) > box.right (400) -> left = 30 + 16 = 46
     expect(scrollBy).toHaveBeenLastCalledWith({ top: 0, left: 46, behavior: 'auto' })
+  })
+})
+
+describe('revealInContainer', () => {
+  it('scrolls only the nearest overflow parent without shifting wide table rows horizontally', () => {
+    const outer = document.createElement('div')
+    outer.style.overflowY = 'auto'
+    const outerScrollBy = vi.fn()
+    outer.scrollBy = outerScrollBy
+
+    const container = document.createElement('div')
+    container.style.overflowY = 'auto'
+    const scrollBy = vi.fn()
+    container.scrollBy = scrollBy
+
+    const target = document.createElement('div')
+    target.style.scrollMarginTop = '28px'
+
+    outer.appendChild(container)
+    container.appendChild(target)
+    document.body.appendChild(outer)
+
+    mockRect(container, { top: 0, left: 0, width: 300, height: 200 })
+    // Already visible below sticky offset and wider than container -> no scroll at all
+    mockRect(target, { top: 40, left: -20, width: 500, height: 28 })
+    revealInContainer(target)
+    expect(scrollBy).not.toHaveBeenCalled()
+
+    // Below bottom edge -> scrolls down minimally
+    mockRect(target, { top: 190, left: -20, width: 500, height: 28 })
+    revealInContainer(target)
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 18, left: 0, behavior: 'auto' })
+    expect(outerScrollBy).not.toHaveBeenCalled()
+
+    outer.remove()
   })
 })

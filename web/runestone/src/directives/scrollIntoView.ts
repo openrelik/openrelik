@@ -1,4 +1,5 @@
-import { nextTick, type Directive } from 'vue'
+import { nextTick, type Directive, type DirectiveBinding } from 'vue'
+import { revealInContainer } from '@/utils/scroll'
 
 export interface ScrollIntoViewOptions {
   active?: boolean
@@ -29,12 +30,20 @@ function parseOptions(
   }
 }
 
+function scheduleScroll(el: HTMLElement, binding: DirectiveBinding<ScrollIntoViewInput>) {
+  const options = parseOptions(binding.value, binding.modifiers)
+  nextTick(() => {
+    revealInContainer(el, options)
+  })
+}
+
 /**
  * v-scroll-into-view directive:
- * Automatically scrolls an element into its container's visible area when active.
+ * Automatically scrolls an element into its container's visible area when active,
+ * scrolling only the nearest scrollable container (via `utils/scroll.ts`).
  *
  * Modifiers:
- *   .center - Centers the element vertically in the viewport
+ *   .center - Centers the element vertically in the container
  *   .smooth - Enables smooth scrolling animation
  *
  * Usage:
@@ -44,11 +53,7 @@ function parseOptions(
 export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewInput> = {
   mounted(el, binding) {
     if (!parseActive(binding.value)) return
-
-    const { block, inline, behavior } = parseOptions(binding.value, binding.modifiers)
-    nextTick(() => {
-      el.scrollIntoView({ block, inline, behavior })
-    })
+    scheduleScroll(el, binding)
   },
 
   updated(el, binding) {
@@ -56,10 +61,7 @@ export const vScrollIntoView: Directive<HTMLElement, ScrollIntoViewInput> = {
     const wasActive = parseActive(binding.oldValue)
 
     if (active && !wasActive) {
-      const { block, inline, behavior } = parseOptions(binding.value, binding.modifiers)
-      nextTick(() => {
-        el.scrollIntoView({ block, inline, behavior })
-      })
+      scheduleScroll(el, binding)
     }
   },
 }

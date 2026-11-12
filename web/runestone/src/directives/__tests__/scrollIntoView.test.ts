@@ -114,4 +114,36 @@ describe('vScrollIntoView', () => {
     await nextTick()
     expect(scrollSpy).toHaveBeenCalledTimes(1)
   })
+
+  it('scrolls only the nearest overflow container and respects scroll-margin-top', async () => {
+    const outer = document.createElement('div')
+    outer.style.overflowY = 'auto'
+    const outerScrollBy = vi.fn()
+    outer.scrollBy = outerScrollBy
+
+    const Comp = defineComponent({
+      directives: { scrollIntoView: vScrollIntoView },
+      template: `
+        <div style="overflow-y: auto" data-testid="box">
+          <div style="scroll-margin-top: 28px" v-scroll-into-view="true" data-testid="row">Row</div>
+        </div>
+      `,
+    })
+
+    document.body.appendChild(outer)
+    const wrapper = track(mount(Comp, { attachTo: outer }))
+    const box = wrapper.get('[data-testid="box"]').element as HTMLElement
+    const row = wrapper.get('[data-testid="row"]').element as HTMLElement
+
+    const boxScrollBy = vi.fn()
+    box.scrollBy = boxScrollBy
+    vi.spyOn(box, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 300, 200))
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 110, 400, 28))
+
+    await nextTick()
+
+    // row.top (110) is inside box (100..300) but occluded by 28px sticky header (100 + 28 = 128) -> scroll -18
+    expect(boxScrollBy).toHaveBeenCalledWith({ top: -18, left: 0, behavior: 'auto' })
+    expect(outerScrollBy).not.toHaveBeenCalled()
+  })
 })

@@ -5,6 +5,7 @@ import {
   isKeyboardFocus,
   isTouch,
   showTooltip,
+  updateTooltip,
   type TooltipInput,
 } from '@/composables/useTooltip'
 
@@ -80,6 +81,13 @@ export const vOverflowTooltip: Directive<OverflowTooltipElement, TooltipInput | 
 
   updated(el, binding) {
     el._overflowTooltipValue = binding.value
+    if (!isTruncated(el)) {
+      hideTooltip(el)
+      return
+    }
+    const text = binding.value ?? (el.textContent || el.innerText || '').trim()
+    if (!text) hideTooltip(el)
+    else updateTooltip(el, text)
   },
 
   unmounted(el) {

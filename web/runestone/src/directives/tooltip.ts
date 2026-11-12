@@ -26,7 +26,7 @@ function sameTooltip(a: TooltipInput, b: TooltipInput | null | undefined): boole
   if (!b) return false
   const x = parseTooltip(a)
   const y = parseTooltip(b)
-  return x.text === y.text && x.detail === y.detail
+  return x.text === y.text && x.detail === y.detail && x.placement === y.placement
 }
 
 /**

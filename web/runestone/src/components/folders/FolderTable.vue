@@ -479,7 +479,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
           v-if="!atRoot"
           :data-row="UP"
           v-scroll-into-view="cursor === UP && !hasTask"
-          class="h-7 cursor-default border-b border-border/60 select-none"
+          class="h-7 scroll-mt-7 cursor-default border-b border-border/60 select-none"
           :class="[
             cursor === UP && !hasTask
               ? 'bg-sunken shadow-[inset_2px_0_0_var(--color-brand)]'
@@ -629,7 +629,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
           :key="itemKey(row)"
           :data-row="index"
           v-scroll-into-view="index === cursor && !hasTask"
-          class="group h-7 cursor-default border-b border-border/60 select-none"
+          class="group h-7 scroll-mt-7 cursor-default border-b border-border/60 select-none"
           :class="[
             selected.has(itemKey(row)) ? 'bg-brand-selected' : 'hover:bg-sunken',
             tracing
