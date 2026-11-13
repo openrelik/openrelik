@@ -65,7 +65,12 @@ def up(
     project = repo.project(checkout)
 
     env = repo.env(checkout)
-    for port in (env.get("UI_PORT"), env.get("RUNESTONE_PORT"), env.get("API_PORT"), env.get("MCP_PORT")):
+    for port in (
+        env.get("UI_PORT"),
+        repo.runestone_port(checkout),
+        env.get("API_PORT"),
+        env.get("MCP_PORT"),
+    ):
         holder = docker.port_holder(port) if port else None
         if holder and holder[1] != project:
             name, holder_project = holder

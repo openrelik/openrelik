@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from devctl import envfile, ui
+import pytest
+
+from devctl import envfile, stacks, ui
 from devctl.checkout import Repo, worktree_slug
 from devctl.docker import summarize
 from devctl.worktrees import TreeRow, tree
@@ -99,3 +101,26 @@ def test_tree_survives_duplicate_branches():
 
 def test_table_counts_tree_characters_as_one_column():
     assert ui.table([["A", "B"], ["└─> x", "y"]]) == "A      B\n└─> x  y"
+
+
+def test_stack_up_checks_default_runestone_port_when_missing_from_env(tmp_path, monkeypatch):
+    repo = Repo(tmp_path)
+    wt = repo.worktree_dir("legacy")
+    wt.mkdir(parents=True)
+    (wt / ".env").write_text("COMPOSE_PROJECT_NAME=openrelik-legacy\nUI_PORT=3001\n")
+    assert repo.runestone_port(wt) == "3050"
+
+    checked_ports = []
+
+    def fake_port_holder(port: str):
+        checked_ports.append(port)
+        if port == "3050":
+            return ("other-runestone", "openrelik-main")
+        return None
+
+    monkeypatch.setattr(stacks.docker, "ready", lambda: True)
+    monkeypatch.setattr(stacks.docker, "port_holder", fake_port_holder)
+
+    with pytest.raises(ui.DevError, match="port 3050 is already in use"):
+        stacks.up(repo, "legacy")
+    assert checked_ports == ["3001", "3050"]
