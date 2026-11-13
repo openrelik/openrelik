@@ -38,6 +38,11 @@ name = "openrelik-ui"
 dockerfile = "web/sunstone/Dockerfile"
 context = "web/sunstone"
 
+[[platform]]
+name = "openrelik-ui-runestone"
+dockerfile = "web/runestone/Dockerfile"
+context = "web/runestone"
+
 [[mcp]]
 name = "openrelik-mcp-server"
 dockerfile = "mcp/docker/Dockerfile"
