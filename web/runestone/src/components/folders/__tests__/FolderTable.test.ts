@@ -578,4 +578,53 @@ describe('FolderTable', () => {
     await flushPromises()
     wrapper.unmount()
   })
+
+  it('virtualizes 50,000 rows while preserving real row indices and cursor reveal', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = makeRouter()
+    await router.push('/folder/10')
+    await router.isReady()
+
+    const total = 50_000
+    const manyRows = Array.from({ length: total }, (_, i) =>
+      makeFile({ id: i + 1, name: `item-${String(i).padStart(5, '0')}.bin` }),
+    )
+
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(280) // 10 rows * 28px
+
+    const wrapper = mount(FolderTable, {
+      attachTo: document.body,
+      props: {
+        ...defaultProps(),
+        rows: manyRows,
+        cursor: 0,
+      },
+      global: { plugins: [pinia, router, directives] },
+    })
+    activeWrapper = wrapper
+
+    // Only the visible window + overscan (and parent .. row) mounts in the DOM.
+    const initialDataRows = wrapper.findAll('tr[data-row]')
+    expect(initialDataRows.length).toBeLessThan(60)
+    expect(wrapper.find('tr[data-row="0"]').exists()).toBe(true)
+    expect(wrapper.find('tr[data-row="25000"]').exists()).toBe(false)
+
+    // Scrolling halfway through the 50,000-row table mounts the middle window and emits true indices.
+    const scroller = wrapper.get('div').element as HTMLElement
+    scroller.scrollTop = 25_000 * 28
+    await wrapper.get('div').trigger('scroll')
+
+    const midRow = wrapper.get('tr[data-row="25000"]')
+    expect(midRow.text()).toContain('item-25000.bin')
+    await midRow.trigger('click', { shiftKey: true })
+    expect(wrapper.emitted('rowClick')?.[0]?.[1]).toBe(25_000)
+
+    // Moving cursor to the last row reveals and renders it.
+    await wrapper.setProps({ cursor: total - 1 })
+    await nextTick()
+    expect(wrapper.find(`tr[data-row="${total - 1}"]`).exists()).toBe(true)
+
+    wrapper.unmount()
+  })
 })

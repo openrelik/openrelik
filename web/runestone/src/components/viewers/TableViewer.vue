@@ -388,7 +388,13 @@ const rowsLabel = computed(() => {
     ? `${view.value.length.toLocaleString('en-US')} of ${total} rows`
     : `${total} rows`
 })
-const sortedPartly = computed(() => !!sort.value && !table.done.value)
+const partialNotice = computed(() => {
+  if (table.done.value) return ''
+  if (sort.value && filter.value) return 'filtered and sorted: rows read so far'
+  if (sort.value) return 'sorted: rows read so far'
+  if (filter.value) return 'filtered: rows read so far'
+  return ''
+})
 </script>
 
 <template>
@@ -432,7 +438,7 @@ const sortedPartly = computed(() => !!sort.value && !table.done.value)
               @load-more="table.loadMore()"
               @load-all="table.loadAll()"
             />
-            <span v-if="sortedPartly" class="shrink-0 text-warning">sorted: rows read so far</span>
+            <span v-if="partialNotice" class="shrink-0 text-warning">{{ partialNotice }}</span>
             <button
               v-if="mark"
               type="button"

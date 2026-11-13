@@ -473,8 +473,17 @@ describe('TableViewer', () => {
     expect(cappedWrapper.text()).toContain('Load 10 MB more')
     expect(cappedWrapper.text()).toContain('Load full file')
 
-    // Sorting while capped warns that only rows read so far are sorted
+    // Filtering or sorting while capped warns that only rows read so far are shown
+    const cappedFilter = cappedWrapper.get('input[placeholder="filter rows"]')
+    await cappedFilter.setValue('1')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(cappedWrapper.text()).toContain('filtered: rows read so far')
+
     await cappedWrapper.findAll('[role="columnheader"]')[0]!.trigger('click')
+    expect(cappedWrapper.text()).toContain('filtered and sorted: rows read so far')
+
+    await cappedFilter.setValue('')
+    await vi.advanceTimersByTimeAsync(150)
     expect(cappedWrapper.text()).toContain('sorted: rows read so far')
 
     // Clicking Load 10 MB more reads additional chunks up to +10 MB

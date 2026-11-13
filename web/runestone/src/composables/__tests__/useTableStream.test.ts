@@ -18,7 +18,13 @@ import { effectScope, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api'
-import { FIRST_BYTES, MORE_BYTES, useTableStream } from '@/composables/useTableStream'
+import {
+  FIRST_BYTES,
+  FIRST_ROWS,
+  MORE_BYTES,
+  MORE_ROWS,
+  useTableStream,
+} from '@/composables/useTableStream'
 import type { TableKind } from '@/utils/preview'
 
 vi.mock('@/api', async (importOriginal) => {
@@ -268,5 +274,49 @@ describe('useTableStream', () => {
 
     scope.stop()
     tsvScope.stop()
+  })
+
+  it('caps dense tables at FIRST_ROWS and MORE_ROWS before byte caps when more bytes remain', async () => {
+    expect(FIRST_ROWS).toBe(100_000)
+    expect(MORE_ROWS).toBe(200_000)
+
+    const shortRow = new TextEncoder().encode('a,12345\n') // 131,071 rows per 1 MiB
+    const oneMeg = 1024 * 1024
+    const chunk = new Uint8Array(oneMeg)
+    for (let offset = 0; offset < oneMeg; offset += shortRow.length) {
+      chunk.set(shortRow, offset)
+    }
+    const totalSize = 4 * oneMeg // < FIRST_BYTES (5 MB), but ~524k rows total
+    vi.mocked(api.files.readRange).mockResolvedValue(chunk)
+
+    const scope = effectScope()
+    const stream = scope.run(() =>
+      useTableStream(
+        () => ({ id: 40, size: totalSize }),
+        () => 'csv',
+      ),
+    )!
+
+    await vi.runAllTimersAsync()
+    // Chunk 0 (1 MiB) yields > 100k rows so initial load caps before chunk 1.
+    expect(stream.bytesRead.value).toBe(oneMeg)
+    expect(stream.rows.value.length).toBeGreaterThanOrEqual(FIRST_ROWS)
+    expect(stream.capped.value).toBe(true)
+    expect(stream.done.value).toBe(false)
+
+    // loadMore() stops again once +MORE_ROWS are loaded (at chunk 2 -> 3 MiB < 4 MiB).
+    stream.loadMore()
+    await vi.runAllTimersAsync()
+    expect(stream.bytesRead.value).toBe(3 * oneMeg)
+    expect(stream.capped.value).toBe(true)
+    expect(stream.done.value).toBe(false)
+
+    // loadAll() overrides row caps and reads the remaining chunk.
+    stream.loadAll()
+    await vi.runAllTimersAsync()
+    expect(stream.bytesRead.value).toBe(totalSize)
+    expect(stream.done.value).toBe(true)
+
+    scope.stop()
   })
 })

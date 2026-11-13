@@ -75,6 +75,7 @@ function encodingOf(bytes: Uint8Array, last: boolean): string {
 export function createRangeText(
   file: { id: number; size: number },
   onText: (text: string, last: boolean) => void,
+  shouldStop?: () => boolean,
 ): RangeText {
   const bytesRead = ref(0)
   const reading = ref(false)
@@ -90,10 +91,16 @@ export function createRangeText(
   let until: (() => boolean) | null = null
 
   function satisfied() {
-    if (bytesRead.value < stopAt) return false
-    if (until && !until()) return false
-    until = null
-    return true
+    if (bytesRead.value >= stopAt || (bytesRead.value > 0 && shouldStop?.())) {
+      if (until && !until()) return false
+      until = null
+      stopAt = bytesRead.value
+      return true
+    }
+    if (until && until()) {
+      until = null
+    }
+    return false
   }
 
   async function run() {

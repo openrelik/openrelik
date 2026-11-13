@@ -25,7 +25,7 @@ import {
   Upload as UploadIcon,
   Workflow as WorkflowIcon,
 } from '@/components/icons'
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
@@ -204,6 +204,7 @@ async function startRename(item: Item) {
   renamingKey.value = itemKey(item)
   renamingName.value = item.name
   cancellingRename = false
+  revealRow(props.rows.findIndex((r) => itemKey(r) === itemKey(item)))
   await nextTick()
   const input = renameInput.value
   if (!input) return
@@ -266,16 +267,101 @@ function onWindowPointerDown(event: PointerEvent) {
   }
 }
 
+// --- Row menus & virtualization ---
+const root = ref<HTMLElement | null>(null)
+const tableEl = ref<HTMLElement | null>(null)
+
+const ROW_H = 28
+const OVERSCAN = 10
+/** Fallback row window before layout measurement (e.g. headless DOM tests). */
+const UNMEASURED_ROWS = 40
+
+const scrollTop = ref(0)
+const viewHeight = ref(0)
+
+const prefixCount = computed(
+  () =>
+    (props.atRoot ? 0 : 1) +
+    (isCreating.value ? 1 : 0) +
+    shownUploads.value.length +
+    (hiddenUploads.value ? 1 : 0) +
+    (props.pendingFolders?.length ?? 0),
+)
+
+function rowsOrigin(): number {
+  return (tableEl.value?.offsetTop ?? 0) + ROW_H + prefixCount.value * ROW_H
+}
+
+function effectiveWindowHeight(): number {
+  return viewHeight.value > ROW_H ? viewHeight.value - ROW_H : UNMEASURED_ROWS * ROW_H
+}
+
+const rowWindow = computed(() => {
+  void props.hasTask
+  const total = props.rows.length
+  if (!total) return { start: 0, end: 0, topPad: 0, bottomPad: 0 }
+  const bodyTop = Math.max(0, scrollTop.value + ROW_H - rowsOrigin())
+  const height = effectiveWindowHeight()
+  const visibleStart = Math.min(total, Math.floor(bodyTop / ROW_H))
+  const visibleEnd = Math.min(total, Math.ceil((bodyTop + height) / ROW_H))
+  const start = Math.max(0, visibleStart - OVERSCAN)
+  const end = Math.min(total, visibleEnd + OVERSCAN)
+  return {
+    start,
+    end,
+    topPad: start * ROW_H,
+    bottomPad: (total - end) * ROW_H,
+  }
+})
+
+const visibleRows = computed(() => {
+  const { start, end } = rowWindow.value
+  const out: { row: Item; index: number }[] = []
+  for (let index = start; index < end; index++) {
+    out.push({ row: props.rows[index]!, index })
+  }
+  return out
+})
+
+function onScroll(event: Event) {
+  const el = event.target as HTMLElement
+  if (el.clientHeight) scrollTop.value = el.scrollTop
+}
+
+function revealRow(index: number) {
+  const el = root.value
+  if (!el || index < UP || index >= props.rows.length) return
+  const origin = rowsOrigin()
+  const rowTop = origin + index * ROW_H
+  const viewportH = el.clientHeight > ROW_H ? el.clientHeight : UNMEASURED_ROWS * ROW_H + ROW_H
+  const currentTop = el.clientHeight > 0 ? el.scrollTop : scrollTop.value
+  let nextTop = currentTop
+  if (rowTop < currentTop + ROW_H) nextTop = Math.max(0, rowTop - ROW_H)
+  else if (rowTop + ROW_H > currentTop + viewportH) nextTop = rowTop + ROW_H - viewportH
+  if (nextTop !== currentTop) {
+    scrollTop.value = nextTop
+    el.scrollTop = nextTop
+  }
+}
+
+let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
   window.addEventListener('pointerdown', onWindowPointerDown)
+  if (!root.value) return
+  viewHeight.value = root.value.clientHeight
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(([entry]) => {
+      viewHeight.value = entry!.contentRect.height
+      if (root.value?.clientHeight) scrollTop.value = root.value.scrollTop
+    })
+    resizeObserver.observe(root.value)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('pointerdown', onWindowPointerDown)
+  resizeObserver?.disconnect()
 })
-
-// --- Row menus ---
-const root = ref<HTMLElement | null>(null)
 
 /** A row's `⋯` button, for anchoring its menu or flashing what it did. */
 function menuButton(item: Item): HTMLElement | null {
@@ -303,6 +389,27 @@ function openMenuFor(index: number) {
 /** Narrows the rows by name; it sits in the name column's header. */
 const filter = defineModel<string>('filter', { default: '' })
 const filterInput = ref<HTMLInputElement | null>(null)
+
+watch(
+  () => [props.cursor, props.hasTask] as const,
+  ([cursor, hasTask]) => {
+    if (!hasTask) revealRow(cursor)
+  },
+  { immediate: true },
+)
+
+watch(filter, () => {
+  scrollTop.value = 0
+  if (root.value) root.value.scrollTop = 0
+})
+
+watch(
+  () => props.rows.length,
+  (total) => {
+    const maxTop = Math.max(0, rowsOrigin() + total * ROW_H - ROW_H)
+    if (scrollTop.value > maxTop) scrollTop.value = maxTop
+  },
+)
 
 function focusFilter() {
   filterInput.value?.focus()
@@ -383,10 +490,11 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
     ref="root"
     class="min-w-0 flex-1 overflow-auto"
     :class="{ 'ring-1 ring-brand ring-inset': isDropTarget }"
+    @scroll="onScroll"
   >
     <slot name="workflow" />
 
-    <table class="w-full min-w-3xl table-fixed border-collapse text-left">
+    <table ref="tableEl" class="w-full min-w-3xl table-fixed border-collapse text-left">
       <colgroup>
         <col class="w-8" />
         <col />
@@ -629,8 +737,16 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
           <td />
         </tr>
 
+        <tr v-if="rowWindow.topPad > 0" aria-hidden="true" data-spacer="top">
+          <td
+            :colspan="columns.length + 2"
+            class="border-0 p-0 text-[0px] leading-none"
+            :style="{ height: `${rowWindow.topPad}px` }"
+          />
+        </tr>
+
         <tr
-          v-for="(row, index) in rows"
+          v-for="{ row, index } in visibleRows"
           :key="itemKey(row)"
           :data-row="index"
           v-scroll-into-view="index === cursor && !hasTask"
@@ -789,6 +905,14 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               <Ellipsis :size="14" :stroke-width="1.5" />
             </button>
           </td>
+        </tr>
+
+        <tr v-if="rowWindow.bottomPad > 0" aria-hidden="true" data-spacer="bottom">
+          <td
+            :colspan="columns.length + 2"
+            class="border-0 p-0 text-[0px] leading-none"
+            :style="{ height: `${rowWindow.bottomPad}px` }"
+          />
         </tr>
 
         <tr v-if="hiddenEmpty || shownEmpty" class="h-7 select-none">

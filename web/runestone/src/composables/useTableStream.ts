@@ -53,6 +53,10 @@ import {
 } from '@/utils/table'
 
 export { FIRST_BYTES, MORE_BYTES } from '@/composables/useRangeText'
+// shortcut: pause dense tables at FIRST_ROWS / MORE_ROWS per step in addition to byte caps so
+// high-density multi-gigabyte CSV/JSONL files do not parse millions of rows in one batch.
+export const FIRST_ROWS = 100_000
+export const MORE_ROWS = 200_000
 /** Rows looked at to infer the columns' types. */
 const TYPE_SAMPLE = 1000
 
@@ -89,6 +93,7 @@ export function useTableStream(
   const delimiter = ref(',')
 
   let parser: TableParser | null = null
+  let rowLimit = FIRST_ROWS
   /** The reader of the file on screen: a new one for each file. */
   const reader = shallowRef<RangeText | null>(null)
 
@@ -126,6 +131,7 @@ export function useTableStream(
     reader.value?.stop()
     reader.value = null
     parser = null
+    rowLimit = FIRST_ROWS
     rows.value = []
     columns.value = []
     delimiter.value = ','
@@ -135,7 +141,7 @@ export function useTableStream(
     [() => file().id, () => file().size, kind],
     () => {
       reset()
-      const next = createRangeText(file(), onText)
+      const next = createRangeText(file(), onText, () => rows.value.length >= rowLimit)
       reader.value = next
       next.read(FIRST_BYTES)
     },
@@ -170,10 +176,17 @@ export function useTableStream(
     capped: computed(() => reader.value?.capped.value ?? false),
     done: computed(() => reader.value?.done.value ?? false),
     error: computed(() => reader.value?.error.value ?? null),
-    loadMore: () => reader.value?.loadMore(),
-    loadAll: () => reader.value?.loadAll(),
+    loadMore: () => {
+      if (rowLimit !== Infinity) rowLimit = rows.value.length + MORE_ROWS
+      reader.value?.loadMore()
+    },
+    loadAll: () => {
+      rowLimit = Infinity
+      reader.value?.loadAll()
+    },
     readUntil: (row) => {
       // The parser hands on whole rows only.
+      rowLimit = Math.max(rowLimit, row)
       const arrived = () => rows.value.length >= row
       if (!arrived()) reader.value?.read(0, arrived)
     },
