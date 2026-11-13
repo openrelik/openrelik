@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/logo-light-round.png" type="image/png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenRelik</title>
+    <!--
+      Resolve the theme before the first paint.
+
+      Inline and synchronous on purpose: anything deferred to the bundle paints
+      the default palette first, and a page flashing the wrong theme at every
+      load is worse than either theme. CSS only ever reads an explicit
+      `data-theme`, so the stylesheet carries one override block, not two.
+
+      The choice lives in the settings (`appearance.theme`); "system", or no
+      choice yet, follows the OS. From here on `useSettings` owns the attribute,
+      including following the OS while the choice is "system".
+    -->
+    <script>
+      ;(function () {
+        var chosen = ''
+        try {
+          var stored = JSON.parse(localStorage.getItem('openrelik.settings') || '{}')
+          chosen = (stored.appearance && stored.appearance.theme) || ''
+        } catch (e) {
+          // Site data blocked, or not JSON: fall back to the OS.
+        }
+        var mode =
+          chosen === 'light' || chosen === 'dark'
+            ? chosen
+            : window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark'
+        document.documentElement.setAttribute('data-theme', mode)
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
