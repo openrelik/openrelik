@@ -7,7 +7,6 @@ Companion documents:
 - [`docs/design-system.md`](docs/design-system.md): visual and interaction rules (§1–§13).
 - [`docs/style-guide.md`](docs/style-guide.md): full formatting, TypeScript, Vue, naming, and comment conventions. Note: §7's additional ESLint rules are a planned rollout, so enforce the guide's rules directly where `eslint.config.ts` does not check them yet.
 - [`src/composables/README.md`](src/composables/README.md): inventory of all composables and their contracts. Add or update an entry whenever you add or substantially change a composable.
-- [`docs/ideas/`](docs/ideas/): proposals not built yet ([`file-view-ideas.md`](docs/ideas/file-view-ideas.md), [`evidence-lineage.md`](docs/ideas/evidence-lineage.md)).
 
 ---
 
