@@ -198,8 +198,11 @@
      alone tells them apart. Measured on the panel: brand 7.60, success 6.99,
      warning 7.56, danger 8.20. Each tint holds ~6 of its own accent. */
   --color-brand: #0052a7;
-  --color-brand-strong: #0052a7;
-  --color-brand-stronger: #003b7f;
+  /* Primary button fill matches `--color-brand-icon` (OKLCH L 0.62) so solid
+     buttons match the folder icons instead of reading near-black; hover steps
+     down to L 0.55 at the same hue/chroma. */
+  --color-brand-strong: #4186e0;
+  --color-brand-stronger: #2b70c9;
   --color-brand-tint: #d7ebff;
   --color-brand-tint-hover: #c3dfff;
   --color-brand-selected: #e4f2ff;

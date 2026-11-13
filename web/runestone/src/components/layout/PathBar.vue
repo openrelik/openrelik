@@ -364,24 +364,32 @@ function onBarClick(event: MouseEvent) {
 
     <!-- the prompt -->
     <span class="shrink-0 pr-1.5 pl-1 text-ink-muted" aria-hidden="true">$</span>
-    <input
-      ref="input"
-      v-model="line"
-      type="text"
-      role="combobox"
-      data-prompt
-      spellcheck="false"
-      autocomplete="off"
-      aria-label="Find a folder or file"
-      aria-controls="prompt-results"
-      :aria-expanded="dropdown"
-      :aria-activedescendant="dropdown && results.length ? `prompt-${index}` : undefined"
-      class="min-w-24 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
-      :placeholder="focused ? 'cd, or type to find…' : ''"
-      @focus="focused = true"
-      @blur="focused = false"
-      @keydown="onInputKey"
-    />
+    <div class="relative flex h-full min-w-24 flex-1 items-center">
+      <input
+        ref="input"
+        v-model="line"
+        type="text"
+        role="combobox"
+        data-prompt
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="Find a folder or file"
+        aria-controls="prompt-results"
+        :aria-expanded="dropdown"
+        :aria-activedescendant="dropdown && results.length ? `prompt-${index}` : undefined"
+        class="peer h-full w-full min-w-0 bg-transparent text-ink caret-brand-icon outline-none [caret-shape:block] placeholder:text-transparent"
+        :placeholder="focused ? 'cd, or type to find…' : ''"
+        @focus="focused = true"
+        @blur="focused = false"
+        @keydown="onInputKey"
+      />
+      <span
+        v-if="focused"
+        aria-hidden="true"
+        class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate text-ink-muted/60 select-none peer-placeholder-shown:block"
+        >cd, or type to find…</span
+      >
+    </div>
 
     <!-- what the prompt would print -->
     <PromptResults

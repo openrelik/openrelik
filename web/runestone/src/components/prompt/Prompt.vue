@@ -54,21 +54,28 @@ function onInputKey(event: KeyboardEvent) {
         <label class="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-sunken px-3">
           <span class="max-w-[45%] shrink-0 truncate text-brand">{{ cwdPath }}</span>
           <span class="shrink-0 text-ink-muted">$</span>
-          <input
-            v-autofocus
-            v-model="line"
-            type="text"
-            role="combobox"
-            spellcheck="false"
-            autocomplete="off"
-            aria-label="Find a folder or file"
-            aria-controls="prompt-results"
-            :aria-expanded="results.length > 0"
-            :aria-activedescendant="results.length ? `prompt-${index}` : undefined"
-            class="min-w-0 flex-1 bg-transparent pl-1 font-mono text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
-            placeholder="cd, or type to find…"
-            @keydown="onInputKey"
-          />
+          <div class="relative ml-1 flex min-w-0 flex-1 items-center">
+            <input
+              v-autofocus
+              v-model="line"
+              type="text"
+              role="combobox"
+              spellcheck="false"
+              autocomplete="off"
+              aria-label="Find a folder or file"
+              aria-controls="prompt-results"
+              :aria-expanded="results.length > 0"
+              :aria-activedescendant="results.length ? `prompt-${index}` : undefined"
+              class="peer w-full min-w-0 bg-transparent font-mono text-ink caret-brand-icon outline-none [caret-shape:block] placeholder:text-transparent"
+              placeholder="cd, or type to find…"
+              @keydown="onInputKey"
+            />
+            <span
+              aria-hidden="true"
+              class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate font-mono text-ink-muted/60 select-none peer-placeholder-shown:block"
+              >cd, or type to find…</span
+            >
+          </div>
         </label>
         <PromptResults
           class="min-h-0 flex-1"
