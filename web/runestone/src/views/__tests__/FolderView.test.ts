@@ -234,6 +234,7 @@ beforeEach(() => {
   vi.mocked(api.taskqueue.registeredTasks).mockResolvedValue([])
   vi.mocked(api.directory.listGroups).mockResolvedValue([])
   vi.mocked(api.directory.searchUsers).mockResolvedValue([])
+  vi.mocked(api.workflows.saveSpec).mockResolvedValue(undefined as never)
   vi.mocked(api.workflows.get).mockResolvedValue({
     id: 77,
     uuid: 'wf-uuid-77',

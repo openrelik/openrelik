@@ -276,6 +276,8 @@ const OVERSCAN = 10
 /** Fallback row window before layout measurement (e.g. headless DOM tests). */
 const UNMEASURED_ROWS = 40
 
+const workflowEl = ref<HTMLElement | null>(null)
+const tableTop = ref(0)
 const scrollTop = ref(0)
 const viewHeight = ref(0)
 
@@ -288,8 +290,8 @@ const prefixCount = computed(
     (props.pendingFolders?.length ?? 0),
 )
 
-function rowsOrigin(): number {
-  return (tableEl.value?.offsetTop ?? 0) + ROW_H + prefixCount.value * ROW_H
+function rowsOrigin(offset = tableTop.value): number {
+  return offset + ROW_H + prefixCount.value * ROW_H
 }
 
 function effectiveWindowHeight(): number {
@@ -328,10 +330,19 @@ function onScroll(event: Event) {
   if (el.clientHeight) scrollTop.value = el.scrollTop
 }
 
+function syncLayout() {
+  if (!root.value) return
+  viewHeight.value = root.value.clientHeight
+  tableTop.value = tableEl.value?.offsetTop ?? 0
+  if (root.value.clientHeight) scrollTop.value = root.value.scrollTop
+}
+
 function revealRow(index: number) {
   const el = root.value
   if (!el || index < UP || index >= props.rows.length) return
-  const origin = rowsOrigin()
+  const offset = tableEl.value?.offsetTop ?? tableTop.value
+  if (offset !== tableTop.value) tableTop.value = offset
+  const origin = rowsOrigin(offset)
   const rowTop = origin + index * ROW_H
   const viewportH = el.clientHeight > ROW_H ? el.clientHeight : UNMEASURED_ROWS * ROW_H + ROW_H
   const currentTop = el.clientHeight > 0 ? el.scrollTop : scrollTop.value
@@ -347,14 +358,11 @@ function revealRow(index: number) {
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
   window.addEventListener('pointerdown', onWindowPointerDown)
-  if (!root.value) return
-  viewHeight.value = root.value.clientHeight
-  if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(([entry]) => {
-      viewHeight.value = entry!.contentRect.height
-      if (root.value?.clientHeight) scrollTop.value = root.value.scrollTop
-    })
+  syncLayout()
+  if (root.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(syncLayout)
     resizeObserver.observe(root.value)
+    if (workflowEl.value) resizeObserver.observe(workflowEl.value)
   }
 })
 
@@ -488,11 +496,13 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
   <!-- The inset ring marks a file drag without changing the layout. -->
   <div
     ref="root"
-    class="min-w-0 flex-1 overflow-auto"
+    class="relative min-w-0 flex-1 overflow-auto"
     :class="{ 'ring-1 ring-brand ring-inset': isDropTarget }"
     @scroll="onScroll"
   >
-    <slot name="workflow" />
+    <div ref="workflowEl">
+      <slot name="workflow" />
+    </div>
 
     <table ref="tableEl" class="w-full min-w-3xl table-fixed border-collapse text-left">
       <colgroup>

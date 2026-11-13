@@ -130,6 +130,7 @@ describe('FolderTable', () => {
     activeWrapper?.unmount()
     activeWrapper = undefined
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('sorts columns, toggles filter input, and renders plain headers when sortable is false or atRoot is true', async () => {
@@ -624,6 +625,94 @@ describe('FolderTable', () => {
     await wrapper.setProps({ cursor: total - 1 })
     await nextTick()
     expect(wrapper.find(`tr[data-row="${total - 1}"]`).exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('positions scroll root relative and updates row window when workflow slot height shifts table offsetTop', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = makeRouter()
+    await router.push('/folder/10')
+    await router.isReady()
+
+    let resizeCallback: ResizeObserverCallback | undefined
+    const observed: Element[] = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: ResizeObserverCallback) {
+          resizeCallback = cb
+        }
+        observe(el: Element) {
+          observed.push(el)
+        }
+        disconnect() {}
+      },
+    )
+
+    let tableOffsetTop = 0
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(280)
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.tagName === 'TABLE' ? tableOffsetTop : 0
+    })
+
+    const rows = Array.from({ length: 200 }, (_, i) =>
+      makeFile({ id: i + 1, name: `item-${String(i).padStart(3, '0')}.bin` }),
+    )
+
+    const wrapper = mount(FolderTable, {
+      attachTo: document.body,
+      props: {
+        ...defaultProps(),
+        atRoot: true,
+        rows,
+        cursor: -1,
+      },
+      slots: {
+        workflow: '<div class="wf-slot">Workflow</div>',
+      },
+      global: { plugins: [pinia, router, directives] },
+    })
+    activeWrapper = wrapper
+
+    const rootEl = wrapper.get('div')
+    const workflowWrapper = wrapper.get('.wf-slot').element.parentElement!
+    expect(rootEl.classes()).toContain('relative')
+    expect(observed).toContain(rootEl.element)
+    expect(observed).toContain(workflowWrapper)
+
+    // Scroll to row 50, then jump cursor to row 0: scrollTop resets cleanly to 0.
+    const scroller = rootEl.element as HTMLElement
+    scroller.scrollTop = 50 * 28
+    await rootEl.trigger('scroll')
+    expect(wrapper.find('tr[data-row="0"]').exists()).toBe(false)
+
+    await wrapper.setProps({ cursor: 0 })
+    await nextTick()
+    expect(scroller.scrollTop).toBe(0)
+    expect(wrapper.find('tr[data-row="0"]').exists()).toBe(true)
+
+    // Scroll back down to row 50, then expand workflow slot so table starts at y = 50 * 28.
+    await wrapper.setProps({ cursor: -1 })
+    scroller.scrollTop = 50 * 28
+    await rootEl.trigger('scroll')
+    expect(wrapper.find('tr[data-row="0"]').exists()).toBe(false)
+
+    tableOffsetTop = 50 * 28
+    resizeCallback?.(
+      [
+        {
+          target: workflowWrapper,
+          contentRect: { height: 50 * 28 },
+        } as unknown as ResizeObserverEntry,
+      ],
+      {} as ResizeObserver,
+    )
+    await nextTick()
+    expect(wrapper.find('tr[data-row="0"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
