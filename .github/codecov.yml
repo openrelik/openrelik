@@ -23,6 +23,9 @@ component_management:
     - component_id: web-sunstone
       name: web/sunstone
       paths: ["web/sunstone/**"]
+    - component_id: web-runestone
+      name: web/runestone
+      paths: ["web/runestone/**"]
 
 # The coverage checks on pull requests are informational: they report, but
 # never block a merge.

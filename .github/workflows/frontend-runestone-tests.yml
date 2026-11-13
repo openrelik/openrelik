@@ -1,0 +1,120 @@
+# Lints, checks formatting/types, tests, and builds the runestone web UI (web/runestone).
+#
+# - pull request: when a file under web/runestone/ or this workflow changed.
+# - push to main or a release branch (release/*), and Run workflow: always.
+#
+# The coverage is uploaded to Codecov (flag web-runestone). A pull request that
+# doesn't run the tests keeps the last result (carryforward,
+# .github/codecov.yml). A failed upload doesn't fail the tests.
+#
+# The workflow always runs, so its gate job "Frontend Unit Tests [runestone]
+# passed" can be a required check; the test job is skipped when nothing
+# relevant changed.
+name: Frontend Unit Tests [runestone]
+
+on:
+  push:
+    branches: [main, "release/*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: frontend-runestone-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Check for changes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    outputs:
+      run: ${{ steps.changes.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check for changes in web/runestone
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "$EVENT" != pull_request ]] ||
+             git diff --name-only "$BASE...$HEAD" |
+               grep -qE '^(web/runestone/|\.github/workflows/frontend-runestone-tests\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No changes in web/runestone."
+          fi
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    name: runestone
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # check out the repository
+    defaults:
+      run:
+        working-directory: web/runestone
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/runestone/package-lock.json
+
+      - name: Install the dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint:check
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Run the tests
+        run: npm run test:coverage
+
+      - name: Upload the coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: web/runestone/coverage/lcov.info
+          flags: web-runestone
+          disable_search: true
+          fail_ci_if_error: false
+
+      - name: Build
+        run: npm run build-only
+
+  passed:
+    name: Frontend Unit Tests [runestone] passed
+    needs: [changes, test]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Check the results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          if [[ " $RESULTS " == *" failure "* || " $RESULTS " == *" cancelled "* ]]; then
+            exit 1
+          fi

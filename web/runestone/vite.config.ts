@@ -51,7 +51,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.{ts,vue}'],
       exclude: ['src/**/__tests__/**', 'src/types/**', 'src/api/types.ts'],
-      reporter: ['text', 'json-summary'],
+      reporter: ['text', 'json-summary', 'lcov'],
     },
   },
 })
