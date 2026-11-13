@@ -177,6 +177,40 @@ services:
       - -c
       - yarn install --frozen-lockfile --silent && exec yarn run dev --host 0.0.0.0
 
+  # Vite dev server for Runestone UI. The browser talks to the API directly at http://localhost:8710.
+  web-runestone:
+    build:
+      context: ./web/runestone
+      dockerfile_inline: |
+        FROM node:22-bookworm-slim
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        RUN npm ci
+        COPY . .
+    develop:
+      watch:
+        - action: rebuild
+          path: ./web/runestone/package.json
+        - action: rebuild
+          path: ./web/runestone/package-lock.json
+    restart: always
+    environment:
+      VITE_OPENRELIK_SERVER_URL: http://localhost:${API_PORT:-8710}
+    volumes:
+      # Vite reloads mounted source changes itself (HMR).
+      - ./web/runestone:/app
+      # The image's packages, kept in a volume so that a node_modules on the
+      # host (built for macOS) never shadows them.
+      - /app/node_modules
+    ports:
+      - 127.0.0.1:${RUNESTONE_PORT:-3050}:3050
+    # npm ci updates the node_modules volume after a dependency change;
+    # it's a no-op when nothing changed.
+    command:
+      - sh
+      - -c
+      - npm ci --silent && exec npm run dev -- --host 0.0.0.0 --port 3050
+
   mediator:
     build:
       context: ./server

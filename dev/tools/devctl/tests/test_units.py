@@ -35,10 +35,11 @@ def test_render_settings():
         'ui_server_url = "old"\nallowed_origins = []\npassword = "<REPLACE_WITH_POSTGRES_PASSWORD>"\n'
         'allowlist = ["<REPLACE_WITH_USERNAME>@gmail.com"]\n'
     )
-    rendered = envfile.render_settings(template, "3001", "pw&|\\1", "s", "j")
+    rendered = envfile.render_settings(template, "3001", "pw&|\\1", "s", "j", runestone_port="3051")
     assert rendered == (
         'ui_server_url = "http://localhost:3001"\n'
-        'allowed_origins = ["http://localhost:3001", "http://127.0.0.1:3001"]\n'
+        'allowed_origins = ["http://localhost:3001", "http://127.0.0.1:3001", '
+        '"http://localhost:3051", "http://127.0.0.1:3051"]\n'
         'password = "pw&|\\1"\nallowlist = []\n'
     )
 
