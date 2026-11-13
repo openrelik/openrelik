@@ -10,9 +10,8 @@ import { PAGE_SIZES } from '@/stores/settings'
  * costs you your place.
  *
  * Each row says what it does in words and, on the right, what it is as a
- * config key: `ai.summaries = true`. The words are for deciding; the key is for
- * the person who will later grep a config file for it. The AI switch rules the
- * three features below it: off, they keep their values but stand greyed out.
+ * config key: `appearance.theme = "dark"`. The words are for deciding; the key
+ * is for the person who will later grep a config file for it.
  */
 const settings = useSettings()
 
@@ -23,20 +22,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'light', icon: Sun },
   { value: 'dark', label: 'dark', icon: Moon },
 ]
-
-const AI_FEATURES = [
-  {
-    key: 'summaries',
-    label: 'File summarization',
-    help: 'LLM-generated summaries for files',
-  },
-  { key: 'chat', label: 'Assistant chat for files', help: 'LLM chat about a file' },
-  {
-    key: 'workflowNames',
-    label: 'Workflow name generation',
-    help: 'LLM-generated names for workflows',
-  },
-] as const
 </script>
 
 <template>
@@ -158,47 +143,6 @@ const AI_FEATURES = [
                 <span class="text-brand">{{ settings.explorer.showEmptyFiles }}</span></code
               >
             </div>
-          </section>
-
-          <hr class="my-2 border-border" />
-
-          <!-- ai -->
-          <section aria-labelledby="settings-ai">
-            <p id="settings-ai" class="micro-label px-4 pt-2 pb-1">ai</p>
-
-            <div class="flex items-center gap-3 px-4 py-2.5">
-              <Switch v-model="settings.ai.enabled" label="Enable AI features" />
-              <div class="min-w-0 flex-1">
-                <p class="font-medium text-ink">Enable AI features</p>
-                <p class="text-ink-muted">Turns every AI feature below on or off</p>
-              </div>
-              <code class="tabular shrink-0 text-[11px] text-ink-muted"
-                >ai.enabled = <span class="text-brand">{{ settings.ai.enabled }}</span></code
-              >
-            </div>
-
-            <label
-              v-for="feature in AI_FEATURES"
-              :key="feature.key"
-              class="flex items-center gap-3 py-2 pr-4 pl-8"
-              :class="settings.ai.enabled ? 'cursor-pointer hover:bg-sunken' : 'opacity-50'"
-            >
-              <input
-                v-model="settings.ai[feature.key]"
-                type="checkbox"
-                class="accent-brand"
-                :disabled="!settings.ai.enabled"
-                v-tooltip="settings.ai.enabled ? undefined : 'Turn on AI features first'"
-              />
-              <span class="min-w-0 flex-1">
-                <span class="block text-ink">{{ feature.label }}</span>
-                <span class="block text-ink-muted">{{ feature.help }}</span>
-              </span>
-              <code class="tabular shrink-0 text-[11px] text-ink-muted"
-                >ai.{{ feature.key }} =
-                <span class="text-brand">{{ settings.ai[feature.key] }}</span></code
-              >
-            </label>
           </section>
         </div>
 

@@ -54,7 +54,7 @@ afterEach(() => {
 })
 
 describe('SettingsDialog', () => {
-  it('renders nothing while closed and shows appearance, explorer, and AI sections when open', async () => {
+  it('renders nothing while closed and shows appearance and explorer sections when open', async () => {
     const body = mountDialog()
     expect(body.find('[role="dialog"]').exists()).toBe(false)
 
@@ -65,7 +65,7 @@ describe('SettingsDialog', () => {
     expect(dialog.get('#settings-title').text()).toBe('settings')
     expect(dialog.text()).toContain('appearance.theme =')
     expect(dialog.text()).toContain('explorer.pageSize =')
-    expect(dialog.text()).toContain('ai.enabled =')
+    expect(dialog.text()).not.toContain('ai.enabled =')
   })
 
   it('switches theme between system, light, and dark and updates data-theme', async () => {
@@ -111,33 +111,6 @@ describe('SettingsDialog', () => {
     expect(settings.value.explorer.showEmptyFiles).toBe(false)
     await body.get('button[role="switch"][aria-label="Show empty files"]').trigger('click')
     expect(settings.value.explorer.showEmptyFiles).toBe(true)
-  })
-
-  it('toggles AI master switch and individual AI feature checkboxes', async () => {
-    const body = mountDialog()
-    const settings = useSettings()
-    openSettings()
-    await nextTick()
-
-    const checkboxes = body.findAll('input[type="checkbox"]')
-    expect(checkboxes).toHaveLength(3)
-    expect(settings.value.ai.summaries).toBe(true)
-
-    await checkboxes[0]!.setValue(false)
-    expect(settings.value.ai.summaries).toBe(false)
-
-    await checkboxes[1]!.setValue(false)
-    expect(settings.value.ai.chat).toBe(false)
-
-    await checkboxes[2]!.setValue(false)
-    expect(settings.value.ai.workflowNames).toBe(false)
-
-    // Turn off master AI switch: sub-features stay disabled while retaining values
-    await body.get('button[role="switch"][aria-label="Enable AI features"]').trigger('click')
-    expect(settings.value.ai.enabled).toBe(false)
-    for (const box of body.findAll('input[type="checkbox"]')) {
-      expect((box.element as HTMLInputElement).disabled).toBe(true)
-    }
   })
 
   it('closes via close button and backdrop pointerdown', async () => {
