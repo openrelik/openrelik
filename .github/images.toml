@@ -39,7 +39,7 @@ dockerfile = "web/sunstone/Dockerfile"
 context = "web/sunstone"
 
 [[platform]]
-name = "openrelik-ui-runestone"
+name = "openrelik-web-runestone"
 dockerfile = "web/runestone/Dockerfile"
 context = "web/runestone"
 
