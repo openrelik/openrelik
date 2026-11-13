@@ -174,6 +174,33 @@ def test_download_file(fastapi_test_client, mocker, file_id, display_name, tmp_p
     )
 
 
+def test_download_file_range(fastapi_test_client, mocker, tmp_path):
+    """Test that Range requests return 206 and expose Content-Range for CORS."""
+    mock_file_response = mocker.Mock()
+    mock_file_response.id = 1
+    mock_file_response.display_name = "range.bin"
+    mock_file_response.path = os.path.join(tmp_path, "range.bin")
+
+    with open(mock_file_response.path, "wb") as f:
+        f.write(b"Dummy file content")
+
+    mock_get_file_from_db = mocker.patch("api.v1.files.get_file_from_db")
+    mock_get_file_from_db.return_value = mock_file_response
+
+    response = fastapi_test_client.get(
+        "/files/1/download", headers={"Range": "bytes=0-4"}
+    )
+
+    assert response.status_code == 206
+    assert response.content == b"Dummy"
+    assert response.headers["content-range"] == "bytes 0-4/18"
+    exposed = {
+        header.strip()
+        for header in response.headers["access-control-expose-headers"].split(",")
+    }
+    assert {"Content-Disposition", "Content-Range", "Accept-Ranges"} <= exposed
+
+
 def test_get_workflows_empty(fastapi_test_client, mocker):
     """Test the get_workflows endpoint."""
     mock_get_file_workflows_from_db = mocker.patch(
