@@ -5,9 +5,10 @@ artifact (`sunstone`, `runestone`, `seax`, `mjolnir`, …). Codenames don't age
 the way "ui", "ui-new" or "ui-v2" do, and say nothing about the technology, so
 implementations can come and go without renames.
 
-| Codename | What                                        | Status  |
-| -------- | ------------------------------------------- | ------- |
-| sunstone | Vue 3 + Vuetify, the original OpenRelik UI  | default |
+| Codename  | What                                          | Status         |
+| --------- | --------------------------------------------- | -------------- |
+| sunstone  | Vue 3 + Vuetify, the original OpenRelik UI    | default        |
+| runestone | Vue 3 + TypeScript + Tailwind CSS, console UI | in development |
 
 Code shared between UIs (API client, types, auth) goes into `shared/` once a
 second implementation needs it. Released images keep a codename-free name

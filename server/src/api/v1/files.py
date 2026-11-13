@@ -271,7 +271,11 @@ def download_file(
     """Downloads a file's contents based on its ID."""
     telemetry.add_attribute_to_current_span('file_id', file_id)
     file = get_file_from_db(db, file_id)
-    headers = {"Access-Control-Expose-Headers": "Content-Disposition"}
+    headers = {
+        "Access-Control-Expose-Headers": (
+            "Content-Disposition, Content-Range, Accept-Ranges"
+        )
+    }
     return FileResponse(
         path=file.path,
         filename=file.display_name,

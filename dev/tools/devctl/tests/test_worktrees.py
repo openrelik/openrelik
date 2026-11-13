@@ -23,9 +23,11 @@ def test_init_main_checkout(repo, dev):
     env = (repo / ".env").read_text()
     assert "COMPOSE_PROJECT_NAME=openrelik-main" in env
     assert "UI_PORT=3000" in env
+    assert "RUNESTONE_PORT=3050" in env
     assert oct((repo / ".env").stat().st_mode & 0o777) == "0o600"
     settings = (repo / ".dev-local" / "config" / "settings.toml").read_text()
     assert 'ui_server_url = "http://localhost:3000"' in settings
+    assert '"http://localhost:3050"' in settings
     assert "<REPLACE_WITH_POSTGRES_PASSWORD>" not in settings
     assert (repo / ".dev-local" / "data" / "storage").is_dir()
     assert "exists, leaving as is" in dev("init").output
@@ -46,8 +48,12 @@ def test_init_moves_config_and_data_from_before_dev_local(repo, dev):
 def test_create_allocates_ports_and_records_parent(repo, dev):
     dev("worktree", "create", "a", "--no-stack")
     dev("worktree", "create", "b", "--from", "a", "--no-stack")
-    assert "UI_PORT=3002" in (repo / ".worktrees" / "b" / ".env").read_text()
-    assert "COMPOSE_PROJECT_NAME=openrelik-b" in (repo / ".worktrees" / "b" / ".env").read_text()
+    b_env = (repo / ".worktrees" / "b" / ".env").read_text()
+    assert "UI_PORT=3002" in b_env
+    assert "RUNESTONE_PORT=3052" in b_env
+    assert "COMPOSE_PROJECT_NAME=openrelik-b" in b_env
+    b_settings = (repo / ".worktrees" / "b" / ".dev-local" / "config" / "settings.toml").read_text()
+    assert '"http://localhost:3052"' in b_settings
     assert git(repo, "config", "branch.b.devparent") == "a"
 
     output = dev("worktree", "list").output

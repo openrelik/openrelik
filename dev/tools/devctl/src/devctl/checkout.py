@@ -36,6 +36,7 @@ PROJECT_PREFIX = "openrelik"
 MAIN_PROJECT = f"{PROJECT_PREFIX}-main"
 
 BASE_UI_PORT = 3000
+BASE_RUNESTONE_PORT = 3050
 BASE_API_PORT = 8710
 BASE_MCP_PORT = 7070
 
@@ -114,6 +115,10 @@ class Repo:
             env.get("MCP_PORT") or str(BASE_MCP_PORT),
         )
 
+    def runestone_port(self, checkout: Path) -> str:
+        """The checkout's Runestone UI host port."""
+        return self.env(checkout).get("RUNESTONE_PORT") or str(BASE_RUNESTONE_PORT)
+
     def next_port_slot(self) -> int:
         """The lowest slot (1, 2, 3, ...) whose ports no worktree's .env uses."""
         used = set()
@@ -179,11 +184,15 @@ def init_checkout(repo: Repo, checkout: Path) -> None:
             "POSTGRES_PASSWORD": secrets.token_hex(32),
             "COMPOSE_PROJECT_NAME": project,
             "UI_PORT": str(BASE_UI_PORT + slot),
+            "RUNESTONE_PORT": str(BASE_RUNESTONE_PORT + slot),
             "API_PORT": str(BASE_API_PORT + slot),
             "MCP_PORT": str(BASE_MCP_PORT + slot),
         }
         write_private(env_file, envfile.render_env(template, values))
-        ui.ok(f".env (project {project}, UI:{values['UI_PORT']}, API:{values['API_PORT']})")
+        ui.ok(
+            f".env (project {project}, UI:{values['UI_PORT']}, "
+            f"Runestone:{values['RUNESTONE_PORT']}, API:{values['API_PORT']})"
+        )
 
     if settings.is_file():
         ui.ok(f"{LOCAL}/config/settings.toml exists, leaving as is")
@@ -195,6 +204,7 @@ def init_checkout(repo: Repo, checkout: Path) -> None:
             postgres_password=repo.env(checkout).get("POSTGRES_PASSWORD", ""),
             session_secret=secrets.token_hex(32),
             jwt_secret=secrets.token_hex(32),
+            runestone_port=repo.runestone_port(checkout),
         )
         write_private(settings, rendered)
         ui.ok(f"{LOCAL}/config/settings.toml")

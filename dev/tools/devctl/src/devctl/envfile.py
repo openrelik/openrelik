@@ -43,7 +43,12 @@ def render_env(template: str, values: dict[str, str]) -> str:
 
 
 def render_settings(
-    template: str, ui_port: str, postgres_password: str, session_secret: str, jwt_secret: str
+    template: str,
+    ui_port: str,
+    postgres_password: str,
+    session_secret: str,
+    jwt_secret: str,
+    runestone_port: str | None = None,
 ) -> str:
     """Fills in server/settings_example.toml for a development stack."""
     placeholders = {
@@ -57,11 +62,12 @@ def render_settings(
     }
     for placeholder, value in placeholders.items():
         template = template.replace(placeholder, value)
+    origins = [f'"http://localhost:{ui_port}"', f'"http://127.0.0.1:{ui_port}"']
+    if runestone_port and runestone_port != ui_port:
+        origins.extend([f'"http://localhost:{runestone_port}"', f'"http://127.0.0.1:{runestone_port}"'])
     lines = {
         "ui_server_url": f'ui_server_url = "http://localhost:{ui_port}"',
-        "allowed_origins": (
-            f'allowed_origins = ["http://localhost:{ui_port}", "http://127.0.0.1:{ui_port}"]'
-        ),
+        "allowed_origins": f'allowed_origins = [{", ".join(origins)}]',
     }
     for key, line in lines.items():
         template = re.sub(rf"^{key} = .*$", lambda _: line, template, flags=re.MULTILINE)

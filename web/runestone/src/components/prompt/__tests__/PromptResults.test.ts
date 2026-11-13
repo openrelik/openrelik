@@ -1,0 +1,288 @@
+/*
+Copyright 2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// @vitest-environment happy-dom
+import { createPinia, setActivePinia } from 'pinia'
+import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import PromptResults from '@/components/prompt/PromptResults.vue'
+import type { PromptResult } from '@/composables/usePrompt'
+import { directives } from '@/directives'
+import { useItemsStore } from '@/stores/items'
+import type { Item } from '@/types/item'
+
+function makeItem(overrides: Partial<Item> & Pick<Item, 'id' | 'kind' | 'name'>): Item {
+  return {
+    parent: null,
+    owner: 'analyst',
+    modified: '2026-11-10T00:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('PromptResults', () => {
+  let pinia: ReturnType<typeof createPinia>
+
+  beforeEach(() => {
+    pinia = createPinia()
+    setActivePinia(pinia)
+  })
+
+  it('renders item metadata, highlights, case/remote badges, and emits hover and go', async () => {
+    const itemsStore = useItemsStore()
+    const folder = makeItem({ id: 1, kind: 'folder', name: 'evidence' })
+    const childFile = makeItem({
+      id: 10,
+      kind: 'file',
+      name: 'syslog.txt',
+      parent: 1,
+      size: 2048,
+      mime: 'text/plain',
+    })
+    const bareFile = makeItem({ id: 11, kind: 'file', name: 'raw.bin', parent: 1 })
+    const wfFolder = makeItem({ id: 2, kind: 'folder', name: 'plaso-run', workflowId: 77 })
+    itemsStore.upsertItems([folder, childFile, bareFile, wfFolder])
+
+    const results: PromptResult[] = [
+      { kind: 'item', item: folder, path: '/evidence/', label: 'evidence/', hits: [0, 1] },
+      { kind: 'item', item: wfFolder, path: '/plaso-run/', label: 'plaso-run/', hits: [] },
+      {
+        kind: 'item',
+        item: childFile,
+        path: '/evidence/syslog.txt',
+        label: 'syslog.txt',
+        hits: [],
+      },
+      { kind: 'item', item: bareFile, path: '/evidence/raw.bin', label: 'raw.bin', hits: [] },
+      {
+        kind: 'item',
+        item: folder,
+        path: '/case/',
+        label: '/case/',
+        hits: [],
+        caseRef: 'INC-42',
+      },
+      {
+        kind: 'item',
+        item: makeItem({ id: 9, kind: 'folder', name: 'remote-dir' }),
+        path: 'remote-dir',
+        label: 'remote-dir/',
+        hits: [],
+        remote: true,
+      },
+    ]
+
+    const wrapper = mount(PromptResults, {
+      props: {
+        results,
+        index: 0,
+        query: 'ev',
+        cwdPath: '/cases',
+        scopePath: '/cases',
+        serverSearch: { searching: false, error: null, total: 4 },
+      },
+      global: { plugins: [pinia, directives] },
+    })
+
+    expect(wrapper.text()).toContain('6 matches in /cases')
+    expect(wrapper.text()).toContain('4 folders on the server')
+    expect(wrapper.text()).toContain('2 items')
+    expect(wrapper.text()).toContain('workflow')
+    expect(wrapper.text()).toContain('0 B')
+    expect(wrapper.text()).toContain('text/plain')
+    expect(wrapper.text()).toContain('case INC-42')
+    expect(wrapper.text()).toContain('server')
+
+    const options = wrapper.findAll('[role="option"]')
+    expect(options).toHaveLength(6)
+    expect(options[0]!.attributes('aria-selected')).toBe('true')
+
+    await options[2]!.trigger('pointermove')
+    expect(wrapper.emitted('hover')?.[0]).toEqual([2])
+
+    await options[2]!.trigger('click')
+    expect(wrapper.emitted('go')?.[0]).toEqual([results[2]])
+
+    wrapper.unmount()
+  })
+
+  it('renders command headers for mkdir, rm, cd home, cd prev, and directory contents', () => {
+    const scenarios: {
+      results: PromptResult[]
+      query: string
+      expected: string
+    }[] = [
+      {
+        results: [
+          {
+            kind: 'mkdir',
+            path: 'logs',
+            label: 'mkdir logs/',
+            hits: [],
+            folderName: 'logs',
+          },
+        ],
+        query: 'mkdir logs',
+        expected: 'mkdir: create folder',
+      },
+      {
+        results: [
+          {
+            kind: 'mkdir',
+            path: 'mkdir ',
+            label: 'mkdir: enter folder name',
+            hits: [],
+            folderName: null,
+          },
+        ],
+        query: 'mkdir',
+        expected: 'mkdir: create folder',
+      },
+      {
+        results: [
+          {
+            kind: 'rm',
+            item: makeItem({ id: 3, kind: 'folder', name: 'old' }),
+            path: 'rm old',
+            label: 'rm old/',
+            hits: [],
+          },
+        ],
+        query: 'rm old',
+        expected: 'rm: delete folder in /work',
+      },
+      {
+        results: [{ kind: 'home', path: '~', label: '~ (home)', hits: [] }],
+        query: '~',
+        expected: 'cd: home',
+      },
+      {
+        results: [{ kind: 'prev', path: '/', label: '- (~)', hits: [] }],
+        query: '-',
+        expected: 'cd: previous directory',
+      },
+      {
+        results: [{ kind: 'up', path: '..', label: '..', hits: [] }],
+        query: '',
+        expected: 'contents of /work',
+      },
+    ]
+
+    for (const scenario of scenarios) {
+      const wrapper = mount(PromptResults, {
+        props: {
+          results: scenario.results,
+          index: 0,
+          query: scenario.query,
+          cwdPath: '/work',
+          scopePath: '/work',
+        },
+        global: { plugins: [pinia, directives] },
+      })
+      expect(wrapper.text()).toContain(scenario.expected)
+      wrapper.unmount()
+    }
+  })
+
+  it('renders empty states for rm, active server search, server error, and scoped fallback hint', () => {
+    const rmEmpty = mount(PromptResults, {
+      props: {
+        results: [],
+        index: 0,
+        query: 'rm nope',
+        cwdPath: '/cases',
+        scopePath: '/cases',
+      },
+      global: { plugins: [pinia, directives] },
+    })
+    expect(rmEmpty.text()).toContain('no folder matching "nope" in /cases')
+    rmEmpty.unmount()
+
+    const searching = mount(PromptResults, {
+      props: {
+        results: [],
+        index: 0,
+        query: 'disk',
+        cwdPath: '/',
+        scopePath: '/',
+        serverSearch: { searching: true, error: null, total: null },
+      },
+      global: { plugins: [pinia, directives] },
+    })
+    expect(searching.text()).toContain('searching server…')
+    expect(searching.text()).toContain('no loaded folder matches "disk" — asking the server…')
+    searching.unmount()
+
+    const failedAndScoped = mount(PromptResults, {
+      props: {
+        results: [],
+        index: 0,
+        query: '../missing',
+        cwdPath: '/cases/sub',
+        scopePath: '/cases',
+        serverSearch: { searching: false, error: 'Timeout', total: null },
+      },
+      global: { plugins: [pinia, directives] },
+    })
+    expect(failedAndScoped.text()).toContain('server search failed: Timeout')
+    expect(failedAndScoped.text()).toContain('no match for "../missing" in /cases')
+    expect(failedAndScoped.text()).toContain('/missing')
+    failedAndScoped.unmount()
+
+    // cd rm (mode: 'search') does not show rm empty-state text.
+    const cdRm = mount(PromptResults, {
+      props: {
+        results: [],
+        index: 0,
+        query: 'rm',
+        mode: 'search',
+        cwdPath: '/cases',
+        scopePath: '/cases',
+      },
+      global: { plugins: [pinia, directives] },
+    })
+    expect(cdRm.text()).toContain('no match for "rm" in /cases')
+    cdRm.unmount()
+  })
+
+  it('keys same-named remote folders uniquely and shows 50+ indicator at cap', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const results: PromptResult[] = Array.from({ length: 50 }, (_, idx) => ({
+      kind: 'item',
+      item: makeItem({ id: 100 + idx, kind: 'folder', name: 'evidence' }),
+      path: 'evidence',
+      label: 'evidence/',
+      hits: [],
+      remote: true,
+    }))
+
+    const wrapper = mount(PromptResults, {
+      props: {
+        results,
+        index: 0,
+        query: 'evidence',
+        cwdPath: '/',
+        scopePath: '/',
+      },
+      global: { plugins: [pinia, directives] },
+    })
+    expect(wrapper.text()).toContain('50 matches+ in /')
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(50)
+    expect(warnSpy).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+})

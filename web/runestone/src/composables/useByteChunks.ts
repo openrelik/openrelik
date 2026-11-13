@@ -1,0 +1,194 @@
+/*
+Copyright 2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/**
+ * Byte Chunks Composable
+ *
+ * A file's bytes, a piece at a time, for the hex viewer: never the whole file,
+ * which may be a disk image of many gigabytes.
+ *
+ * - The file is read in 64 KiB chunks through byte-range requests
+ *   (`api.files.readRange`), each through the query cache, so two needs for
+ *   one chunk share one request.
+ * - What is on screen asks for its chunks (`show`), plus the next one in the
+ *   direction of travel; a chunk no longer wanted is cancelled in flight.
+ * - At most `MAX_CHUNKS` are kept (2 MiB); the least recently shown go first,
+ *   and are forgotten by the cache too, so coming back fetches them again.
+ */
+
+import { computed, onScopeDispose, ref, watch, type ComputedRef, type Ref } from 'vue'
+
+import { api, errorMessage } from '@/api'
+import { ensure, forget } from '@/composables/useQueryCache'
+
+export const CHUNK_SIZE = 64 * 1024
+const MAX_CHUNKS = 32
+
+export interface UseByteChunksReturn {
+  /** The byte at `offset`, or undefined until its chunk has loaded. Reactive. */
+  byteAt: (offset: number) => number | undefined
+  /** Makes bytes `from`..`to` (the rows on screen) load; cancels what is no longer wanted. */
+  show: (from: number, to: number) => void
+  /** Bytes `start`..`end` inclusive, loading what is missing (for copying and decoding). */
+  read: (start: number, end: number) => Promise<Uint8Array>
+  /** Chunks on screen are still loading. */
+  loading: ComputedRef<boolean>
+  /** Why the last chunk failed to load, until one loads. */
+  error: Readonly<Ref<string | null>>
+}
+
+export function useByteChunks(fileId: () => number, size: () => number): UseByteChunksReturn {
+  /** Loaded chunks by index, least recently shown first. */
+  let chunks = new Map<number, Uint8Array>()
+  /** Bumped when a chunk arrives or leaves: what reads bytes depends on it. */
+  const version = ref(0)
+  const error = ref<string | null>(null)
+  /** Chunks on screen that are loading, and the controllers of every load in flight. */
+  const pending = ref(new Set<number>())
+  const inFlight = new Map<number, AbortController>()
+  const readControllers = new Set<AbortController>()
+  let activeId = fileId()
+  let lastFrom = 0
+
+  const key = (index: number, id = activeId) => `file:${id}:bytes:${index}`
+
+  function reset(id = activeId) {
+    for (const controller of inFlight.values()) controller.abort()
+    inFlight.clear()
+    for (const controller of readControllers) controller.abort()
+    readControllers.clear()
+    forget([...chunks.keys()].map((index) => key(index, id)))
+    chunks = new Map()
+    pending.value = new Set()
+    error.value = null
+    version.value++
+  }
+  watch(fileId, (next) => {
+    reset(activeId)
+    activeId = next
+  })
+  onScopeDispose(() => reset(activeId))
+
+  function evict() {
+    while (chunks.size > MAX_CHUNKS) {
+      const oldest = chunks.keys().next().value!
+      chunks.delete(oldest)
+      forget([key(oldest)])
+    }
+  }
+
+  /** Loads a chunk unless it is here; resolves once it is (or failed, or was cancelled). */
+  function load(index: number, controller: AbortController): Promise<void> {
+    const id = activeId
+    const start = index * CHUNK_SIZE
+    const end = Math.min(size(), start + CHUNK_SIZE) - 1
+    return ensure(
+      key(index, id),
+      async (signal) => {
+        const bytes = await api.files.readRange(id, start, end, { signal, background: true })
+        if (id !== activeId) return
+        chunks.set(index, bytes)
+        evict()
+        error.value = null
+        version.value++
+      },
+      { signal: controller.signal, staleMs: Infinity },
+    ).catch((err: unknown) => {
+      if (id === activeId) error.value = errorMessage(err, 'could not read the file')
+    })
+  }
+
+  function show(from: number, to: number) {
+    if (size() <= 0 || to < 0) return
+    const first = Math.floor(Math.max(0, from) / CHUNK_SIZE)
+    const last = Math.floor(Math.min(size() - 1, to) / CHUNK_SIZE)
+    const forward = from >= lastFrom
+    lastFrom = from
+    const ahead = forward ? last + 1 : first - 1
+    const wanted = new Set<number>()
+    for (let index = first; index <= last; index++) wanted.add(index)
+    if (ahead >= 0 && ahead * CHUNK_SIZE < size()) wanted.add(ahead)
+
+    // What scrolled away is not worth the wait.
+    for (const [index, controller] of inFlight) {
+      if (!wanted.has(index)) {
+        controller.abort()
+        inFlight.delete(index)
+      }
+    }
+    const onScreen = new Set<number>()
+    for (const index of wanted) {
+      const bytes = chunks.get(index)
+      if (bytes) {
+        // Recently shown: last to be evicted.
+        chunks.delete(index)
+        chunks.set(index, bytes)
+        continue
+      }
+      if (index >= first && index <= last) onScreen.add(index)
+      if (inFlight.has(index)) continue
+      const controller = new AbortController()
+      inFlight.set(index, controller)
+      load(index, controller).finally(() => {
+        if (inFlight.get(index) !== controller) return
+        inFlight.delete(index)
+        if (pending.value.has(index)) {
+          const next = new Set(pending.value)
+          next.delete(index)
+          pending.value = next
+        }
+      })
+    }
+    pending.value = onScreen
+  }
+
+  function byteAt(offset: number): number | undefined {
+    void version.value
+    return chunks.get(Math.floor(offset / CHUNK_SIZE))?.[offset % CHUNK_SIZE]
+  }
+
+  async function read(start: number, end: number): Promise<Uint8Array> {
+    const firstByte = Math.max(0, start)
+    const last = Math.min(end, size() - 1)
+    if (last < firstByte) return new Uint8Array()
+    const indexes: number[] = []
+    for (let i = Math.floor(firstByte / CHUNK_SIZE); i <= Math.floor(last / CHUNK_SIZE); i++) {
+      indexes.push(i)
+    }
+    const controller = new AbortController()
+    readControllers.add(controller)
+    try {
+      await Promise.all(indexes.filter((i) => !chunks.has(i)).map((i) => load(i, controller)))
+    } finally {
+      readControllers.delete(controller)
+    }
+    const out = new Uint8Array(last - firstByte + 1)
+    for (let offset = firstByte; offset <= last; offset++) {
+      const byte = byteAt(offset)
+      if (byte === undefined) throw new Error(error.value ?? 'Could not read the bytes')
+      out[offset - firstByte] = byte
+    }
+    return out
+  }
+
+  return {
+    byteAt,
+    show,
+    read,
+    loading: computed(() => pending.value.size > 0),
+    error,
+  }
+}

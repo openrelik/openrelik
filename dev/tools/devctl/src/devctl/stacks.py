@@ -34,11 +34,13 @@ def init(repo: Repo, worktree: str | None) -> None:
 def stack_urls(repo: Repo, checkout: Path, indent: str = "  ") -> str:
     env = repo.env(checkout)
     ui_port, api_port, _ = repo.ports(checkout)
+    runestone_port = repo.runestone_port(checkout)
     user = env.get("OPENRELIK_DEV_USER") or "dev"
     password = env.get("OPENRELIK_DEV_PASSWORD") or "dev"
     return (
-        f"{indent}UI:      http://localhost:{ui_port}  (log in as {user} / {password})\n"
-        f"{indent}API:     http://localhost:{api_port}/api/v1/docs"
+        f"{indent}UI:        http://localhost:{ui_port}  (log in as {user} / {password})\n"
+        f"{indent}Runestone: http://localhost:{runestone_port}\n"
+        f"{indent}API:       http://localhost:{api_port}/api/v1/docs"
     )
 
 
@@ -63,7 +65,12 @@ def up(
     project = repo.project(checkout)
 
     env = repo.env(checkout)
-    for port in (env.get("UI_PORT"), env.get("API_PORT"), env.get("MCP_PORT")):
+    for port in (
+        env.get("UI_PORT"),
+        repo.runestone_port(checkout),
+        env.get("API_PORT"),
+        env.get("MCP_PORT"),
+    ):
         holder = docker.port_holder(port) if port else None
         if holder and holder[1] != project:
             name, holder_project = holder
