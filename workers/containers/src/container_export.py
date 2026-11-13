@@ -262,6 +262,18 @@ def export_all_containers(
                 container_export_dir,
             )
 
+            if not exported_containers and (process.stderr or process.stdout):
+                details = (process.stderr or process.stdout).strip()
+                logger.warning(
+                    "container-explorer exported 0 containers from %s: %s",
+                    disk_mount_dir,
+                    details,
+                )
+                log_entry(
+                    log_file,
+                    f"container-explorer exported 0 containers from {disk_mount_dir}: {details}",
+                )
+
             for exported_container in exported_containers:
                 logger.debug(
                     "Exported container %s in export directory %s",
@@ -313,11 +325,14 @@ def export_all_containers(
             logger.debug("%d output file created", len(output_files))
 
         else:
+            details = (process.stderr or process.stdout or "").strip()
             _log_message: str = (
-                f"Error exporting all containers in disk {input_file.get('id')}"
+                f"Error exporting all containers in disk {input_file.get('id')} "
+                f"(exit {process.returncode}): {details}"
             )
             logger.error(_log_message)
             log_entry(log_file, _log_message)
+            raise RuntimeError(_log_message)
 
     except subprocess.CalledProcessError as err:
         logger.error("Error calling container-explorer command: %s", str(err))

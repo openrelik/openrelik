@@ -305,6 +305,20 @@ def command(
         fh.write(all_patterns)
 
     all_matches = []
+    resolved_inputs = get_input_files(pipe_result, input_files)
+    if not resolved_inputs:
+        if pipe_result:
+            report = Report("Yara scan report")
+            report.summary = "No input files provided from upstream task; scan skipped."
+            return create_task_result(
+                output_files=[],
+                task_files=[],
+                workflow_id=workflow_id,
+                command="",
+                task_report=report.to_dict(),
+            )
+        raise RuntimeError("No input files were provided to Yara scan.")
+    input_files = resolved_inputs
     fraken_output = create_output_file(
         output_path, display_name="fraken_out.jsonl", data_type="yara:yara-scan:jsonl"
     )
@@ -315,10 +329,6 @@ def command(
     )
     output_files.append(fraken_output.to_dict())
     task_files.append(fraken_stderr.to_dict())
-
-    input_files = get_input_files(pipe_result, input_files)
-    if not input_files:
-        raise RuntimeError("No input files were provided to Yara scan.")
 
     input_files_map = {}
     for input_file in input_files:
@@ -377,8 +387,8 @@ def command(
                 try:
                     send_progress(self, "Mounting disk image", display_name)
                     bd = BlockDevice(input_file_path, min_partition_size=1)
-                    bd.setup()
                     disks_mounted.append(bd)
+                    bd.setup()
                     mountpoints = bd.mount()
                     send_progress(
                         self,
@@ -395,8 +405,8 @@ def command(
                     skipped_inputs.append(
                         SkippedInput(
                             display_name,
-                            "Disk image input is not supported or could not be "
-                            "mounted by the Yara worker.",
+                            "Disk image input could not be mounted by the "
+                            f"Yara worker: {e}",
                         )
                     )
                     continue
