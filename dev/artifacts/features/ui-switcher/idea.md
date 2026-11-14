@@ -8,15 +8,15 @@ by: berggren (Johan Berggren)
 
 ## Problem
 
-OpenRelik now ships two web UIs (`sunstone` and `runestone`). In development they run on separate ports (`:3000` and `:3050`), and in production only one UI container is served on `:8711`. Serving two UIs on separate ports or origins breaks single-origin expectations in OAuth/OIDC login callbacks, CORS `allowed_origins`, and shared report links, while swapping the `openrelik-ui` container image switches every user at once with no way for an individual user to switch back in the browser.
+OpenRelik now ships two web UIs (`sunstone` and `runestone`). In development they run on separate ports (`:3000` and `:3050`), and in production only one UI container is served on `:8711`. Serving two UIs on separate ports or origins breaks single-origin expectations in OAuth/OIDC login callbacks, CORS `allowed_origins`, and shared report links. Replacing the existing `openrelik-ui` image in place would break current deployments that pull `openrelik-ui` without updating their container setup, and swapping UI images flips every user at once with no way for an individual user to switch back in the browser.
 
 ## Proposal
 
-Run `sunstone` and `runestone` in separate containers behind a lightweight `openrelik-ui` Nginx router container on the existing UI port. Operators configure the default UI with an environment variable (`sunstone` initially, switching to `runestone` once feature parity lands), and individual users can switch between `sunstone` and `runestone` from the login screen, settings, or menu using a browser cookie without routing API, upload, or download traffic through the UI router.
+Keep publishing `openrelik-ui` as standalone `sunstone` so current deployments continue working unchanged, and publish three images alongside it: `openrelik-web-sunstone`, `openrelik-web-runestone`, and `openrelik-web-router`. Update `deploy/docker/docker-compose.yml` and the local development stack (`compose.yml`) to place `openrelik-web-router` on the UI port in front of `openrelik-web-sunstone` and `openrelik-web-runestone`. Operators pick the default UI with an environment variable (`sunstone` initially), and when served through `openrelik-web-router`, individual users can switch between `sunstone` and `runestone` from the login screen, settings, or menu using a browser cookie without routing API, upload, or download traffic through the router.
 
 ## Users
 
-Forensic analysts and incident responders who want to opt into `runestone` early or switch back to `sunstone` when needed, and administrators deploying OpenRelik with Docker Compose or Kubernetes who want a single configurable UI origin.
+Forensic analysts and incident responders who want to opt into `runestone` early or switch back to `sunstone` when needed, and administrators running either existing standalone `openrelik-ui` deployments or multi-UI Docker Compose and Kubernetes deployments.
 
 ## Open questions
 
