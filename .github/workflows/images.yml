@@ -6,8 +6,10 @@
 #   the pull request's "closed" event, whose token can't push packages for pull
 #   requests from forks.
 # - release tag (made by devctl release): server-v0.18.1 builds the images
-#   from server/ (server, mediator, metrics, gcp-importer), ui-v0.18.1 the web
-#   UI, mcp-v0.18.1 the MCP server, worker-<name>-v0.18.1 that worker. They're
+#   from server/ (server, mediator, metrics, gcp-importer), ui-v0.18.1 builds all
+#   web images under web/ (openrelik-ui, openrelik-web-sunstone,
+#   openrelik-web-runestone, openrelik-web-router), mcp-v0.18.1 the MCP server,
+#   worker-<name>-v0.18.1 that worker. They're
 #   tagged 0.18.1 and the floating minor tag 0.18 (unless a newer 0.18.x of that
 #   component is released already); `latest` isn't moved. The platform tag
 #   v0.18.0 builds nothing itself: a minor release tags every component.

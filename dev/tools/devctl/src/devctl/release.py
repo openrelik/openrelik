@@ -198,7 +198,12 @@ def release_ui(root: Path, version: str) -> None:
     check_clean_worktree(root)
     parse_version(version)
     tag = check_new(root, "ui-v", version)
-    files = set_package_version(root / "web" / "sunstone" / "package.json", version)
+    packages = sorted(root.glob("web/*/package.json"))
+    if not packages:
+        ui.die("no web/*/package.json")
+    files: list[Path] = []
+    for package in packages:
+        files += set_package_version(package, version)
     commit_release(root, files, f"Release the UI {version}", [tag])
 
 

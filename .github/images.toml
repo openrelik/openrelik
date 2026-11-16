@@ -32,9 +32,14 @@ name = "openrelik-gcp-importer"
 dockerfile = "server/src/importers/gcp/Dockerfile"
 context = "server"
 
-# The default web UI, under the codename-free name (see web/README.md).
+# Standalone default web UI for single-container deployments, plus multi-UI images (see web/README.md).
 [[platform]]
 name = "openrelik-ui"
+dockerfile = "web/sunstone/Dockerfile"
+context = "web/sunstone"
+
+[[platform]]
+name = "openrelik-web-sunstone"
 dockerfile = "web/sunstone/Dockerfile"
 context = "web/sunstone"
 
@@ -42,6 +47,11 @@ context = "web/sunstone"
 name = "openrelik-web-runestone"
 dockerfile = "web/runestone/Dockerfile"
 context = "web/runestone"
+
+[[platform]]
+name = "openrelik-web-router"
+dockerfile = "web/router/Dockerfile"
+context = "web/router"
 
 [[mcp]]
 name = "openrelik-mcp-server"
