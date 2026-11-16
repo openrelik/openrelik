@@ -37,11 +37,10 @@ def test_render_settings():
         'ui_server_url = "old"\nallowed_origins = []\npassword = "<REPLACE_WITH_POSTGRES_PASSWORD>"\n'
         'allowlist = ["<REPLACE_WITH_USERNAME>@gmail.com"]\n'
     )
-    rendered = envfile.render_settings(template, "3001", "pw&|\\1", "s", "j", runestone_port="3051")
+    rendered = envfile.render_settings(template, "3001", "pw&|\\1", "s", "j")
     assert rendered == (
         'ui_server_url = "http://localhost:3001"\n'
-        'allowed_origins = ["http://localhost:3001", "http://127.0.0.1:3001", '
-        '"http://localhost:3051", "http://127.0.0.1:3051"]\n'
+        'allowed_origins = ["http://localhost:3001", "http://127.0.0.1:3001"]\n'
         'password = "pw&|\\1"\nallowlist = []\n'
     )
 
@@ -103,24 +102,26 @@ def test_table_counts_tree_characters_as_one_column():
     assert ui.table([["A", "B"], ["└─> x", "y"]]) == "A      B\n└─> x  y"
 
 
-def test_stack_up_checks_default_runestone_port_when_missing_from_env(tmp_path, monkeypatch):
+def test_stack_up_checks_ui_api_mcp_ports_only(tmp_path, monkeypatch):
     repo = Repo(tmp_path)
-    wt = repo.worktree_dir("legacy")
+    wt = repo.worktree_dir("router")
     wt.mkdir(parents=True)
-    (wt / ".env").write_text("COMPOSE_PROJECT_NAME=openrelik-legacy\nUI_PORT=3001\n")
-    assert repo.runestone_port(wt) == "3050"
+    (wt / ".env").write_text(
+        "COMPOSE_PROJECT_NAME=openrelik-router\nUI_PORT=3001\nAPI_PORT=8711\nMCP_PORT=7071\n"
+    )
 
     checked_ports = []
 
     def fake_port_holder(port: str):
         checked_ports.append(port)
-        if port == "3050":
-            return ("other-runestone", "openrelik-main")
+        if port == "3001":
+            return ("other-router", "openrelik-main")
         return None
 
     monkeypatch.setattr(stacks.docker, "ready", lambda: True)
     monkeypatch.setattr(stacks.docker, "port_holder", fake_port_holder)
 
-    with pytest.raises(ui.DevError, match="port 3050 is already in use"):
-        stacks.up(repo, "legacy")
-    assert checked_ports == ["3001", "3050"]
+    with pytest.raises(ui.DevError, match="port 3001 is already in use"):
+        stacks.up(repo, "router")
+    assert checked_ports == ["3001"]
+    assert "3050" not in checked_ports
