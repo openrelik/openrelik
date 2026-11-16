@@ -17,16 +17,36 @@ services:
       - 127.0.0.1:8710:8710
     command: uvicorn main:app --proxy-headers --forwarded-allow-ips '*' --workers 1 --host 0.0.0.0 --port 8710
 
-  openrelik-ui:
-    container_name: openrelik-ui
-    image: ghcr.io/openrelik/openrelik-ui:${OPENRELIK_UI_VERSION:-${OPENRELIK_VERSION}}
+  openrelik-web-router:
+    container_name: openrelik-web-router
+    image: ghcr.io/openrelik/openrelik-web-router:${OPENRELIK_UI_VERSION:-${OPENRELIK_VERSION}}
+    restart: always
+    environment:
+      - OPENRELIK_DEFAULT_UI=${OPENRELIK_DEFAULT_UI:-sunstone}
+      - OPENRELIK_UIS=${OPENRELIK_UIS:-sunstone|Sunstone|http://openrelik-web-sunstone:8711,runestone|Runestone|http://openrelik-web-runestone:8711}
+    ports:
+      - 127.0.0.1:8711:8711
+    depends_on:
+      - openrelik-web-sunstone
+      - openrelik-web-runestone
+
+  openrelik-web-sunstone:
+    container_name: openrelik-web-sunstone
+    image: ghcr.io/openrelik/openrelik-web-sunstone:${OPENRELIK_UI_VERSION:-${OPENRELIK_VERSION}}
     restart: always
     environment:
       - OPENRELIK_SERVER_URL=${OPENRELIK_SERVER_URL}
       - OPENRELIK_API_VERSION=${OPENRELIK_API_VERSION}
-      - OPENRELIK_AUTH_METHODS=local  # Comma separated string of auth methods (e.g. local,google)
-    ports:
-      - 127.0.0.1:8711:8711
+      - OPENRELIK_AUTH_METHODS=${OPENRELIK_AUTH_METHODS:-local}  # Comma separated string of auth methods (e.g. local,google)
+
+  openrelik-web-runestone:
+    container_name: openrelik-web-runestone
+    image: ghcr.io/openrelik/openrelik-web-runestone:${OPENRELIK_UI_VERSION:-${OPENRELIK_VERSION}}
+    restart: always
+    environment:
+      - OPENRELIK_SERVER_URL=${OPENRELIK_SERVER_URL}
+      - OPENRELIK_API_VERSION=${OPENRELIK_API_VERSION}
+      - OPENRELIK_AUTH_METHODS=${OPENRELIK_AUTH_METHODS:-local}  # Comma separated string of auth methods (e.g. local,google)
 
   # The mediator server is responsible for orchestrating updates between task workers and the backend datastore.
   # It uses the mediator/monitor.py script to monitor Celery tasks and update the database accordingly.
