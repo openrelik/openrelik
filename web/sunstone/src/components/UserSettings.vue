@@ -177,6 +177,32 @@ limitations under the License.
               Enable or disable the creation of chords in the workflow
             </v-list-item-subtitle>
           </v-list-item>
+          <template v-if="alternativeUis.length > 0">
+            <v-list-subheader class="text-h6 font-weight-bold mb-2 mt-4">
+              Interface
+            </v-list-subheader>
+            <v-list-item>
+              <v-list-item-title class="text-body-2 font-weight-medium">
+                Web UI
+              </v-list-item-title>
+              <v-list-item-subtitle class="text-caption">
+                Switch to another OpenRelik web interface
+              </v-list-item-subtitle>
+              <div class="d-flex flex-wrap ga-2 mt-2">
+                <v-btn
+                  v-for="ui in alternativeUis"
+                  :key="ui.id"
+                  variant="outlined"
+                  size="small"
+                  class="text-none"
+                  prepend-icon="mdi-swap-horizontal"
+                  @click="switchToUi(ui.id)"
+                >
+                  Switch to {{ ui.name }}
+                </v-btn>
+              </div>
+            </v-list-item>
+          </template>
         </v-list>
       </v-container>
     </v-card>
@@ -184,13 +210,26 @@ limitations under the License.
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useUserSettings } from "@/composables/useUserSettings";
 import { useAppStore } from "@/stores/app";
+import { getAlternativeUis, switchToUi } from "@/utils/uiSwitch";
 
 const dialog = ref(false);
+const alternativeUis = ref([]);
 const { settings } = useUserSettings();
 const appStore = useAppStore();
+
+let active = true;
+onMounted(async () => {
+  const uis = await getAlternativeUis();
+  if (active) {
+    alternativeUis.value = uis;
+  }
+});
+onUnmounted(() => {
+  active = false;
+});
 
 const llmsAvailable = computed(() => {
   return appStore.systemConfig?.active_llms?.length > 0;
