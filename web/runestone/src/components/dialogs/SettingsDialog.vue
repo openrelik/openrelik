@@ -14,11 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { Monitor, Moon, Sun, X } from '@/components/icons'
 
+import Button from '@/components/base/Button.vue'
 import Switch from '@/components/base/Switch.vue'
 import { settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
 import { PAGE_SIZES } from '@/stores/settings'
+import { getAlternativeUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
 
 /**
  * Settings, as a dialog over whatever page you are on — so changing one never
@@ -29,6 +32,21 @@ import { PAGE_SIZES } from '@/stores/settings'
  * is for the person who will later grep a config file for it.
  */
 const settings = useSettings()
+const alternativeUis = ref<UiOption[]>([])
+let loadGeneration = 0
+
+watch(
+  settingsOpen,
+  async (open) => {
+    const generation = ++loadGeneration
+    if (!open) return
+    const uis = await getAlternativeUis()
+    if (generation === loadGeneration && settingsOpen.value) {
+      alternativeUis.value = uis
+    }
+  },
+  { immediate: true },
+)
 
 const close = () => (settingsOpen.value = false)
 
@@ -104,6 +122,26 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
               <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
                 >appearance.theme =
                 <span class="text-brand">"{{ settings.appearance.theme }}"</span></code
+              >
+            </div>
+
+            <div v-if="alternativeUis.length > 0" class="flex items-center gap-3 px-4 py-2.5">
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-ink">Interface</p>
+                <p class="text-ink-muted">Switch to another OpenRelik web interface</p>
+              </div>
+              <div class="flex flex-wrap items-center justify-end gap-1.5">
+                <Button
+                  v-for="ui in alternativeUis"
+                  :key="ui.id"
+                  size="row"
+                  @click="switchToUi(ui.id)"
+                >
+                  Switch to {{ ui.name }}
+                </Button>
+              </div>
+              <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
+                >openrelik_ui = <span class="text-brand">"runestone"</span></code
               >
             </div>
           </section>

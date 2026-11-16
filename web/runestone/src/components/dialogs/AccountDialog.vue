@@ -32,6 +32,7 @@ import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
 import { stamp } from '@/utils/format'
+import { getAlternativeUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
 
 /**
  * The account: who you are signed in as, your API keys, and signing out.
@@ -63,12 +64,14 @@ const newKey = ref<{ name: string; token: string } | null>(null)
 const copied = ref(false)
 const warned = ref(false)
 const deletingIds = reactive(new Set<number>())
+const alternativeUis = ref<UiOption[]>([])
 let openGeneration = 0
 
 watch(
   [accountOpen, () => auth.user?.id],
   ([open, userId]) => {
     openGeneration++
+    const generation = openGeneration
     creating.value = false
     saving.value = false
     name.value = description.value = ''
@@ -77,6 +80,13 @@ watch(
     copied.value = warned.value = false
     deletingIds.clear()
     if (open && userId !== undefined) loadApiKeys()
+    if (open) {
+      void getAlternativeUis().then((uis) => {
+        if (generation === openGeneration && accountOpen.value) {
+          alternativeUis.value = uis
+        }
+      })
+    }
   },
   { flush: 'sync' },
 )
@@ -398,6 +408,11 @@ const user = computed(() => auth.user)
             <template #icon><LogOut :size="12" :stroke-width="1.5" /></template>
             Sign out
           </Button>
+          <div v-if="alternativeUis.length > 0" class="ml-auto flex flex-wrap items-center gap-1.5">
+            <Button v-for="ui in alternativeUis" :key="ui.id" size="row" @click="switchToUi(ui.id)">
+              Switch to {{ ui.name }}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

@@ -21,6 +21,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Button from '@/components/base/Button.vue'
 import { errorMessage as toMessage } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { getAlternativeUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
 
 /**
  * LoginView — Minimal Console Authentication View
@@ -37,8 +38,10 @@ const password = ref('')
 const showPassword = ref(false)
 const isSubmitting = ref(false)
 const errorMessage = ref('')
+const alternativeUis = ref<UiOption[]>([])
 
 const usernameInput = ref<HTMLInputElement | null>(null)
+let isMounted = true
 
 function resetForm() {
   username.value = ''
@@ -92,8 +95,16 @@ function onKeyDown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+  void getAlternativeUis().then((uis) => {
+    if (isMounted) alternativeUis.value = uis
+  })
+})
+onUnmounted(() => {
+  isMounted = false
+  window.removeEventListener('keydown', onKeyDown)
+})
 </script>
 
 <template>
@@ -182,6 +193,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           {{ isSubmitting ? 'Signing in...' : 'Login' }}
         </Button>
       </form>
+
+      <div
+        v-if="alternativeUis.length > 0"
+        class="flex flex-wrap items-center justify-center gap-1.5"
+      >
+        <Button
+          v-for="ui in alternativeUis"
+          :key="ui.id"
+          variant="ghost"
+          size="row"
+          @click="switchToUi(ui.id)"
+        >
+          Switch to {{ ui.name }}
+        </Button>
+      </div>
     </div>
   </div>
 </template>

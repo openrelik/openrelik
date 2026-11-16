@@ -24,6 +24,7 @@ import LoginView from '@/views/LoginView.vue'
 import directives from '@/directives'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { useAuthStore } from '@/stores/auth'
+import { clearUiSwitchCache } from '@/utils/uiSwitch'
 import { api, ApiError, type User } from '@/api'
 
 vi.mock('@/api', async (importOriginal) => {
@@ -67,15 +68,34 @@ function buildRouter() {
 
 let wrapper: VueWrapper | null = null
 
+function mockManifest(uis: Array<{ id: string; name: string }> | null): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      uis === null
+        ? { ok: true, headers: { get: () => 'text/html' }, json: async () => ({}) }
+        : {
+            ok: true,
+            headers: { get: () => 'application/json' },
+            json: async () => ({ default: 'sunstone', uis }),
+          },
+    ),
+  )
+}
+
 beforeEach(() => {
   clearQueryCache()
+  clearUiSwitchCache()
   sessionStorage.clear()
+  document.cookie = 'openrelik_ui=; Path=/; Max-Age=0'
+  mockManifest(null)
 })
 
 afterEach(() => {
   wrapper?.unmount()
   wrapper = null
   document.body.innerHTML = ''
+  document.cookie = 'openrelik_ui=; Path=/; Max-Age=0'
 })
 
 describe('LoginView', () => {
@@ -264,5 +284,48 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.fullPath).toBe('/')
+  })
+
+  it('hides UI switcher when standalone/single-UI and renders dynamic switch buttons on multi-UI', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push('/login')
+    await router.isReady()
+
+    wrapper = mount(LoginView, {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Switch to ')
+    wrapper.unmount()
+
+    clearUiSwitchCache()
+    mockManifest([
+      { id: 'sunstone', name: 'Sunstone' },
+      { id: 'runestone', name: 'Runestone' },
+    ])
+    const assign = vi.fn()
+    vi.stubGlobal('location', {
+      pathname: '/login',
+      search: '?redirect=/folder/42',
+      hash: '',
+      protocol: 'http:',
+      assign,
+    })
+
+    wrapper = mount(LoginView, {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+    await flushPromises()
+
+    const switchButton = wrapper.findAll('button').find((b) => b.text() === 'Switch to Sunstone')
+    expect(switchButton).toBeDefined()
+
+    await switchButton!.trigger('click')
+    expect(document.cookie).toContain('openrelik_ui=sunstone')
+    expect(assign).toHaveBeenCalledWith('/login?redirect=/folder/42')
   })
 })
