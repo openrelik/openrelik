@@ -45,12 +45,12 @@ code, don't fight the tool.
 
 `.prettierrc.json`, unchanged:
 
-| Option | Value | Why |
-| :--- | :--- | :--- |
-| `semi` | `false` | House style; Prettier inserts the rare guard semicolon itself. |
-| `singleQuote` | `true` | House style. |
-| `printWidth` | `100` | Matches `.editorconfig`; fits dense UI code without wrapping every call. |
-| everything else | Prettier 3 defaults | Trailing commas `all`, arrow parens `always`, 2-space indent. |
+| Option          | Value               | Why                                                                      |
+| :-------------- | :------------------ | :----------------------------------------------------------------------- |
+| `semi`          | `false`             | House style; Prettier inserts the rare guard semicolon itself.           |
+| `singleQuote`   | `true`              | House style.                                                             |
+| `printWidth`    | `100`               | Matches `.editorconfig`; fits dense UI code without wrapping every call. |
+| everything else | Prettier 3 defaults | Trailing commas `all`, arrow parens `always`, 2-space indent.            |
 
 `.editorconfig` sets UTF-8, LF line endings, 2-space indent, final newline and
 no trailing whitespace for editors that don't run Prettier.
@@ -59,8 +59,7 @@ no trailing whitespace for editors that don't run Prettier.
 
 - **Format the whole repository**, not only `src/`: config files, Markdown
   docs, `AGENTS.md`, JSON. `.prettierignore` excludes only generated or
-  vendored files (`dist/`, `node_modules/`, `package-lock.json`,
-  `public/fonts/`).
+  vendored files (`dist/`, `node_modules/`, `package-lock.json`).
 - **Format on save** in your editor (Prettier extension, using the repo's
   Prettier version). Agents run `npm run format` before finishing.
 - **ESLint never formats.** `eslint-config-prettier` turns off every
@@ -98,7 +97,11 @@ error goes away.
 - **`interface` for object shapes, `type` for everything else**: unions,
   function types, aliases, mapped and conditional types.
   ```ts
-  interface Upload { key: string; name: string; sent: number }
+  interface Upload {
+    key: string
+    name: string
+    sent: number
+  }
   type QueryStatus = 'idle' | 'loading' | 'success' | 'error'
   type Fetcher = (signal: AbortSignal) => Promise<void>
   ```
@@ -115,12 +118,14 @@ error goes away.
   several kinds, give it a `kind` field, not several optional booleans:
   ```ts
   // No: which combinations are valid? What does { up: true, rm: true } mean?
-  interface Result { up?: boolean; rm?: boolean; mkdir?: boolean; folderName?: string }
+  interface Result {
+    up?: boolean
+    rm?: boolean
+    mkdir?: boolean
+    folderName?: string
+  }
   // Yes: each kind carries exactly its own fields.
-  type Result =
-    | { kind: 'up' }
-    | { kind: 'rm'; item: Item }
-    | { kind: 'mkdir'; folderName: string }
+  type Result = { kind: 'up' } | { kind: 'rm'; item: Item } | { kind: 'mkdir'; folderName: string }
   ```
   Switch on `kind`; the compiler checks each branch has the right fields.
   For exhaustiveness, end the switch with
@@ -186,7 +191,8 @@ error goes away.
   They read top-down, hoist, and show up by name in stack traces.
   **One-expression helpers** may be arrow constants:
   ```ts
-  const isAbort = (err: unknown): boolean => err instanceof DOMException && err.name === 'AbortError'
+  const isAbort = (err: unknown): boolean =>
+    err instanceof DOMException && err.name === 'AbortError'
   ```
   Arrow functions are otherwise for callbacks.
 - **Exported functions declare their return type.** Internal functions may
@@ -213,7 +219,9 @@ error goes away.
 - **Prefer `satisfies`** to check that a literal fits a type without
   widening or casting it:
   ```ts
-  const STATUS_LABEL = { running: 'running', success: 'done' } satisfies Partial<Record<TaskStatus, string>>
+  const STATUS_LABEL = { running: 'running', success: 'done' } satisfies Partial<
+    Record<TaskStatus, string>
+  >
   ```
 - **Non-null `!` only right after the check that makes it true, when the
   compiler can't follow it**: `map.get(key)!` straight after `map.has(key)`,
@@ -311,17 +319,17 @@ in functions.
 
 ## 5. Naming
 
-| Thing | Style | Examples |
-| :--- | :--- | :--- |
-| Variables, functions | `camelCase` | `queryState`, `formatSize` |
-| Types, interfaces | `PascalCase`, no `I`/`T` prefix | `Item`, `QueryState`, `UploadOptions` |
-| True constants (config numbers, fixed tables) | `SCREAMING_SNAKE` | `DEFAULT_STALE_MS`, `CANDIDATES` |
-| Components | `PascalCase.vue`, multi-word unless a base primitive | `FolderTable.vue`, `Button.vue` |
-| Composables | `useThing.ts`, exporting `useThing()` | `useRowSelection.ts` |
-| Utils, stores, types, endpoints | `camelCase.ts` | `textSearch.ts`, `rootPages.ts` |
-| Tests | `__tests__/<module>.test.ts` | `utils/__tests__/table.test.ts` |
-| Booleans | `is`/`has`/`can`/`should` or a past participle | `isFetching`, `canUpload`, `measured` |
-| Event handlers | `on` + event, or what it does | `onKeydown`, `retrySave` |
+| Thing                                         | Style                                                | Examples                              |
+| :-------------------------------------------- | :--------------------------------------------------- | :------------------------------------ |
+| Variables, functions                          | `camelCase`                                          | `queryState`, `formatSize`            |
+| Types, interfaces                             | `PascalCase`, no `I`/`T` prefix                      | `Item`, `QueryState`, `UploadOptions` |
+| True constants (config numbers, fixed tables) | `SCREAMING_SNAKE`                                    | `DEFAULT_STALE_MS`, `CANDIDATES`      |
+| Components                                    | `PascalCase.vue`, multi-word unless a base primitive | `FolderTable.vue`, `Button.vue`       |
+| Composables                                   | `useThing.ts`, exporting `useThing()`                | `useRowSelection.ts`                  |
+| Utils, stores, types, endpoints               | `camelCase.ts`                                       | `textSearch.ts`, `rootPages.ts`       |
+| Tests                                         | `__tests__/<module>.test.ts`                         | `utils/__tests__/table.test.ts`       |
+| Booleans                                      | `is`/`has`/`can`/`should` or a past participle       | `isFetching`, `canUpload`, `measured` |
+| Event handlers                                | `on` + event, or what it does                        | `onKeydown`, `retrySave`              |
 
 - **Acronyms are words:** `Id`, `Url`, `Api`, `Csv` (`ApiError`,
   `parseUrl`, `hexId`), never `ID`, `URL`.
@@ -338,7 +346,7 @@ in functions.
 
 ## 6. Comments
 
-`AGENTS.md` §4 sets the rule: comments explain *why*, in plain sentences, and
+`AGENTS.md` §4 sets the rule: comments explain _why_, in plain sentences, and
 stay accurate.
 
 - **`/** … */` on exports and on module headers**: what it's for, and the
@@ -378,20 +386,20 @@ landed, `test` joins `check`.
 
 Added on top of the current `flat/essential` + `vueTsConfigs.recommended`:
 
-| Rule | Setting | Enforces |
-| :--- | :--- | :--- |
-| `eqeqeq` | `error` | §3.3 |
-| `no-console` | `['error', { allow: ['warn', 'error'] }]` | §3.7 |
-| `no-restricted-imports` | patterns `['../*']` | §3.4, no `../` |
-| `no-restricted-syntax` | `TSEnumDeclaration`, `TSModuleDeclaration` | §3.2, no `enum` / `namespace` |
-| `prefer-const`, `no-var` | `error` (already in recommended; keep) | §3.5 |
-| `@typescript-eslint/consistent-type-imports` | `{ prefer: 'type-imports', fixStyle: 'inline-type-imports' }` | §3.4 |
-| `@typescript-eslint/no-import-type-side-effects` | `error` | §3.4, all-type imports use `import type` |
-| `@typescript-eslint/consistent-type-definitions` | `['error', 'interface']` | §3.2 |
-| `@typescript-eslint/explicit-module-boundary-types` | `error` | §3.5 |
-| `@typescript-eslint/no-explicit-any` | `error` (in recommended; keep) | §3.2 |
-| `@typescript-eslint/ban-ts-comment` | `error`, `ts-expect-error` allowed with description | §3.1 |
-| `@typescript-eslint/no-non-null-assertion` | **off for now**, see 7.4 | §3.6 |
+| Rule                                                | Setting                                                       | Enforces                                 |
+| :-------------------------------------------------- | :------------------------------------------------------------ | :--------------------------------------- |
+| `eqeqeq`                                            | `error`                                                       | §3.3                                     |
+| `no-console`                                        | `['error', { allow: ['warn', 'error'] }]`                     | §3.7                                     |
+| `no-restricted-imports`                             | patterns `['../*']`                                           | §3.4, no `../`                           |
+| `no-restricted-syntax`                              | `TSEnumDeclaration`, `TSModuleDeclaration`                    | §3.2, no `enum` / `namespace`            |
+| `prefer-const`, `no-var`                            | `error` (already in recommended; keep)                        | §3.5                                     |
+| `@typescript-eslint/consistent-type-imports`        | `{ prefer: 'type-imports', fixStyle: 'inline-type-imports' }` | §3.4                                     |
+| `@typescript-eslint/no-import-type-side-effects`    | `error`                                                       | §3.4, all-type imports use `import type` |
+| `@typescript-eslint/consistent-type-definitions`    | `['error', 'interface']`                                      | §3.2                                     |
+| `@typescript-eslint/explicit-module-boundary-types` | `error`                                                       | §3.5                                     |
+| `@typescript-eslint/no-explicit-any`                | `error` (in recommended; keep)                                | §3.2                                     |
+| `@typescript-eslint/ban-ts-comment`                 | `error`, `ts-expect-error` allowed with description           | §3.1                                     |
+| `@typescript-eslint/no-non-null-assertion`          | **off for now**, see 7.4                                      | §3.6                                     |
 
 Also move `pluginVue.configs['flat/essential']` to `flat/recommended`. It
 adds the Vue style guide's priority B and C rules; its formatting rules are
@@ -445,16 +453,16 @@ need judgement per site rather than a mechanical fix:
 
 ### 7.5 Decisions
 
-Decided 2026-11-01, as recommended. Items marked *revisit* go on the list
+Decided 2026-11-01, as recommended. Items marked _revisit_ go on the list
 for the testing effort after the review.
 
 1. **Vue `flat/recommended`: adopt in the rollout** (§7.4 step 7). 145 of
    its 148 problems fix themselves.
 2. **Type-aware lint rules** (`no-floating-promises`, `no-misused-promises`):
-   **not now**, because they make lint several times slower. *Revisit* after the
+   **not now**, because they make lint several times slower. _Revisit_ after the
    review.
 3. **Tailwind class sorting** (`prettier-plugin-tailwindcss`): **no for
    now**. It would reorder classes in every template and bury the review
-   diffs. Class order stays by hand (§4.5). *Revisit* after the review.
+   diffs. Class order stays by hand (§4.5). _Revisit_ after the review.
 4. **Import sorting by a tool** (`eslint-plugin-import-x`,
    `simple-import-sort`): **no**. Order stays by hand, per §3.4.

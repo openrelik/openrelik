@@ -288,7 +288,7 @@ map \$http_upgrade \$connection_upgrade {
 }
 
 map "\$scheme:\$http_x_forwarded_proto" \$cookie_secure_flag {
-    "~(^|:)https([,\s]|\$)" "; Secure";
+    "~*(^|:)https([,:\s]|\$)" "; Secure";
     default "";
 }
 
