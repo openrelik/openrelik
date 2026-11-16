@@ -97,7 +97,6 @@ requested_default="$(trim "${OPENRELIK_DEFAULT_UI:-}")"
 map_entries=""
 switch_locations=""
 asset_locations=""
-ui_ids=""
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT

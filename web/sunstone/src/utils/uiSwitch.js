@@ -199,11 +199,4 @@ export function switchToUi(targetId, options = {}) {
   }`;
   const targetPath = normalizeSunstonePath(currentPath);
   loc.assign(targetPath);
-  if (
-    loc.hash &&
-    targetPath === currentPath &&
-    typeof loc.reload === "function"
-  ) {
-    loc.reload();
-  }
 }

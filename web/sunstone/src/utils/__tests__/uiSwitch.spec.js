@@ -189,7 +189,6 @@ describe("uiSwitch", () => {
     it("sets openrelik_ui cookie and navigates to normalized path", () => {
       const setCookie = vi.fn();
       const assign = vi.fn();
-      const reload = vi.fn();
 
       switchToUi("runestone", {
         setCookie,
@@ -199,7 +198,6 @@ describe("uiSwitch", () => {
           hash: "",
           protocol: "https:",
           assign,
-          reload,
         },
       });
 
@@ -207,7 +205,6 @@ describe("uiSwitch", () => {
         "openrelik_ui=runestone; Path=/; Max-Age=31536000; SameSite=Lax; Secure"
       );
       expect(assign).toHaveBeenCalledWith("/folder/42");
-      expect(reload).not.toHaveBeenCalled();
     });
 
     it("ignores invalid target UI IDs", () => {

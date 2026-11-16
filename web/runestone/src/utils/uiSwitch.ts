@@ -29,7 +29,6 @@ export interface SwitchLocation {
   hash: string
   protocol: string
   assign: (url: string) => void
-  reload?: () => void
 }
 
 export interface SwitchUiOptions {
@@ -43,7 +42,7 @@ const MANIFEST_URL = '/__openrelik/uis.json'
 
 let cachedPromise: Promise<UiOption[]> | null = null
 
-/** Clears the memoized UI manifest lookup. Primarily used by tests. */
+/** Clears the memoized UI manifest lookup. */
 export function clearUiSwitchCache(): void {
   cachedPromise = null
 }
@@ -210,7 +209,4 @@ export function switchToUi(targetId: string, options: SwitchUiOptions = {}): voi
   const currentPath = `${loc.pathname}${loc.search}${loc.hash}`
   const targetPath = normalizeUiSwitchPath(currentPath)
   loc.assign(targetPath)
-  if (loc.hash && targetPath === currentPath && typeof loc.reload === 'function') {
-    loc.reload()
-  }
 }

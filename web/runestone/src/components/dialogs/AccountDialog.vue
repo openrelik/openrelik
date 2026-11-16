@@ -402,7 +402,7 @@ const user = computed(() => auth.user)
 
         <div
           v-if="!newKey"
-          class="flex h-10 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[11px] text-ink-muted"
+          class="flex min-h-10 shrink-0 flex-wrap items-center gap-3 border-t border-border bg-sunken px-4 py-1.5 text-[11px] text-ink-muted"
         >
           <Button variant="danger" size="row" @click="(close(), auth.logout())">
             <template #icon><LogOut :size="12" :stroke-width="1.5" /></template>

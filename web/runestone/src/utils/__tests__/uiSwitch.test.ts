@@ -184,7 +184,6 @@ describe('uiSwitch', () => {
     it('sets openrelik_ui cookie and navigates to normalized path', () => {
       const writeCookie = vi.fn()
       const assign = vi.fn()
-      const reload = vi.fn()
 
       switchToUi('sunstone', {
         writeCookie,
@@ -194,7 +193,6 @@ describe('uiSwitch', () => {
           hash: '#L12-L20',
           protocol: 'https:',
           assign,
-          reload,
         },
       })
 
@@ -202,13 +200,11 @@ describe('uiSwitch', () => {
         'openrelik_ui=sunstone; Path=/; Max-Age=31536000; SameSite=Lax; Secure',
       )
       expect(assign).toHaveBeenCalledWith('/folder/42/file/99')
-      expect(reload).not.toHaveBeenCalled()
     })
 
-    it('reloads when hash stays on same URL or skips invalid targetId', () => {
+    it('strips hash when navigating and skips invalid targetId', () => {
       const writeCookie = vi.fn()
       const assign = vi.fn()
-      const reload = vi.fn()
 
       switchToUi('sunstone', {
         writeCookie,
@@ -218,12 +214,9 @@ describe('uiSwitch', () => {
           hash: '#top',
           protocol: 'http:',
           assign,
-          reload,
         },
       })
-      // #top normalizes to /, which differs from /#top so assign navigates without reload
       expect(assign).toHaveBeenCalledWith('/')
-      expect(reload).not.toHaveBeenCalled()
 
       writeCookie.mockClear()
       assign.mockClear()

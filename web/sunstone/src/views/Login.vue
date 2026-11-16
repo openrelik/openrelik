@@ -151,6 +151,7 @@ export default {
 
       try {
         await this.loginUser(); // 1. Attempt to log in the user
+        sessionStorage.removeItem("openrelik.auth.user");
         this.$router.replace({ name: "home" }); // 2. Redirect to the home page
       } catch (err) {
         this.handleError(err);
@@ -215,6 +216,7 @@ export default {
     this.isMounted = false;
   },
   created() {
+    sessionStorage.removeItem("openrelik.auth.user");
     const urlParams = new URLSearchParams(window.location.search);
     const redirect_url = urlParams.get("redirect") || "/";
     sessionStorage.setItem("redirect_url", redirect_url);
