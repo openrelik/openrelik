@@ -22,8 +22,10 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 
+from redis.exceptions import LockError
 from uuid import uuid4
 
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +56,7 @@ class BlockDevice:
     MIN_PARTITION_SIZE_BYTES = 100 * 1024 * 1024  #: Default 100 MB
     MAX_NBD_DEVICES = 10  #: Default 10
     LOCK_TIMEOUT_SECONDS = 6 * 60 * 60  #: Default 6 hours
+    LOCK_RENEW_INTERVAL_SECONDS = 60 * 60  #: Renew every 1 hour while mounted
     MAX_MOUNTPATH_SIZE = 500  #: Default 500
 
     def __init__(
@@ -95,6 +98,47 @@ class BlockDevice:
         self.REDIS_URL = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
         self.redis_client = None
         self.redis_lock = None
+        self._lock_renew_stop = threading.Event()
+        self._lock_renew_thread: threading.Thread | None = None
+
+    def _start_lock_renewal(self) -> None:
+        self._lock_renew_stop.clear()
+
+        def _renew_loop() -> None:
+            while not self._lock_renew_stop.wait(self.LOCK_RENEW_INTERVAL_SECONDS):
+                lock = self.redis_lock
+                if not lock:
+                    break
+                try:
+                    if not lock.reacquire():
+                        logger.warning(f"Failed to reacquire Redis lock: {lock.name}")
+                        break
+                    logger.debug(f"Renewed Redis lock: {lock.name}")
+                except LockError as err:
+                    logger.warning(f"Failed to reacquire Redis lock {lock.name}: {err}")
+                    break
+                except Exception as err:
+                    logger.warning(f"Error renewing Redis lock {lock.name}: {err}")
+
+        self._lock_renew_thread = threading.Thread(
+            target=_renew_loop, name="openrelik-nbd-lock-renew", daemon=True
+        )
+        self._lock_renew_thread.start()
+
+    def _release_redis_lock(self) -> None:
+        self._lock_renew_stop.set()
+        if self._lock_renew_thread and self._lock_renew_thread.is_alive():
+            self._lock_renew_thread.join(timeout=2.0)
+        self._lock_renew_thread = None
+        lock = self.redis_lock
+        self.redis_lock = None
+        if not lock:
+            return
+        try:
+            lock.release()
+            logger.info(f"Redis lock released: {lock.name}")
+        except LockError as err:
+            logger.warning(f"Could not release Redis lock {lock.name}: {err}")
 
     def setup(self):
         """Setup BlockDevice instance
@@ -152,14 +196,12 @@ class BlockDevice:
                     logger.error(
                         f"Error cleaning up EWF mount after setup failure: {cleanup_error}"
                     )
-            if self.redis_lock:
-                try:
-                    self.redis_lock.release()
-                    self.redis_lock = None
-                except Exception as cleanup_error:
-                    logger.error(
-                        f"Error releasing Redis lock after setup failure: {cleanup_error}"
-                    )
+            try:
+                self._release_redis_lock()
+            except Exception as cleanup_error:
+                logger.error(
+                    f"Error releasing Redis lock after setup failure: {cleanup_error}"
+                )
             raise
 
     def _losetup(self) -> str:
@@ -229,9 +271,11 @@ class BlockDevice:
                 name=f"{hostname}-{devname}",
                 timeout=self.LOCK_TIMEOUT_SECONDS,
                 blocking=False,
+                thread_local=False,
             )
             if lock.acquire():
                 self.redis_lock = lock
+                self._start_lock_renewal()
                 logger.info(
                     f"Redis lock succesfully set: {lock.name} for {hostname}-{devname}"
                 )
@@ -734,6 +778,4 @@ class BlockDevice:
             self._detach_device()
         if self.ewf_mount_path:
             self._ewfumount()
-        if self.redis_lock:
-            self.redis_lock.release()
-            logger.info(f"Redis lock released: {self.redis_lock.name}")
+        self._release_redis_lock()
