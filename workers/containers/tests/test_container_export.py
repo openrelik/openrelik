@@ -231,6 +231,82 @@ class TestContainerExport(unittest.TestCase):
 
         self.assertEqual(result, [mock_output_file_1, mock_output_file_2])
 
+    @patch("src.container_export.create_task_result", return_value="encoded_result")
+    @patch("src.container_export.BlockDevice")
+    @patch("src.container_export.log_entry")
+    @patch("src.container_export.create_output_file")
+    @patch("src.container_export.telemetry")
+    @patch("src.container_export.get_input_files")
+    def test_container_export_no_mountpoints_umounts_once(
+        self,
+        mock_get_input_files,
+        mock_telemetry,
+        mock_create_output_file,
+        mock_log_entry,
+        mock_block_device_cls,
+        mock_create_task_result,
+    ):
+        """Ensures bd.umount() is called once via finally when mount() returns empty."""
+        mock_get_input_files.return_value = [
+            {"id": "disk.qcow2", "path": "/fake/disk.qcow2"}
+        ]
+        mock_create_output_file.return_value = self.log_file
+        mock_bd = mock_block_device_cls.return_value
+        mock_bd.mount.return_value = []
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_export.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[{"id": "disk.qcow2", "path": "/fake/disk.qcow2"}],
+            output_path=self.output_path,
+            workflow_id=self.workflow_id,
+            task_config={},
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_bd.setup.assert_called_once_with()
+        mock_bd.mount.assert_called_once_with()
+        mock_bd.umount.assert_called_once_with()
+
+    @patch("src.container_export.create_task_result", return_value="encoded_result")
+    @patch("src.container_export.BlockDevice", side_effect=RuntimeError("bad image"))
+    @patch("src.container_export.log_entry")
+    @patch("src.container_export.create_output_file")
+    @patch("src.container_export.telemetry")
+    @patch("src.container_export.get_input_files")
+    def test_container_export_block_device_init_failure_guards_umount(
+        self,
+        mock_get_input_files,
+        mock_telemetry,
+        mock_create_output_file,
+        mock_log_entry,
+        mock_block_device_cls,
+        mock_create_task_result,
+    ):
+        """Ensures finally block guards bd.umount() when BlockDevice init raises."""
+        mock_get_input_files.return_value = [
+            {"id": "disk.qcow2", "path": "/fake/disk.qcow2"}
+        ]
+        mock_create_output_file.return_value = self.log_file
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_export.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[{"id": "disk.qcow2", "path": "/fake/disk.qcow2"}],
+            output_path=self.output_path,
+            workflow_id=self.workflow_id,
+            task_config={},
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_create_task_result.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

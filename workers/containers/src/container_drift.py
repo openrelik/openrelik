@@ -133,7 +133,6 @@ def container_drift(
             mountpoints: list[str] = bd.mount()
             if not mountpoints:
                 logger.info("No mountpoints returned for input file")
-                bd.umount()
                 continue
 
             # Process each mountpoint and check for containers.
@@ -158,9 +157,10 @@ def container_drift(
         except RuntimeError as e:
             logger.error("Disk mounting error encountered: %s", str(e))
         finally:
-            logger.debug("Unmounting disk %s", input_file_path)
             log_entry(log_file, f"Done processing {input_file_path}")
-            bd.umount()
+            if bd:
+                logger.debug("Unmounting disk %s", input_file_path)
+                bd.umount()
         logger.debug("Proceessing input %s completed", input_file_path)
 
     report: Report = create_task_report(output_files)

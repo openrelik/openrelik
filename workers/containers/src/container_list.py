@@ -130,10 +130,6 @@ def container_list(
             mountpoints: list[str] = bd.mount()
             if not mountpoints:
                 logger.info("No mountpoints returned for disk %s", input_file_id)
-                logger.info("Unmounting the disk %s", input_file_id)
-
-                bd.umount()
-
                 # Skipping current input_file.
                 continue
 
@@ -166,9 +162,10 @@ def container_list(
         except RuntimeError:
             logger.error("Encountered unexpected error while processing disk %s", input_file_id)
         finally:
-            logger.debug("Unmounting disk %s", input_file_id)
             log_entry(log_file, f"Done processing {input_file.get('path', '')}")
-            bd.umount()
+            if bd:
+                logger.debug("Unmounting disk %s", input_file_id)
+                bd.umount()
 
         logger.debug("Completed processing %d input disks", len(input_files))
 
