@@ -23,6 +23,7 @@ from uuid import uuid4
 from openrelik_worker_common.file_utils import create_output_file
 
 from src.container_export import (
+    conainer_export,
     export_container,
     export_all_containers,
 )
