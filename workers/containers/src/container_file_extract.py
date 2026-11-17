@@ -185,8 +185,9 @@ def container_file_extraction(
 
         input_file_name: str = input_file.get("display_name", "unknown")
 
+        bd: BlockDevice | None = None
         try:
-            bd: BlockDevice = BlockDevice(image_path=input_file_path, max_mountpath_size=11)
+            bd = BlockDevice(image_path=input_file_path, max_mountpath_size=11)
             bd.setup()
 
             mountpoints: list[str] = bd.mount()

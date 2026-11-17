@@ -124,10 +124,11 @@ def container_drift(
             log_entry(log_file, "No path for input file.")
             continue
 
+        bd: BlockDevice | None = None
         try:
             # Using shorter mountpoint like /mnt/abcdef.
             # Overlay mount layers can get large and reach mount option limit of 4KB.
-            bd: BlockDevice = BlockDevice(image_path=input_file_path, max_mountpath_size=11)
+            bd = BlockDevice(image_path=input_file_path, max_mountpath_size=11)
             bd.setup()
 
             mountpoints: list[str] = bd.mount()

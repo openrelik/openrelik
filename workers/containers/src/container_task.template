@@ -106,6 +106,7 @@ def container_list(
         input_file_id: str = input_file.get("id", "")
         input_file_path: str = input_file.get("path", "")
 
+        bd: BlockDevice | None = None
         try:
             bd = BlockDevice(input_file_path, max_mountpath_size=8)
             bd.setup()

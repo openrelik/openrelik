@@ -422,6 +422,7 @@ def container_export(
         else:
             logger.info("Processing all containers")
 
+        bd: BlockDevice | None = None
         try:
             bd = BlockDevice(input_file.get("path"))
             bd.setup()
