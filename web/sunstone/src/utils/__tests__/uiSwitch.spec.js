@@ -19,6 +19,7 @@ import {
   clearUiSwitchCache,
   formatUiCookie,
   getAlternativeUis,
+  getAvailableUis,
   normalizeSunstonePath,
   switchToUi,
 } from "../uiSwitch";
@@ -125,11 +126,17 @@ describe("uiSwitch", () => {
 
       const first = await getAlternativeUis();
       const second = await getAlternativeUis();
+      const all = await getAvailableUis();
       expect(first).toEqual([
         { id: "runestone", name: "Runestone" },
         { id: "custom-ui", name: "Custom UI" },
       ]);
       expect(second).toEqual(first);
+      expect(all).toEqual([
+        { id: "sunstone", name: "Sunstone" },
+        { id: "runestone", name: "Runestone" },
+        { id: "custom-ui", name: "Custom UI" },
+      ]);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock).toHaveBeenCalledWith("/__openrelik/uis.json", {
         cache: "no-store",

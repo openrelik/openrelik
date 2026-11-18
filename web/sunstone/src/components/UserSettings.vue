@@ -177,30 +177,33 @@ limitations under the License.
               Enable or disable the creation of chords in the workflow
             </v-list-item-subtitle>
           </v-list-item>
-          <template v-if="alternativeUis.length > 0">
+          <template v-if="uiOptions.length > 1">
             <v-list-subheader class="text-h6 font-weight-bold mb-2 mt-4">
               Interface
             </v-list-subheader>
             <v-list-item>
-              <v-list-item-title class="text-body-2 font-weight-medium">
+              <v-list-item-title
+                id="web-ui-label"
+                class="text-body-2 font-weight-medium"
+              >
                 Web UI
               </v-list-item-title>
               <v-list-item-subtitle class="text-caption">
-                Switch to another OpenRelik web interface
+                Choose which OpenRelik web interface to use
               </v-list-item-subtitle>
-              <div class="d-flex flex-wrap ga-2 mt-2">
-                <v-btn
-                  v-for="ui in alternativeUis"
-                  :key="ui.id"
-                  variant="outlined"
-                  size="small"
-                  class="text-none"
-                  prepend-icon="mdi-swap-horizontal"
-                  @click="switchToUi(ui.id)"
-                >
-                  Switch to {{ ui.name }}
-                </v-btn>
-              </div>
+              <v-select
+                :model-value="CURRENT_UI_ID"
+                :items="uiOptions"
+                item-title="name"
+                item-value="id"
+                aria-labelledby="web-ui-label"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="mt-3"
+                style="max-width: 260px"
+                @update:model-value="onSelectUi"
+              ></v-select>
             </v-list-item>
           </template>
         </v-list>
@@ -213,23 +216,43 @@ limitations under the License.
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useUserSettings } from "@/composables/useUserSettings";
 import { useAppStore } from "@/stores/app";
-import { getAlternativeUis, switchToUi } from "@/utils/uiSwitch";
+import {
+  CURRENT_UI_ID,
+  getAvailableUis,
+  switchToUi,
+} from "@/utils/uiSwitch";
 
 const dialog = ref(false);
-const alternativeUis = ref([]);
+const availableUis = ref([]);
 const { settings } = useUserSettings();
 const appStore = useAppStore();
 
 let active = true;
 onMounted(async () => {
-  const uis = await getAlternativeUis();
+  const uis = await getAvailableUis();
   if (active) {
-    alternativeUis.value = uis;
+    availableUis.value = uis;
   }
 });
 onUnmounted(() => {
   active = false;
 });
+
+const uiOptions = computed(() => {
+  if (availableUis.value.length < 2) {
+    return [];
+  }
+  if (availableUis.value.some((ui) => ui.id === CURRENT_UI_ID)) {
+    return availableUis.value;
+  }
+  return [{ id: CURRENT_UI_ID, name: "Sunstone" }, ...availableUis.value];
+});
+
+const onSelectUi = (targetId) => {
+  if (targetId && targetId !== CURRENT_UI_ID) {
+    switchToUi(targetId);
+  }
+};
 
 const llmsAvailable = computed(() => {
   return appStore.systemConfig?.active_llms?.length > 0;

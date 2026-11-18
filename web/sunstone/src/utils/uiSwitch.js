@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 const UI_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
-const CURRENT_UI_ID = "sunstone";
+export const CURRENT_UI_ID = "sunstone";
 const MANIFEST_URL = "/__openrelik/uis.json";
 
 let cachedPromise = null;
@@ -28,13 +28,13 @@ export function clearUiSwitchCache() {
 }
 
 /**
- * Fetches and memoizes GET /__openrelik/uis.json, returning alternative UI
- * entries when two or more valid UIs are registered. Returns [] on standalone
+ * Fetches and memoizes GET /__openrelik/uis.json, returning all valid UI
+ * entries when two or more UIs are registered. Returns [] on standalone
  * deployments (where SPA fallback returns text/html) or single-UI setups.
  */
-export async function getAlternativeUis() {
+export async function getAvailableUis() {
   if (cachedPromise) {
-    return cachedPromise;
+    return (await cachedPromise).slice();
   }
   if (typeof fetch !== "function") {
     return [];
@@ -75,7 +75,7 @@ export async function getAlternativeUis() {
       if (validUis.length < 2) {
         return [];
       }
-      return validUis.filter((ui) => ui.id !== CURRENT_UI_ID);
+      return validUis;
     } catch {
       cachedPromise = null;
       return [];
@@ -83,7 +83,16 @@ export async function getAlternativeUis() {
   })();
 
   cachedPromise = request;
-  return request;
+  return (await request).slice();
+}
+
+/**
+ * Returns alternative UI entries (excluding Sunstone) when two or more valid
+ * UIs are registered.
+ */
+export async function getAlternativeUis() {
+  const uis = await getAvailableUis();
+  return uis.filter((ui) => ui.id !== CURRENT_UI_ID);
 }
 
 /**

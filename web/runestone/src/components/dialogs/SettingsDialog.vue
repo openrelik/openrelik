@@ -14,14 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { Monitor, Moon, Sun, X } from '@/components/icons'
+import { computed, ref, watch } from 'vue'
+import { ChevronDown, Monitor, Moon, Sun, X } from '@/components/icons'
 
-import Button from '@/components/base/Button.vue'
 import Switch from '@/components/base/Switch.vue'
 import { settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
 import { PAGE_SIZES } from '@/stores/settings'
-import { getAlternativeUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
+import { CURRENT_UI_ID, getAvailableUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
 
 /**
  * Settings, as a dialog over whatever page you are on — so changing one never
@@ -32,7 +31,7 @@ import { getAlternativeUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
  * is for the person who will later grep a config file for it.
  */
 const settings = useSettings()
-const alternativeUis = ref<UiOption[]>([])
+const availableUis = ref<UiOption[]>([])
 let loadGeneration = 0
 
 watch(
@@ -40,13 +39,28 @@ watch(
   async (open) => {
     const generation = ++loadGeneration
     if (!open) return
-    const uis = await getAlternativeUis()
+    const uis = await getAvailableUis()
     if (generation === loadGeneration && settingsOpen.value) {
-      alternativeUis.value = uis
+      availableUis.value = uis
     }
   },
   { immediate: true },
 )
+
+const uiOptions = computed<UiOption[]>(() => {
+  if (availableUis.value.length < 2) return []
+  if (availableUis.value.some((ui) => ui.id === CURRENT_UI_ID)) {
+    return availableUis.value
+  }
+  return [{ id: CURRENT_UI_ID, name: 'Runestone' }, ...availableUis.value]
+})
+
+function onUiChange(event: Event): void {
+  const targetId = (event.target as HTMLSelectElement).value
+  if (targetId && targetId !== CURRENT_UI_ID) {
+    switchToUi(targetId)
+  }
+}
 
 const close = () => (settingsOpen.value = false)
 
@@ -125,20 +139,32 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
               >
             </div>
 
-            <div v-if="alternativeUis.length > 0" class="flex items-center gap-3 px-4 py-2.5">
+            <div v-if="uiOptions.length > 1" class="flex items-center gap-3 px-4 py-2.5">
               <div class="min-w-0 flex-1">
-                <p class="font-medium text-ink">Interface</p>
-                <p class="text-ink-muted">Switch to another OpenRelik web interface</p>
+                <label for="settings-ui-select" class="block font-medium text-ink">Interface</label>
+                <p id="settings-ui-help" class="text-ink-muted">
+                  Choose which OpenRelik web interface to use
+                </p>
               </div>
-              <div class="flex flex-wrap items-center justify-end gap-1.5">
-                <Button
-                  v-for="ui in alternativeUis"
-                  :key="ui.id"
-                  size="row"
-                  @click="switchToUi(ui.id)"
+              <div class="relative shrink-0">
+                <select
+                  id="settings-ui-select"
+                  name="openrelik_ui"
+                  :value="CURRENT_UI_ID"
+                  aria-describedby="settings-ui-help"
+                  class="field h-7 min-w-32 cursor-pointer appearance-none pr-7 pl-2.5 text-[12px] font-medium text-ink"
+                  @change="onUiChange"
                 >
-                  Switch to {{ ui.name }}
-                </Button>
+                  <option v-for="ui in uiOptions" :key="ui.id" :value="ui.id">
+                    {{ ui.name }}
+                  </option>
+                </select>
+                <ChevronDown
+                  :size="13"
+                  :stroke-width="1.5"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
+                />
               </div>
               <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
                 >openrelik_ui = <span class="text-brand">"runestone"</span></code

@@ -37,7 +37,7 @@ export interface SwitchUiOptions {
 }
 
 const UI_ID_RE = /^[a-z0-9][a-z0-9-]*$/
-const CURRENT_UI_ID = 'runestone'
+export const CURRENT_UI_ID = 'runestone'
 const MANIFEST_URL = '/__openrelik/uis.json'
 
 let cachedPromise: Promise<UiOption[]> | null = null
@@ -70,16 +70,16 @@ function parseManifest(raw: unknown): UiOption[] {
   if (validUis.length < 2) {
     return []
   }
-  return validUis.filter((ui) => ui.id !== CURRENT_UI_ID)
+  return validUis
 }
 
 /**
- * Fetches and memoizes GET /__openrelik/uis.json, returning alternative UI
- * entries when two or more valid UIs are registered.
+ * Fetches and memoizes GET /__openrelik/uis.json, returning all valid UI
+ * entries when two or more UIs are registered.
  */
-export async function getAlternativeUis(): Promise<UiOption[]> {
+export async function getAvailableUis(): Promise<UiOption[]> {
   if (cachedPromise) {
-    return cachedPromise
+    return (await cachedPromise).slice()
   }
   if (typeof fetch !== 'function') {
     return []
@@ -107,7 +107,16 @@ export async function getAlternativeUis(): Promise<UiOption[]> {
   })()
 
   cachedPromise = request
-  return request
+  return (await request).slice()
+}
+
+/**
+ * Returns alternative UI entries (excluding Runestone) when two or more valid
+ * UIs are registered.
+ */
+export async function getAlternativeUis(): Promise<UiOption[]> {
+  const uis = await getAvailableUis()
+  return uis.filter((ui) => ui.id !== CURRENT_UI_ID)
 }
 
 /** Formats the openrelik_ui cookie string for an allowlisted UI ID. */

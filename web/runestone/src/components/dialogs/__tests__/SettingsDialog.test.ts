@@ -165,11 +165,11 @@ describe('SettingsDialog', () => {
     expect(body.find('[role="dialog"]').exists()).toBe(false)
   })
 
-  it('hides UI switcher when standalone or single-UI and renders dynamic switch buttons for 2 and 3+ UIs', async () => {
+  it('hides UI switcher when standalone or single-UI and renders a select box for 2 and 3+ UIs', async () => {
     const body = mountDialog()
     openSettings()
     await flushPromises()
-    expect(body.text()).not.toContain('Switch to ')
+    expect(body.find('#settings-ui-select').exists()).toBe(false)
 
     settingsOpen.value = false
     await nextTick()
@@ -177,7 +177,7 @@ describe('SettingsDialog', () => {
     mockManifest([{ id: 'runestone', name: 'Runestone' }])
     openSettings()
     await flushPromises()
-    expect(body.text()).not.toContain('Switch to ')
+    expect(body.find('#settings-ui-select').exists()).toBe(false)
 
     settingsOpen.value = false
     await nextTick()
@@ -199,14 +199,40 @@ describe('SettingsDialog', () => {
     openSettings()
     await flushPromises()
 
-    const switchButtons = body.findAll('button').filter((b) => b.text().startsWith('Switch to '))
-    expect(switchButtons.map((b) => b.text())).toEqual([
-      'Switch to Sunstone',
-      'Switch to Custom UI',
+    const select = body.get('#settings-ui-select')
+    expect((select.element as HTMLSelectElement).value).toBe('runestone')
+    expect(
+      select.findAll('option').map((o) => ({ value: o.element.value, text: o.text() })),
+    ).toEqual([
+      { value: 'sunstone', text: 'Sunstone' },
+      { value: 'runestone', text: 'Runestone' },
+      { value: 'custom', text: 'Custom UI' },
     ])
 
-    await switchButtons[0]!.trigger('click')
-    expect(document.cookie).toContain('openrelik_ui=sunstone')
+    // Re-selecting the current UI is a no-op.
+    await select.setValue('runestone')
+    expect(assign).not.toHaveBeenCalled()
+
+    await select.setValue('custom')
+    expect(document.cookie).toContain('openrelik_ui=custom')
     expect(assign).toHaveBeenCalledWith('/folder/7')
+
+    // Falls back to prepending Runestone when a multi-UI manifest omits its ID.
+    settingsOpen.value = false
+    await nextTick()
+    clearUiSwitchCache()
+    mockManifest([
+      { id: 'sunstone', name: 'Sunstone' },
+      { id: 'custom', name: 'Custom UI' },
+    ])
+    openSettings()
+    await flushPromises()
+
+    const fallbackSelect = body.get('#settings-ui-select')
+    expect(fallbackSelect.findAll('option').map((o) => o.element.value)).toEqual([
+      'runestone',
+      'sunstone',
+      'custom',
+    ])
   })
 })
