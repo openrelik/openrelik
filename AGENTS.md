@@ -76,4 +76,6 @@ and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
   `spec/<slug>`). Refer to the issue in commits and PRs (`Refs #123`, and `Closes #123`
   on the code PR). A bugfix needs a failing regression test first and a commit message
   stating the symptom, the cause, and the fix.
+- Keep implementations simple and avoid being overly defensive. Don't add unnecessary
+  complexity or speculative guards for unlikely edge cases.
 - Follow the `AGENTS.md` of the component you change, if it has one.
