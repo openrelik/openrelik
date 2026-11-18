@@ -144,6 +144,7 @@ function addRefreshTokenInterceptor(client) {
           // This could happen if the refresh token is invalid or expired.
           console.error("Refresh error, redirect");
           sessionStorage.removeItem("csrfToken");
+          sessionStorage.removeItem("openrelik.auth.user");
           window.location.href = "/login?redirect=" + window.location.pathname;
         }
       }

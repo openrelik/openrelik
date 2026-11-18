@@ -18,13 +18,14 @@ limitations under the License.
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
-import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SettingsDialog from '@/components/dialogs/SettingsDialog.vue'
 import directives from '@/directives'
 import { openSettings, settingsOpen, useSettings } from '@/composables/useSettings'
 import { useModalStore } from '@/stores/modals'
+import { clearUiSwitchCache } from '@/utils/uiSwitch'
 
 const pinia = createPinia()
 setActivePinia(pinia)
@@ -54,9 +55,27 @@ function mountDialog(): DOMWrapper<HTMLElement> {
   return new DOMWrapper(document.body)
 }
 
+function mockManifest(uis: Array<{ id: string; name: string }> | null): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      uis === null
+        ? { ok: true, headers: { get: () => 'text/html' }, json: async () => ({}) }
+        : {
+            ok: true,
+            headers: { get: () => 'application/json' },
+            json: async () => ({ default: 'sunstone', uis }),
+          },
+    ),
+  )
+}
+
 beforeEach(() => {
   setActivePinia(pinia)
   localStorage.clear()
+  document.cookie = 'openrelik_ui=; Path=/; Max-Age=0'
+  clearUiSwitchCache()
+  mockManifest(null)
   useModalStore().closeAllModals()
   resetPreferences()
 })
@@ -66,6 +85,7 @@ afterEach(() => {
   wrapper?.unmount()
   wrapper = null
   document.body.innerHTML = ''
+  document.cookie = 'openrelik_ui=; Path=/; Max-Age=0'
   localStorage.clear()
 })
 
@@ -143,5 +163,76 @@ describe('SettingsDialog', () => {
     await body.get('[aria-hidden="true"]').trigger('pointerdown')
     expect(settingsOpen.value).toBe(false)
     expect(body.find('[role="dialog"]').exists()).toBe(false)
+  })
+
+  it('hides UI switcher when standalone or single-UI and renders a select box for 2 and 3+ UIs', async () => {
+    const body = mountDialog()
+    openSettings()
+    await flushPromises()
+    expect(body.find('#settings-ui-select').exists()).toBe(false)
+
+    settingsOpen.value = false
+    await nextTick()
+    clearUiSwitchCache()
+    mockManifest([{ id: 'runestone', name: 'Runestone' }])
+    openSettings()
+    await flushPromises()
+    expect(body.find('#settings-ui-select').exists()).toBe(false)
+
+    settingsOpen.value = false
+    await nextTick()
+    clearUiSwitchCache()
+    mockManifest([
+      { id: 'sunstone', name: 'Sunstone' },
+      { id: 'runestone', name: 'Runestone' },
+      { id: 'custom', name: 'Custom UI' },
+    ])
+    const assign = vi.fn()
+    vi.stubGlobal('location', {
+      pathname: '/folder/7',
+      search: '',
+      hash: '',
+      protocol: 'http:',
+      assign,
+    })
+
+    openSettings()
+    await flushPromises()
+
+    const select = body.get('#settings-ui-select')
+    expect((select.element as HTMLSelectElement).value).toBe('runestone')
+    expect(
+      select.findAll('option').map((o) => ({ value: o.element.value, text: o.text() })),
+    ).toEqual([
+      { value: 'sunstone', text: 'Sunstone' },
+      { value: 'runestone', text: 'Runestone' },
+      { value: 'custom', text: 'Custom UI' },
+    ])
+
+    // Re-selecting the current UI is a no-op.
+    await select.setValue('runestone')
+    expect(assign).not.toHaveBeenCalled()
+
+    await select.setValue('custom')
+    expect(document.cookie).toContain('openrelik_ui=custom')
+    expect(assign).toHaveBeenCalledWith('/folder/7')
+
+    // Falls back to prepending Runestone when a multi-UI manifest omits its ID.
+    settingsOpen.value = false
+    await nextTick()
+    clearUiSwitchCache()
+    mockManifest([
+      { id: 'sunstone', name: 'Sunstone' },
+      { id: 'custom', name: 'Custom UI' },
+    ])
+    openSettings()
+    await flushPromises()
+
+    const fallbackSelect = body.get('#settings-ui-select')
+    expect(fallbackSelect.findAll('option').map((o) => o.element.value)).toEqual([
+      'runestone',
+      'sunstone',
+      'custom',
+    ])
   })
 })

@@ -93,10 +93,13 @@ def test_worktree_must_be_clean(repo, dev):
 def test_version_check_gate_failure_reverts(release_env, dev):
     repo = release_env
     (repo / "web" / "sunstone").mkdir(parents=True, exist_ok=True)
-    pkg = repo / "web" / "sunstone" / "package.json"
-    pkg.write_text('{\n  "name": "sunstone",\n  "version": "0.18.0"\n}\n')
+    sunstone_pkg = repo / "web" / "sunstone" / "package.json"
+    sunstone_pkg.write_text('{\n  "name": "openrelik-ui",\n  "version": "0.18.0"\n}\n')
+    (repo / "web" / "runestone").mkdir(parents=True, exist_ok=True)
+    runestone_pkg = repo / "web" / "runestone" / "package.json"
+    runestone_pkg.write_text('{\n  "name": "openrelik-web-runestone",\n  "version": "0.18.0"\n}\n')
     git(repo, "add", ".")
-    git(repo, "commit", "-m", "add sunstone")
+    git(repo, "commit", "-m", "add sunstone and runestone")
 
     check_script = repo / ".github" / "scripts" / "check-versions.py"
     check_script.write_text("#!/usr/bin/env python3\nimport sys\nsys.exit(1)\n")
@@ -104,21 +107,26 @@ def test_version_check_gate_failure_reverts(release_env, dev):
 
     res = dev("release", "ui", "0.18.1", exit_code=1)
     assert ".github/scripts/check-versions.py failed; the changes are reverted" in res.output
-    assert '"version": "0.18.0"' in pkg.read_text()
+    assert '"version": "0.18.0"' in sunstone_pkg.read_text()
+    assert '"version": "0.18.0"' in runestone_pkg.read_text()
 
 
 def test_release_ui_success(release_env, dev):
     repo = release_env
     (repo / "web" / "sunstone").mkdir(parents=True, exist_ok=True)
-    pkg = repo / "web" / "sunstone" / "package.json"
-    pkg.write_text('{\n  "name": "sunstone",\n  "version": "0.18.0"\n}\n')
+    sunstone_pkg = repo / "web" / "sunstone" / "package.json"
+    sunstone_pkg.write_text('{\n  "name": "openrelik-ui",\n  "version": "0.18.0"\n}\n')
+    (repo / "web" / "runestone").mkdir(parents=True, exist_ok=True)
+    runestone_pkg = repo / "web" / "runestone" / "package.json"
+    runestone_pkg.write_text('{\n  "name": "openrelik-web-runestone",\n  "version": "0.18.0"\n}\n')
     git(repo, "add", ".")
     git(repo, "commit", "-m", "setup for ui release")
 
     res = dev("release", "ui", "0.18.1")
     assert "committed: Release the UI 0.18.1" in res.output
     assert "not tagged: on a branch for a pull request (ui-v0.18.1)" in res.output
-    assert '"version": "0.18.1"' in pkg.read_text()
+    assert '"version": "0.18.1"' in sunstone_pkg.read_text()
+    assert '"version": "0.18.1"' in runestone_pkg.read_text()
 
     tag_res = dev("release", "tag", "HEAD")
     assert "tagged" in tag_res.output

@@ -177,6 +177,35 @@ limitations under the License.
               Enable or disable the creation of chords in the workflow
             </v-list-item-subtitle>
           </v-list-item>
+          <template v-if="uiOptions.length > 1">
+            <v-list-subheader class="text-h6 font-weight-bold mb-2 mt-4">
+              Interface
+            </v-list-subheader>
+            <v-list-item>
+              <v-list-item-title
+                id="web-ui-label"
+                class="text-body-2 font-weight-medium"
+              >
+                Web UI
+              </v-list-item-title>
+              <v-list-item-subtitle class="text-caption">
+                Choose which OpenRelik web interface to use
+              </v-list-item-subtitle>
+              <v-select
+                :model-value="CURRENT_UI_ID"
+                :items="uiOptions"
+                item-title="name"
+                item-value="id"
+                aria-labelledby="web-ui-label"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="mt-3"
+                style="max-width: 260px"
+                @update:model-value="onSelectUi"
+              ></v-select>
+            </v-list-item>
+          </template>
         </v-list>
       </v-container>
     </v-card>
@@ -184,13 +213,46 @@ limitations under the License.
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useUserSettings } from "@/composables/useUserSettings";
 import { useAppStore } from "@/stores/app";
+import {
+  CURRENT_UI_ID,
+  getAvailableUis,
+  switchToUi,
+} from "@/utils/uiSwitch";
 
 const dialog = ref(false);
+const availableUis = ref([]);
 const { settings } = useUserSettings();
 const appStore = useAppStore();
+
+let active = true;
+onMounted(async () => {
+  const uis = await getAvailableUis();
+  if (active) {
+    availableUis.value = uis;
+  }
+});
+onUnmounted(() => {
+  active = false;
+});
+
+const uiOptions = computed(() => {
+  if (availableUis.value.length < 2) {
+    return [];
+  }
+  if (availableUis.value.some((ui) => ui.id === CURRENT_UI_ID)) {
+    return availableUis.value;
+  }
+  return [{ id: CURRENT_UI_ID, name: "Sunstone" }, ...availableUis.value];
+});
+
+const onSelectUi = (targetId) => {
+  if (targetId && targetId !== CURRENT_UI_ID) {
+    switchToUi(targetId);
+  }
+};
 
 const llmsAvailable = computed(() => {
   return appStore.systemConfig?.active_llms?.length > 0;

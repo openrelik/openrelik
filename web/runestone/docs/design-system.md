@@ -140,7 +140,7 @@ Status accents are **never displayed as solid, saturated blocks of color**. Soli
 
 ### One Family, Two Faces
 
-The console is set in IBM Plex: **Plex Sans** for the interface and prose, **Plex Mono** for data. Both are self-hosted from `public/fonts/` (never a font service) and designed as a pair, so the mix reads as one system.
+The console is set in IBM Plex: **Plex Sans** for the interface and prose, **Plex Mono** for data. Both are self-hosted from `public/assets/runestone/fonts/` (never a font service) and designed as a pair, so the mix reads as one system.
 
 ```css
 --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; /* the page */

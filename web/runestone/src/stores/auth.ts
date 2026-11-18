@@ -55,6 +55,7 @@ import { useModalStore } from '@/stores/modals'
 import { useRootPagesStore } from '@/stores/rootPages'
 import { useRunStore } from '@/stores/run'
 import { useWorkflowsStore } from '@/stores/workflows'
+import { clearUiSwitchCache } from '@/utils/uiSwitch'
 
 const STORAGE_USER_KEY = 'openrelik.auth.user'
 
@@ -110,6 +111,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Bytes must not keep flowing on a session that just ended.
       clearDownloads()
       clearUploads()
+      clearUiSwitchCache()
     }
   }
 

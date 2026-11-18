@@ -143,6 +143,25 @@ services:
       postgres:
         condition: service_healthy
 
+  # Routes browser traffic between registered web UIs on UI_PORT (cookie + /assets/<id>/).
+  web-router:
+    build:
+      context: ./web/router
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./web/router
+    restart: always
+    environment:
+      OPENRELIK_DEFAULT_UI: ${OPENRELIK_DEFAULT_UI:-sunstone}
+      OPENRELIK_UIS: ${OPENRELIK_UIS:-sunstone|Sunstone|http://web-sunstone:3000,runestone|Runestone|http://web-runestone:3050}
+    ports:
+      - 127.0.0.1:${UI_PORT:-3000}:8711
+    depends_on:
+      - web-sunstone
+      - web-runestone
+
   # Vite dev server. The browser talks to the API directly at http://localhost:8710.
   web-sunstone:
     build:
@@ -162,14 +181,13 @@ services:
     restart: always
     environment:
       VITE_OPENRELIK_SERVER_URL: http://localhost:${API_PORT:-8710}
+      VITE_HMR_CLIENT_PORT: ${UI_PORT:-3000}
     volumes:
       # Vite reloads mounted source changes itself (HMR).
       - ./web/sunstone:/app
       # The image's packages, kept in a volume so that a node_modules on the
       # host (built for macOS) never shadows them.
       - /app/node_modules
-    ports:
-      - 127.0.0.1:${UI_PORT:-3000}:3000
     # yarn install updates the node_modules volume after a dependency change;
     # it's a no-op when nothing changed.
     command:
@@ -196,14 +214,13 @@ services:
     restart: always
     environment:
       VITE_OPENRELIK_SERVER_URL: http://localhost:${API_PORT:-8710}
+      VITE_HMR_CLIENT_PORT: ${UI_PORT:-3000}
     volumes:
       # Vite reloads mounted source changes itself (HMR).
       - ./web/runestone:/app
       # The image's packages, kept in a volume so that a node_modules on the
       # host (built for macOS) never shadows them.
       - /app/node_modules
-    ports:
-      - 127.0.0.1:${RUNESTONE_PORT:-3050}:3050
     # npm ci updates the node_modules volume after a dependency change;
     # it's a no-op when nothing changed.
     command:
