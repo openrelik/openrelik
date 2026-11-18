@@ -85,6 +85,7 @@ actually written. **Reviews must always run in a subagent with a completely clea
    hot loops.
 7. **Lean:** code that should not exist or should be smaller:
    - delete: dead code, unused options, leftover debug logs, speculative features
+   - defensive: overly defensive code or speculative guards adding unnecessary complexity for unlikely edge cases
    - reuse: the repo already has this helper (name the path in `libs/common`, `libs/worker-common`, etc.)
    - stdlib / native: standard library or platform already does it; avoid new dependencies for a few lines
    - yagni: abstraction with one implementation, config nobody sets
@@ -101,7 +102,7 @@ actually written. **Reviews must always run in a subagent with a completely clea
 - A shortcut marked with a `shortcut:` comment that names its limit is a decision, not a
   finding, unless the expected load already crosses it.
 - Propose the smallest fix that works. Prefer fixes that delete code. Never add layers or
-  frameworks the problem does not need.
+  frameworks the problem does not need, and don't ask for defensive guards for unlikely edge cases.
 - No style taste, no "consider", no vague worries. Don't name the model or tool.
 
 ## 4. Output
