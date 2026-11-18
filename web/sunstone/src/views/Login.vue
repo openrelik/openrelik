@@ -96,22 +96,6 @@ limitations under the License.
         >
           {{ $filters.capitalizeFirstLetter(authMethod) }}
         </v-btn>
-
-        <div v-if="alternativeUis.length > 0" class="mt-4">
-          <v-divider class="mb-3"></v-divider>
-          <v-btn
-            v-for="ui in alternativeUis"
-            :key="ui.id"
-            variant="text"
-            size="small"
-            class="text-none mb-1"
-            prepend-icon="mdi-swap-horizontal"
-            block
-            @click="switchToUi(ui.id)"
-          >
-            Switch to {{ ui.name }}
-          </v-btn>
-        </div>
       </template>
     </v-card>
   </v-container>
@@ -119,7 +103,6 @@ limitations under the License.
 
 <script>
 import settings from "@/settings";
-import { getAlternativeUis, switchToUi } from "@/utils/uiSwitch";
 import axios from "axios";
 import { useTheme } from "vuetify";
 
@@ -131,8 +114,6 @@ export default {
     showError: false,
     error: "",
     redirect_url: null,
-    alternativeUis: [],
-    isMounted: false,
   }),
   computed: {
     loginUrl() {
@@ -197,23 +178,14 @@ export default {
       };
       return iconMap[authMethod] || "mdi-account";
     },
-    switchToUi,
   },
-  async mounted() {
-    this.isMounted = true;
+  mounted() {
     const theme = useTheme();
     if (localStorage.getItem("theme")) {
       theme.change(localStorage.getItem("theme"));
     } else {
       theme.change("light");
     }
-    const uis = await getAlternativeUis();
-    if (this.isMounted) {
-      this.alternativeUis = uis;
-    }
-  },
-  unmounted() {
-    this.isMounted = false;
   },
   created() {
     sessionStorage.removeItem("openrelik.auth.user");
