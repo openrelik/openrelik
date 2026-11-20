@@ -79,7 +79,7 @@ def test_bind_structlog_console(log: pytest_structlog.StructuredLogCapture):
 def test_get_plain_python(caplog):
     caplog.set_level(logging.INFO)
     log_plain()
-    assert "INFO     tests.test_logging:test_logging.py:13 test\n" == caplog.text
+    assert "INFO     tests.test_logging:test_logging.py:14 test\n" == caplog.text
 
 
 def test_get_wrap(log: pytest_structlog.StructuredLogCapture):
