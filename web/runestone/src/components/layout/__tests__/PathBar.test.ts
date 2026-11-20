@@ -404,11 +404,11 @@ describe('PathBar', () => {
     expect(router.currentRoute.value.path).toBe('/folder/2')
     expect(document.activeElement).toBe(promptInput.element)
 
-    // Navigating from the prompt while a modal is active does not steal focus from the modal.
+    // Navigating from the prompt while a modal is active does not keep focus in the prompt.
     modalStore.openModal('settings')
     await promptInput.setValue('..')
     await nextTick()
-    ;(promptInput.element as HTMLInputElement).blur()
+    expect(document.activeElement).toBe(promptInput.element)
     await promptInput.trigger('keydown', { key: 'Enter' })
     await flushPromises()
     await nextTick()

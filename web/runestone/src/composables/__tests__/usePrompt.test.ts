@@ -572,6 +572,34 @@ describe('composables/usePrompt', () => {
     await flushPromises()
     expect(consumePendingPromptFocus('/folder/10')).toBe(false)
 
+    // A cancelled navigation clears pending focus via the afterEach failure check.
+    await router.push('/')
+    const cancelNav = router.beforeEach(() => false)
+    inline.prompt.go({
+      kind: 'item',
+      item: folder,
+      path: '/Evidence/',
+      label: 'Evidence/',
+      hits: [],
+    })
+    await flushPromises()
+    cancelNav()
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(consumePendingPromptFocus('/folder/10')).toBe(false)
+
+    // Landing on a different path clears any unconsumed pending focus for an earlier target.
+    inline.prompt.go({
+      kind: 'item',
+      item: folder,
+      path: '/Evidence/',
+      label: 'Evidence/',
+      hits: [],
+    })
+    await flushPromises()
+    await router.push('/metrics')
+    await flushPromises()
+    expect(consumePendingPromptFocus('/folder/10')).toBe(false)
+
     // clearPromptState clears pending focus on sign-out.
     await router.push('/')
     inline.prompt.go({

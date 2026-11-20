@@ -103,11 +103,10 @@ let isUnmounted = false
  * keep their focus.
  */
 function applyPendingFocus() {
-  if (consumePendingPromptFocus(route.path)) {
-    if (route.name !== 'file' && !modalStore.hasActiveModal) focusPrompt()
-    return true
-  }
-  return false
+  if (!consumePendingPromptFocus(route.path)) return false
+  if (route.name === 'file' || modalStore.hasActiveModal) return false
+  focusPrompt()
+  return true
 }
 
 let unregister = () => {}
