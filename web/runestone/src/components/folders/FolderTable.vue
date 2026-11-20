@@ -39,12 +39,12 @@ import {
   bytesOf,
   folderItemBreakdown,
   folderItemCount,
+  getUniqueFolderName,
   isEmptyFile,
   isEmptyFolder,
   itemKey,
   typeOf,
 } from '@/utils/item'
-import { getUniqueFolderName } from '@/utils/item'
 import type { Item } from '@/types/item'
 import { runStats } from '@/utils/workflow'
 import { useWorkflowsStore } from '@/stores/workflows'

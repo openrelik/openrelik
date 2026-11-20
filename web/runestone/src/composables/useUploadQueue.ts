@@ -230,7 +230,16 @@ function finish(upload: Upload, created: UploadedFile): void {
     },
     upload.folderId,
   )
-  useItemsStore().upsertItems([item])
+  const itemsStore = useItemsStore()
+  const isNew = !itemsStore.findFile(item.id)
+  itemsStore.upsertItems([item])
+  if (isNew) {
+    const parentFolder = itemsStore.findFolder(upload.folderId)
+    if (parentFolder) {
+      if (parentFolder.fileCount !== undefined) parentFolder.fileCount += 1
+      parentFolder.isEmpty = false
+    }
+  }
 
   // The answer holds everything the listing shows, so nothing is refetched.
   // A folder whose files were never loaded stays unloaded: we know our file,

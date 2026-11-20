@@ -69,18 +69,18 @@ def _attach_item_counts(db: Session, folders: list[Folder]) -> list[Folder]:
         select(
             File.folder_id.label("folder_id"),
             literal(1).label("is_file"),
-            func.count(File.id).label("cnt"),
+            func.count().label("cnt"),
         )
-        .where(File.folder_id.in_(folder_ids), File.is_deleted.is_(False))
+        .where(File.folder_id.in_(folder_ids), ~File.is_deleted)
         .group_by(File.folder_id)
     )
     subfolders_q = (
         select(
             Folder.parent_id.label("folder_id"),
             literal(0).label("is_file"),
-            func.count(Folder.id).label("cnt"),
+            func.count().label("cnt"),
         )
-        .where(Folder.parent_id.in_(folder_ids), Folder.is_deleted.is_(False))
+        .where(Folder.parent_id.in_(folder_ids), ~Folder.is_deleted)
         .group_by(Folder.parent_id)
     )
 

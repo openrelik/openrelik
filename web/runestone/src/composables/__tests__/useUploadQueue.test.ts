@@ -218,6 +218,49 @@ describe('useUploadQueue', () => {
     expect(useItemsStore().findFile(77)?.name).toBe('evidence.bin')
   })
 
+  it('increments parent folder fileCount and clears isEmpty on new upload without double-counting existing files', async () => {
+    vi.mocked(api.folders.getMyFolderRole).mockResolvedValue('Owner')
+    const itemsStore = useItemsStore()
+    itemsStore.upsertItems([
+      {
+        id: 10,
+        parent: null,
+        kind: 'folder',
+        name: 'Case',
+        owner: 'alice',
+        created: '2026-11-01T00:00:00Z',
+        modified: '2026-11-01T00:00:00Z',
+        fileCount: 0,
+        folderCount: 0,
+        isEmpty: true,
+      },
+    ])
+
+    vi.mocked(api.files.uploadChunk)
+      .mockResolvedValueOnce({ id: 88, display_name: 'first.bin' })
+      .mockResolvedValueOnce({ id: 88, display_name: 'first.bin' })
+
+    const queue = useUploadQueue()
+    await queue.enqueue(10, [new File(['a'], 'first.bin')])
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(itemsStore.findFolder(10)).toMatchObject({
+      fileCount: 1,
+      folderCount: 0,
+      isEmpty: false,
+    })
+
+    // Re-uploading a file that resolves to an already stored file ID must not double-increment.
+    await queue.enqueue(10, [new File(['a'], 'first.bin')])
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(itemsStore.findFolder(10)).toMatchObject({
+      fileCount: 1,
+      folderCount: 0,
+      isEmpty: false,
+    })
+  })
+
   it('handles 503 backoff retries, 429 chunk reset, 413 error, retry(), dismiss(), and cancelAll()', async () => {
     vi.useFakeTimers()
     vi.mocked(api.folders.getMyFolderRole).mockResolvedValue('Editor')

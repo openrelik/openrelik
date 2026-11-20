@@ -147,9 +147,6 @@ export const useItemsStore = defineStore('items', () => {
         next[index] = {
           hashes: prev.hashes,
           magicText: prev.magicText,
-          fileCount: prev.fileCount,
-          folderCount: prev.folderCount,
-          isEmpty: prev.isEmpty,
           ...item,
           fileCount: item.fileCount ?? prev.fileCount,
           folderCount: item.folderCount ?? prev.folderCount,

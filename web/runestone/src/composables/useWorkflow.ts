@@ -204,18 +204,29 @@ export async function createWorkflow(
  */
 function adopt(record: WorkflowRecord, parentId: number): Workflow {
   const workflow = mapWorkflow(record)
-  useItemsStore().upsertItems([
-    mapFolderToItem(
-      {
-        id: record.folder.id,
-        display_name: record.display_name,
-        user: record.user,
-        created_at: record.created_at,
-        workflows: [{ id: record.id }],
-      },
-      parentId,
-    ),
+  const itemsStore = useItemsStore()
+  itemsStore.upsertItems([
+    {
+      ...mapFolderToItem(
+        {
+          id: record.folder.id,
+          display_name: record.display_name,
+          user: record.user,
+          created_at: record.created_at,
+          workflows: [{ id: record.id }],
+        },
+        parentId,
+      ),
+      fileCount: 0,
+      folderCount: 0,
+      isEmpty: true,
+    },
   ])
+  const parentFolder = itemsStore.findFolder(parentId)
+  if (parentFolder) {
+    if (parentFolder.folderCount !== undefined) parentFolder.folderCount += 1
+    parentFolder.isEmpty = false
+  }
   useWorkflowsStore().upsertWorkflow(workflow)
   // All known without asking: the folder is new and empty.
   markFresh(workflowKeys.workflow(workflow.id))

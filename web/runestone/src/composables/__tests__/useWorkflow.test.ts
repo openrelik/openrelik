@@ -715,6 +715,20 @@ describe('createWorkflow, loadWorkflow, and renameWorkflow', () => {
         ],
       },
     }
+    useItemsStore().upsertItems([
+      {
+        id: 10,
+        parent: null,
+        kind: 'folder',
+        name: 'Parent Case',
+        owner: 'alice',
+        created: '2026-11-01T00:00:00Z',
+        modified: '2026-11-01T00:00:00Z',
+        fileCount: 0,
+        folderCount: 0,
+        isEmpty: true,
+      },
+    ])
     vi.mocked(api.workflows.create).mockResolvedValueOnce({
       ...makeWorkflowRecord(80, 800),
       display_name: 'From Template',
@@ -725,7 +739,17 @@ describe('createWorkflow, loadWorkflow, and renameWorkflow', () => {
     expect(api.workflows.create).toHaveBeenCalledWith(10, [1, 2], 5)
     expect(created.name).toBe('From Template')
     expect(created.groups).toHaveLength(1)
-    expect(useItemsStore().findFolder(800)?.workflowId).toBe(80)
+    expect(useItemsStore().findFolder(800)).toMatchObject({
+      workflowId: 80,
+      fileCount: 0,
+      folderCount: 0,
+      isEmpty: true,
+    })
+    expect(useItemsStore().findFolder(10)).toMatchObject({
+      fileCount: 0,
+      folderCount: 1,
+      isEmpty: false,
+    })
     expect(queryState(workflowKeys.workflow(80)).status).toBe('success')
     expect(queryState(folderKeys.subfolders(800)).status).toBe('success')
     expect(queryState(folderKeys.files(800)).status).toBe('success')
