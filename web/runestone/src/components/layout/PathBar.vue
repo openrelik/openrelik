@@ -351,7 +351,7 @@ function onBarClick(event: MouseEvent) {
               <span class="truncate">{{ path[at + 1]!.name }}</span>
               <span
                 aria-hidden="true"
-                class="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-linear-to-l from-sunken from-60% via-sunken/90 to-transparent pr-0.5 pl-2.5 text-ink-muted opacity-0 group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
+                class="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-linear-to-l from-sunken from-60% to-transparent pr-0.5 pl-2.5 text-ink-muted opacity-0 group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
               >
                 <Pencil :size="11" :stroke-width="1.5" />
               </span>
