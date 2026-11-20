@@ -75,7 +75,7 @@ const { report, close } = useTaskReport()
             :class="{ 'mt-6 border-t border-border pt-4': report.task.report }"
             aria-label="File reports"
           >
-            <p class="micro-label pb-2">files</p>
+            <p class="micro-label pb-2">Files</p>
             <article
               v-for="(file, index) in report.task.fileReports"
               :key="`${file.fileId}-${index}`"

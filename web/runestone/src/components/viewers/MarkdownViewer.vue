@@ -253,7 +253,9 @@ function onHover(event: PointerEvent) {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col bg-surface">
-    <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
+    <div
+      class="flex h-9 shrink-0 items-center gap-3 border-b border-border pr-2 pl-3 text-ink-muted"
+    >
       <span class="tabular shrink-0">
         <template v-if="rendered.lines">{{ rendered.lines.toLocaleString('en-US') }} lines</template
         ><template v-if="mark"> · {{ marks.label() }}</template>
@@ -293,7 +295,7 @@ function onHover(event: PointerEvent) {
         <button
           v-if="mark"
           type="button"
-          class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+          class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
           :aria-label="linkLabel"
           v-tooltip="linkLabel"
           @mousedown.prevent

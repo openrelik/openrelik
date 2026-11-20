@@ -314,7 +314,7 @@ describe('TextViewer', () => {
     await vi.advanceTimersByTimeAsync(20)
 
     const body = wrapper.get('[aria-label="File text"]')
-    const gotoInput = wrapper.get('input[placeholder="go to line"]')
+    const gotoInput = wrapper.get('input[placeholder="Go to line"]')
 
     await body.trigger('keydown', { key: ':' })
     expect(document.activeElement).toBe(gotoInput.element)
@@ -509,7 +509,7 @@ describe('TextViewer', () => {
     expect(fallbackWrapper.emitted('update:mark')?.at(-1)).toEqual([null])
 
     // Trigger goto error, then switch fileId -> gotoText and gotoError reset
-    const gotoInput = fallbackWrapper.get('input[placeholder="go to line"]')
+    const gotoInput = fallbackWrapper.get('input[placeholder="Go to line"]')
     await gotoInput.setValue('999')
     await fallbackWrapper.get('form').trigger('submit')
     expect(gotoInput.classes()).toContain('border-danger')

@@ -16,8 +16,9 @@ limitations under the License.
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { TableRow } from '@/utils/table'
+import { X } from '@/components/icons'
 import { escapeControls, hex2 } from '@/utils/bytes'
+import type { TableRow } from '@/utils/table'
 
 /**
  * One table row in full: every column's value, with nested JSON (JSONL)
@@ -29,7 +30,10 @@ const props = defineProps<{
   number: number
   columns: string[]
   cells: string[]
+  /** Show a close button in the header (used in fullscreen where there is no side panel chrome). */
+  closable?: boolean
 }>()
+const emit = defineEmits<{ close: [] }>()
 
 const escapeDelAndC1 = (text: string) =>
   text.replace(/[\u007f-\u009f]/g, (ch) => `\\x${hex2(ch.charCodeAt(0))}`)
@@ -52,15 +56,30 @@ const fields = computed(() =>
 
 <template>
   <div aria-label="Row details">
-    <p class="micro-label flex h-7 items-center border-b border-border px-3">
-      row <span class="tabular ml-1 normal-case">{{ number.toLocaleString('en-US') }}</span>
-    </p>
+    <div
+      class="sticky top-0 flex items-center border-b border-border bg-surface pl-3"
+      :class="closable ? 'h-9 pr-2' : 'h-7 pr-1'"
+    >
+      <p class="micro-label">
+        Row <span class="tabular ml-1">{{ number.toLocaleString('en-US') }}</span>
+      </p>
+      <button
+        v-if="closable"
+        type="button"
+        class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink"
+        aria-label="Close row details"
+        v-tooltip="'Close'"
+        @click="emit('close')"
+      >
+        <X :size="13" :stroke-width="1.5" />
+      </button>
+    </div>
     <p v-if="row.error" class="border-b border-border px-3 py-2 text-danger">
       Not valid JSON: {{ escapeControls(row.error) }}
     </p>
     <dl class="divide-y divide-border px-3">
       <div v-for="(field, index) in fields" :key="index" class="py-2">
-        <dt class="micro-label truncate normal-case" v-overflow-tooltip>{{ field.name }}</dt>
+        <dt class="micro-label truncate" v-overflow-tooltip>{{ field.name }}</dt>
         <dd class="mt-0.5 font-mono">
           <span v-if="field.text === ''" class="text-ink-muted">–</span>
           <pre

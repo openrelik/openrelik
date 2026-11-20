@@ -51,8 +51,8 @@ const magic = computed(() => {
 const bytes = computed(() => exactSize(props.file))
 
 const typeRows = computed<Row[]>(() => {
-  const rows: Row[] = [{ label: 'type', value: dataTypeOf(props.file) }]
-  if (props.file.mime) rows.push({ label: 'mime', value: props.file.mime })
+  const rows: Row[] = [{ label: 'Type', value: dataTypeOf(props.file) }]
+  if (props.file.mime) rows.push({ label: 'MIME', value: props.file.mime })
   return rows
 })
 
@@ -60,9 +60,9 @@ const typeRows = computed<Row[]>(() => {
 const hashRows = computed<Row[]>(() => {
   const hashes = hashesOf(props.file)
   const rows: Row[] = [
-    { label: 'md5', value: hashes.md5 },
-    { label: 'sha-1', value: hashes.sha1 },
-    { label: 'sha-256', value: hashes.sha256 },
+    { label: 'MD5', value: hashes.md5 },
+    { label: 'SHA-1', value: hashes.sha1 },
+    { label: 'SHA-256', value: hashes.sha256 },
   ]
   return rows.filter((row) => row.value)
 })
@@ -104,26 +104,26 @@ const created = computed(() => props.file.created ?? props.file.modified)
     <!-- where it came from -->
     <dl class="flex flex-col gap-1">
       <div :class="ROW">
-        <dt class="micro-label">created</dt>
+        <dt class="micro-label">Created</dt>
         <dd class="tabular min-w-0 font-mono text-ink">
-          {{ stamp(created) }} <span class="text-ink-muted">utc</span>
+          {{ stamp(created) }} <span class="text-ink-muted">UTC</span>
         </dd>
       </div>
       <div :class="ROW">
-        <dt class="micro-label">modified</dt>
+        <dt class="micro-label">Modified</dt>
         <dd class="tabular min-w-0 font-mono text-ink">
-          {{ stamp(file.modified) }} <span class="text-ink-muted">utc</span>
+          {{ stamp(file.modified) }} <span class="text-ink-muted">UTC</span>
         </dd>
       </div>
       <div v-if="file.owner" :class="ROW">
-        <dt class="micro-label">owner</dt>
+        <dt class="micro-label">Owner</dt>
         <dd class="flex min-w-0 items-center gap-2 text-ink">
           <UserAvatar :name="file.owner" :username="file.ownerUsername" :src="file.ownerAvatar" />
           <span class="truncate">{{ file.owner }}</span>
         </dd>
       </div>
       <div :class="ROW">
-        <dt class="micro-label">id</dt>
+        <dt class="micro-label">ID</dt>
         <dd class="min-w-0">
           <CopyValue :value="String(file.id)" />
         </dd>

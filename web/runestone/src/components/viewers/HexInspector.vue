@@ -55,7 +55,7 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
 <template>
   <div aria-label="Byte inspector">
     <div class="flex h-7 items-center border-b border-border px-3">
-      <p class="micro-label">byte order</p>
+      <p class="micro-label">Byte order</p>
       <!-- byte order: a segmented pick of two -->
       <div
         class="ml-auto flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
@@ -86,7 +86,7 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
 
     <!-- One place: everything below is read from where it starts. -->
     <dl class="divide-y divide-border px-3">
-      <KeyValueRow v-if="selectionLength > 1" label="selection">
+      <KeyValueRow v-if="selectionLength > 1" label="Selection">
         <!-- the count wraps under the range on a narrow panel -->
         <span class="tabular inline-flex flex-wrap justify-end gap-x-[1ch]"
           ><span class="whitespace-nowrap"
@@ -99,7 +99,7 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
           ></span
         >
       </KeyValueRow>
-      <KeyValueRow v-else label="offset">
+      <KeyValueRow v-else label="Offset">
         <span class="tabular whitespace-nowrap"
           >0x{{ offsetLabel(selectionStart, width) }}
           <span class="text-ink-muted">({{ selectionStart }})</span></span
@@ -108,8 +108,8 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
     </dl>
 
     <p class="micro-label mt-2 px-3">
-      {{ selectionLength > 1 ? 'its start as numbers and times' : 'as numbers and times' }}
-      <span class="normal-case">· UTC</span>
+      {{ selectionLength > 1 ? 'Its start as numbers and times' : 'As numbers and times' }}
+      · UTC
     </p>
     <dl class="divide-y divide-border px-3">
       <KeyValueRow v-for="reading in readings" :key="reading.label" :label="reading.label">
@@ -150,10 +150,8 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
     </dl>
 
     <p class="micro-label mt-2 px-3">
-      {{ selectionLength > 1 ? 'selection as text' : 'as text' }}
-      <span v-if="selectionLength > decodedLimit" class="normal-case">
-        (first {{ decodedLimit }} bytes)</span
-      >
+      {{ selectionLength > 1 ? 'Selection as text' : 'As text' }}
+      <span v-if="selectionLength > decodedLimit"> (first {{ decodedLimit }} bytes)</span>
     </p>
     <dl class="divide-y divide-border px-3 pb-3">
       <KeyValueRow

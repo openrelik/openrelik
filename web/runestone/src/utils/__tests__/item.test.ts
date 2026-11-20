@@ -22,9 +22,12 @@ import {
   bytesOf,
   dataTypeOf,
   exactSize,
+  folderItemBreakdown,
+  folderItemCount,
   getUniqueFolderName,
   hashesOf,
   isEmptyFile,
+  isEmptyFolder,
   itemKey,
   magicOf,
   typeOf,
@@ -118,5 +121,35 @@ describe('utils/item', () => {
     expect(awaitsOutputs(workflowFolder, 1)).toBe(false)
     expect(awaitsOutputs(regularFolder, 0)).toBe(false)
     expect(awaitsOutputs(undefined, 0)).toBe(false)
+  })
+
+  it('identifies empty regular folders and summarizes item counts', () => {
+    const emptyFolder = makeItem({ kind: 'folder', fileCount: 0, folderCount: 0, isEmpty: true })
+    const unknownFolder = makeItem({ kind: 'folder' })
+    const populatedFolder = makeItem({
+      kind: 'folder',
+      fileCount: 3,
+      folderCount: 1,
+      isEmpty: false,
+    })
+    const emptyWorkflow = makeItem({ kind: 'folder', workflowId: 9, isEmpty: true })
+
+    expect(isEmptyFolder(emptyFolder)).toBe(true)
+    expect(isEmptyFolder(unknownFolder)).toBe(false)
+    expect(isEmptyFolder(populatedFolder)).toBe(false)
+    expect(isEmptyFolder(emptyWorkflow)).toBe(false)
+    expect(isEmptyFolder(makeItem({ kind: 'file' }))).toBe(false)
+
+    expect(folderItemCount(emptyFolder)).toBe(0)
+    expect(folderItemCount(unknownFolder)).toBeUndefined()
+    expect(folderItemCount(populatedFolder)).toBe(4)
+    expect(folderItemCount(makeItem({ kind: 'file' }))).toBeUndefined()
+
+    expect(folderItemBreakdown(emptyFolder)).toBe('Empty folder')
+    expect(folderItemBreakdown(populatedFolder)).toBe('1 folder, 3 files')
+    expect(folderItemBreakdown(makeItem({ kind: 'folder', fileCount: 1, folderCount: 0 }))).toBe(
+      '1 file',
+    )
+    expect(folderItemBreakdown(unknownFolder)).toBeUndefined()
   })
 })

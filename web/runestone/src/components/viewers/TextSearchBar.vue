@@ -75,9 +75,9 @@ function onKey(event: KeyboardEvent) {
         type="text"
         spellcheck="false"
         autocomplete="off"
-        placeholder="find"
+        placeholder="Find"
         aria-label="Find in the file"
-        class="field h-5 w-52 pr-14 font-mono text-[11px]"
+        class="field h-6 w-52 pr-14 font-mono text-[12px]"
         :class="{ 'border-danger': error }"
         v-tooltip="error ?? 'Find in the lines read'"
         @keydown="onKey"
@@ -90,7 +90,7 @@ function onKey(event: KeyboardEvent) {
       >
     </div>
     <div
-      class="flex items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
+      class="flex h-6 items-center gap-0.5 rounded-(--radius-control) border border-border bg-canvas p-0.5"
       role="group"
       aria-label="Find options"
     >
@@ -98,7 +98,7 @@ function onKey(event: KeyboardEvent) {
         v-for="toggle in TOGGLES"
         :key="toggle.label"
         type="button"
-        class="h-4 cursor-pointer rounded-(--radius-check) px-1 text-[11px] transition-colors duration-120"
+        class="h-4.5 cursor-pointer rounded-(--radius-check) px-1 text-[11px] transition-colors duration-120"
         :class="
           toggle.model.value
             ? 'bg-brand-tint text-brand'
@@ -115,7 +115,7 @@ function onKey(event: KeyboardEvent) {
     <div class="flex items-center">
       <button
         type="button"
-        class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+        class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
         :disabled="!count"
         aria-label="Previous hit"
         v-tooltip="'Previous hit'"
@@ -125,7 +125,7 @@ function onKey(event: KeyboardEvent) {
       </button>
       <button
         type="button"
-        class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+        class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
         :disabled="!count"
         aria-label="Next hit"
         v-tooltip="'Next hit'"

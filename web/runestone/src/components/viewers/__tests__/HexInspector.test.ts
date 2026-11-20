@@ -106,12 +106,12 @@ describe('HexInspector', () => {
       decodings: decodings(bytes),
     })
 
-    expect(wrapper.get('[aria-label="Byte inspector"]').text()).toContain('offset')
-    expect(wrapper.text()).not.toContain('selection as text')
+    expect(wrapper.get('[aria-label="Byte inspector"]').text()).toContain('Offset')
+    expect(wrapper.text()).not.toContain('Selection as text')
     expect(wrapper.text()).toContain('0x0000002a')
     expect(wrapper.text()).toContain('(42)')
-    expect(wrapper.text()).toContain('as numbers and times')
-    expect(wrapper.text()).toContain('as text')
+    expect(wrapper.text()).toContain('As numbers and times')
+    expect(wrapper.text()).toContain('As text')
   })
 
   it('shows byte range, count, and decodedLimit truncation notice for a long multi-byte selection', () => {
@@ -125,11 +125,11 @@ describe('HexInspector', () => {
       decodings: decodings(sample),
     })
 
-    expect(wrapper.text()).toContain('selection')
+    expect(wrapper.text()).toContain('Selection')
     expect(wrapper.text()).toContain('0x00000010–0x0000013b')
     expect(wrapper.text()).toContain('300 bytes')
-    expect(wrapper.text()).toContain('its start as numbers and times')
-    expect(wrapper.text()).toContain('selection as text')
+    expect(wrapper.text()).toContain('Its start as numbers and times')
+    expect(wrapper.text()).toContain('Selection as text')
     expect(wrapper.text()).toContain('(first 256 bytes)')
     expect(wrapper.text()).toContain('Hello UTF-8 🚀\\n')
   })
@@ -144,7 +144,7 @@ describe('HexInspector', () => {
 
     expect(emptyWrapper.text()).not.toContain('uint8')
     // Empty decoded strings show em-dash placeholders via KeyValueRow
-    expect(emptyWrapper.text()).toContain('ascii')
+    expect(emptyWrapper.text()).toContain('ASCII')
     expect(emptyWrapper.text()).toContain('–')
 
     const twoBytes = new Uint8Array([0x80, 0x01])
@@ -165,7 +165,7 @@ describe('HexInspector', () => {
     expect(text).not.toContain('uint32')
     expect(text).not.toContain('uint64')
     expect(text).not.toContain('float32')
-    expect(text).not.toContain('unix time')
+    expect(text).not.toContain('Unix time')
   })
 
   it('decodes 8-byte integers, floats, timestamps, and text, and toggles little vs big endian', async () => {
@@ -227,12 +227,12 @@ describe('HexInspector', () => {
     expect(wrapper.text()).toContain('float32')
     expect(wrapper.text()).toContain('float64')
     expect(wrapper.text()).toContain('2024-03-25 10:27:12')
-    expect(wrapper.text()).toContain('dos date/time')
+    expect(wrapper.text()).toContain('DOS date/time')
     expect(wrapper.text()).toContain('local')
     expect(wrapper.text()).toContain('FILETIME')
-    expect(wrapper.text()).toContain('webkit time')
-    expect(wrapper.text()).toContain('hfs+ time')
-    expect(wrapper.text()).toContain('apple time')
+    expect(wrapper.text()).toContain('WebKit time')
+    expect(wrapper.text()).toContain('HFS+ time')
+    expect(wrapper.text()).toContain('Apple time')
     // UTF-8 & ASCII decodings
     expect(wrapper.text()).toContain('Caf\\xc3\\xa9\\t!')
     expect(wrapper.text()).toContain('Café\\t!')
@@ -285,7 +285,7 @@ describe('HexInspector', () => {
     // Unrepresentable DOS date '–' does not append '?' right beside it
     const dosRow = wrapper
       .findAll('div')
-      .find((el) => el.find('dt').exists() && el.find('dt').text() === 'dos date/time')
+      .find((el) => el.find('dt').exists() && el.find('dt').text() === 'DOS date/time')
     expect(dosRow?.text()).toContain('–')
     expect(dosRow?.text()).toContain('local')
     expect(dosRow?.find('.text-warning').exists()).toBe(false)

@@ -193,14 +193,14 @@ export function readings(bytes: Uint8Array, littleEndian: boolean, now = Date.no
   if (n >= 4) out.push({ label: 'float32', value: String(view.getFloat32(0, littleEndian)) })
   if (n >= 8) out.push({ label: 'float64', value: String(view.getFloat64(0, littleEndian)) })
   const unix = { zero: UNIX_ZERO, digits: 0 }
-  time(4, 'unix time', () => view.getUint32(0, littleEndian) * 1000, unix)
-  time(8, 'unix time (64)', () => Number(view.getBigInt64(0, littleEndian)) * 1000, unix)
-  time(8, 'unix ms', () => Number(view.getBigInt64(0, littleEndian)), { ...unix, digits: 3 })
+  time(4, 'Unix time', () => view.getUint32(0, littleEndian) * 1000, unix)
+  time(8, 'Unix time (64)', () => Number(view.getBigInt64(0, littleEndian)) * 1000, unix)
+  time(8, 'Unix ms', () => Number(view.getBigInt64(0, littleEndian)), { ...unix, digits: 3 })
   // DOS starts in 1980; fields out of range (month 13, hour 25) read as not a time at all.
   // It keeps no zone: the time is the writing machine's clock, shown as it is.
   time(
     4,
-    'dos date/time',
+    'DOS date/time',
     () => dosTime(view.getUint16(0, littleEndian), view.getUint16(2, littleEndian)),
     { zero: Date.UTC(1980, 0, 1), digits: 0, note: 'local' },
   )
@@ -214,17 +214,17 @@ export function readings(bytes: Uint8Array, littleEndian: boolean, now = Date.no
   // WebKit/Chrome: microseconds since 1601 (history, cookies).
   time(
     8,
-    'webkit time',
+    'WebKit time',
     () => ticksSince1970(view.getBigInt64(0, littleEndian) - FILETIME_EPOCH / 10n, 1_000_000n),
     { zero: FILETIME_ZERO, digits: 6 },
   )
-  time(4, 'hfs+ time', () => (view.getUint32(0, littleEndian) - HFS_EPOCH_S) * 1000, {
+  time(4, 'HFS+ time', () => (view.getUint32(0, littleEndian) - HFS_EPOCH_S) * 1000, {
     zero: HFS_ZERO,
     digits: 0,
   })
   // Apple Cocoa / Core Data: seconds since 2001, as a double (iOS and macOS databases).
   // Apple counts back before 2001 with negative values, as far as FILETIME's start.
-  time(8, 'apple time', () => (view.getFloat64(0, littleEndian) + COCOA_EPOCH_S) * 1000, {
+  time(8, 'Apple time', () => (view.getFloat64(0, littleEndian) + COCOA_EPOCH_S) * 1000, {
     zero: COCOA_ZERO,
     from: FILETIME_ZERO,
     digits: 3,
@@ -306,9 +306,9 @@ function utf8Escaped(bytes: Uint8Array): string {
  */
 export function decodings(bytes: Uint8Array): Reading[] {
   return [
-    { label: 'ascii', value: asciiEscaped(bytes) },
-    { label: 'utf-8', value: utf8Escaped(bytes) },
-    { label: 'utf-16le', value: escapeControls(new TextDecoder('utf-16le').decode(bytes)) },
+    { label: 'ASCII', value: asciiEscaped(bytes) },
+    { label: 'UTF-8', value: utf8Escaped(bytes) },
+    { label: 'UTF-16LE', value: escapeControls(new TextDecoder('utf-16le').decode(bytes)) },
   ]
 }
 

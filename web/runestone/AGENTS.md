@@ -30,7 +30,7 @@ Before reaching for `npm install`:
 
 The app is a high-density technical console instrument, not a consumer web app. Every UI element must conform to [`docs/design-system.md`](docs/design-system.md):
 
-- **Typography**: `IBM Plex Sans` for UI and prose, `IBM Plex Mono` (`font-mono`) for data the operator copies, compares character by character, or lines up (file contents, names, paths, hashes, IDs, case references, offsets, detail values). Both are self-hosted from `public/assets/runestone/fonts/`; never load external fonts. Use the 4-step type scale (`.card-title` 14px, body 13px, `.micro-label` 12px lowercase with `tracking-[0.06em]`, badge/keycap 11px).
+- **Typography**: `IBM Plex Sans` for UI and prose, `IBM Plex Mono` (`font-mono`) for data the operator copies, compares character by character, or lines up (file contents, names, paths, hashes, IDs, case references, offsets, detail values). Both are self-hosted from `public/assets/runestone/fonts/`; never load external fonts. Use the 4-step type scale (`.card-title` 14px, body 13px, `.micro-label` 12px sentence case with normal tracking, badge/keycap 11px).
 - **Numbers & Dates**: Always apply `.tabular` (`tabular-nums`) to dynamic numbers, counters, timestamps, and sizes to eliminate layout shift.
 - **Buttons**: Exactly 5 variants (`primary` [max 1 per view], `brand`, `secondary`, `danger` [never solid], `ghost`) and 2 heights (`default` 32px, `row` 24px) via `Button.vue`. Group buttons with space (`gap-1.5` / `w-1.5`), not vertical divider lines.
 - **Geometry**: Near-square corners (`4px` sheets/cards, `3px` controls, `2px` badges/checkboxes). No pill shapes (`UserAvatar` 18px disc and the `Switch` internal knob are the only round elements).

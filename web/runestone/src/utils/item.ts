@@ -45,6 +45,41 @@ export const bytesOf = (item: Item) => (item.kind === 'file' ? (item.size ?? 0) 
  */
 export const isEmptyFile = (item: Item) => item.kind === 'file' && item.size === 0
 
+/**
+ * A regular folder known to contain zero active files and subfolders.
+ * Unknown folders (`isEmpty === undefined`) are not treated as empty.
+ */
+export const isEmptyFolder = (item: Item) =>
+  item.kind === 'folder' && item.workflowId === undefined && item.isEmpty === true
+
+/** Direct active item count of a folder when known, else undefined. */
+export function folderItemCount(item: Item): number | undefined {
+  if (item.kind !== 'folder') return undefined
+  if (item.fileCount !== undefined || item.folderCount !== undefined) {
+    return (item.fileCount ?? 0) + (item.folderCount ?? 0)
+  }
+  return item.isEmpty === true ? 0 : undefined
+}
+
+/** Human-readable breakdown of a folder's direct items for tooltips. */
+export function folderItemBreakdown(item: Item): string | undefined {
+  const total = folderItemCount(item)
+  if (total === undefined) return undefined
+  if (total === 0) return 'Empty folder'
+  const parts: string[] = []
+  if (item.folderCount) {
+    parts.push(
+      `${item.folderCount.toLocaleString('en-US')} ${item.folderCount === 1 ? 'folder' : 'folders'}`,
+    )
+  }
+  if (item.fileCount) {
+    parts.push(
+      `${item.fileCount.toLocaleString('en-US')} ${item.fileCount === 1 ? 'file' : 'files'}`,
+    )
+  }
+  return parts.length ? parts.join(', ') : undefined
+}
+
 /** What the type column shows: the file's own type, or what the item is. */
 export const typeOf = (item: Item) =>
   (isEmptyFile(item) ? 'empty' : undefined) ??

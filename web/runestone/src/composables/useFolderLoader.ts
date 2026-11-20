@@ -68,6 +68,13 @@ export function mapFolderToItem(folder: Folder, parent: number | null = null): I
     modified: folder.updated_at ?? folder.created_at ?? new Date().toISOString(),
     workflowId: folder.workflows?.[0]?.id,
     caseRef: folder.case_ref || undefined,
+    fileCount: folder.file_count,
+    folderCount: folder.folder_count,
+    isEmpty:
+      folder.is_empty ??
+      (folder.file_count !== undefined || folder.folder_count !== undefined
+        ? (folder.file_count ?? 0) + (folder.folder_count ?? 0) === 0
+        : undefined),
   }
 }
 

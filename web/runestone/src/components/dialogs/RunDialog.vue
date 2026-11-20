@@ -208,7 +208,7 @@ function onOptionsKey(event: KeyboardEvent) {
             autocomplete="off"
             aria-label="Filter workers"
             :disabled="!!configuring"
-            class="min-w-0 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
+            class="min-w-0 flex-1 bg-transparent text-ink caret-ink outline-none [caret-shape:block] placeholder:text-ink-muted/60"
             placeholder="find a worker…"
             @keydown="onListKey"
           />

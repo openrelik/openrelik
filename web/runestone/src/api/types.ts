@@ -44,6 +44,7 @@ export interface Folder {
   selectable?: boolean
   file_count?: number
   folder_count?: number
+  is_empty?: boolean
   /** Top-level folders only: the case this folder is the folder of, normalized ("ir-2024/007"). */
   case_ref?: string | null
 }

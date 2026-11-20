@@ -81,8 +81,8 @@ describe('FileDetails', () => {
     expect(text).toContain('4,096 B')
     expect(text).toContain('syslog:file')
     expect(text).toContain('text/plain')
-    expect(text).toContain('2026-10-01 12:34:56 utc')
-    expect(text).toContain('2026-10-02 08:15:00 utc')
+    expect(text).toContain('2026-10-01 12:34:56 UTC')
+    expect(text).toContain('2026-10-02 08:15:00 UTC')
     expect(text).toContain('Alice Analyst')
     expect(text).toContain('42')
   })
@@ -99,15 +99,15 @@ describe('FileDetails', () => {
 
     const labels = wrapper.findAll('dt').map((dt) => dt.text())
     expect(labels).toEqual([
-      'type',
-      'mime',
-      'md5',
-      'sha-1',
-      'sha-256',
-      'created',
-      'modified',
-      'owner',
-      'id',
+      'Type',
+      'MIME',
+      'MD5',
+      'SHA-1',
+      'SHA-256',
+      'Created',
+      'Modified',
+      'Owner',
+      'ID',
     ])
 
     const copyables = wrapper.findAll('[role="button"]')
@@ -157,9 +157,9 @@ describe('FileDetails', () => {
     expect(text).toContain('file:generic')
 
     const labels = wrapper.findAll('dt').map((dt) => dt.text())
-    expect(labels).toEqual(['type', 'md5', 'created', 'modified', 'id'])
-    expect(labels).not.toContain('mime')
-    expect(labels).not.toContain('owner')
+    expect(labels).toEqual(['Type', 'MD5', 'Created', 'Modified', 'ID'])
+    expect(labels).not.toContain('MIME')
+    expect(labels).not.toContain('Owner')
     expect(text).toContain('2026-10-02 08:15')
   })
 })

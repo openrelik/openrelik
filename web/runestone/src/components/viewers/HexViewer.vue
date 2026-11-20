@@ -420,7 +420,9 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
   <div class="flex min-h-0 min-w-0 flex-1">
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">
       <!-- status and go-to -->
-      <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
+      <div
+        class="flex h-9 shrink-0 items-center gap-3 border-b border-border pr-2 pl-3 text-ink-muted"
+      >
         <span class="tabular truncate">
           <template v-if="size > 0">0x{{ offsetLabel(cursor, width) }} · </template
           ><template v-if="size > 0 && selectionEnd > selectionStart">
@@ -439,7 +441,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           <button
             v-if="mark || hasSelection"
             type="button"
-            class="mr-1 flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+            class="mr-1 flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
             :aria-label="linkLabel"
             v-tooltip="linkLabel"
             @click="copyLink"
@@ -448,7 +450,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           </button>
           <button
             type="button"
-            class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+            class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
             :disabled="!history.back.length"
             aria-label="Back to where the last jump left from"
             v-tooltip="
@@ -462,7 +464,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           </button>
           <button
             type="button"
-            class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+            class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
             :disabled="!history.forward.length"
             aria-label="Forward again"
             v-tooltip="
@@ -482,9 +484,9 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             type="text"
             spellcheck="false"
             autocomplete="off"
-            placeholder="go to offset"
+            placeholder="Go to offset"
             aria-label="Go to an offset, or a range as 0x1f0-0x2a0"
-            class="field tabular h-5 w-36 font-mono text-[11px]"
+            class="field tabular h-6 w-36 font-mono text-[12px]"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
@@ -520,7 +522,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           <div
             class="flex h-6 shrink-0 items-center border-b border-border text-[11px] text-ink-muted"
           >
-            <span class="shrink-0 px-3" :style="{ width: `${width + 3}ch` }">offset</span>
+            <span class="shrink-0 px-3" :style="{ width: `${width + 3}ch` }">Offset</span>
             <span class="flex shrink-0">
               <span
                 v-for="i in COLUMN_OFFSETS"
@@ -530,7 +532,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
                 >{{ hex2(i) }}</span
               >
             </span>
-            <span class="ml-4 shrink-0">text</span>
+            <span class="ml-4 shrink-0">Text</span>
           </div>
 
           <div ref="body" class="min-h-0 flex-1 overflow-hidden">

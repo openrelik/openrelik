@@ -171,18 +171,31 @@ describe('FolderTable', () => {
     await filterInput.setValue('disk')
     expect(wrapper.emitted('update:filter')?.[0]).toEqual(['disk'])
 
-    // Root non-sortable mode: 4 columns (name, case, owner, modified) and plain labels
+    // Root non-sortable mode: 5 columns (Name, Case, Items, Owner, Modified (UTC)) and hollow icon for empty folders
     await wrapper.setProps({
       atRoot: true,
       sortable: false,
       rows: [
-        makeFolder({ parent: null, caseRef: 'ir-2024/007' }),
-        makeFolder({ id: 99, parent: null }),
+        makeFolder({
+          parent: null,
+          caseRef: 'ir-2024/007',
+          fileCount: 2,
+          folderCount: 1,
+          isEmpty: false,
+        }),
+        makeFolder({ id: 99, parent: null, fileCount: 0, folderCount: 0, isEmpty: true }),
       ],
     })
     expect(wrapper.find('input[aria-label="Filter by name"]').exists()).toBe(false)
     expect(wrapper.findAll('thead th button')).toHaveLength(0)
+    expect(wrapper.text()).toContain('Items')
     expect(wrapper.text()).toContain('ir-2024/007')
+    const rootRows = wrapper.findAll('tbody tr')
+    expect(rootRows[0]!.find('svg').classes()).toContain('fill-current')
+    expect(rootRows[0]!.text()).toContain('3')
+    expect(rootRows[1]!.find('svg').classes()).not.toContain('fill-current')
+    expect(rootRows[1]!.find('svg').attributes('aria-label')).toBe('Empty folder')
+    expect(rootRows[1]!.text()).toContain('0')
 
     wrapper.unmount()
   })

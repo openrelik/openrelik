@@ -764,7 +764,7 @@ export async function saveAsTemplate(folderId: number): Promise<string | null> {
     title: 'Save as template',
     message:
       'New workflows can start from it: the same workers and options, on their own input files.',
-    field: { label: 'template name', value: workflow.name },
+    field: { label: 'Template name', value: workflow.name },
     confirmLabel: 'Save template',
   })
   if (!name || epoch !== sessionEpoch) return null

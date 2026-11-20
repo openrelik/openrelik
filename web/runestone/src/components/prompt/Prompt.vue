@@ -68,7 +68,7 @@ function onInputKey(event: KeyboardEvent) {
       >
         <label class="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-sunken px-3">
           <span class="max-w-[45%] shrink-0 truncate text-brand">{{ cwdPath }}</span>
-          <span class="shrink-0 text-ink-muted">$</span>
+          <span class="shrink-0 text-ink-muted" aria-hidden="true">&gt;</span>
           <div class="relative ml-1 flex min-w-0 flex-1 items-center">
             <input
               v-autofocus
@@ -81,7 +81,7 @@ function onInputKey(event: KeyboardEvent) {
               aria-controls="prompt-results"
               :aria-expanded="results.length > 0"
               :aria-activedescendant="results.length ? `prompt-${index}` : undefined"
-              class="peer w-full min-w-0 bg-transparent font-mono text-ink caret-brand-icon outline-none [caret-shape:block] placeholder:text-transparent"
+              class="peer w-full min-w-0 bg-transparent font-mono text-ink caret-ink outline-none [caret-shape:block] placeholder:text-transparent"
               placeholder="cd, or type to find…"
               @keydown="onInputKey"
             />

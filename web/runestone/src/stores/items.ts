@@ -93,6 +93,14 @@ export const useItemsStore = defineStore('items', () => {
     )
   }
 
+  function syncFolderEmpty(folder: Item): void {
+    if (folder.fileCount !== undefined && folder.folderCount !== undefined) {
+      folder.isEmpty = folder.fileCount + folder.folderCount === 0
+    } else if ((folder.fileCount ?? 0) > 0 || (folder.folderCount ?? 0) > 0) {
+      folder.isEmpty = false
+    }
+  }
+
   /**
    * Removes an item, and for a folder everything below it, from the reactive
    * items store. Returns what was removed, the item itself first.
@@ -101,6 +109,17 @@ export const useItemsStore = defineStore('items', () => {
     const removed = [item, ...(item.kind === 'folder' ? descendantsOf(item.id) : [])]
     const gone = new Set(removed.map(itemKey))
     items.value = items.value.filter((other) => !gone.has(itemKey(other)))
+    if (item.parent !== null) {
+      const parent = findFolder(item.parent)
+      if (parent) {
+        if (item.kind === 'file' && parent.fileCount !== undefined) {
+          parent.fileCount = Math.max(0, parent.fileCount - 1)
+        } else if (item.kind === 'folder' && parent.folderCount !== undefined) {
+          parent.folderCount = Math.max(0, parent.folderCount - 1)
+        }
+        syncFolderEmpty(parent)
+      }
+    }
     return removed
   }
 
@@ -122,9 +141,20 @@ export const useItemsStore = defineStore('items', () => {
         byKey.set(key, next.length)
         next.push(item)
       } else {
-        // Listings do not carry a file's details (hashes, magic): keep those loaded.
-        const { hashes, magicText } = next[index]!
-        next[index] = { hashes, magicText, ...item }
+        // Listings do not carry a file's details (hashes, magic), and single-folder
+        // fetches do not carry item counts: keep loaded values unless the incoming item sets them.
+        const prev = next[index]!
+        next[index] = {
+          hashes: prev.hashes,
+          magicText: prev.magicText,
+          fileCount: prev.fileCount,
+          folderCount: prev.folderCount,
+          isEmpty: prev.isEmpty,
+          ...item,
+          fileCount: item.fileCount ?? prev.fileCount,
+          folderCount: item.folderCount ?? prev.folderCount,
+          isEmpty: item.isEmpty ?? prev.isEmpty,
+        }
       }
     }
     items.value = next
@@ -140,12 +170,22 @@ export const useItemsStore = defineStore('items', () => {
       (item) => item.parent !== parent || item.kind !== 'file' || listed.has(item.id),
     )
     upsertItems(files)
+    const folder = findFolder(parent)
+    if (folder) {
+      folder.fileCount = files.length
+      syncFolderEmpty(folder)
+    }
   }
 
   /** Replaces the folders directly inside `parent`, leaving its files in place. */
   function setSubfolders(parent: number, folders: Item[]): void {
     items.value = items.value.filter((item) => item.parent !== parent || item.kind !== 'folder')
     upsertItems(folders)
+    const folder = findFolder(parent)
+    if (folder) {
+      folder.folderCount = folders.length
+      syncFolderEmpty(folder)
+    }
   }
 
   return {

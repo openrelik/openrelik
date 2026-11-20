@@ -301,7 +301,7 @@ const user = computed(() => auth.user)
           <!-- API keys -->
           <section aria-labelledby="account-keys" class="px-4 py-3">
             <div class="flex items-center gap-2">
-              <p id="account-keys" class="micro-label">api keys</p>
+              <p id="account-keys" class="micro-label">API keys</p>
               <Button
                 v-if="!creating"
                 size="row"
@@ -324,7 +324,7 @@ const user = computed(() => auth.user)
               @submit.prevent="create"
             >
               <label class="flex flex-col gap-1">
-                <span class="micro-label">name</span>
+                <span class="micro-label">Name</span>
                 <input
                   ref="nameInput"
                   v-model="name"
@@ -336,7 +336,7 @@ const user = computed(() => auth.user)
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <span class="micro-label">description (optional)</span>
+                <span class="micro-label">Description (optional)</span>
                 <input v-model="description" type="text" class="field h-7" />
               </label>
               <p class="text-ink-muted">How long it lasts is set by the server.</p>

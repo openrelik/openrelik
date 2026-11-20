@@ -93,19 +93,18 @@ async function requestLoadAll() {
   </span>
   <span v-else-if="capped" class="flex min-w-0 items-center gap-2">
     <span class="tabular truncate">{{ formatSize(bytesRead) }} of {{ formatSize(size) }} read</span>
-    <Button size="row" class="shrink-0" @click="emit('loadMore')">
-      Load {{ moreLabel }} more
-    </Button>
-    <Button
-      size="row"
-      :tooltip="{
-        text: `Read the remaining ${formatSize(remaining)}`,
-        detail: 'Kept in this page',
-      }"
-      class="shrink-0"
-      @click="requestLoadAll"
-    >
-      Load full file
-    </Button>
+    <span class="flex shrink-0 items-center gap-1.5">
+      <Button size="row" @click="emit('loadMore')">Load {{ moreLabel }} more</Button>
+      <Button
+        size="row"
+        :tooltip="{
+          text: `Read the remaining ${formatSize(remaining)}`,
+          detail: 'Kept in this page',
+        }"
+        @click="requestLoadAll"
+      >
+        Load full file
+      </Button>
+    </span>
   </span>
 </template>

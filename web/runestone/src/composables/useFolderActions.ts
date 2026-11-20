@@ -122,8 +122,21 @@ async function createFolder(parent: number | null, name: string): Promise<Item |
 
   try {
     const folder = await api.folders.createFolder(name, parent)
-    const item = mapFolderToItem(folder, folder.parent?.id ?? parent)
-    useItemsStore().upsertItems([item])
+    const item: Item = {
+      ...mapFolderToItem(folder, folder.parent?.id ?? parent),
+      fileCount: 0,
+      folderCount: 0,
+      isEmpty: true,
+    }
+    const itemsStore = useItemsStore()
+    itemsStore.upsertItems([item])
+    if (item.parent !== null) {
+      const parentFolder = itemsStore.findFolder(item.parent)
+      if (parentFolder) {
+        if (parentFolder.folderCount !== undefined) parentFolder.folderCount += 1
+        parentFolder.isEmpty = false
+      }
+    }
     if (item.parent === null) {
       // The newest folder: first on page 1 now; later pages shift by one, so
       // they refetch when visited.

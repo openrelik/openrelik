@@ -323,6 +323,11 @@ async function copyRow() {
 
 const modalStore = useModalStore()
 const fullscreen = ref(false)
+function closeRowDetail() {
+  cursor.value = null
+  scroller.value?.focus({ preventScroll: true })
+}
+
 function toggleFullscreen() {
   const savedTop = scroller.value?.scrollTop ?? scrollTop.value
   fullscreen.value = !fullscreen.value
@@ -413,7 +418,7 @@ const partialNotice = computed(() => {
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           <!-- status, filter -->
           <div
-            class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted"
+            class="flex h-9 shrink-0 items-center gap-3 border-b border-border pr-2 pl-3 text-ink-muted"
           >
             <span class="tabular truncate">
               {{ rowsLabel }}<template v-if="mark"> · {{ marks.label() }}</template> ·
@@ -442,7 +447,7 @@ const partialNotice = computed(() => {
             <button
               v-if="mark"
               type="button"
-              class="ml-auto flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+              class="ml-auto flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
               :aria-label="`Copy a link to ${marks.label()}`"
               v-tooltip="`Copy a link to ${marks.label()}`"
               @click="copyLink"
@@ -455,9 +460,9 @@ const partialNotice = computed(() => {
               type="text"
               spellcheck="false"
               autocomplete="off"
-              placeholder="filter rows"
+              placeholder="Filter rows"
               aria-label="Filter rows: text, or column:value"
-              class="field h-5 w-52 shrink-0 text-[11px]"
+              class="field h-6 w-52 shrink-0 text-[12px]"
               :class="{ 'ml-auto': !mark }"
               v-tooltip="'Text in any cell, or column:value'"
               @keydown.esc.stop="((filterText = ''), scroller?.focus())"
@@ -465,7 +470,7 @@ const partialNotice = computed(() => {
             />
             <button
               type="button"
-              class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
               :aria-label="fullscreen ? 'Exit full screen' : 'Full screen'"
               v-tooltip="fullscreen ? 'Exit full screen' : 'Full screen'"
               @click="toggleFullscreen"
@@ -602,6 +607,8 @@ const partialNotice = computed(() => {
               :number="selectedIndex + 1"
               :columns="columns"
               :cells="table.cellsOf(rows[selectedIndex]!)"
+              :closable="fullscreen"
+              @close="closeRowDetail"
             />
             <p v-else class="px-3 py-3 text-ink-muted">Select a row to see it in full.</p>
           </div>

@@ -253,7 +253,7 @@ function onKeydown(event: KeyboardEvent) {
             spellcheck="false"
             autocomplete="off"
             aria-label="Filter templates"
-            class="min-w-0 flex-1 bg-transparent text-ink caret-brand outline-none [caret-shape:block] placeholder:text-ink-muted/60"
+            class="min-w-0 flex-1 bg-transparent text-ink caret-ink outline-none [caret-shape:block] placeholder:text-ink-muted/60"
             placeholder="type a template or empty…"
             @keydown="onKeydown"
           />
