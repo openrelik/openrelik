@@ -595,6 +595,81 @@ def test_log2timeline_multiple_inputs_ewf_missing_e01_raises(
         )
 
 
+def test_log2timeline_multiple_inputs_non_ewf_does_not_follow_symlinks(
+    tmp_path, fake_subprocess, bound_task, monkeypatch
+):
+    """Hardlinking multiple inputs must pass follow_symlinks=False so Python 3.14+
+    does not dereference dangling symlinks via linkat(..., AT_SYMLINK_FOLLOW)."""
+    in_dir = tmp_path / "inputs"
+    in_dir.mkdir()
+    real_file = in_dir / "regular.txt"
+    real_file.write_text("data")
+    dangling_link = in_dir / "dangling_symlink"
+    os.symlink("nonexistent_target", dangling_link)
+
+    link_calls = []
+    real_link = os.link
+
+    def spy_link(src, dst, **kwargs):
+        link_calls.append((src, dst, kwargs))
+        return real_link(src, dst, **kwargs)
+
+    monkeypatch.setattr(log2timeline.os, "link", spy_link)
+
+    inputs = [
+        {"path": str(real_file), "display_name": "regular.txt"},
+        {"path": str(dangling_link), "display_name": "dangling_symlink"},
+    ]
+
+    log2timeline.log2timeline(
+        bound_task,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf-multi-symlink",
+        task_config=None,
+    )
+
+    assert len(link_calls) == 2
+    assert all(kwargs.get("follow_symlinks") is False for _, _, kwargs in link_calls)
+
+
+def test_log2timeline_multiple_inputs_ewf_does_not_follow_symlinks(
+    tmp_path, fake_subprocess, bound_task, monkeypatch
+):
+    """Hardlinking EWF segments must pass follow_symlinks=False."""
+    in_dir = tmp_path / "inputs"
+    in_dir.mkdir()
+    e01 = in_dir / "disk.E01"
+    e02 = in_dir / "disk.E02"
+    e01.write_text("e01 data")
+    e02.write_text("e02 data")
+
+    link_calls = []
+    real_link = os.link
+
+    def spy_link(src, dst, **kwargs):
+        link_calls.append((src, dst, kwargs))
+        return real_link(src, dst, **kwargs)
+
+    monkeypatch.setattr(log2timeline.os, "link", spy_link)
+
+    inputs = [
+        {"path": str(e01), "display_name": "disk.E01"},
+        {"path": str(e02), "display_name": "disk.E02"},
+    ]
+
+    log2timeline.log2timeline(
+        bound_task,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf-ewf-symlink",
+        task_config=None,
+    )
+
+    assert len(link_calls) == 2
+    assert all(kwargs.get("follow_symlinks") is False for _, _, kwargs in link_calls)
+
+
 def test_log2timeline_extract_single_zip(
     tmp_path, fake_subprocess, bound_task, monkeypatch
 ):

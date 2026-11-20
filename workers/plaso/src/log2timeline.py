@@ -277,7 +277,7 @@ def log2timeline(
                 original_ext = os.path.splitext(original_path)[1]
                 new_filename = f"{base_name}{original_ext}".lower()
                 link_path = os.path.join(temp_dir, new_filename)
-                os.link(original_path, link_path)
+                os.link(original_path, link_path, follow_symlinks=False)
             # Use the first file's base name to use in Plaso.
             e01_file = os.path.join(temp_dir, f"{base_name}.e01")
             if not os.path.exists(e01_file):
@@ -286,7 +286,11 @@ def log2timeline(
         else:
             for input_file in input_files:
                 filename = os.path.basename(input_file.get("path"))
-                os.link(input_file.get("path"), f"{temp_dir}/{filename}")
+                os.link(
+                    input_file.get("path"),
+                    f"{temp_dir}/{filename}",
+                    follow_symlinks=False,
+                )
             command.append(temp_dir)
 
     # Handle extraction of single ZIP input before launching log2timeline.py (slow $MFT parsing workaround)
