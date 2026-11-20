@@ -738,7 +738,7 @@ KEYS.j = KEYS.ArrowDown!
 KEYS.k = KEYS.ArrowUp!
 KEYS.l = KEYS.Enter!
 
-/** Blurs the path prompt if it still has the caret (it is focused on arrival). */
+/** Blurs the path prompt if it currently has the caret. */
 function leavePrompt() {
   const focused = document.activeElement
   if (focused instanceof HTMLElement && 'prompt' in focused.dataset) focused.blur()

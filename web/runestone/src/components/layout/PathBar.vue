@@ -21,7 +21,7 @@ import { Pencil } from '@/components/icons'
 import BrandLink from '@/components/layout/BrandLink.vue'
 import PromptResults from '@/components/prompt/PromptResults.vue'
 import { canRename, roleOf } from '@/composables/useFolderPermissions'
-import { registerPrompt, usePrompt } from '@/composables/usePrompt'
+import { consumePendingPromptFocus, registerPrompt, usePrompt } from '@/composables/usePrompt'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import { useModalStore } from '@/stores/modals'
@@ -30,14 +30,16 @@ import { useSettingsStore } from '@/stores/settings'
 import { isCommandModifier, promptPassesThrough } from '@/utils/keyboard'
 
 /**
- * Where you are, as a shell prompt: `/CLI Test Folder/evidence $ ▌`.
+ * Where you are, as a shell prompt: `/CLI Test Folder/evidence $ ▯`.
  *
  * The path stays a row of links — every folder name goes there, and every `/`
  * opens the list of folders inside the segment to its left, the one you came
- * through marked. After the `$` you can type: the folder's contents drop down,
+ * through marked. After the `$` you can click or press `g` / `⌘K` to type:
  * typing searches every folder and finds a case by its reference, Tab
- * completes, Enter goes. Going into a folder keeps the prompt focused with an
- * empty line, so you can keep walking the way you would with `cd`.
+ * completes, Enter goes. Navigating to a folder from the prompt keeps it
+ * focused with an empty line so you can keep walking with `cd`; arriving any
+ * other way leaves the prompt unfocused so the workspace stays calm and
+ * single-letter listing shortcuts work right away.
  */
 const props = defineProps<{
   path: Item[]
@@ -64,15 +66,14 @@ const rootPagesStore = useRootPagesStore()
 const input = ref<HTMLInputElement | null>(null)
 const focused = ref(false)
 const { line, index, query, isRm, cwdPath, scopePath, results, serverSearch, go, handleKey } =
-  usePrompt()
+  usePrompt(() => {}, { keepFocusOnNavigate: true })
 
 const dropdown = computed(() => focused.value && line.value.trim() !== '')
 
 /**
- * The prompt is focused by default, so it must not take the listing's keyboard
- * away. With an empty line these keys mean nothing to a prompt and everything
- * to the listing — move, range-select, open — so they pass straight through.
- * Once something is typed, every key is the prompt's.
+ * While the prompt is focused with an empty line (for instance after walking
+ * into a folder with `cd`), listing keys — move, range-select, open — still
+ * pass straight through. Once something is typed, every key is the prompt's.
  *
  * Backspace is never passed on: it only ever edits the line, so one press too
  * many does nothing instead of leaving the folder. Going up is `cd ..`, or a
@@ -94,30 +95,43 @@ function onInputKey(event: KeyboardEvent) {
 }
 
 const focusPrompt = () => input.value?.focus({ preventScroll: true })
+let isUnmounted = false
+
 /**
- * Arriving in a folder puts you at the prompt, to keep walking with `cd`. A
- * file page is for its own keys (j, k, d, w, and the hex view's): the prompt
- * waits for `g` or a click there.
+ * Only focus on arrival when the navigation came from the inline prompt (to
+ * keep walking folders with `cd`). File pages keep their own keys, and modals
+ * keep their focus.
  */
-const focusOnArrival = () => {
-  if (route.name !== 'file' && !modalStore.hasActiveModal) focusPrompt()
+function applyPendingFocus() {
+  if (consumePendingPromptFocus(route.path)) {
+    if (route.name !== 'file' && !modalStore.hasActiveModal) focusPrompt()
+    return true
+  }
+  return false
 }
 
 let unregister = () => {}
 onMounted(() => {
   unregister = registerPrompt(focusPrompt)
-  focusOnArrival()
+  applyPendingFocus()
 })
-// Arriving somewhere — by prompt, link or keyboard — puts you back at the prompt;
-// query-only changes (e.g. root paging) leave focus where the operator put it.
+// Keep focus across folder navigations initiated from the prompt; blur on
+// navigations from elsewhere. Query-only changes (e.g. root paging) leave
+// focus where the operator put it.
 watch(
   () => route.path,
   async () => {
     await nextTick()
-    focusOnArrival()
+    if (isUnmounted) return
+    if (!applyPendingFocus() && document.activeElement === input.value) {
+      input.value?.blur()
+    }
   },
 )
-onUnmounted(() => unregister())
+onUnmounted(() => {
+  isUnmounted = true
+  unregister()
+})
 
 // --- renaming the folder you are in ---------------------------------------------
 
@@ -393,15 +407,20 @@ function onBarClick(event: MouseEvent) {
         :aria-expanded="dropdown"
         :aria-activedescendant="dropdown && results.length ? `prompt-${index}` : undefined"
         class="peer h-full w-full min-w-0 bg-transparent text-ink caret-brand-icon outline-none [caret-shape:block] placeholder:text-transparent"
-        :placeholder="focused ? 'cd, or type to find…' : ''"
+        placeholder="cd, or type to find…"
         @focus="focused = true"
         @blur="focused = false"
         @keydown="onInputKey"
       />
       <span
-        v-if="focused"
+        v-if="!focused"
         aria-hidden="true"
-        class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate text-ink-muted/60 select-none peer-placeholder-shown:block"
+        class="pointer-events-none absolute top-1/2 left-0 hidden h-[1.15em] w-[1ch] -translate-y-1/2 border border-ink-muted/40 select-none peer-placeholder-shown:block"
+      />
+      <span
+        aria-hidden="true"
+        class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate select-none peer-placeholder-shown:block"
+        :class="focused ? 'text-ink-muted/60' : 'text-ink-muted/45'"
         >cd, or type to find…</span
       >
     </div>

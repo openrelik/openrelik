@@ -27,6 +27,8 @@ import { folderKeys } from '@/composables/useFolderLoader'
 import { forgetRoles } from '@/composables/useFolderPermissions'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
 import {
+  clearPromptState,
+  consumePendingPromptFocus,
   labelForPath,
   openPrompt,
   pathOf,
@@ -35,6 +37,7 @@ import {
   registerPrompt,
   usePrompt,
   type PromptResult,
+  type UsePromptOptions,
 } from '@/composables/usePrompt'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { useItemsStore } from '@/stores/items'
@@ -83,14 +86,14 @@ function makeItem(overrides: Partial<Item> & Pick<Item, 'id' | 'kind' | 'name'>)
   }
 }
 
-function mountPrompt(onGo: (result: PromptResult) => void = () => {}) {
+function mountPrompt(onGo: (result: PromptResult) => void = () => {}, options?: UsePromptOptions) {
   const pinia = createPinia()
   setActivePinia(pinia)
 
   let prompt!: ReturnType<typeof usePrompt>
   const Harness = defineComponent({
     setup() {
-      prompt = usePrompt(onGo)
+      prompt = usePrompt(onGo, options)
       return () => null
     },
   })
@@ -120,11 +123,12 @@ describe('composables/usePrompt', () => {
     clearCaseLookups()
     forgetRoles()
     await router.replace('/')
-    previousPath.value = null
+    clearPromptState()
   })
 
   afterEach(() => {
     useConfirm().cancel()
+    clearPromptState()
     clearQueryCache()
     clearFolderSearch()
     clearCaseLookups()
@@ -517,5 +521,70 @@ describe('composables/usePrompt', () => {
     expect(prompt.results.value).toEqual([])
 
     wrapper.unmount()
+  })
+
+  it('tracks one-shot pending focus for folder navigations only when keepFocusOnNavigate is enabled', async () => {
+    const folder = makeItem({ id: 10, kind: 'folder', name: 'Evidence', parent: null })
+    const file = makeItem({ id: 99, kind: 'file', name: 'notes.txt', parent: 10 })
+
+    // Default mode (Prompt.vue modal) does not record pending focus.
+    const modal = mountPrompt()
+    useItemsStore().upsertItems([folder, file])
+    modal.prompt.go({
+      kind: 'item',
+      item: folder,
+      path: '/Evidence/',
+      label: 'Evidence/',
+      hits: [],
+    })
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/folder/10')
+    expect(consumePendingPromptFocus('/folder/10')).toBe(false)
+    modal.wrapper.unmount()
+
+    // Inline mode (PathBar.vue) records pending focus for folder routes and consumes it once.
+    const inline = mountPrompt(() => {}, { keepFocusOnNavigate: true })
+    useItemsStore().upsertItems([folder, file])
+    await router.push('/folder/10')
+    inline.prompt.go({ kind: 'home', path: '~', label: '~ (home)', hits: [] })
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(consumePendingPromptFocus('/folder/10')).toBe(false)
+    expect(consumePendingPromptFocus('/')).toBe(true)
+    expect(consumePendingPromptFocus('/')).toBe(false)
+
+    // Navigating to a file route does not record pending focus.
+    inline.prompt.go({
+      kind: 'item',
+      item: file,
+      path: '/Evidence/notes.txt',
+      label: 'notes.txt',
+      hits: [],
+    })
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/folder/10/file/99')
+    expect(consumePendingPromptFocus('/folder/10/file/99')).toBe(false)
+
+    // Navigating to login clears any unconsumed pending focus.
+    inline.prompt.go({ kind: 'here', path: '.', label: '.', hits: [] })
+    await flushPromises()
+    await router.push('/login')
+    await flushPromises()
+    expect(consumePendingPromptFocus('/folder/10')).toBe(false)
+
+    // clearPromptState clears pending focus on sign-out.
+    await router.push('/')
+    inline.prompt.go({
+      kind: 'item',
+      item: folder,
+      path: '/Evidence/',
+      label: 'Evidence/',
+      hits: [],
+    })
+    await flushPromises()
+    clearPromptState()
+    expect(consumePendingPromptFocus('/folder/10')).toBe(false)
+
+    inline.wrapper.unmount()
   })
 })

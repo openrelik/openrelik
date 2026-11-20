@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // @vitest-environment happy-dom
-import { nextTick } from 'vue'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { defineComponent, nextTick } from 'vue'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api'
 import PathBar from '@/components/layout/PathBar.vue'
 import { ensureRole, forgetRoles } from '@/composables/useFolderPermissions'
+import { clearPromptState } from '@/composables/usePrompt'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { directives } from '@/directives'
 import { useItemsStore } from '@/stores/items'
@@ -62,6 +63,7 @@ describe('PathBar', () => {
       configurable: true,
     })
     clearQueryCache()
+    clearPromptState()
     forgetRoles()
     pinia = createPinia()
     setActivePinia(pinia)
@@ -86,6 +88,7 @@ describe('PathBar', () => {
       wrappers.pop()?.unmount()
     }
     clearQueryCache()
+    clearPromptState()
     forgetRoles()
     vi.restoreAllMocks()
   })
@@ -363,28 +366,53 @@ describe('PathBar', () => {
     await promptInput.trigger('keydown', { key: 'Escape' })
     expect(document.activeElement).not.toBe(promptInput.element)
 
-    // Navigating to a folder route auto-focuses the prompt on arrival.
+    // Navigating to a folder outside the prompt does NOT auto-focus the prompt,
+    // and blurs it if it was previously focused.
     await router.push('/folder/1')
     await flushPromises()
     await nextTick()
-    expect(document.activeElement).toBe(promptInput.element)
+    expect(document.activeElement).not.toBe(promptInput.element)
 
-    // Query-only route updates (e.g. paging) do not steal focus back into the prompt.
+    modalStore.triggerPrompt()
+    expect(document.activeElement).toBe(promptInput.element)
     await router.push('/')
     await flushPromises()
     await nextTick()
-    expect(document.activeElement).toBe(promptInput.element)
-    ;(promptInput.element as HTMLInputElement).blur()
+    expect(document.activeElement).not.toBe(promptInput.element)
+
+    // Query-only route updates (e.g. paging) leave focus where the operator put it.
     await router.replace('/?page=2')
     await flushPromises()
     await nextTick()
     expect(document.activeElement).not.toBe(promptInput.element)
 
-    // Path changes while a modal is active also do not steal focus away from the modal.
-    modalStore.openModal('settings')
-    await router.push('/folder/1')
+    modalStore.triggerPrompt()
+    expect(document.activeElement).toBe(promptInput.element)
+    await router.replace('/?page=3')
     await flushPromises()
     await nextTick()
+    expect(document.activeElement).toBe(promptInput.element)
+
+    // Navigating to a folder from the prompt keeps focus in the prompt to chain `cd`.
+    const evidence = makeItem({ id: 2, kind: 'folder', name: 'evidence', parent: 1 })
+    itemsStore.upsertItems([folder, evidence, file])
+    await promptInput.setValue('evidence')
+    await nextTick()
+    await promptInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    await nextTick()
+    expect(router.currentRoute.value.path).toBe('/folder/2')
+    expect(document.activeElement).toBe(promptInput.element)
+
+    // Navigating from the prompt while a modal is active does not steal focus from the modal.
+    modalStore.openModal('settings')
+    await promptInput.setValue('..')
+    await nextTick()
+    ;(promptInput.element as HTMLInputElement).blur()
+    await promptInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    await nextTick()
+    expect(router.currentRoute.value.path).toBe('/folder/1')
     expect(document.activeElement).not.toBe(promptInput.element)
     modalStore.closeAllModals()
 
@@ -393,5 +421,71 @@ describe('PathBar', () => {
     await promptInput.setValue('zzz-no-match')
     await nextTick()
     expect(promptInput.attributes('aria-activedescendant')).toBeUndefined()
+  })
+
+  it('does not auto-focus on folder mount, carries prompt focus across view changes, and skips file routes', async () => {
+    const itemsStore = useItemsStore()
+    const folder = makeItem({ id: 1, kind: 'folder', name: 'Case One' })
+    const file = makeItem({ id: 99, kind: 'file', name: 'syslog.txt', parent: 1, size: 100 })
+    itemsStore.upsertItems([folder, file])
+
+    const FolderRoute = defineComponent({
+      components: { PathBar },
+      setup: () => ({ path: [folder] }),
+      template: '<PathBar :path="path" />',
+    })
+    const FileRoute = defineComponent({
+      components: { PathBar },
+      setup: () => ({ path: [folder, file] }),
+      template: '<PathBar :path="path" />',
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', name: 'home', component: FolderRoute },
+        { path: '/folder/:id', name: 'folder', component: FolderRoute },
+        { path: '/folder/:folderId/file/:fileId', name: 'file', component: FileRoute },
+      ],
+    })
+    await router.push('/folder/1')
+    await router.isReady()
+
+    // Fresh folder mount leaves the prompt unfocused with its static placeholder visible.
+    const host = mount(
+      defineComponent({
+        components: { RouterView },
+        template: '<RouterView />',
+      }),
+      {
+        attachTo: document.body,
+        global: { plugins: [pinia, router, directives] },
+      },
+    )
+    wrappers.push(host)
+
+    const folderInput = host.get('input[data-prompt]')
+    expect(document.activeElement).not.toBe(folderInput.element)
+    expect(host.text()).toContain('cd, or type to find…')
+
+    // Opening a file from the prompt does NOT carry focus onto the file page.
+    await folderInput.trigger('focus')
+    await folderInput.setValue('syslog')
+    await nextTick()
+    await folderInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    await nextTick()
+    expect(router.currentRoute.value.path).toBe('/folder/1/file/99')
+    const fileInput = host.get('input[data-prompt]')
+    expect(document.activeElement).not.toBe(fileInput.element)
+
+    // Going back to the folder with `..` from the file's prompt carries focus into the new PathBar.
+    await fileInput.trigger('focus')
+    await fileInput.setValue('..')
+    await nextTick()
+    await fileInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    await nextTick()
+    expect(router.currentRoute.value.path).toBe('/folder/1')
+    expect(document.activeElement).toBe(host.get('input[data-prompt]').element)
   })
 })
