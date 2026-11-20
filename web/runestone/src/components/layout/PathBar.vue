@@ -343,17 +343,18 @@ function onBarClick(event: MouseEvent) {
             <button
               v-else-if="renamable"
               type="button"
-              class="group/name flex min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-check) px-1 font-medium text-ink hover:bg-surface"
+              class="group/name relative flex min-w-0 cursor-pointer items-center overflow-hidden rounded-(--radius-check) px-0.5 font-medium text-ink hover:bg-sunken focus-visible:bg-sunken"
               :aria-label="`Rename ${path[at + 1]!.name}`"
               v-tooltip="'Rename'"
               @click="startRename"
             >
               <span class="truncate">{{ path[at + 1]!.name }}</span>
-              <Pencil
-                :size="11"
-                :stroke-width="1.5"
-                class="shrink-0 text-ink-muted opacity-0 group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
-              />
+              <span
+                aria-hidden="true"
+                class="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-linear-to-l from-sunken from-60% via-sunken/90 to-transparent pr-0.5 pl-2.5 text-ink-muted opacity-0 group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
+              >
+                <Pencil :size="11" :stroke-width="1.5" />
+              </span>
             </button>
             <span v-else class="truncate font-medium text-ink">{{ path[at + 1]!.name }}</span>
           </template>
