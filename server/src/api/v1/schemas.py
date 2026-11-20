@@ -184,6 +184,9 @@ class FolderResponseCompact(BaseSchema):
     workflows: Optional[List["WorkflowResponseCompact"]]
     selectable: Optional[bool] = False
     case_ref: Optional[str] = None
+    file_count: Optional[int] = None
+    folder_count: Optional[int] = None
+    is_empty: Optional[bool] = None
 
 
 class FolderListPaginatedResponse(BaseModel):

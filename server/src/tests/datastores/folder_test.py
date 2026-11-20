@@ -45,6 +45,7 @@ from datastores.sql.crud.folder import (
     set_folder_case_ref_in_db,
 )
 from datastores.sql.database import BaseModel
+from datastores.sql.models.file import File
 from datastores.sql.models.folder import Folder
 from datastores.sql.models.group import Group, GroupRole
 from datastores.sql.models.role import Role
@@ -466,12 +467,89 @@ def test_folder_listing_query_count(folder_tree, sqlite_db, list_folders):
 
     assert response
     assert all(folder.workflows for folder in response)
-    # Folder query (+ count) + one query each for eager loading users and workflows.
-    assert len(statements) <= 4
+    # Folder query (+ count) + eager-load users and workflows + 1 batched item-count query.
+    assert len(statements) <= 5
     # Workflows must be loaded in one batch, not one lazy load per folder.
     assert sum("FROM workflow" in statement for statement in statements) == 1
+    # Item counts must be loaded in one batched query, not per folder.
+    assert sum("FROM file" in statement for statement in statements) == 1
     # No implicit cross join, e.g. "FROM (...) AS anon_1, folder WHERE ...".
     assert not any(re.search(r",\s*folder\s+WHERE", statement) for statement in statements)
+
+
+def test_folder_listing_item_counts(folder_tree, sqlite_db):
+    """Folder listings attach active direct file_count, folder_count, and is_empty."""
+    me, folders = folder_tree
+    my_root = folders["my_root"]
+    my_sub = folders["my_sub"]
+
+    # Active and soft-deleted files in my_root; only soft-deleted children in my_sub.
+    sqlite_db.add_all(
+        [
+            File(
+                display_name="active.txt",
+                uuid=uuid.uuid4(),
+                data_type="file:generic",
+                filename="active.txt",
+                extension="txt",
+                user=me,
+                folder=my_root,
+                is_deleted=False,
+            ),
+            File(
+                display_name="gone.txt",
+                uuid=uuid.uuid4(),
+                data_type="file:generic",
+                filename="gone.txt",
+                extension="txt",
+                user=me,
+                folder=my_root,
+                is_deleted=True,
+            ),
+            File(
+                display_name="gone-sub.txt",
+                uuid=uuid.uuid4(),
+                data_type="file:generic",
+                filename="gone-sub.txt",
+                extension="txt",
+                user=me,
+                folder=my_sub,
+                is_deleted=True,
+            ),
+            Folder(
+                display_name="gone-dir",
+                uuid=uuid.uuid4(),
+                user=me,
+                parent=my_sub,
+                is_deleted=True,
+            ),
+        ]
+    )
+    sqlite_db.commit()
+
+    listed, _, _ = get_all_folders_from_db(sqlite_db, me, page=1, page_size=40)
+    by_name = {
+        f.display_name: schemas.FolderResponseCompact.model_validate(f) for f in listed
+    }
+
+    # my_root has 1 active file + 2 active subfolders (my_sub, my_child); deleted file ignored.
+    assert by_name["my_root"].file_count == 1
+    assert by_name["my_root"].folder_count == 2
+    assert by_name["my_root"].is_empty is False
+
+    # user_shared has no children.
+    assert by_name["user_shared"].file_count == 0
+    assert by_name["user_shared"].folder_count == 0
+    assert by_name["user_shared"].is_empty is True
+
+    # Subfolder listing: my_sub has only soft-deleted children -> counts as empty.
+    subs = get_subfolders_from_db(sqlite_db, my_root.id)
+    subs_by_name = {
+        f.display_name: schemas.FolderResponseCompact.model_validate(f) for f in subs
+    }
+    assert subs_by_name["my_sub"].file_count == 0
+    assert subs_by_name["my_sub"].folder_count == 0
+    assert subs_by_name["my_sub"].is_empty is True
 
 
 def test_get_subfolders_from_db(folder_tree, sqlite_db):

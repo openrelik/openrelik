@@ -69,6 +69,12 @@ class Folder(BaseModel):
             postgresql_where=text("NOT is_deleted"),
             sqlite_where=text("NOT is_deleted"),
         ),
+        Index(
+            "ix_folder_parent_id_active",
+            "parent_id",
+            postgresql_where=text("NOT is_deleted"),
+            sqlite_where=text("NOT is_deleted"),
+        ),
     )
 
     display_name: Mapped[str] = mapped_column(UnicodeText, index=True)

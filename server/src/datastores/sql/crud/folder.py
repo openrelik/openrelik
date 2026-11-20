@@ -21,7 +21,7 @@ import re
 import uuid
 from typing import Literal, get_args
 
-from sqlalchemy import exists, func, literal, select, tuple_, union, update
+from sqlalchemy import exists, func, literal, select, tuple_, union, union_all, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, selectinload
 
@@ -45,6 +45,61 @@ def _folder_list_options():
         selectinload(Folder.user),
         selectinload(Folder.workflows).load_only(Workflow.id, Workflow.display_name),
     )
+
+
+def _attach_item_counts(db: Session, folders: list[Folder]) -> list[Folder]:
+    """Attach direct active file_count, folder_count, and is_empty to listed folders.
+
+    Runs a single batched UNION ALL query over the page's folder IDs (backed by partial
+    indexes on file.folder_id and folder.parent_id WHERE NOT is_deleted) so listing
+    never does N+1 queries or full-table scans.
+
+    Args:
+        db (Session): database session
+        folders (list[Folder]): folders to annotate
+
+    Returns:
+        list[Folder]: the same folders with file_count, folder_count, and is_empty set
+    """
+    if not folders:
+        return folders
+
+    folder_ids = [folder.id for folder in folders]
+    files_q = (
+        select(
+            File.folder_id.label("folder_id"),
+            literal(1).label("is_file"),
+            func.count(File.id).label("cnt"),
+        )
+        .where(File.folder_id.in_(folder_ids), File.is_deleted.is_(False))
+        .group_by(File.folder_id)
+    )
+    subfolders_q = (
+        select(
+            Folder.parent_id.label("folder_id"),
+            literal(0).label("is_file"),
+            func.count(Folder.id).label("cnt"),
+        )
+        .where(Folder.parent_id.in_(folder_ids), Folder.is_deleted.is_(False))
+        .group_by(Folder.parent_id)
+    )
+
+    file_counts: dict[int, int] = {}
+    folder_counts: dict[int, int] = {}
+    for folder_id, is_file, cnt in db.execute(union_all(files_q, subfolders_q)).all():
+        if is_file:
+            file_counts[folder_id] = cnt
+        else:
+            folder_counts[folder_id] = cnt
+
+    for folder in folders:
+        fc = file_counts.get(folder.id, 0)
+        dc = folder_counts.get(folder.id, 0)
+        folder.file_count = fc
+        folder.folder_count = dc
+        folder.is_empty = (fc + dc) == 0
+
+    return folders
 
 
 def _shared_folder_ids(current_user: User):
@@ -99,7 +154,7 @@ def get_root_folders_from_db(db: Session, current_user: User):
     Returns:
         list: list of folders
     """
-    return (
+    folders = (
         db.query(Folder)
         .join(UserRole, UserRole.folder_id == Folder.id)
         .filter(
@@ -111,6 +166,7 @@ def get_root_folders_from_db(db: Session, current_user: User):
         .order_by(Folder.created_at.desc(), Folder.id.desc())
         .all()
     )
+    return _attach_item_counts(db, folders)
 
 
 def get_shared_folders_from_db(db: Session, current_user: User):
@@ -123,13 +179,14 @@ def get_shared_folders_from_db(db: Session, current_user: User):
     Returns:
         list: list of folders
     """
-    return (
+    folders = (
         db.query(Folder)
         .filter(Folder.id.in_(_shared_folder_ids(current_user)))
         .options(*_folder_list_options())
         .order_by(Folder.created_at.desc(), Folder.id.desc())
         .all()
     )
+    return _attach_item_counts(db, folders)
 
 
 # Columns get_all_folders_from_db can sort by. Names sort case-insensitively.
@@ -358,7 +415,7 @@ def get_all_folders_from_db(
 
     # Apply pagination. One extra row tells whether there is a next page.
     if page_size is None:
-        return final_query.all(), total_count, None
+        return _attach_item_counts(db, final_query.all()), total_count, None
     if not after:
         final_query = final_query.offset((page - 1) * page_size)
     folders = final_query.limit(page_size + 1).all()
@@ -368,7 +425,7 @@ def get_all_folders_from_db(
     # With page_size 0, the extra row leaves no folder to build a cursor from.
     if has_more and folders:
         next_cursor = encode_folder_cursor(folders[-1], sort, order, search_term)
-    return folders, total_count, next_cursor
+    return _attach_item_counts(db, folders), total_count, next_cursor
 
 
 def get_subfolders_from_db(db: Session, parent_folder_id: str):
@@ -381,13 +438,14 @@ def get_subfolders_from_db(db: Session, parent_folder_id: str):
     Returns:
         list: list of folders
     """
-    return (
+    folders = (
         db.query(Folder)
         .filter_by(parent_id=parent_folder_id)
         .options(*_folder_list_options())
         .order_by(Folder.id.desc())
         .all()
     )
+    return _attach_item_counts(db, folders)
 
 
 def get_folder_from_db(db: Session, folder_id: int):

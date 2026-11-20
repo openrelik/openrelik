@@ -21,11 +21,13 @@ from sqlalchemy import (
     BigInteger,
     Column,
     ForeignKey,
+    Index,
     Integer,
     Table,
     Unicode,
     UnicodeText,
     event,
+    text,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -89,6 +91,15 @@ class File(BaseModel):
         workflows (List[Workflow]): The workflows that have been applied to the file.
         summaries (List[FileSummary]): The summaries of the file.
     """
+
+    __table_args__ = (
+        Index(
+            "ix_file_folder_id_active",
+            "folder_id",
+            postgresql_where=text("NOT is_deleted"),
+            sqlite_where=text("NOT is_deleted"),
+        ),
+    )
 
     display_name: Mapped[Optional[str]] = mapped_column(UnicodeText, index=True)
     description: Mapped[Optional[str]] = mapped_column(UnicodeText, index=False)
