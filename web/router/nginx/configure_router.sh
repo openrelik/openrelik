@@ -180,6 +180,10 @@ if [ -z "$default_id" ]; then
 fi
 
 resolver="$(detect_resolver)"
+case "$resolver" in
+  \[*) resolver_opts="valid=10s" ;;
+  *) resolver_opts="valid=10s ipv6=off" ;;
+esac
 
 mkdir -p "$(dirname "$NGINX_CONF_OUT")" "$ROUTER_HTML_DIR"
 
@@ -311,7 +315,7 @@ server {
     listen 8711;
     server_name localhost;
     absolute_redirect off;
-    resolver ${resolver} valid=10s;
+    resolver ${resolver} ${resolver_opts};
     client_body_buffer_size 10K;
     client_header_buffer_size 1k;
     client_max_body_size 8m;
