@@ -70,7 +70,7 @@ Powers both the pop-up quick-open prompt (`Prompt.vue`) and the inline terminal 
 
 - Implements directory-relative and absolute path resolution (`/`, `../`, `cd`), `mkdir`, and `rm` (`confirmAction` deletion in the current folder).
 - Performs ranked fuzzy matching with hit-highlight indices against the folder hierarchy.
-- Manages keyboard traversal (`Tab` completion, `↑`/`↓` / `^P`/`^N` navigation, `Enter` navigation).
+- Manages keyboard traversal (`Tab` completion, `↑`/`↓` / `^P`/`^N` navigation, `Enter` navigation) and optional focus handoff (`keepFocusOnNavigate` / `consumePendingPromptFocus`) so inline `PathBar` prompts stay focused across prompt-initiated folder navigations.
 
 ### `useRowSelection`
 

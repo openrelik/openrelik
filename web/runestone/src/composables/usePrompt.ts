@@ -23,7 +23,7 @@ import {
   ref,
   watch,
 } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
 
 import { refreshAll } from '@/composables/useAutoRefresh'
 import { findCaseFolder } from '@/composables/useCaseRef'
@@ -115,6 +115,7 @@ export const pathOf = (item: Item) =>
 
 const trackedRouters = new WeakSet<object>()
 export const previousPath = ref<string | null>(null)
+let pendingFocusPath: string | null = null
 
 export function labelForPath(pathStr: string | null): string {
   const itemsStore = useItemsStore()
@@ -133,16 +134,36 @@ export function labelForPath(pathStr: string | null): string {
   return pathStr
 }
 
-/** Forgets the last visited route for `cd -` (sign-out). */
+/**
+ * Consumes a pending prompt-focus handoff for `path`, set when an inline
+ * PathBar prompt navigated to a folder. Returns true at most once per
+ * prompt-initiated navigation.
+ */
+export function consumePendingPromptFocus(path: string): boolean {
+  if (pendingFocusPath === null || pendingFocusPath !== path) return false
+  pendingFocusPath = null
+  return true
+}
+
+/** Forgets the last visited route for `cd -` and any pending prompt focus (sign-out). */
 export function clearPromptState(): void {
   previousPath.value = null
+  pendingFocusPath = null
+}
+
+export interface UsePromptOptions {
+  /** Keep the inline prompt focused after folder navigations initiated here. */
+  keepFocusOnNavigate?: boolean
 }
 
 /**
  * Terminal prompt navigation logic: fuzzy path matching,
  * directory traversal (`cd`), autocompletion, and modal state.
  */
-export function usePrompt(onGo: (result: PromptResult) => void = () => {}): UsePromptReturn {
+export function usePrompt(
+  onGo: (result: PromptResult) => void = () => {},
+  options: UsePromptOptions = {},
+): UsePromptReturn {
   const itemsStore = useItemsStore()
   const rootPagesStore = useRootPagesStore()
   const modalStore = useModalStore()
@@ -155,10 +176,14 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}): UseP
 
   if (!trackedRouters.has(router)) {
     trackedRouters.add(router)
-    router.afterEach((to, from) => {
+    router.afterEach((to, from, failure) => {
       if (to.name === 'login') {
         previousPath.value = null
+        pendingFocusPath = null
         return
+      }
+      if (failure || (pendingFocusPath !== null && to.path !== pendingFocusPath)) {
+        pendingFocusPath = null
       }
       if (from.name && from.name !== 'login' && to.path !== from.path) {
         previousPath.value = from.fullPath
@@ -463,10 +488,18 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}): UseP
     refreshAll()
   }
 
+  function push(to: RouteLocationRaw): void {
+    const target = router.resolve(to)
+    if (options.keepFocusOnNavigate && target.path !== route.path && target.name !== 'file') {
+      pendingFocusPath = target.path
+    }
+    router.push(to)
+  }
+
   function goToFileFolder(): void {
     const folderId = fileFolderId.value
     if (route.name === 'file' && folderId !== undefined) {
-      router.push({
+      push({
         path: `/folder/${folderId}`,
         query: { focus: String(route.params.fileId) },
       })
@@ -490,11 +523,11 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}): UseP
         confirmDeleteItems([result.item])
         return
       case 'home':
-        if (route.path !== '/') router.push('/')
+        if (route.path !== '/') push('/')
         return
       case 'prev':
         if (previousPath.value && route.fullPath !== previousPath.value) {
-          router.push(previousPath.value)
+          push(previousPath.value)
         }
         return
       case 'here':
@@ -508,12 +541,12 @@ export function usePrompt(onGo: (result: PromptResult) => void = () => {}): UseP
           return
         }
         const parent = cwd.value?.parent
-        router.push(parent === null || parent === undefined ? '/' : `/folder/${parent}`)
+        push(parent === null || parent === undefined ? '/' : `/folder/${parent}`)
         return
       }
       case 'item': {
         const item = result.item
-        router.push(
+        push(
           item.kind === 'folder' ? `/folder/${item.id}` : `/folder/${item.parent}/file/${item.id}`,
         )
         return

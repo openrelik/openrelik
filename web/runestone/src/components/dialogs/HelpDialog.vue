@@ -25,8 +25,7 @@ import { useModalStore } from '@/stores/modals'
  * Every keyboard shortcut, on one sheet, grouped by where it works.
  *
  * `?` opens it from anywhere that is not mid-typing — including the prompt
- * while its line is empty, since the prompt is focused by default and would
- * otherwise swallow the key. `?` or Esc closes it; nothing reaches the page
+ * while its line is empty. `?` or Esc closes it; nothing reaches the page
  * behind while it is open.
  */
 const modalStore = useModalStore()
@@ -66,7 +65,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
   },
   {
     title: 'prompt',
-    note: 'Focused when you arrive. Typing searches below the current folder; from the top it also searches the server.',
+    note: 'Focus with g, ⌘K, or a click. Typing searches below the current folder; from the top it also searches the server.',
     shortcuts: [
       { keys: ['/…'], does: 'Search from the top instead' },
       { keys: ['../…'], does: 'Search from the folder above' },
@@ -82,7 +81,6 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
   },
   {
     title: 'listing',
-    note: 'Letters work once you leave the prompt with esc.',
     shortcuts: [
       { keys: ['↑', '↓'], does: 'Move (also j k)' },
       { keys: ['home', 'end'], does: 'First, last' },
