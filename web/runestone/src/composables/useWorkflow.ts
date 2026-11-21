@@ -222,11 +222,7 @@ function adopt(record: WorkflowRecord, parentId: number): Workflow {
       isEmpty: true,
     },
   ])
-  const parentFolder = itemsStore.findFolder(parentId)
-  if (parentFolder) {
-    if (parentFolder.folderCount !== undefined) parentFolder.folderCount += 1
-    parentFolder.isEmpty = false
-  }
+  itemsStore.recordChildAdded(parentId, 'folder')
   useWorkflowsStore().upsertWorkflow(workflow)
   // All known without asking: the folder is new and empty.
   markFresh(workflowKeys.workflow(workflow.id))

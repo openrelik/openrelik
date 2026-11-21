@@ -151,5 +151,13 @@ describe('utils/item', () => {
       '1 file',
     )
     expect(folderItemBreakdown(unknownFolder)).toBeUndefined()
+
+    // Half-loaded folders (only one count populated) stay unknown until both counts arrive.
+    const halfLoadedSubfolders = makeItem({ kind: 'folder', folderCount: 0 })
+    const halfLoadedFiles = makeItem({ kind: 'folder', fileCount: 2 })
+    expect(folderItemCount(halfLoadedSubfolders)).toBeUndefined()
+    expect(folderItemBreakdown(halfLoadedSubfolders)).toBeUndefined()
+    expect(folderItemCount(halfLoadedFiles)).toBeUndefined()
+    expect(folderItemBreakdown(halfLoadedFiles)).toBeUndefined()
   })
 })

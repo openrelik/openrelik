@@ -101,15 +101,25 @@ export const useItemsStore = defineStore('items', () => {
     }
   }
 
+  /** Increments a parent folder's cached item count when a new direct child is added. */
+  function recordChildAdded(parentId: number, kind: Item['kind']): void {
+    const parent = findFolder(parentId)
+    if (!parent) return
+    if (kind === 'file' && parent.fileCount !== undefined) parent.fileCount += 1
+    else if (kind === 'folder' && parent.folderCount !== undefined) parent.folderCount += 1
+    parent.isEmpty = false
+  }
+
   /**
    * Removes an item, and for a folder everything below it, from the reactive
    * items store. Returns what was removed, the item itself first.
    */
   function removeTree(item: Item): Item[] {
+    const present = find(item.kind, item.id) !== undefined
     const removed = [item, ...(item.kind === 'folder' ? descendantsOf(item.id) : [])]
     const gone = new Set(removed.map(itemKey))
     items.value = items.value.filter((other) => !gone.has(itemKey(other)))
-    if (item.parent !== null) {
+    if (present && item.parent !== null) {
       const parent = findFolder(item.parent)
       if (parent) {
         if (item.kind === 'file' && parent.fileCount !== undefined) {
@@ -195,6 +205,7 @@ export const useItemsStore = defineStore('items', () => {
     descendantsOf,
     renameItem,
     upsertListed,
+    recordChildAdded,
     removeTree,
     clearItems,
     upsertItems,

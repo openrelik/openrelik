@@ -72,8 +72,8 @@ export function mapFolderToItem(folder: Folder, parent: number | null = null): I
     folderCount: folder.folder_count,
     isEmpty:
       folder.is_empty ??
-      (folder.file_count !== undefined || folder.folder_count !== undefined
-        ? (folder.file_count ?? 0) + (folder.folder_count ?? 0) === 0
+      (folder.file_count !== undefined && folder.folder_count !== undefined
+        ? folder.file_count + folder.folder_count === 0
         : undefined),
   }
 }

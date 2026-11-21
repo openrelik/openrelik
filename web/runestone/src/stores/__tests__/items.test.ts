@@ -307,4 +307,23 @@ describe('stores/items', () => {
     store.setSubfolders(1, [])
     expect(store.findFolder(1)).toMatchObject({ fileCount: 0, folderCount: 0, isEmpty: true })
   })
+
+  it('does not double-decrement parent counts when removeTree runs after a refresh already removed the item', () => {
+    const store = useItemsStore()
+    const deletedFile = makeFile(10, 1, { name: 'gone.txt' })
+    const remainingFile = makeFile(11, 1, { name: 'stay.txt' })
+    store.upsertItems([
+      makeFolder(1, null, { name: 'Case', fileCount: 2, folderCount: 0, isEmpty: false }),
+      deletedFile,
+      remainingFile,
+    ])
+
+    // Background listing refresh finishes first and already reflects the deletion.
+    store.setFiles(1, [remainingFile])
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 1, folderCount: 0, isEmpty: false })
+
+    // The DELETE response now triggers removeTree for the already-removed file.
+    store.removeTree(deletedFile)
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 1, folderCount: 0, isEmpty: false })
+  })
 })

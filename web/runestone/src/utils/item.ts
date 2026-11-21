@@ -55,8 +55,8 @@ export const isEmptyFolder = (item: Item) =>
 /** Direct active item count of a folder when known, else undefined. */
 export function folderItemCount(item: Item): number | undefined {
   if (item.kind !== 'folder') return undefined
-  if (item.fileCount !== undefined || item.folderCount !== undefined) {
-    return (item.fileCount ?? 0) + (item.folderCount ?? 0)
+  if (item.fileCount !== undefined && item.folderCount !== undefined) {
+    return item.fileCount + item.folderCount
   }
   return item.isEmpty === true ? 0 : undefined
 }
