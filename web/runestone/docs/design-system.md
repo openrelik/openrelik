@@ -494,7 +494,7 @@ Data tables are the core workhorse of the technical console.
 1. **Sticky Header**: `FolderTable` pins its header with `sticky top-0 z-[1] bg-surface` (`h-7`, `shadow-[inset_0_-1px_0_var(--color-border)]`) and places its `h-5` `Filter names` input in the name column; `TableViewer` uses `sticky top-0 z-10 h-6 border-b border-border bg-sunken`; `HexViewer` uses a non-sticky `h-6` header (`MarkdownView` tables use `bg-sunken` and `border-border-strong`). Column headers use `.micro-label` (or `11px` `.micro-label` in compact viewers) with click-to-sort indicators.
 2. **Row Height Floor**: Rows have a locked height (`h-7` / `28px` in explorer listings and upload rows; `h-6` / `24px` in `TableViewer`; `h-5` / `20px` in `TextViewer` and `HexViewer`). Rows never wrap multi-line text dynamically; long names are truncated with `v-overflow-tooltip`, and empty files in `FolderTable` can fold behind a toggle row.
 3. **Alignment Discipline**:
-   - String names, descriptors, and folder `modified (utc)` timestamps (`.tabular`): **Left-aligned**.
+   - String names, descriptors, and folder `Modified (UTC)` timestamps (`.tabular`): **Left-aligned**.
    - Byte `size` (folder listing) and `TableViewer` row-number/numeric/date columns: **Right-aligned** with `.tabular`.
    - Action buttons and status badges: **Right-aligned** or centered in fixed-width columns.
 4. **Visual Row States**:
@@ -581,7 +581,7 @@ Global keyboard shortcuts must never hijack typing when a user is actively editi
 
 - Returns `true` if the event target is a text `<input>`, `<textarea>`, `<select>`, or `contenteditable` element (ignoring checkboxes and radio buttons).
 - For the navigation prompt (`[data-prompt]` in `PathBar.vue`), delegates to `!promptPassesThrough(event, target.value)` so `ArrowUp`/`ArrowDown`/`ArrowLeft`/`ArrowRight`/`Enter`/`Space`/`Home`/`End`, `?` when the prompt is empty, and `⌘⏎` pass through to table/view navigation.
-- Prompt `<input>` fields in `PathBar.vue` and `Prompt.vue` use `caret-brand-icon [caret-shape:block]` for a console-style cursor.
+- Prompt `<input>` fields in `PathBar.vue`, `Prompt.vue`, `WorkflowDialog.vue`, and `RunDialog.vue` use `caret-ink [caret-shape:block]` for a console-style cursor.
 
 ### Inline Renaming Pattern
 
