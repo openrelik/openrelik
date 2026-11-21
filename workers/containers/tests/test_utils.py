@@ -17,6 +17,7 @@
 import logging
 import os
 import subprocess
+import tempfile
 import unittest
 
 
@@ -26,7 +27,6 @@ from unittest.mock import patch
 from src.utils import _mount_containerd_container
 from src.utils import _mount_docker_container
 from src.utils import (
-    _find_directory,
     _mount_container,
     CE_BINARY,
     container_root_exists,
@@ -811,177 +811,6 @@ class TestContainerWorkerUtils(unittest.TestCase):
             custom_container_root_dir,
         )
 
-    @patch("src.utils.os.walk")
-    def test_find_directory_found(self, mock_os_walk) -> None:
-        """Test _find_directory when directory is found."""
-        root_dir: str = "/test"
-        find_dirname: str = "target_dir"
-        mock_os_walk.return_value = [
-            ("/test", ["subdir", "target_dir"], ["file1"]),
-            ("/test/subdir", [], ["file2"]),
-            ("/test/target_dir", [], ["file3"]),
-        ]
-        expected_path: str = os.path.join(root_dir, find_dirname)
-
-        result: list[str] = _find_directory(root_dir, find_dirname)
-        self.assertEqual(result, [expected_path])
-        mock_os_walk.assert_called_once_with(root_dir)
-
-    @patch("src.utils.os.walk")
-    def test_find_directory_found_multiple(self, mock_os_walk) -> None:
-        """Test _find_directory when directory is found multiple times."""
-        root_dir: str = "/test"
-        find_dirname: str = "target_dir"
-        mock_os_walk.return_value = [
-            ("/test", ["subdir1", "target_dir"], ["file1"]),
-            ("/test/subdir1", ["target_dir"], ["file2"]),
-            ("/test/target_dir", [], ["file_in_root_target"]),
-            ("/test/subdir1/target_dir", [], ["file_in_subdir_target"]),
-        ]
-        expected_paths: list[str] = [
-            os.path.join(root_dir, find_dirname),
-            os.path.join(root_dir, "subdir1", find_dirname),
-        ]
-
-        result: list[str] = _find_directory(root_dir, find_dirname)
-        self.assertEqual(sorted(result), sorted(expected_paths))
-        mock_os_walk.assert_called_once_with(root_dir)
-
-    @patch("src.utils.os.walk")
-    def test_find_directory_not_found(self, mock_os_walk) -> None:
-        """Test _find_directory when directory is not found."""
-        root_dir: str = "/test"
-        find_dirname: str = "non_existent_dir"
-        mock_os_walk.return_value = [
-            ("/test", ["subdir"], ["file1"]),
-            ("/test/subdir", [], ["file2"]),
-        ]
-
-        result: list[str] = _find_directory(root_dir, find_dirname)
-        self.assertEqual(result, [])
-        mock_os_walk.assert_called_once_with(root_dir)
-
-    @patch("src.utils.os.walk")
-    def test_find_directory_empty_root(self, mock_os_walk) -> None:
-        """Test _find_directory with an empty root directory."""
-        root_dir: str = "/empty_test"
-        find_dirname: str = "target_dir"
-        mock_os_walk.return_value = []  # Simulates os.walk on an empty or non-existent dir
-
-        result: list[str] = _find_directory(root_dir, find_dirname)
-        self.assertEqual(result, [])
-        mock_os_walk.assert_called_once_with(root_dir)
-
-    @patch("src.utils._find_directory")
-    @patch("src.utils.os.listdir")
-    def test_container_root_exists_docker_valid(
-        self, mock_os_listdir, mock_find_directory
-    ) -> None:
-        """Test container_root_exists finds a valid Docker root."""
-        mountpoint: str = "/mnt/disk1"
-        docker_root_path: str = os.path.join(mountpoint, "var", "lib", "docker")
-
-        mock_find_directory.side_effect = lambda mp, dirname: (
-            [docker_root_path] if dirname == "docker" else []
-        )
-        mock_os_listdir.return_value = ["containers", "other_stuff"]
-
-        result: bool = container_root_exists(mountpoint)
-        self.assertTrue(result)
-        mock_find_directory.assert_any_call(mountpoint, "docker")
-        mock_os_listdir.assert_called_once_with(docker_root_path)
-
-    @patch("src.utils._find_directory")
-    @patch("src.utils.os.listdir")
-    def test_container_root_exists_containerd_valid_containers_dir(
-        self, mock_os_listdir, mock_find_directory
-    ) -> None:
-        """Test container_root_exists finds a valid containerd root with 'containers' dir."""
-        mountpoint: str = "/mnt/disk1"
-        containerd_root_path: str = os.path.join(mountpoint, "var", "lib", "containerd")
-
-        mock_find_directory.side_effect = lambda mp, dirname: (
-            [containerd_root_path] if dirname == "containerd" else []
-        )
-        mock_os_listdir.return_value = ["containers", "other_stuff"]
-
-        result: bool = container_root_exists(mountpoint)
-        self.assertTrue(result)
-        mock_find_directory.assert_any_call(mountpoint, "containerd")
-        mock_os_listdir.assert_called_once_with(containerd_root_path)
-
-    @patch("src.utils._find_directory")
-    @patch("src.utils.os.listdir")
-    def test_container_root_exists_containerd_valid_content_dir(
-        self, mock_os_listdir, mock_find_directory
-    ) -> None:
-        """Test container_root_exists finds a valid containerd root with content dir."""
-        mountpoint: str = "/mnt/disk1"
-        containerd_root_path: str = os.path.join(mountpoint, "var", "lib", "containerd")
-
-        mock_find_directory.side_effect = lambda mp, dirname: (
-            [containerd_root_path] if dirname == "containerd" else []
-        )
-        mock_os_listdir.return_value = [
-            "io.containerd.content.v1.content",
-            "other_stuff",
-        ]
-
-        result: bool = container_root_exists(mountpoint)
-        self.assertTrue(result)
-        mock_find_directory.assert_any_call(mountpoint, "containerd")
-        mock_os_listdir.assert_called_once_with(containerd_root_path)
-
-    @patch("src.utils._find_directory")
-    @patch("src.utils.os.listdir")
-    def test_container_root_exists_docker_invalid_content(
-        self, mock_os_listdir, mock_find_directory
-    ) -> None:
-        """Test container_root_exists with Docker root but no 'containers' dir."""
-        mountpoint: str = "/mnt/disk1"
-        docker_root_path: str = os.path.join(mountpoint, "var", "lib", "docker")
-
-        mock_find_directory.side_effect = lambda mp, dirname: (
-            [docker_root_path] if dirname == "docker" else []
-        )
-        mock_os_listdir.return_value = ["other_stuff"]
-
-        result: bool = container_root_exists(mountpoint)
-        self.assertFalse(result)
-        mock_find_directory.assert_any_call(mountpoint, "docker")
-        mock_os_listdir.assert_called_once_with(docker_root_path)
-
-    @patch("src.utils._find_directory")
-    @patch("src.utils.os.listdir")
-    def test_container_root_exists_no_valid_markers(
-        self, mock_os_listdir, mock_find_directory
-    ) -> None:
-        """Test container_root_exists when found dir has no valid markers."""
-        mountpoint: str = "/mnt/disk1"
-        containerd_root_path: str = os.path.join(mountpoint, "var", "lib", "containerd")
-
-        mock_find_directory.side_effect = lambda mp, dirname: (
-            [containerd_root_path] if dirname == "containerd" else []
-        )
-        mock_os_listdir.return_value = ["some_other_dir"]
-
-        result: bool = container_root_exists(mountpoint)
-        self.assertFalse(result)
-
-    @patch("src.utils._find_directory")
-    @patch("src.utils.os.listdir")
-    def test_container_root_exists_none_found(
-        self, mock_os_listdir, mock_find_directory
-    ) -> None:
-        """Test container_root_exists when _find_directory returns no paths."""
-        mountpoint: str = "/mnt/disk1"
-        mock_find_directory.return_value = []
-
-        result: bool = container_root_exists(mountpoint)
-        self.assertFalse(result)
-        self.assertEqual(mock_find_directory.call_count, 2)  # docker and containerd
-        mock_os_listdir.assert_not_called()
-
     def test_unmount_container_success(self) -> None:
         """Test successful unmount_container."""
         container_id: str = "test_id"
@@ -1183,6 +1012,132 @@ class TestContainerWorkerUtils(unittest.TestCase):
         self.mock_logger.info.assert_called_once_with(
             "Original log message: %s", message
         )
+
+
+class TestContainerRootExists(unittest.TestCase):
+    """Tests for container_root_exists against direct candidate paths."""
+
+    def test_var_lib_docker_valid(self) -> None:
+        """Detects Docker root under var/lib/docker."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(os.path.join(mountpoint, "var", "lib", "docker", "containers"))
+            self.assertTrue(container_root_exists(mountpoint))
+
+    def test_var_lib_containerd_valid_containers_dir(self) -> None:
+        """Detects containerd root under var/lib/containerd with 'containers' dir."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(
+                os.path.join(mountpoint, "var", "lib", "containerd", "containers")
+            )
+            self.assertTrue(container_root_exists(mountpoint))
+
+    def test_var_lib_containerd_valid_content_dir(self) -> None:
+        """Detects containerd root with 'io.containerd.content.v1.content' dir."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(
+                os.path.join(
+                    mountpoint,
+                    "var",
+                    "lib",
+                    "containerd",
+                    "io.containerd.content.v1.content",
+                )
+            )
+            self.assertTrue(container_root_exists(mountpoint))
+
+    def test_dedicated_var_partition_lib_roots(self) -> None:
+        """Detects lib/docker and lib/containerd when /var is mounted directly."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(os.path.join(mountpoint, "lib", "docker", "containers"))
+            self.assertTrue(container_root_exists(mountpoint))
+
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(
+                os.path.join(
+                    mountpoint,
+                    "lib",
+                    "containerd",
+                    "io.containerd.content.v1.content",
+                )
+            )
+            self.assertTrue(container_root_exists(mountpoint))
+
+    def test_cos_stateful_partition_roots(self) -> None:
+        """Detects GKE Container-Optimized OS stateful_partition container roots."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(
+                os.path.join(
+                    mountpoint,
+                    "mnt",
+                    "stateful_partition",
+                    "var",
+                    "lib",
+                    "containerd",
+                    "io.containerd.content.v1.content",
+                )
+            )
+            self.assertTrue(container_root_exists(mountpoint))
+
+    def test_no_valid_markers_returns_false(self) -> None:
+        """Returns False when candidate directories lack container root markers."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(os.path.join(mountpoint, "var", "lib", "docker", "tmp"))
+            os.makedirs(os.path.join(mountpoint, "var", "lib", "containerd", "tmpmounts"))
+            self.assertFalse(container_root_exists(mountpoint))
+
+    def test_non_existent_dirs_returns_false(self) -> None:
+        """Returns False when mountpoint has no candidate directories or does not exist."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            # Arbitrary unrelated directory named docker should not match.
+            os.makedirs(os.path.join(mountpoint, "home", "user", "docker", "containers"))
+            self.assertFalse(container_root_exists(mountpoint))
+            non_existent = os.path.join(mountpoint, "does_not_exist")
+            self.assertFalse(container_root_exists(non_existent))
+
+    def test_out_of_mount_symlinks_rejected(self) -> None:
+        """Rejects symlinks inside untrusted disk images that escape mountpoint."""
+        with (
+            tempfile.TemporaryDirectory() as base_dir,
+            tempfile.TemporaryDirectory() as outside_dir,
+        ):
+            mountpoint = os.path.join(base_dir, "mnt")
+            sibling_outside = os.path.join(base_dir, "mnt_outside")
+            os.makedirs(os.path.join(mountpoint, "var", "lib"))
+            os.makedirs(os.path.join(outside_dir, "containers"))
+            os.makedirs(os.path.join(sibling_outside, "containers"))
+
+            # Direct symlink to an outside directory containing marker.
+            os.symlink(
+                outside_dir, os.path.join(mountpoint, "var", "lib", "docker")
+            )
+            # Sibling prefix path (mnt vs mnt_outside) must also be rejected.
+            os.symlink(
+                sibling_outside, os.path.join(mountpoint, "var", "lib", "containerd")
+            )
+            # Ancestor symlink (lib -> outside_dir) must also be rejected.
+            os.makedirs(os.path.join(outside_dir, "docker", "containers"))
+            os.symlink(outside_dir, os.path.join(mountpoint, "lib"))
+
+            self.assertFalse(container_root_exists(mountpoint))
+
+    def test_in_mount_symlink_allowed(self) -> None:
+        """Allows symlinks that resolve strictly within mountpoint."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            real_root = os.path.join(mountpoint, "data", "docker")
+            os.makedirs(os.path.join(real_root, "containers"))
+            os.makedirs(os.path.join(mountpoint, "var", "lib"))
+            os.symlink(
+                os.path.join("..", "..", "data", "docker"),
+                os.path.join(mountpoint, "var", "lib", "docker"),
+            )
+            self.assertTrue(container_root_exists(mountpoint))
+
+    @patch("src.utils.os.listdir", side_effect=PermissionError("permission denied"))
+    def test_oserror_on_listdir_handled(self, _mock_listdir) -> None:
+        """Handles OSError when listing a candidate directory."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(os.path.join(mountpoint, "var", "lib", "docker"))
+            self.assertFalse(container_root_exists(mountpoint))
 
 
 if __name__ == "__main__":
