@@ -422,6 +422,7 @@ def container_export(
         else:
             logger.info("Processing all containers")
 
+        bd: BlockDevice | None = None
         try:
             bd = BlockDevice(input_file.get("path"))
             bd.setup()
@@ -431,10 +432,6 @@ def container_export(
                 logger.info(
                     "No mountpoints return for the disk %s", input_file.get("id")
                 )
-
-                logger.debug("Unmounting the disk %s", input_file.get("id"))
-                bd.umount()
-
                 continue
 
             export_files: list[OutputFile] = []
@@ -525,9 +522,10 @@ def container_export(
             )
 
         finally:
-            logger.debug("Unmounting disk %s", input_file.get("id"))
             log_entry(log_file, f"Done processing {input_file.get('path', '')}")
-            bd.umount()
+            if bd:
+                logger.debug("Unmounting the disk %s", input_file.get("id"))
+                bd.umount()
 
     logger.debug("Completed processing %d input disks", len(input_files))
 

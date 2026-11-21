@@ -22,6 +22,7 @@ from typing import Any
 from unittest.mock import patch, MagicMock
 
 from src.container_drift import (
+    container_drift,
     create_task_report,
     _create_drift_output_files,
     run_container_drift,
@@ -373,6 +374,86 @@ class TestContainerDrift(unittest.TestCase):
 * 2 output files created
 * 7 files added, modified, or deleted"""
         self.assertEqual(str(report.to_markdown()), expected_markdown_report)
+
+    @patch("src.container_drift.create_task_result", return_value="encoded_result")
+    @patch("src.container_drift.BlockDevice")
+    @patch("src.container_drift.log_entry")
+    @patch("src.container_drift.create_output_file")
+    @patch("src.container_drift.telemetry")
+    @patch("src.container_drift.get_input_files")
+    def test_container_drift_no_mountpoints_umounts_once(
+        self,
+        mock_get_input_files: MagicMock,
+        mock_telemetry: MagicMock,
+        mock_create_output_file: MagicMock,
+        mock_log_entry: MagicMock,
+        mock_block_device_cls: MagicMock,
+        mock_create_task_result: MagicMock,
+    ) -> None:
+        """Ensures bd.umount() is called once via finally when mount() returns empty."""
+        mock_log_file = MagicMock(spec=OutputFile)
+        mock_log_file.to_dict.return_value = {"path": "/fake/output/container_drift.log"}
+        mock_create_output_file.return_value = mock_log_file
+        mock_get_input_files.return_value = [
+            {"id": "disk.qcow2", "path": "/fake/disk.qcow2"}
+        ]
+        mock_bd = mock_block_device_cls.return_value
+        mock_bd.mount.return_value = []
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_drift.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[{"id": "disk.qcow2", "path": "/fake/disk.qcow2"}],
+            output_path="/fake/output",
+            workflow_id="test_workflow_id",
+            task_config={},
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_bd.setup.assert_called_once_with()
+        mock_bd.mount.assert_called_once_with()
+        mock_bd.umount.assert_called_once_with()
+
+    @patch("src.container_drift.create_task_result", return_value="encoded_result")
+    @patch("src.container_drift.BlockDevice", side_effect=RuntimeError("bad image"))
+    @patch("src.container_drift.log_entry")
+    @patch("src.container_drift.create_output_file")
+    @patch("src.container_drift.telemetry")
+    @patch("src.container_drift.get_input_files")
+    def test_container_drift_block_device_init_failure_guards_umount(
+        self,
+        mock_get_input_files: MagicMock,
+        mock_telemetry: MagicMock,
+        mock_create_output_file: MagicMock,
+        mock_log_entry: MagicMock,
+        mock_block_device_cls: MagicMock,
+        mock_create_task_result: MagicMock,
+    ) -> None:
+        """Ensures finally block guards bd.umount() when BlockDevice init raises."""
+        mock_log_file = MagicMock(spec=OutputFile)
+        mock_log_file.to_dict.return_value = {"path": "/fake/output/container_drift.log"}
+        mock_create_output_file.return_value = mock_log_file
+        mock_get_input_files.return_value = [
+            {"id": "disk.qcow2", "path": "/fake/disk.qcow2"}
+        ]
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_drift.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[{"id": "disk.qcow2", "path": "/fake/disk.qcow2"}],
+            output_path="/fake/output",
+            workflow_id="test_workflow_id",
+            task_config={},
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_create_task_result.assert_called_once()
 
 
 if __name__ == "__main__":

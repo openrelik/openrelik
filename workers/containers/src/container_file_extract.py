@@ -185,14 +185,14 @@ def container_file_extraction(
 
         input_file_name: str = input_file.get("display_name", "unknown")
 
+        bd: BlockDevice | None = None
         try:
-            bd: BlockDevice = BlockDevice(image_path=input_file_path, max_mountpath_size=11)
+            bd = BlockDevice(image_path=input_file_path, max_mountpath_size=11)
             bd.setup()
 
             mountpoints: list[str] = bd.mount()
             if not mountpoints:
                 logger.info("No mountpoints returned for input file %s", input_file_name)
-                bd.umount()
                 continue
 
             for mountpoint in mountpoints:
@@ -228,8 +228,10 @@ def container_file_extraction(
             logger.error("Disk mounting error encountered: %s", str(e))
 
         finally:
-            logger.debug("Unmounting disk %s", input_file_path)
-            bd.umount()
+            log_entry(log_file, f"Done processing {input_file_path}")
+            if bd:
+                logger.debug("Unmounting disk %s", input_file_path)
+                bd.umount()
 
         logger.debug("Processing input %s completed", input_file_name)
     logger.debug("Completed processing %d input disks", len(input_files))

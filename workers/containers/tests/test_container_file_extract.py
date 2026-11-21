@@ -27,6 +27,7 @@ from src.container_file_extract import (
     _extract_regular_file,
     _extract_file_and_directory,
     _get_containers_info,
+    container_file_extraction,
     run_container_file_extraction,
 )
 
@@ -473,6 +474,125 @@ class TestContainerFileExtract(unittest.TestCase):
         mock_shutil_rmtree.assert_called_once_with(expected_temp_container_mount_dir)
 
         self.assertEqual(extracted_files, mock_extracted_output_files_data)
+
+    @patch("src.container_file_extract.create_task_result", return_value="encoded_result")
+    @patch("src.container_file_extract.BlockDevice")
+    @patch("src.container_file_extract.log_entry")
+    @patch("src.container_file_extract.create_output_file")
+    @patch("src.container_file_extract.telemetry")
+    @patch("src.container_file_extract.get_input_files")
+    def test_container_file_extraction_no_mountpoints_umounts_once(
+        self,
+        mock_get_input_files: MagicMock,
+        mock_telemetry: MagicMock,
+        mock_create_output_file: MagicMock,
+        mock_log_entry: MagicMock,
+        mock_block_device_cls: MagicMock,
+        mock_create_task_result: MagicMock,
+    ) -> None:
+        """Ensures bd.umount() is called once via finally when mount() returns empty."""
+        mock_log_file = MagicMock()
+        mock_log_file.to_dict.return_value = {
+            "path": "/fake/output/container_file_extraction.log"
+        }
+        mock_create_output_file.return_value = mock_log_file
+        mock_get_input_files.return_value = [
+            {
+                "id": "disk.qcow2",
+                "path": "/fake/disk.qcow2",
+                "display_name": "disk.qcow2",
+            }
+        ]
+        mock_bd = mock_block_device_cls.return_value
+        mock_bd.mount.return_value = []
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_file_extraction.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[
+                {
+                    "id": "disk.qcow2",
+                    "path": "/fake/disk.qcow2",
+                    "display_name": "disk.qcow2",
+                }
+            ],
+            output_path="/fake/output",
+            workflow_id="test_workflow_id",
+            task_config={
+                "container_ids": "container-1",
+                "file_paths": "/etc/passwd",
+            },
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_bd.setup.assert_called_once_with()
+        mock_bd.mount.assert_called_once_with()
+        mock_bd.umount.assert_called_once_with()
+        mock_log_entry.assert_called_once_with(
+            mock_log_file, "Done processing /fake/disk.qcow2"
+        )
+
+    @patch("src.container_file_extract.create_task_result", return_value="encoded_result")
+    @patch(
+        "src.container_file_extract.BlockDevice",
+        side_effect=RuntimeError("bad image"),
+    )
+    @patch("src.container_file_extract.log_entry")
+    @patch("src.container_file_extract.create_output_file")
+    @patch("src.container_file_extract.telemetry")
+    @patch("src.container_file_extract.get_input_files")
+    def test_container_file_extraction_block_device_init_failure_guards_umount(
+        self,
+        mock_get_input_files: MagicMock,
+        mock_telemetry: MagicMock,
+        mock_create_output_file: MagicMock,
+        mock_log_entry: MagicMock,
+        mock_block_device_cls: MagicMock,
+        mock_create_task_result: MagicMock,
+    ) -> None:
+        """Ensures finally block guards bd.umount() when BlockDevice init raises."""
+        mock_log_file = MagicMock()
+        mock_log_file.to_dict.return_value = {
+            "path": "/fake/output/container_file_extraction.log"
+        }
+        mock_create_output_file.return_value = mock_log_file
+        mock_get_input_files.return_value = [
+            {
+                "id": "disk.qcow2",
+                "path": "/fake/disk.qcow2",
+                "display_name": "disk.qcow2",
+            }
+        ]
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_file_extraction.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[
+                {
+                    "id": "disk.qcow2",
+                    "path": "/fake/disk.qcow2",
+                    "display_name": "disk.qcow2",
+                }
+            ],
+            output_path="/fake/output",
+            workflow_id="test_workflow_id",
+            task_config={
+                "container_ids": "container-1",
+                "file_paths": "/etc/passwd",
+            },
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_create_task_result.assert_called_once()
+        mock_log_entry.assert_called_once_with(
+            mock_log_file, "Done processing /fake/disk.qcow2"
+        )
 
 
 if __name__ == "__main__":

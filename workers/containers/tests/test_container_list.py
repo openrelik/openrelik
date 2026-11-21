@@ -26,6 +26,7 @@ from unittest.mock import patch, mock_open, MagicMock
 from openrelik_worker_common.file_utils import create_output_file
 from openrelik_worker_common.file_utils import OutputFile
 
+from src.container_list import container_list
 from src.container_list import list_containers
 from src.container_list import _read_json_file
 
@@ -100,6 +101,101 @@ class TestContainerListTask(unittest.TestCase):
         # Expected hash is calculated by running md5sum test_data/container_list.json
         expected_hash: str = "3bc5afa979113b3f0e32cf216a2f9794"
         self.assertEqual(content_hash, expected_hash)
+
+    @patch("src.container_list.create_task_result", return_value="encoded_result")
+    @patch("src.container_list.create_task_report")
+    @patch("src.container_list.create_markdown_report")
+    @patch("src.container_list.BlockDevice")
+    @patch("src.container_list.log_entry")
+    @patch("src.container_list.create_output_file")
+    @patch("src.container_list.telemetry")
+    @patch("src.container_list.get_input_files")
+    def test_container_list_no_mountpoints_umounts_once(
+        self,
+        mock_get_input_files: MagicMock,
+        mock_telemetry: MagicMock,
+        mock_create_output_file: MagicMock,
+        mock_log_entry: MagicMock,
+        mock_block_device_cls: MagicMock,
+        mock_create_markdown_report: MagicMock,
+        mock_create_task_report: MagicMock,
+        mock_create_task_result: MagicMock,
+    ) -> None:
+        """Ensures bd.umount() is called once via finally when mount() returns empty."""
+        mock_get_input_files.return_value = [
+            {"id": "disk.qcow2", "path": "/fake/disk.qcow2"}
+        ]
+        mock_create_output_file.return_value = self.log_file
+        mock_markdown = MagicMock()
+        mock_markdown.path = "/fake/output/container_list.md"
+        mock_markdown.to_dict.return_value = {"path": mock_markdown.path}
+        mock_create_markdown_report.return_value = mock_markdown
+        mock_create_task_report.return_value.to_dict.return_value = {}
+
+        mock_bd = mock_block_device_cls.return_value
+        mock_bd.mount.return_value = []
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_list.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[{"id": "disk.qcow2", "path": "/fake/disk.qcow2"}],
+            output_path=self.output_path,
+            workflow_id="test_workflow_id",
+            task_config={},
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_bd.setup.assert_called_once_with()
+        mock_bd.mount.assert_called_once_with()
+        mock_bd.umount.assert_called_once_with()
+
+    @patch("src.container_list.create_task_result", return_value="encoded_result")
+    @patch("src.container_list.create_task_report")
+    @patch("src.container_list.create_markdown_report")
+    @patch("src.container_list.BlockDevice", side_effect=RuntimeError("bad image"))
+    @patch("src.container_list.log_entry")
+    @patch("src.container_list.create_output_file")
+    @patch("src.container_list.telemetry")
+    @patch("src.container_list.get_input_files")
+    def test_container_list_block_device_init_failure_guards_umount(
+        self,
+        mock_get_input_files: MagicMock,
+        mock_telemetry: MagicMock,
+        mock_create_output_file: MagicMock,
+        mock_log_entry: MagicMock,
+        mock_block_device_cls: MagicMock,
+        mock_create_markdown_report: MagicMock,
+        mock_create_task_report: MagicMock,
+        mock_create_task_result: MagicMock,
+    ) -> None:
+        """Ensures finally block guards bd.umount() when BlockDevice init raises."""
+        mock_get_input_files.return_value = [
+            {"id": "disk.qcow2", "path": "/fake/disk.qcow2"}
+        ]
+        mock_create_output_file.return_value = self.log_file
+        mock_markdown = MagicMock()
+        mock_markdown.path = "/fake/output/container_list.md"
+        mock_markdown.to_dict.return_value = {"path": mock_markdown.path}
+        mock_create_markdown_report.return_value = mock_markdown
+        mock_create_task_report.return_value.to_dict.return_value = {}
+
+        mock_task = MagicMock()
+        mock_task.request.id = "task-123"
+
+        result = container_list.__class__.run(
+            mock_task,
+            pipe_result=None,
+            input_files=[{"id": "disk.qcow2", "path": "/fake/disk.qcow2"}],
+            output_path=self.output_path,
+            workflow_id="test_workflow_id",
+            task_config={},
+        )
+
+        self.assertEqual(result, "encoded_result")
+        mock_create_task_result.assert_called_once()
 
 
 if __name__ == "__main__":
