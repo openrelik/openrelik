@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import sys
+import time
 import unittest
 import subprocess
 from fakeredis import FakeStrictRedis
@@ -128,9 +129,9 @@ class Utils(unittest.TestCase):
             bd2.redis_lock.local.token,
         )
 
-        bd.redis_lock.release()
+        bd._release_redis_lock()
         self.assertIsNone(bd.redis_client.get("random_host_name-/dev/nbd0"))
-        bd2.redis_lock.release()
+        bd2._release_redis_lock()
         self.assertIsNone(bd2.redis_client.get("random_host_name-/dev/nbd1"))
 
     @patch("openrelik_worker_common.mount_utils.BlockDevice._get_hostname")
@@ -699,6 +700,150 @@ class Utils(unittest.TestCase):
     @classmethod
     def tearDownClass(self):
         pass
+
+
+class TestBlockDeviceRedisLock(unittest.TestCase):
+    """Unit tests for QCOW2 NBD Redis lock renewal and safe idempotent release."""
+
+    def _setup_qcow2_block_device(
+        self, fake_redis: FakeStrictRedis, hostname: str = "test_host"
+    ) -> mount_utils.BlockDevice:
+        bd = mount_utils.BlockDevice("/mock/disk.qcow2")
+        with (
+            patch(
+                "openrelik_worker_common.mount_utils.pathlib.Path.exists",
+                return_value=True,
+            ),
+            patch.object(bd, "_required_tools_available", return_value=True),
+            patch.object(bd, "_required_modules_loaded"),
+            patch(
+                "openrelik_worker_common.mount_utils.redis.Redis.from_url",
+                return_value=fake_redis,
+            ),
+            patch.object(bd, "_get_hostname", return_value=hostname),
+            patch("openrelik_worker_common.mount_utils.time.sleep"),
+            patch(
+                "openrelik_worker_common.mount_utils.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[], stdout="", stderr="", returncode=0
+                ),
+            ),
+            patch.object(bd, "_blkinfo", return_value={"blockdevices": []}),
+            patch.object(bd, "_parse_partitions", return_value=[]),
+        ):
+            bd.setup()
+        return bd
+
+    def test_UmountIdempotentOnQcow2(self):
+        fake_redis = FakeStrictRedis(server_type="redis")
+        bd = self._setup_qcow2_block_device(fake_redis)
+        self.assertIsNotNone(fake_redis.get("test_host-/dev/nbd0"))
+
+        with patch(
+            "openrelik_worker_common.mount_utils.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                args=[], stdout="", stderr="", returncode=0
+            ),
+        ):
+            bd.umount()
+            self.assertIsNone(fake_redis.get("test_host-/dev/nbd0"))
+            self.assertIsNone(bd.redis_lock)
+            # Second umount() call must be a safe no-op without LockNotOwnedError.
+            bd.umount()
+
+    def test_UmountWhenRedisLockAlreadyExpired(self):
+        fake_redis = FakeStrictRedis(server_type="redis")
+        bd = self._setup_qcow2_block_device(fake_redis)
+        # Simulate the Redis lock key expiring before umount() runs.
+        fake_redis.delete("test_host-/dev/nbd0")
+
+        with patch(
+            "openrelik_worker_common.mount_utils.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                args=[], stdout="", stderr="", returncode=0
+            ),
+        ):
+            with self.assertLogs(
+                "openrelik_worker_common.mount_utils", level="WARNING"
+            ) as cm:
+                bd.umount()
+
+        self.assertTrue(
+            any("Could not release Redis lock" in entry for entry in cm.output)
+        )
+        self.assertFalse(any(entry.startswith("ERROR:") for entry in cm.output))
+        self.assertIsNone(bd.redis_lock)
+
+    def test_LockRenewalExtendsTtlAndStopsOnUmount(self):
+        fake_redis = FakeStrictRedis(server_type="redis")
+        with (
+            patch.object(mount_utils.BlockDevice, "LOCK_TIMEOUT_SECONDS", 30),
+            patch.object(mount_utils.BlockDevice, "LOCK_RENEW_INTERVAL_SECONDS", 0.05),
+        ):
+            bd = self._setup_qcow2_block_device(fake_redis)
+            try:
+                renew_thread = bd._lock_renew_thread
+                self.assertIsNotNone(renew_thread)
+                self.assertTrue(renew_thread.is_alive())
+
+                # Drop TTL to 1 second and verify background renewal restores it.
+                fake_redis.pexpire("test_host-/dev/nbd0", 1000)
+                self.assertLessEqual(fake_redis.pttl("test_host-/dev/nbd0"), 1000)
+
+                deadline = time.monotonic() + 1.5
+                while time.monotonic() < deadline:
+                    if fake_redis.pttl("test_host-/dev/nbd0") > 5000:
+                        break
+                    time.sleep(0.02)
+
+                self.assertGreater(fake_redis.pttl("test_host-/dev/nbd0"), 5000)
+
+                with patch(
+                    "openrelik_worker_common.mount_utils.subprocess.run",
+                    return_value=subprocess.CompletedProcess(
+                        args=[], stdout="", stderr="", returncode=0
+                    ),
+                ):
+                    bd.umount()
+
+                self.assertFalse(renew_thread.is_alive())
+                self.assertIsNone(bd._lock_renew_thread)
+                self.assertIsNone(bd.redis_lock)
+                self.assertIsNone(fake_redis.get("test_host-/dev/nbd0"))
+            finally:
+                bd._release_redis_lock()
+
+    def test_SetupFailureStopsRenewalAndReleasesRedisLock(self):
+        fake_redis = FakeStrictRedis(server_type="redis")
+        bd = mount_utils.BlockDevice("/mock/disk.qcow2")
+        with (
+            patch(
+                "openrelik_worker_common.mount_utils.pathlib.Path.exists",
+                return_value=True,
+            ),
+            patch.object(bd, "_required_tools_available", return_value=True),
+            patch.object(bd, "_required_modules_loaded"),
+            patch(
+                "openrelik_worker_common.mount_utils.redis.Redis.from_url",
+                return_value=fake_redis,
+            ),
+            patch.object(bd, "_get_hostname", return_value="test_host"),
+            patch("openrelik_worker_common.mount_utils.time.sleep"),
+            patch(
+                "openrelik_worker_common.mount_utils.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[], stdout="", stderr="", returncode=0
+                ),
+            ),
+            patch.object(bd, "_blkinfo", side_effect=RuntimeError("lsblk failed")),
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                bd.setup()
+
+        self.assertEqual(str(ctx.exception), "lsblk failed")
+        self.assertIsNone(bd.redis_lock)
+        self.assertIsNone(bd._lock_renew_thread)
+        self.assertIsNone(fake_redis.get("test_host-/dev/nbd0"))
 
 
 if __name__ == "__main__":
