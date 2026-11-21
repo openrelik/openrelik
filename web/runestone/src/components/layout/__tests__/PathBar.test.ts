@@ -185,19 +185,19 @@ describe('PathBar', () => {
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
     expect(document.activeElement).toBe(sep0.element)
 
-    // Trailing separator on leaf folder lists "(no subfolders)" and toggles closed.
-    const sep1 = wrapper.get('[data-separator="1"]')
-    await sep1.trigger('click')
-    await nextTick()
-    expect(wrapper.get('[role="menu"]').text()).toContain('(no subfolders)')
+    // Leaf folder has no trailing separator.
+    expect(wrapper.find('[data-separator="1"]').exists()).toBe(false)
 
     // Outside pointerdown closes open separator menu.
+    await sep0.trigger('click')
+    await nextTick()
+    expect(wrapper.find('[role="menu"]').exists()).toBe(true)
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     await nextTick()
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
 
     // Route change also closes open separator menu; clicking current folder entry closes it too.
-    await sep1.trigger('click')
+    await sep0.trigger('click')
     await nextTick()
     expect(wrapper.find('[role="menu"]').exists()).toBe(true)
     await router.push('/folder/1')
@@ -209,6 +209,13 @@ describe('PathBar', () => {
     await wrapper.get('[data-menu-item]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
+
+    // Separator after a folder with no subfolders lists "(no subfolders)".
+    const leafFile = makeItem({ id: 99, kind: 'file', name: 'notes.txt', parent: 2, size: 12 })
+    await wrapper.setProps({ path: [evidence, leafFile] })
+    await wrapper.get('[data-separator="0"]').trigger('click')
+    await nextTick()
+    expect(wrapper.get('[role="menu"]').text()).toContain('(no subfolders)')
   })
 
   it('renames current folder inline when permitted and cancels on Escape or denied permission', async () => {

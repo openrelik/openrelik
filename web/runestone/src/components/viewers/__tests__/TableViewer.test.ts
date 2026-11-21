@@ -255,7 +255,7 @@ describe('TableViewer', () => {
     await vi.advanceTimersByTimeAsync(10)
 
     const grid = wrapper.get('[role="grid"]')
-    const filterInput = wrapper.get('input[placeholder="filter rows"]')
+    const filterInput = wrapper.get('input[placeholder="Filter rows"]')
 
     // '/' key on grid focuses filter input
     await grid.trigger('keydown', { key: '/' })
@@ -316,7 +316,7 @@ describe('TableViewer', () => {
     await nextTick()
 
     // Incoming mark={from:3,to:3} landed on row 3 and populated TableDetail in #file-side-row
-    expect(sideRowTarget?.textContent).toContain('row 3')
+    expect(sideRowTarget?.textContent).toContain('Row 3')
     expect(sideRowTarget?.textContent).toContain('row-3')
     expect((wrapper.vm as { selectedEvents: boolean[] }).selectedEvents).toContain(true)
 
@@ -328,32 +328,32 @@ describe('TableViewer', () => {
     // Clicking row 0 selects row 1, updates TableDetail, and clears non-gutter mark
     const firstRowEl = wrapper.get('[role="grid"]').findAll('div.absolute')[0]!
     await firstRowEl.trigger('click')
-    expect(sideRowTarget?.textContent).toContain('row 1')
+    expect(sideRowTarget?.textContent).toContain('Row 1')
     expect(sideRowTarget?.textContent).toContain('row-1')
     expect((wrapper.vm as { mark: Span | null }).mark).toBeNull()
 
     // Keyboard row navigation: unhandled key, ArrowDown, PageDown, End, PageUp, ArrowUp, Home
     const grid = wrapper.get('[role="grid"]')
     await grid.trigger('keydown', { key: 'z' })
-    expect(sideRowTarget?.textContent).toContain('row 1')
+    expect(sideRowTarget?.textContent).toContain('Row 1')
 
     await grid.trigger('keydown', { key: 'ArrowDown' })
-    expect(sideRowTarget?.textContent).toContain('row 2')
+    expect(sideRowTarget?.textContent).toContain('Row 2')
 
     await grid.trigger('keydown', { key: 'PageDown' })
-    expect(sideRowTarget?.textContent).toContain('row 11')
+    expect(sideRowTarget?.textContent).toContain('Row 11')
 
     await grid.trigger('keydown', { key: 'End' })
-    expect(sideRowTarget?.textContent).toContain('row 15')
+    expect(sideRowTarget?.textContent).toContain('Row 15')
 
     await grid.trigger('keydown', { key: 'PageUp' })
-    expect(sideRowTarget?.textContent).toContain('row 6')
+    expect(sideRowTarget?.textContent).toContain('Row 6')
 
     await grid.trigger('keydown', { key: 'ArrowUp' })
-    expect(sideRowTarget?.textContent).toContain('row 5')
+    expect(sideRowTarget?.textContent).toContain('Row 5')
 
     await grid.trigger('keydown', { key: 'Home' })
-    expect(sideRowTarget?.textContent).toContain('row 1')
+    expect(sideRowTarget?.textContent).toContain('Row 1')
 
     // Ctrl+C copies row cells joined by tab; clipboard error shows fallback message
     await grid.trigger('keydown', { key: 'c', ctrlKey: true })
@@ -390,6 +390,26 @@ describe('TableViewer', () => {
       document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]'),
     ).not.toBeNull()
 
+    // Fullscreen row detail panel includes a close button that clears the selected row and hides the panel
+    const closeDetailBtn = document.body.querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Table, full screen"] button[aria-label="Close row details"]',
+    )
+    expect(closeDetailBtn).not.toBeNull()
+    closeDetailBtn!.click()
+    await nextTick()
+    expect(
+      document.body.querySelector(
+        '[role="dialog"][aria-label="Table, full screen"] [aria-label="Row details"]',
+      ),
+    ).toBeNull()
+
+    // Re-select first row via keyboard so mark stays set for Escape sequence (cursor -> mark -> exit fullscreen)
+    const fsGrid = document.body.querySelector<HTMLElement>(
+      '[role="dialog"][aria-label="Table, full screen"] [role="grid"]',
+    )
+    fsGrid!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    await nextTick()
+
     // 1st window Escape in fullscreen clears selected row
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await nextTick()
@@ -413,7 +433,7 @@ describe('TableViewer', () => {
     ).toBeNull()
 
     // Landing on an external mark hidden by an active filter clears the filter and selects that row
-    const filterInput = wrapper.get('input[placeholder="filter rows"]')
+    const filterInput = wrapper.get('input[placeholder="Filter rows"]')
     await filterInput.setValue('row-15')
     await vi.advanceTimersByTimeAsync(150)
     expect(wrapper.text()).toContain('1 of 15 rows')
@@ -421,7 +441,7 @@ describe('TableViewer', () => {
     await flushPromises()
     await nextTick()
     expect(wrapper.text()).toContain('15 rows')
-    expect(sideRowTarget?.textContent).toContain('row 4')
+    expect(sideRowTarget?.textContent).toContain('Row 4')
 
     // Scroll & ResizeObserver updates
     await grid.trigger('scroll')
@@ -474,7 +494,7 @@ describe('TableViewer', () => {
     expect(cappedWrapper.text()).toContain('Load full file')
 
     // Filtering or sorting while capped warns that only rows read so far are shown
-    const cappedFilter = cappedWrapper.get('input[placeholder="filter rows"]')
+    const cappedFilter = cappedWrapper.get('input[placeholder="Filter rows"]')
     await cappedFilter.setValue('1')
     await vi.advanceTimersByTimeAsync(150)
     expect(cappedWrapper.text()).toContain('filtered: rows read so far')

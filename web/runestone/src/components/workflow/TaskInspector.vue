@@ -171,7 +171,7 @@ function remove() {
 <template>
   <aside class="flex min-h-0 flex-col" aria-label="Task">
     <div class="flex h-7 shrink-0 items-center border-b border-border pr-1 pl-3">
-      <p class="micro-label">task</p>
+      <p class="micro-label">Task</p>
       <button
         type="button"
         class="ml-auto flex size-5 cursor-pointer items-center justify-center rounded-(--radius-check) text-ink-muted hover:bg-sunken hover:text-ink"
@@ -220,7 +220,7 @@ function remove() {
 
       <!-- What it found: the summary here, the full report in a sheet of its own. -->
       <section v-if="hasReport" class="mt-3" aria-label="Report">
-        <p class="micro-label pb-1">report</p>
+        <p class="micro-label pb-1">Report</p>
         <div v-if="task.report" class="flex items-start gap-2">
           <PriorityBadge :priority="task.report.priority" />
           <p class="line-clamp-3 min-w-0 text-ink">{{ task.report.summary }}</p>
@@ -239,7 +239,7 @@ function remove() {
       </section>
 
       <section v-if="ranOn && !editable" class="mt-3" aria-label="Ran on">
-        <p class="micro-label pb-1">ran on</p>
+        <p class="micro-label pb-1">Ran on</p>
         <p v-if="ranOn.from" class="text-ink-secondary">{{ ranOn.from }}</p>
         <ul v-else class="flex flex-col">
           <li v-for="input in ranOn.files" :key="input.id">
@@ -260,7 +260,7 @@ function remove() {
       </section>
 
       <section v-if="!editable" class="mt-3" aria-label="Outputs">
-        <p class="micro-label pb-1">outputs</p>
+        <p class="micro-label pb-1">Outputs</p>
         <ul v-if="outputs.length" class="flex flex-col">
           <li v-for="row in outputRows" :key="row.file.id">
             <RouterLink
@@ -310,7 +310,7 @@ function remove() {
       </section>
 
       <template v-if="editable && task.options.length">
-        <p class="micro-label mt-3 pb-1">options</p>
+        <p class="micro-label mt-3 pb-1">Options</p>
         <label
           v-for="option in task.options"
           :key="option.key"
@@ -357,7 +357,7 @@ function remove() {
         </label>
       </template>
       <template v-else-if="used.length">
-        <p class="micro-label mt-3 pb-1">options</p>
+        <p class="micro-label mt-3 pb-1">Options</p>
         <dl class="well px-2 py-1 text-[12px]">
           <div v-for="option in used" :key="option.key" class="flex justify-between gap-3 py-0.5">
             <dt class="text-ink-muted">{{ option.label }}</dt>

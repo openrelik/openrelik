@@ -131,12 +131,42 @@ describe('useFolderActions', () => {
       resolveCreate(makeDetail(99, 'New Case', null))
       const created = await promise
 
-      expect(created).toMatchObject({ id: 99, name: 'New Case', parent: null })
+      expect(created).toMatchObject({
+        id: 99,
+        name: 'New Case',
+        parent: null,
+        fileCount: 0,
+        folderCount: 0,
+        isEmpty: true,
+      })
       expect(pendingIn(null)).toHaveLength(0)
       expect(useRootPagesStore().rootPage(page1Key)?.ids).toEqual([99, 2])
       expect(queryState(page1Key).status).toBe('success')
       expect(queryState(folderKeys.subfolders(99)).status).toBe('success')
       expect(queryState(folderKeys.files(99)).status).toBe('success')
+    })
+
+    it('increments parent folderCount and clears isEmpty when creating a subfolder', async () => {
+      const itemsStore = useItemsStore()
+      itemsStore.upsertItems([
+        makeItem('folder', 10, { fileCount: 0, folderCount: 0, isEmpty: true }),
+      ])
+      vi.mocked(api.folders.createFolder).mockResolvedValueOnce(makeDetail(11, 'Sub', 10))
+
+      const created = await useFolderActions().createFolder(10, 'Sub')
+
+      expect(created).toMatchObject({
+        id: 11,
+        parent: 10,
+        fileCount: 0,
+        folderCount: 0,
+        isEmpty: true,
+      })
+      expect(itemsStore.findFolder(10)).toMatchObject({
+        fileCount: 0,
+        folderCount: 1,
+        isEmpty: false,
+      })
     })
 
     it('reports server errors and cleans up pendingIn when creation fails', async () => {

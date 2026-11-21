@@ -249,7 +249,7 @@ const inputs = computed(() =>
               </button>
             </span>
           </td>
-          <td class="micro-label truncate px-2">input</td>
+          <td class="micro-label truncate px-2">Input</td>
           <td />
           <td />
           <td class="tabular px-2 pr-3 text-right whitespace-nowrap text-ink-muted">

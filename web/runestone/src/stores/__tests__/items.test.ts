@@ -248,4 +248,82 @@ describe('stores/items', () => {
     })
     expect(store.findFile(11)?.name).toBe('updated.txt')
   })
+
+  it('preserves folder item counts across partial upserts and overwrites them when provided', () => {
+    const store = useItemsStore()
+    store.upsertItems([
+      makeFolder(1, null, { name: 'Case', fileCount: 2, folderCount: 1, isEmpty: false }),
+    ])
+
+    // Single-folder fetch omits counts — existing counts must survive.
+    store.upsertItems([makeFolder(1, null, { name: 'Case Renamed' })])
+    expect(store.findFolder(1)).toMatchObject({
+      name: 'Case Renamed',
+      fileCount: 2,
+      folderCount: 1,
+      isEmpty: false,
+    })
+
+    // Fresh listing carries updated counts — incoming values replace old ones.
+    store.upsertItems([
+      makeFolder(1, null, { name: 'Case Renamed', fileCount: 0, folderCount: 0, isEmpty: true }),
+    ])
+    expect(store.findFolder(1)).toMatchObject({
+      fileCount: 0,
+      folderCount: 0,
+      isEmpty: true,
+    })
+  })
+
+  it('updates parent folder item counts and isEmpty in removeTree, setFiles, and setSubfolders', () => {
+    const store = useItemsStore()
+    const childFolder = makeFolder(2, 1, {
+      name: 'Sub',
+      fileCount: 0,
+      folderCount: 0,
+      isEmpty: true,
+    })
+    const childFile = makeFile(10, 1, { name: 'log.txt' })
+    store.upsertItems([
+      makeFolder(1, null, { name: 'Case', fileCount: 1, folderCount: 1, isEmpty: false }),
+      childFolder,
+      childFile,
+    ])
+
+    store.removeTree(childFile)
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 0, folderCount: 1, isEmpty: false })
+
+    store.removeTree(childFolder)
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 0, folderCount: 0, isEmpty: true })
+
+    // setFiles and setSubfolders sync the parent counts and flip isEmpty accordingly.
+    store.setFiles(1, [makeFile(11, 1, { name: 'a.txt' }), makeFile(12, 1, { name: 'b.txt' })])
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 2, folderCount: 0, isEmpty: false })
+
+    store.setSubfolders(1, [makeFolder(3, 1, { name: 'NewSub' })])
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 2, folderCount: 1, isEmpty: false })
+
+    store.setFiles(1, [])
+    store.setSubfolders(1, [])
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 0, folderCount: 0, isEmpty: true })
+  })
+
+  it('does not double-decrement parent counts when removeTree runs after a refresh already removed the item', () => {
+    const store = useItemsStore()
+    const deletedFile = makeFile(10, 1, { name: 'gone.txt' })
+    const remainingFile = makeFile(11, 1, { name: 'stay.txt' })
+    store.upsertItems([
+      makeFolder(1, null, { name: 'Case', fileCount: 2, folderCount: 0, isEmpty: false }),
+      deletedFile,
+      remainingFile,
+    ])
+
+    // Background listing refresh finishes first and already reflects the deletion.
+    store.setFiles(1, [remainingFile])
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 1, folderCount: 0, isEmpty: false })
+
+    // The DELETE response now triggers removeTree for the already-removed file.
+    store.removeTree(deletedFile)
+    expect(store.findFolder(1)).toMatchObject({ fileCount: 1, folderCount: 0, isEmpty: false })
+  })
 })

@@ -230,7 +230,10 @@ function finish(upload: Upload, created: UploadedFile): void {
     },
     upload.folderId,
   )
-  useItemsStore().upsertItems([item])
+  const itemsStore = useItemsStore()
+  const isNew = !itemsStore.findFile(item.id)
+  itemsStore.upsertItems([item])
+  if (isNew) itemsStore.recordChildAdded(upload.folderId, 'file')
 
   // The answer holds everything the listing shows, so nothing is refetched.
   // A folder whose files were never loaded stays unloaded: we know our file,

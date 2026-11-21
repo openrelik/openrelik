@@ -155,11 +155,11 @@ describe('HexViewer', () => {
     )
 
     const gridText = wrapper.get('[role="grid"]').text()
-    // Column headers 00..0f + offset + text
-    expect(gridText).toContain('offset')
+    // Column headers 00..0f + Offset + Text
+    expect(gridText).toContain('Offset')
     expect(gridText).toContain('00')
     expect(gridText).toContain('0f')
-    expect(gridText).toContain('text')
+    expect(gridText).toContain('Text')
     // Hex bytes 4d 5a 90 00 and ASCII 'MZ··'
     expect(gridText).toContain('4d')
     expect(gridText).toContain('5a')
@@ -335,7 +335,7 @@ describe('HexViewer', () => {
 
     // 'o' focuses the go-to-offset input
     await grid.trigger('keydown', { key: 'o' })
-    const gotoInput = wrapper.get('input[placeholder="go to offset"]')
+    const gotoInput = wrapper.get('input[placeholder="Go to offset"]')
     expect(document.activeElement).toBe(gotoInput.element)
   })
 
@@ -359,7 +359,7 @@ describe('HexViewer', () => {
     await flushPromises()
 
     const form = wrapper.get('form')
-    const input = wrapper.get('input[placeholder="go to offset"]')
+    const input = wrapper.get('input[placeholder="Go to offset"]')
     const grid = wrapper.get('[role="grid"]')
 
     // Invalid offset highlights input with border-danger; typing clears error
@@ -537,7 +537,7 @@ describe('HexViewer', () => {
     expect(sideTarget?.textContent).not.toContain('uint8')
 
     // goTo("0") rejects on a 0-byte file and Esc clears border-danger
-    const emptyInput = emptyWrapper.get('input[placeholder="go to offset"]')
+    const emptyInput = emptyWrapper.get('input[placeholder="Go to offset"]')
     await emptyInput.setValue('0')
     await emptyWrapper.get('form').trigger('submit')
     expect(emptyInput.classes()).toContain('border-danger')
@@ -594,7 +594,7 @@ describe('HexViewer', () => {
     ;(partialWrapper.vm as { size: number }).size = 512
     await flushPromises()
     await grid.trigger('wheel', { deltaX: 0, deltaY: 100, deltaMode: 0 })
-    const gotoInput = partialWrapper.get('input[placeholder="go to offset"]')
+    const gotoInput = partialWrapper.get('input[placeholder="Go to offset"]')
     await gotoInput.setValue('0')
     await partialWrapper.get('form').trigger('submit')
     expect(partialWrapper.text()).toContain('0x00000000')

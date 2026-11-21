@@ -39,6 +39,10 @@ export interface Item {
   workflowId?: number
   /** Top-level folders only: the case this is the folder of, as the server normalized it. */
   caseRef?: string
+  /** Folders only: direct active item counts from folder listings. */
+  fileCount?: number
+  folderCount?: number
+  isEmpty?: boolean
   /** Files only, once their details are loaded; empty strings until the server has hashed it. */
   hashes?: Hashes
   /** Files only, once their details are loaded: libmagic's description of the content. */

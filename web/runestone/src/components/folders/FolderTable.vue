@@ -35,8 +35,16 @@ import UploadRow from '@/components/folders/UploadRow.vue'
 import type { PendingFolder } from '@/composables/useFolderActions'
 import type { Upload } from '@/composables/useUploadQueue'
 import type { QueryState } from '@/composables/useQueryCache'
-import { bytesOf, isEmptyFile, itemKey, typeOf } from '@/utils/item'
-import { getUniqueFolderName } from '@/utils/item'
+import {
+  bytesOf,
+  folderItemBreakdown,
+  folderItemCount,
+  getUniqueFolderName,
+  isEmptyFile,
+  isEmptyFolder,
+  itemKey,
+  typeOf,
+} from '@/utils/item'
 import type { Item } from '@/types/item'
 import { runStats } from '@/utils/workflow'
 import { useWorkflowsStore } from '@/stores/workflows'
@@ -469,25 +477,26 @@ const WORKFLOW_SAYS: Record<WorkflowState, string> = {
   failed: 'failed',
 }
 
-type Column = { key: SortKey | 'case'; label: string; align?: 'right' }
+type Column = { key: SortKey | 'case' | 'items'; label: string; align?: 'right' }
 
 const COLUMNS: Column[] = [
-  { key: 'name', label: 'name' },
-  { key: 'size', label: 'size', align: 'right' },
-  { key: 'type', label: 'type' },
-  { key: 'owner', label: 'owner' },
-  { key: 'modified', label: 'modified (utc)' },
+  { key: 'name', label: 'Name' },
+  { key: 'size', label: 'Size', align: 'right' },
+  { key: 'type', label: 'Type' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'modified', label: 'Modified (UTC)' },
 ]
 /**
- * The top level holds only folders, which have no size and one type: those
+ * The top level holds only folders, which have no byte size and one type: those
  * columns would say the same on every row. A top-level folder can be a case's,
- * so its reference takes their place.
+ * and shows how many direct items it holds.
  */
 const ROOT_COLUMNS: Column[] = [
-  { key: 'name', label: 'name' },
-  { key: 'case', label: 'case' },
-  { key: 'owner', label: 'owner' },
-  { key: 'modified', label: 'modified (utc)' },
+  { key: 'name', label: 'Name' },
+  { key: 'case', label: 'Case' },
+  { key: 'items', label: 'Items', align: 'right' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'modified', label: 'Modified (UTC)' },
 ]
 const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
 </script>
@@ -508,7 +517,10 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
       <colgroup>
         <col class="w-8" />
         <col />
-        <template v-if="atRoot"><col class="w-44" /></template>
+        <template v-if="atRoot">
+          <col class="w-44" />
+          <col class="w-24" />
+        </template>
         <template v-else>
           <col class="w-44" />
           <col class="w-44" />
@@ -589,12 +601,12 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-model="filter"
                 type="search"
                 aria-label="Filter by name"
-                placeholder="filter names"
+                placeholder="Filter names"
                 class="h-5 w-full max-w-52 min-w-0 rounded-(--radius-control) border border-border-strong bg-surface px-1.5 font-normal text-ink placeholder:text-ink-muted"
               />
             </div>
           </th>
-          <th><span class="sr-only">actions</span></th>
+          <th><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>
@@ -652,7 +664,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               <Folder
                 :size="13"
                 :stroke-width="1.5"
-                class="shrink-0 fill-current text-brand-icon"
+                class="shrink-0 text-brand-icon"
                 aria-hidden="true"
               />
               <input
@@ -667,7 +679,10 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               />
             </div>
           </td>
-          <td v-if="atRoot" class="px-2"><span class="select-none text-ink-muted">—</span></td>
+          <template v-if="atRoot">
+            <td class="px-2"><span class="select-none text-ink-muted">—</span></td>
+            <td class="px-2 text-right"><span class="select-none text-ink-muted">—</span></td>
+          </template>
           <template v-else>
             <td class="px-2 text-right">
               <span class="select-none text-ink-muted">—</span>
@@ -726,22 +741,34 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               <Folder
                 :size="13"
                 :stroke-width="1.5"
-                class="shrink-0 fill-current text-brand-icon"
+                class="shrink-0 text-brand-icon"
                 aria-hidden="true"
               />
               <span class="truncate font-mono text-ink-secondary">{{ pending.name }}/</span>
             </div>
           </td>
-          <td v-if="!atRoot" class="px-2 text-right">
-            <span class="select-none text-ink-muted">—</span>
-          </td>
-          <td class="truncate px-2 text-ink-muted">
-            <span v-if="showPending" class="inline-flex items-center gap-1.5 text-brand">
-              <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
-              creating…
-            </span>
-            <template v-else>{{ atRoot ? '—' : 'directory' }}</template>
-          </td>
+          <template v-if="atRoot">
+            <td class="truncate px-2 text-ink-muted">
+              <span v-if="showPending" class="inline-flex items-center gap-1.5 text-brand">
+                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                creating…
+              </span>
+              <template v-else>—</template>
+            </td>
+            <td class="px-2 text-right"><span class="select-none text-ink-muted">—</span></td>
+          </template>
+          <template v-else>
+            <td class="px-2 text-right">
+              <span class="select-none text-ink-muted">—</span>
+            </td>
+            <td class="truncate px-2 text-ink-muted">
+              <span v-if="showPending" class="inline-flex items-center gap-1.5 text-brand">
+                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                creating…
+              </span>
+              <template v-else>directory</template>
+            </td>
+          </template>
           <td class="px-2" />
           <td class="tabular truncate px-2 text-ink-secondary">just now</td>
           <td />
@@ -803,19 +830,25 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                   row.workflowId !== undefined
                     ? WORKFLOW_TONE[workflowState(row.id) ?? 'unknown']
                     : row.kind === 'folder'
-                      ? 'fill-current text-brand-icon'
+                      ? isEmptyFolder(row)
+                        ? 'text-brand-icon'
+                        : 'fill-current text-brand-icon'
                       : 'text-ink-muted'
                 "
                 :aria-label="
                   row.workflowId !== undefined
                     ? `Workflow${workflowState(row.id) ? ', ' + WORKFLOW_SAYS[workflowState(row.id)!] : ''}`
-                    : undefined
+                    : isEmptyFolder(row)
+                      ? 'Empty folder'
+                      : undefined
                 "
-                :aria-hidden="row.workflowId === undefined"
+                :aria-hidden="row.workflowId === undefined && !isEmptyFolder(row)"
                 v-tooltip="
                   row.workflowId !== undefined && workflowState(row.id)
                     ? `Workflow: ${WORKFLOW_SAYS[workflowState(row.id)!]}`
-                    : ''
+                    : isEmptyFolder(row)
+                      ? 'Empty folder'
+                      : ''
                 "
               />
               <input
@@ -845,19 +878,31 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               </RouterLink>
             </div>
           </td>
-          <td v-if="atRoot" class="truncate px-2">
-            <span
-              v-if="showPending && (isSaving(row) || isDeleting(row))"
-              class="inline-flex items-center gap-1.5 text-brand"
-            >
-              <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
-              {{ isDeleting(row) ? 'deleting…' : 'saving…' }}
-            </span>
-            <span v-else-if="row.caseRef" class="tabular text-ink-secondary" v-overflow-tooltip>{{
-              row.caseRef
-            }}</span>
-            <span v-else class="select-none text-ink-muted">—</span>
-          </td>
+          <template v-if="atRoot">
+            <td class="truncate px-2">
+              <span
+                v-if="showPending && (isSaving(row) || isDeleting(row))"
+                class="inline-flex items-center gap-1.5 text-brand"
+              >
+                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                {{ isDeleting(row) ? 'deleting…' : 'saving…' }}
+              </span>
+              <span v-else-if="row.caseRef" class="tabular text-ink-secondary" v-overflow-tooltip>{{
+                row.caseRef
+              }}</span>
+              <span v-else class="select-none text-ink-muted">—</span>
+            </td>
+            <td class="px-2 text-right">
+              <span
+                v-if="folderItemCount(row) !== undefined"
+                class="tabular"
+                :class="folderItemCount(row) === 0 ? 'text-ink-muted' : 'text-ink-secondary'"
+                v-tooltip="folderItemBreakdown(row)"
+                >{{ folderItemCount(row)!.toLocaleString('en-US') }}</span
+              >
+              <span v-else class="select-none text-ink-muted">—</span>
+            </td>
+          </template>
           <template v-else>
             <td class="px-2">
               <div class="flex items-center justify-end gap-2">
@@ -872,6 +917,12 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                   class="tabular text-ink-secondary"
                   v-tooltip="`${bytesOf(row).toLocaleString('en-US')} bytes`"
                   >{{ formatSize(bytesOf(row)) }}</span
+                >
+                <span
+                  v-else-if="folderItemCount(row) !== undefined"
+                  class="tabular text-ink-muted"
+                  v-tooltip="folderItemBreakdown(row)"
+                  >{{ count(folderItemCount(row)!, 'item') }}</span
                 >
                 <span
                   v-else

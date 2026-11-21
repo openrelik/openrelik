@@ -149,16 +149,16 @@ describe('readings', () => {
 
       // 32-bit Unix seconds & HFS+ seconds
       view.setUint32(0, TARGET_S, le)
-      expect(byLabel(readings(buf, le, NOW), 'unix time')).toEqual({
-        label: 'unix time',
+      expect(byLabel(readings(buf, le, NOW), 'Unix time')).toEqual({
+        label: 'Unix time',
         value: '2024-06-15 12:30:45',
         note: undefined,
         plausible: true,
       })
 
       view.setUint32(0, TARGET_S + HFS_EPOCH_S, le)
-      expect(byLabel(readings(buf, le, NOW), 'hfs+ time')).toEqual({
-        label: 'hfs+ time',
+      expect(byLabel(readings(buf, le, NOW), 'HFS+ time')).toEqual({
+        label: 'HFS+ time',
         value: '2024-06-15 12:30:45',
         note: undefined,
         plausible: true,
@@ -166,16 +166,16 @@ describe('readings', () => {
 
       // 64-bit Unix seconds and milliseconds
       view.setBigInt64(0, BigInt(TARGET_S), le)
-      expect(byLabel(readings(buf, le, NOW), 'unix time (64)')).toEqual({
-        label: 'unix time (64)',
+      expect(byLabel(readings(buf, le, NOW), 'Unix time (64)')).toEqual({
+        label: 'Unix time (64)',
         value: '2024-06-15 12:30:45',
         note: undefined,
         plausible: true,
       })
 
       view.setBigInt64(0, BigInt(TARGET_MS) + 123n, le)
-      expect(byLabel(readings(buf, le, NOW), 'unix ms')).toEqual({
-        label: 'unix ms',
+      expect(byLabel(readings(buf, le, NOW), 'Unix ms')).toEqual({
+        label: 'Unix ms',
         value: '2024-06-15 12:30:45.123',
         note: undefined,
         plausible: true,
@@ -186,8 +186,8 @@ describe('readings', () => {
       const dosDateWord = ((2024 - 1980) << 9) | (6 << 5) | 15
       view.setUint16(0, dosTimeWord, le)
       view.setUint16(2, dosDateWord, le)
-      expect(byLabel(readings(buf, le, NOW), 'dos date/time')).toEqual({
-        label: 'dos date/time',
+      expect(byLabel(readings(buf, le, NOW), 'DOS date/time')).toEqual({
+        label: 'DOS date/time',
         value: '2024-06-15 12:30:44',
         note: 'local',
         plausible: true,
@@ -206,8 +206,8 @@ describe('readings', () => {
       // WebKit: 6 fractional digits preserved
       const webkitTicks = FILETIME_EPOCH / 10n + BigInt(TARGET_S) * 1_000_000n + 654_321n
       view.setBigInt64(0, webkitTicks, le)
-      expect(byLabel(readings(buf, le, NOW), 'webkit time')).toEqual({
-        label: 'webkit time',
+      expect(byLabel(readings(buf, le, NOW), 'WebKit time')).toEqual({
+        label: 'WebKit time',
         value: '2024-06-15 12:30:45.654321',
         note: undefined,
         plausible: true,
@@ -215,8 +215,8 @@ describe('readings', () => {
 
       // Apple Cocoa / Core Data: positive post-2001 and negative pre-2001 are both plausible
       view.setFloat64(0, TARGET_S - COCOA_EPOCH_S + 0.5, le)
-      expect(byLabel(readings(buf, le, NOW), 'apple time')).toEqual({
-        label: 'apple time',
+      expect(byLabel(readings(buf, le, NOW), 'Apple time')).toEqual({
+        label: 'Apple time',
         value: '2024-06-15 12:30:45.500',
         note: undefined,
         plausible: true,
@@ -224,8 +224,8 @@ describe('readings', () => {
 
       const pre2001S = Date.UTC(1995, 0, 1, 0, 0, 0) / 1000
       view.setFloat64(0, pre2001S - COCOA_EPOCH_S, le)
-      expect(byLabel(readings(buf, le, NOW), 'apple time')).toEqual({
-        label: 'apple time',
+      expect(byLabel(readings(buf, le, NOW), 'Apple time')).toEqual({
+        label: 'Apple time',
         value: '1995-01-01 00:00:00.000',
         note: undefined,
         plausible: true,
@@ -234,23 +234,23 @@ describe('readings', () => {
       // All-zero buffer marks every timestamp implausible (epoch zero or invalid DOS month/day)
       const zeros = readings(new Uint8Array(8), le, NOW)
       for (const label of [
-        'unix time',
-        'unix time (64)',
-        'unix ms',
-        'dos date/time',
+        'Unix time',
+        'Unix time (64)',
+        'Unix ms',
+        'DOS date/time',
         'FILETIME',
-        'webkit time',
-        'hfs+ time',
-        'apple time',
+        'WebKit time',
+        'HFS+ time',
+        'Apple time',
       ]) {
         expect(byLabel(zeros, label).plausible).toBe(false)
       }
-      expect(byLabel(zeros, 'dos date/time').value).toBe('–')
+      expect(byLabel(zeros, 'DOS date/time').value).toBe('–')
 
       // Pre-epoch negative Unix (64) and future timestamps are implausible
       view.setBigInt64(0, -10n, le)
-      expect(byLabel(readings(buf, le, NOW), 'unix time (64)')).toEqual({
-        label: 'unix time (64)',
+      expect(byLabel(readings(buf, le, NOW), 'Unix time (64)')).toEqual({
+        label: 'Unix time (64)',
         value: '1969-12-31 23:59:50',
         note: undefined,
         plausible: false,
@@ -258,21 +258,21 @@ describe('readings', () => {
 
       const futureS = NOW / 1000 + 3600
       view.setUint32(0, futureS, le)
-      expect(byLabel(readings(buf, le, NOW), 'unix time').plausible).toBe(false)
+      expect(byLabel(readings(buf, le, NOW), 'Unix time').plausible).toBe(false)
 
       // Invalid DOS calendar dates (Feb 31 and Apr 31) must not roll over to March/May
       view.setUint16(0, dosTimeWord, le)
       view.setUint16(2, ((2024 - 1980) << 9) | (2 << 5) | 31, le)
-      expect(byLabel(readings(buf, le, NOW), 'dos date/time')).toEqual({
-        label: 'dos date/time',
+      expect(byLabel(readings(buf, le, NOW), 'DOS date/time')).toEqual({
+        label: 'DOS date/time',
         value: '–',
         note: 'local',
         plausible: false,
       })
 
       view.setUint16(2, ((2024 - 1980) << 9) | (4 << 5) | 31, le)
-      expect(byLabel(readings(buf, le, NOW), 'dos date/time')).toEqual({
-        label: 'dos date/time',
+      expect(byLabel(readings(buf, le, NOW), 'DOS date/time')).toEqual({
+        label: 'DOS date/time',
         value: '–',
         note: 'local',
         plausible: false,
@@ -284,17 +284,17 @@ describe('readings', () => {
 describe('decodings', () => {
   it('decodes printable ASCII and escapes controls and high bytes in ascii mode', () => {
     const bytes = new Uint8Array([0x41, 0x09, 0x0a, 0x0d, 0x00, 0x7f, 0x80, 0xff])
-    expect(byLabel(decodings(bytes), 'ascii').value).toBe('A\\t\\n\\r\\x00\\x7f\\x80\\xff')
+    expect(byLabel(decodings(bytes), 'ASCII').value).toBe('A\\t\\n\\r\\x00\\x7f\\x80\\xff')
   })
 
   it('decodes valid UTF-8, escapes C1 controls as \\u00XX, and escapes invalid UTF-8 bytes as \\xNN', () => {
     // 'é' (c3 a9), '€' (e2 82 ac), '🔍' (f0 9f 94 8d)
     const valid = new TextEncoder().encode('é€🔍\n\x00')
-    expect(byLabel(decodings(valid), 'utf-8').value).toBe('é€🔍\\n\\x00')
+    expect(byLabel(decodings(valid), 'UTF-8').value).toBe('é€🔍\\n\\x00')
 
     // C1 controls U+0080 (c2 80) and U+0085 (c2 85) vs U+00A0 NBSP (c2 a0)
     const c1 = new Uint8Array([0xc2, 0x80, 0xc2, 0x85, 0xc2, 0xa0])
-    expect(byLabel(decodings(c1), 'utf-8').value).toBe('\\u0080\\u0085\u00a0')
+    expect(byLabel(decodings(c1), 'UTF-8').value).toBe('\\u0080\\u0085\u00a0')
 
     // Invalid sequences:
     // - stray continuation: 0x80
@@ -308,16 +308,16 @@ describe('decodings', () => {
       0x80, 0xc0, 0xaf, 0xe0, 0x80, 0xaf, 0xed, 0xa0, 0x80, 0xf0, 0x80, 0x80, 0xaf, 0xf4, 0x90,
       0x80, 0x80, 0xc3, 0x41, 0xe2, 0x82,
     ])
-    expect(byLabel(decodings(invalid), 'utf-8').value).toBe(
+    expect(byLabel(decodings(invalid), 'UTF-8').value).toBe(
       '\\x80\\xc0\\xaf\\xe0\\x80\\xaf\\xed\\xa0\\x80\\xf0\\x80\\x80\\xaf\\xf4\\x90\\x80\\x80\\xc3A\\xe2\\x82',
     )
   })
 
   it('decodes UTF-16LE with escaped controls and replacement marks for invalid tails', () => {
     const valid = new Uint8Array([0x48, 0x00, 0x69, 0x00, 0x09, 0x00, 0x00, 0x00])
-    expect(byLabel(decodings(valid), 'utf-16le').value).toBe('Hi\\t\\x00')
+    expect(byLabel(decodings(valid), 'UTF-16LE').value).toBe('Hi\\t\\x00')
 
     const oddTail = new Uint8Array([0x41, 0x00, 0xff])
-    expect(byLabel(decodings(oddTail), 'utf-16le').value).toBe('A\ufffd')
+    expect(byLabel(decodings(oddTail), 'UTF-16LE').value).toBe('A\ufffd')
   })
 })

@@ -55,7 +55,7 @@ interface Shortcut {
 
 const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
   {
-    title: 'anywhere',
+    title: 'Anywhere',
     shortcuts: [
       { keys: ['g', '⌘K'], does: 'Prompt: focus path prompt or open prompt' },
       { keys: ['⌘,'], does: 'Settings' },
@@ -64,7 +64,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
-    title: 'prompt',
+    title: 'Prompt',
     note: 'Focus with g, ⌘K, or a click. Typing searches below the current folder; from the top it also searches the server.',
     shortcuts: [
       { keys: ['/…'], does: 'Search from the top instead' },
@@ -80,7 +80,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
-    title: 'listing',
+    title: 'Listing',
     shortcuts: [
       { keys: ['↑', '↓'], does: 'Move (also j k)' },
       { keys: ['home', 'end'], does: 'First, last' },
@@ -113,7 +113,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
-    title: 'file',
+    title: 'File',
     shortcuts: [
       { keys: ['d'], does: 'Download the file' },
       { keys: ['i'], does: 'Show or hide the side panel (Details, Inspector)' },
@@ -122,7 +122,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
-    title: 'table view',
+    title: 'Table view',
     shortcuts: [
       { keys: ['↑', '↓'], does: 'Move through rows; the row shows in full on the right' },
       { keys: ['/'], does: 'Filter rows: text in any cell, or column:value' },
@@ -135,7 +135,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
-    title: 'text view',
+    title: 'Text view',
     shortcuts: [
       { keys: ['⌘F', '/'], does: 'Find: text, or a regular expression (.*)' },
       { keys: ['⏎', '⇧⏎'], does: 'Next, previous hit (⌘G, ⇧⌘G anywhere on the page)' },
@@ -147,14 +147,14 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
-    title: 'rendered markdown',
+    title: 'Rendered markdown',
     shortcuts: [
       { keys: ['m'], does: 'Copy a link to the marked lines (select to mark)' },
       { keys: ['esc'], does: 'Clear the selection, then the marked lines' },
     ],
   },
   {
-    title: 'hex view',
+    title: 'Hex view',
     shortcuts: [
       { keys: ['←', '→', '↑', '↓'], does: 'Move the cursor a byte or a row (⇧ selects)' },
       { keys: ['⌘↑', '⌘↓'], does: 'Start, end of the file' },
@@ -166,7 +166,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
-    title: 'full-screen flowchart',
+    title: 'Full-screen flowchart',
     shortcuts: [
       { keys: ['esc'], does: 'Close the task, then exit' },
       { keys: ['f'], does: 'Exit' },

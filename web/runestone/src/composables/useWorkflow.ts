@@ -204,18 +204,25 @@ export async function createWorkflow(
  */
 function adopt(record: WorkflowRecord, parentId: number): Workflow {
   const workflow = mapWorkflow(record)
-  useItemsStore().upsertItems([
-    mapFolderToItem(
-      {
-        id: record.folder.id,
-        display_name: record.display_name,
-        user: record.user,
-        created_at: record.created_at,
-        workflows: [{ id: record.id }],
-      },
-      parentId,
-    ),
+  const itemsStore = useItemsStore()
+  itemsStore.upsertItems([
+    {
+      ...mapFolderToItem(
+        {
+          id: record.folder.id,
+          display_name: record.display_name,
+          user: record.user,
+          created_at: record.created_at,
+          workflows: [{ id: record.id }],
+        },
+        parentId,
+      ),
+      fileCount: 0,
+      folderCount: 0,
+      isEmpty: true,
+    },
   ])
+  itemsStore.recordChildAdded(parentId, 'folder')
   useWorkflowsStore().upsertWorkflow(workflow)
   // All known without asking: the folder is new and empty.
   markFresh(workflowKeys.workflow(workflow.id))
@@ -764,7 +771,7 @@ export async function saveAsTemplate(folderId: number): Promise<string | null> {
     title: 'Save as template',
     message:
       'New workflows can start from it: the same workers and options, on their own input files.',
-    field: { label: 'template name', value: workflow.name },
+    field: { label: 'Template name', value: workflow.name },
     confirmLabel: 'Save template',
   })
   if (!name || epoch !== sessionEpoch) return null

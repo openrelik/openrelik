@@ -30,11 +30,11 @@ import { useSettingsStore } from '@/stores/settings'
 import { isCommandModifier, promptPassesThrough } from '@/utils/keyboard'
 
 /**
- * Where you are, as a shell prompt: `/CLI Test Folder/evidence $ ▯`.
+ * Where you are, as a shell prompt: `/CLI Test Folder/evidence > ▯`.
  *
  * The path stays a row of links — every folder name goes there, and every `/`
  * opens the list of folders inside the segment to its left, the one you came
- * through marked. After the `$` you can click or press `g` / `⌘K` to type:
+ * through marked. After the `>` you can click or press `g` / `⌘K` to type:
  * typing searches every folder and finds a case by its reference, Tab
  * completes, Enter goes. Navigating to a folder from the prompt keeps it
  * focused with an empty line so you can keep walking with `cd`; arriving any
@@ -203,17 +203,9 @@ const folderOf = (at: number): number | null => (at < 0 ? null : props.path[at]!
 /**
  * One slot per segment: -1 holds the first segment, `i` the separator after
  * `path[i]` and the segment that follows it. The root icon stands in for `/`,
- * so slot -1 draws no `/` of its own; there is still a trailing one after the
- * last segment when it is a folder.
+ * so slot -1 draws no `/` of its own.
  */
-const separators = computed(() => {
-  const last = props.path.at(-1)
-  return [
-    -1,
-    ...props.path.slice(0, -1).map((_, i) => i),
-    ...(last?.kind === 'folder' ? [props.path.length - 1] : []),
-  ]
-})
+const separators = computed(() => [-1, ...props.path.slice(0, -1).map((_, i) => i)])
 
 const settingsStore = useSettingsStore()
 /** Folders behind a separator; for the root, the top-level pages loaded so far. */
@@ -278,7 +270,7 @@ function onBarClick(event: MouseEvent) {
   >
     <!-- the path: links, and a menu behind every slash -->
     <div class="flex max-w-[65%] min-w-0 shrink items-center">
-      <BrandLink class="mr-4" />
+      <BrandLink class="mr-3" />
       <span
         v-if="pending && !path.length"
         class="text-ink-muted"
@@ -392,7 +384,12 @@ function onBarClick(event: MouseEvent) {
     </div>
 
     <!-- the prompt -->
-    <span class="shrink-0 pr-1.5 pl-1 text-ink-muted" aria-hidden="true">$</span>
+    <span
+      class="shrink-0 pr-1.5 text-ink-muted"
+      :class="{ 'pl-2': path.length || pending }"
+      aria-hidden="true"
+      >&gt;</span
+    >
     <div class="relative flex h-full min-w-24 flex-1 items-center">
       <input
         ref="input"
@@ -406,7 +403,7 @@ function onBarClick(event: MouseEvent) {
         aria-controls="prompt-results"
         :aria-expanded="dropdown"
         :aria-activedescendant="dropdown && results.length ? `prompt-${index}` : undefined"
-        class="peer h-full w-full min-w-0 bg-transparent text-ink caret-brand-icon outline-none [caret-shape:block] placeholder:text-transparent"
+        class="peer h-full w-full min-w-0 bg-transparent text-ink caret-ink outline-none [caret-shape:block] placeholder:text-transparent"
         placeholder="cd, or type to find…"
         @focus="focused = true"
         @blur="focused = false"

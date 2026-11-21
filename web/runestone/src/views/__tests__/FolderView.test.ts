@@ -421,8 +421,8 @@ describe('FolderView', () => {
     await nextTick()
     expect(wrapper.text()).not.toContain('4 selected')
 
-    // Sort columns: name, size, type, owner, modified (and invert name).
-    for (const label of ['name', 'name', 'size', 'type', 'owner', 'modified (utc)']) {
+    // Sort columns: Name, Size, Type, Owner, Modified (and invert Name).
+    for (const label of ['Name', 'Name', 'Size', 'Type', 'Owner', 'Modified (UTC)']) {
       const sortBtn = wrapper.findAll('thead button').find((b) => b.text().trim() === label)
       expect(sortBtn).toBeDefined()
       await sortBtn!.trigger('click')

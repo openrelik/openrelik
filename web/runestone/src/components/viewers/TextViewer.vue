@@ -512,7 +512,9 @@ const linesLabel = computed(() => {
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">
     <!-- status, go to, find -->
-    <div class="flex h-7 shrink-0 items-center gap-3 border-b border-border px-3 text-ink-muted">
+    <div
+      class="flex h-9 shrink-0 items-center gap-3 border-b border-border pr-2 pl-3 text-ink-muted"
+    >
       <span class="tabular shrink-0">
         {{ linesLabel }}<template v-if="range"> · {{ marks.label() }}</template>
       </span>
@@ -535,7 +537,7 @@ const linesLabel = computed(() => {
         <button
           v-if="range || selected"
           type="button"
-          class="flex size-5 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+          class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
           :aria-label="linkLabel"
           v-tooltip="linkLabel"
           @mousedown.prevent
@@ -550,9 +552,9 @@ const linesLabel = computed(() => {
             type="text"
             spellcheck="false"
             autocomplete="off"
-            placeholder="go to line"
+            placeholder="Go to line"
             aria-label="Go to a line, or a range as 12-40"
-            class="field tabular h-5 w-28 font-mono text-[11px]"
+            class="field tabular h-6 w-28 font-mono text-[12px]"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError

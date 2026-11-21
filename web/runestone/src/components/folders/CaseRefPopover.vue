@@ -103,7 +103,7 @@ function onKey(event: KeyboardEvent) {
       @keydown="onKey"
     >
       <label class="micro-label block pb-1" :for="`case-ref-${item.id}`">
-        case of <span class="text-ink normal-case">{{ item.name }}</span>
+        Case of <span class="text-ink">{{ item.name }}</span>
       </label>
       <input
         :id="`case-ref-${item.id}`"

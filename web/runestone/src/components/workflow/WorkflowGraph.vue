@@ -604,7 +604,7 @@ const BAR: Record<TaskStatus, string> = {
             <span
               class="micro-label absolute bg-canvas px-1 leading-none"
               :style="{ left: `${inputsBox.left + 8}px`, top: `${inputsBox.top - 6}px` }"
-              >input</span
+              >Input</span
             >
             <button
               type="button"

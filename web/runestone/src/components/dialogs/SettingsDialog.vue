@@ -103,7 +103,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
         <div class="min-h-0 flex-1 overflow-y-auto py-2">
           <!-- appearance -->
           <section aria-labelledby="settings-appearance">
-            <p id="settings-appearance" class="micro-label px-4 pt-2 pb-1">appearance</p>
+            <p id="settings-appearance" class="micro-label px-4 pt-2 pb-1">Appearance</p>
 
             <div class="flex items-center gap-3 px-4 py-2.5">
               <div class="min-w-0 flex-1">
@@ -176,7 +176,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
 
           <!-- explorer -->
           <section aria-labelledby="settings-explorer">
-            <p id="settings-explorer" class="micro-label px-4 pt-2 pb-1">explorer</p>
+            <p id="settings-explorer" class="micro-label px-4 pt-2 pb-1">Explorer</p>
 
             <div class="flex items-center gap-3 px-4 py-2.5">
               <div class="min-w-0 flex-1">

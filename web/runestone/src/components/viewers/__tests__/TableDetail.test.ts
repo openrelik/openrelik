@@ -38,7 +38,13 @@ vi.mock('@/api', () => ({
 const DummyRoute = defineComponent({ render: () => null })
 const wrappers: VueWrapper[] = []
 
-function mountDetail(props: { row: TableRow; number: number; columns: string[]; cells: string[] }) {
+function mountDetail(props: {
+  row: TableRow
+  number: number
+  columns: string[]
+  cells: string[]
+  closable?: boolean
+}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: DummyRoute }],
@@ -93,7 +99,7 @@ describe('TableDetail', () => {
     })
 
     const root = wrapper.get('[aria-label="Row details"]')
-    expect(root.text()).toContain('row 1,234')
+    expect(root.text()).toContain('Row 1,234')
     expect(wrapper.find('.text-danger').exists()).toBe(false)
 
     const dts = wrapper.findAll('dt').map((dt) => dt.text())
@@ -173,7 +179,7 @@ describe('TableDetail', () => {
       cells,
     })
 
-    expect(wrapper.text()).toContain('row 9')
+    expect(wrapper.text()).toContain('Row 9')
     expect(wrapper.text()).toContain(
       "Not valid JSON: Expected property name or '}' in JSON at position 1",
     )
@@ -210,5 +216,21 @@ describe('TableDetail', () => {
 
     const pre = dds[3]?.get('pre')
     expect(pre?.text()).toContain('\\x7f\\x85')
+  })
+
+  it('renders a close button only when closable and emits close on click', async () => {
+    const base = {
+      row: { cells: ['v'] },
+      number: 1,
+      columns: ['k'],
+      cells: ['v'],
+    }
+    const plain = mountDetail(base)
+    expect(plain.find('button[aria-label="Close row details"]').exists()).toBe(false)
+
+    const closable = mountDetail({ ...base, closable: true })
+    const btn = closable.get('button[aria-label="Close row details"]')
+    await btn.trigger('click')
+    expect(closable.emitted('close')).toHaveLength(1)
   })
 })
