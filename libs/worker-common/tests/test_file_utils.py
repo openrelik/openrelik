@@ -163,6 +163,28 @@ class Utils(unittest.TestCase):
         files = []
         self.assertIsNone(file_utils.build_file_tree(output_path, files))
 
+    def test_build_file_tree_does_not_follow_symlinks(self):
+        """build_file_tree must pass follow_symlinks=False to os.link."""
+        with tempfile.TemporaryDirectory() as output_path:
+            symlink_file = file_utils.create_output_file(
+                output_base_path=output_path, original_path="/etc/dangling_link"
+            )
+            os.symlink("nonexistent_target", symlink_file.path)
+
+            with unittest.mock.patch(
+                "openrelik_worker_common.file_utils.os.link", wraps=os.link
+            ) as mock_link:
+                file_tree_root = file_utils.build_file_tree(output_path, [symlink_file])
+                try:
+                    mock_link.assert_called_once()
+                    self.assertIs(
+                        mock_link.call_args.kwargs.get("follow_symlinks"), False
+                    )
+                    linked_path = os.path.join(file_tree_root.name, "etc/dangling_link")
+                    self.assertTrue(os.path.islink(linked_path))
+                finally:
+                    file_utils.delete_file_tree(file_tree_root)
+
     def test_delete_file_tree(self):
         """Test delete_file_tree function."""
         with self.assertRaises(TypeError):

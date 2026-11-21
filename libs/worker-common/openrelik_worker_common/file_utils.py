@@ -210,6 +210,7 @@ def build_file_tree(
         os.link(
             file.path,
             os.path.join(tree_root.name, relative_original_folder, original_filename),
+            follow_symlinks=False,
         )
 
     return tree_root
