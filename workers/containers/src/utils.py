@@ -338,36 +338,42 @@ def unmount_container(
     return None
 
 
-def _find_directory(root_dir: str, find_dirname: str) -> list[str]:
-    """Find a directory name in the specified path."""
-    potential_root_dirs: list[str] = []
+_CONTAINER_ROOT_CANDIDATES: tuple[str, ...] = (
+    os.path.join("var", "lib", "containerd"),
+    os.path.join("var", "lib", "docker"),
+    # Dedicated /var partition mounted directly at mountpoint:
+    os.path.join("lib", "containerd"),
+    os.path.join("lib", "docker"),
+    # GKE Container-Optimized OS stateful partition mounted directly at mountpoint:
+    os.path.join("var_overlay", "lib", "containerd"),
+    os.path.join("var_overlay", "lib", "docker"),
+    # GKE Container-Optimized OS stateful partition under root:
+    os.path.join("mnt", "stateful_partition", "var", "lib", "containerd"),
+    os.path.join("mnt", "stateful_partition", "var", "lib", "docker"),
+)
 
-    for dirpath, dirnames, _ in os.walk(root_dir):
-        if find_dirname in dirnames:
-            potential_root_dirs.append(os.path.join(dirpath, find_dirname))
-    return potential_root_dirs
+_CONTAINER_ROOT_MARKERS: frozenset[str] = frozenset(
+    {"containers", "io.containerd.content.v1.content"}
+)
 
 
 def container_root_exists(mountpoint: str) -> bool:
-    """Checks if mountpoint has default containerd or Docker root directory."""
-    container_root_dirnames: list[str] = ["docker", "containerd"]
-
-    for container_root_dirname in container_root_dirnames:
-        container_root_paths: list[str] = _find_directory(
-            mountpoint, container_root_dirname
-        )
-
-        # Containerd and Docker default root directories are /var/lib/containerd and /var/lib/docker
-        # Handling edge case where /var is a dedicated Linux partition.
-        for container_root_path in container_root_paths:
-            if f"lib/{container_root_dirname}" in container_root_path:
-                container_root_files: list[str] = os.listdir(container_root_path)
-                if (
-                    "containers" in container_root_files
-                    or "io.containerd.content.v1.content" in container_root_files
-                ):
-                    logger.debug(
-                        "Container root directory identified %s", container_root_path
-                    )
-                    return True
+    """Checks if mountpoint has a default containerd or Docker root directory."""
+    mountpoint_real = os.path.realpath(mountpoint)
+    for rel_path in _CONTAINER_ROOT_CANDIDATES:
+        candidate = os.path.join(mountpoint, rel_path)
+        candidate_real = os.path.realpath(candidate)
+        # Prevent symlinks inside untrusted disk images from escaping mountpoint.
+        if os.path.commonpath([mountpoint_real, candidate_real]) != mountpoint_real:
+            continue
+        if not os.path.isdir(candidate_real):
+            continue
+        try:
+            entries = os.listdir(candidate_real)
+        except OSError as err:
+            logger.debug("Unable to list %s: %s", candidate_real, err)
+            continue
+        if _CONTAINER_ROOT_MARKERS.intersection(entries):
+            logger.debug("Container root directory identified %s", candidate)
+            return True
     return False
