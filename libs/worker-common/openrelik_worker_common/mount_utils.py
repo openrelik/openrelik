@@ -22,8 +22,11 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import threading
 import time
+import weakref
 
+from redis.exceptions import LockError, RedisError
 from uuid import uuid4
 
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +57,7 @@ class BlockDevice:
     MIN_PARTITION_SIZE_BYTES = 100 * 1024 * 1024  #: Default 100 MB
     MAX_NBD_DEVICES = 10  #: Default 10
     LOCK_TIMEOUT_SECONDS = 6 * 60 * 60  #: Default 6 hours
+    LOCK_RENEW_INTERVAL_SECONDS = 60 * 60  #: Renew every 1 hour while mounted
     MAX_MOUNTPATH_SIZE = 500  #: Default 500
 
     def __init__(
@@ -95,6 +99,65 @@ class BlockDevice:
         self.REDIS_URL = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
         self.redis_client = None
         self.redis_lock = None
+        self._lock_renew_stop = threading.Event()
+        self._lock_renew_thread: threading.Thread | None = None
+        self._lock_renew_finalizer: weakref.finalize | None = None
+
+    @staticmethod
+    def _renew_lock_loop(
+        bd_ref: "weakref.ReferenceType[BlockDevice]",
+        stop_event: threading.Event,
+        interval: float,
+    ) -> None:
+        while not stop_event.wait(interval):
+            bd = bd_ref()
+            lock = bd.redis_lock if bd is not None else None
+            del bd
+            if not lock:
+                break
+            try:
+                lock.reacquire()
+                logger.debug(f"Renewed Redis lock: {lock.name}")
+            except LockError as err:
+                logger.warning(f"Failed to reacquire Redis lock {lock.name}: {err}")
+                break
+            except Exception as err:
+                logger.warning(f"Error renewing Redis lock {lock.name}: {err}")
+            finally:
+                del lock
+
+    def _start_lock_renewal(self) -> None:
+        stop_event = self._lock_renew_stop
+        stop_event.clear()
+        self._lock_renew_finalizer = weakref.finalize(self, stop_event.set)
+        self._lock_renew_thread = threading.Thread(
+            target=self._renew_lock_loop,
+            args=(weakref.ref(self), stop_event, self.LOCK_RENEW_INTERVAL_SECONDS),
+            name="openrelik-nbd-lock-renew",
+            daemon=True,
+        )
+        self._lock_renew_thread.start()
+
+    def _stop_lock_renewal(self) -> None:
+        if self._lock_renew_finalizer is not None:
+            self._lock_renew_finalizer.detach()
+            self._lock_renew_finalizer = None
+        self._lock_renew_stop.set()
+        if self._lock_renew_thread and self._lock_renew_thread.is_alive():
+            self._lock_renew_thread.join(timeout=2.0)
+        self._lock_renew_thread = None
+
+    def _release_redis_lock(self) -> None:
+        self._stop_lock_renewal()
+        lock = self.redis_lock
+        self.redis_lock = None
+        if not lock:
+            return
+        try:
+            lock.release()
+            logger.info(f"Redis lock released: {lock.name}")
+        except RedisError as err:
+            logger.warning(f"Could not release Redis lock {lock.name}: {err}")
 
     def setup(self):
         """Setup BlockDevice instance
@@ -152,14 +215,15 @@ class BlockDevice:
                     logger.error(
                         f"Error cleaning up EWF mount after setup failure: {cleanup_error}"
                     )
-            if self.redis_lock:
-                try:
-                    self.redis_lock.release()
-                    self.redis_lock = None
-                except Exception as cleanup_error:
-                    logger.error(
-                        f"Error releasing Redis lock after setup failure: {cleanup_error}"
-                    )
+            try:
+                if self.blkdevice is None:
+                    self._release_redis_lock()
+                else:
+                    self._stop_lock_renewal()
+            except Exception as cleanup_error:
+                logger.error(
+                    f"Error releasing Redis lock after setup failure: {cleanup_error}"
+                )
             raise
 
     def _losetup(self) -> str:
@@ -229,9 +293,11 @@ class BlockDevice:
                 name=f"{hostname}-{devname}",
                 timeout=self.LOCK_TIMEOUT_SECONDS,
                 blocking=False,
+                thread_local=False,
             )
             if lock.acquire():
                 self.redis_lock = lock
+                self._start_lock_renewal()
                 logger.info(
                     f"Redis lock succesfully set: {lock.name} for {hostname}-{devname}"
                 )
@@ -249,13 +315,13 @@ class BlockDevice:
             RuntimeError: if there was an error running qemu-nbd or fdisk.
         """
         # Get and lock a free nbd device
-        self.blkdevice = self._get_free_nbd_device()
+        blkdevice = self._get_free_nbd_device()
         nbdsetup_command = [
             "sudo",
             "qemu-nbd",
             "--read-only",
             "--connect",
-            self.blkdevice,
+            blkdevice,
             self.image_path,
         ]
 
@@ -263,12 +329,13 @@ class BlockDevice:
             nbdsetup_command, capture_output=True, check=False, text=True
         )
         if process.returncode == 0:
+            self.blkdevice = blkdevice
             logger.info(
                 f"qemu-nbd: success creating {self.blkdevice} for {self.image_path}"
             )
         else:
             logger.error(
-                f"qemu-nbd: failed creating {self.blkdevice} for {self.image_path}: {process.stderr} {process.stdout}"
+                f"qemu-nbd: failed creating {blkdevice} for {self.image_path}: {process.stderr} {process.stdout}"
             )
             raise RuntimeError(
                 f"Error running qemu-nbd: {process.stderr} {process.stdout}"
@@ -729,11 +796,14 @@ class BlockDevice:
             RuntimeError: If unmounting any of the mount points fails, or if
                           detaching the block device fails.
         """
-        self._umount_all()
-        if self.blkdevice:
-            self._detach_device()
-        if self.ewf_mount_path:
-            self._ewfumount()
-        if self.redis_lock:
-            self.redis_lock.release()
-            logger.info(f"Redis lock released: {self.redis_lock.name}")
+        try:
+            self._umount_all()
+            if self.blkdevice:
+                self._detach_device()
+            if self.ewf_mount_path:
+                self._ewfumount()
+        finally:
+            if self.blkdevice is None:
+                self._release_redis_lock()
+            else:
+                self._stop_lock_renewal()
