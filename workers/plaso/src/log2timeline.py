@@ -284,9 +284,24 @@ def log2timeline(
                 raise RuntimeError(f"Expected EWF file {e01_file} does not exist.")
             command.append(e01_file)
         else:
+            linked_files = 0
             for input_file in input_files:
-                filename = os.path.basename(input_file.get("path"))
-                os.link(input_file.get("path"), f"{temp_dir}/{filename}")
+                input_path = input_file.get("path")
+                if (
+                    not input_path
+                    or os.path.islink(input_path)
+                    or not os.path.isfile(input_path)
+                ):
+                    logger.warning(
+                        f"Skipping missing or non-regular input file: {input_path}"
+                    )
+                    continue
+                filename = os.path.basename(input_path)
+                os.link(input_path, f"{temp_dir}/{filename}")
+                linked_files += 1
+            if linked_files == 0:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                raise RuntimeError("No readable input files found for log2timeline.")
             command.append(temp_dir)
 
     # Handle extraction of single ZIP input before launching log2timeline.py (slow $MFT parsing workaround)

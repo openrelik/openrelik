@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import pytest
 from unittest.mock import MagicMock, Mock, patch
 
@@ -79,6 +80,7 @@ def test_extract_archive_task_success(mock_celery_task, mock_dependencies):
     # Mock Path and glob
     mock_export_path_obj = Mock()
     mock_extracted_file = Mock()
+    mock_extracted_file.is_symlink.return_value = False
     mock_extracted_file.is_file.return_value = True
     mock_extracted_file.name = "extracted.txt"
     mock_extracted_file.relative_to.return_value = "extracted.txt"
@@ -321,6 +323,7 @@ def _run_task_with_one_extracted_file(mock_celery_task, mock_dependencies, task_
     mock_dependencies["extract_archive"].return_value = ("cmd", "/tmp/export")
 
     mock_extracted = Mock()
+    mock_extracted.is_symlink.return_value = False
     mock_extracted.is_file.return_value = True
     mock_extracted.name = "extracted.txt"
     mock_extracted.relative_to.return_value = "extracted.txt"
@@ -408,3 +411,70 @@ def test_extract_archive_task_exclusion_pattern(mock_celery_task, mock_dependenc
     # Access the call args to verify exclusion patterns
     args, _ = mock_dependencies["extract_archive"].call_args
     assert args[6] == ["$MFT", "*.tmp"]
+
+
+def test_extract_archive_task_skips_symlinks(tmp_path, mock_celery_task):
+    """Symlinks in extracted archives must be skipped so neither dangling symlinks
+    nor host-pointing absolute symlinks enter OpenRelik storage."""
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    secret_file = outside_dir / "secret.txt"
+    secret_file.write_text("host secret")
+
+    export_dir = tmp_path / "export"
+    subdir = export_dir / "subdir"
+    subdir.mkdir(parents=True)
+
+    real_file = subdir / "real.txt"
+    real_file.write_text("real evidence")
+    os.symlink("real.txt", subdir / "rel_link.txt")
+    os.symlink(str(secret_file), export_dir / "abs_link.txt")
+    os.symlink("nonexistent_target", export_dir / "dangling_link.txt")
+    os.symlink(str(outside_dir), export_dir / "dir_link")
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    captured = {}
+
+    def fake_create_task_result(**kwargs):
+        captured.update(kwargs)
+        return "serialized_result"
+
+    with (
+        patch(
+            "src.archives.get_input_files",
+            return_value=[
+                {"id": 1, "display_name": "evidence.tar.gz", "path": "/in/evidence.tar.gz"}
+            ],
+        ),
+        patch(
+            "src.archives.extract_archive",
+            return_value=("tar -vxzf ...", str(export_dir)),
+        ),
+        patch("src.archives.create_task_result", side_effect=fake_create_task_result),
+        patch("src.archives.telemetry"),
+    ):
+        result = archives.extract_archive_task.__class__.run(
+            mock_celery_task,
+            pipe_result=None,
+            input_files=None,
+            output_path=str(output_dir),
+            workflow_id="wf-symlinks",
+            task_config={},
+        )
+
+    assert result == "serialized_result"
+    assert not export_dir.exists()
+    assert secret_file.exists()
+
+    output_files = captured["output_files"]
+    assert len(output_files) == 1
+    assert output_files[0]["display_name"] == "real.txt"
+    assert output_files[0]["original_path"] == "subdir/real.txt"
+
+    stored_path = output_files[0]["path"]
+    assert not os.path.islink(stored_path)
+    with open(stored_path, encoding="utf-8") as fh:
+        assert fh.read() == "real evidence"
+    assert not any(p.is_symlink() for p in output_dir.rglob("*"))

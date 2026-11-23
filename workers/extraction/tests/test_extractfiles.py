@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import pytest
 from unittest.mock import MagicMock, Mock, patch
 
@@ -255,3 +256,119 @@ def test_on_task_prerun():
                 "name"
             ),
         )
+
+
+def test_extract_full_file_path_task_skips_symlinks(tmp_path, mock_celery_task):
+    """Direct symlinks inside a mounted disk image must not be copied into storage."""
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    secret_file = outside_dir / "secret.txt"
+    secret_file.write_text("host secret")
+
+    mountpoint = tmp_path / "mnt"
+    mountpoint.mkdir()
+    real_file = mountpoint / "real.txt"
+    real_file.write_text("disk evidence")
+    os.symlink("real.txt", mountpoint / "rel_link.txt")
+    os.symlink(str(secret_file), mountpoint / "abs_link.txt")
+    os.symlink("missing_target", mountpoint / "dangling_link.txt")
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    captured = {}
+
+    def fake_create_task_result(**kwargs):
+        captured.update(kwargs)
+        return "serialized_result"
+
+    mock_bd = MagicMock()
+    mock_bd.mount.return_value = [str(mountpoint)]
+
+    with (
+        patch(
+            "src.extractfiles.get_input_files",
+            return_value=[{"id": 1, "path": "/path/to/image.raw"}],
+        ),
+        patch("src.extractfiles.BlockDevice", return_value=mock_bd),
+        patch(
+            "src.extractfiles.create_task_result", side_effect=fake_create_task_result
+        ),
+        patch("src.extractfiles.telemetry"),
+    ):
+        result = extractfiles.extract_full_file_path_task.__class__.run(
+            mock_celery_task,
+            pipe_result=None,
+            input_files=None,
+            output_path=str(output_dir),
+            workflow_id="wf-symlinks",
+            task_config={
+                "file_paths": "/real.txt\n/rel_link.txt\n/abs_link.txt\n/dangling_link.txt"
+            },
+        )
+
+    assert result == "serialized_result"
+    mock_bd.umount.assert_called_once()
+
+    output_files = captured["output_files"]
+    assert len(output_files) == 1
+    assert output_files[0]["display_name"] == "real.txt"
+    assert not os.path.islink(output_files[0]["path"])
+    with open(output_files[0]["path"], encoding="utf-8") as fh:
+        assert fh.read() == "disk evidence"
+    assert not any(p.is_symlink() for p in output_dir.rglob("*"))
+
+
+def test_extract_full_file_path_task_blocks_symlink_parent_traversal(
+    tmp_path, mock_celery_task
+):
+    """A symlinked parent directory escaping the mountpoint is skipped without aborting remaining paths."""
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    secret_file = outside_dir / "secret.txt"
+    secret_file.write_text("host secret")
+
+    mountpoint = tmp_path / "mnt"
+    mountpoint.mkdir()
+    os.symlink(str(outside_dir), mountpoint / "escape")
+    normal_file = mountpoint / "after.txt"
+    normal_file.write_text("still extracted")
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    captured = {}
+
+    def fake_create_task_result(**kwargs):
+        captured.update(kwargs)
+        return "serialized_result"
+
+    mock_bd = MagicMock()
+    mock_bd.mount.return_value = [str(mountpoint)]
+
+    with (
+        patch(
+            "src.extractfiles.get_input_files",
+            return_value=[{"id": 1, "path": "/path/to/image.raw"}],
+        ),
+        patch("src.extractfiles.BlockDevice", return_value=mock_bd),
+        patch(
+            "src.extractfiles.create_task_result", side_effect=fake_create_task_result
+        ),
+        patch("src.extractfiles.telemetry"),
+    ):
+        extractfiles.extract_full_file_path_task.__class__.run(
+            mock_celery_task,
+            pipe_result=None,
+            input_files=None,
+            output_path=str(output_dir),
+            workflow_id="wf-traversal",
+            task_config={"file_paths": "/escape/secret.txt\n/after.txt"},
+        )
+
+    mock_bd.umount.assert_called_once()
+    output_files = captured["output_files"]
+    assert len(output_files) == 1
+    assert output_files[0]["display_name"] == "after.txt"
+    with open(output_files[0]["path"], encoding="utf-8") as fh:
+        assert fh.read() == "still extracted"
