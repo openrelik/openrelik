@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import pytest_structlog
+from billiard.einfo import ExceptionInfo
 from openrelik_common.logging import Logger
 from .thirdparty import log_thirdparty
 
@@ -78,7 +79,7 @@ def test_bind_structlog_console(log: pytest_structlog.StructuredLogCapture):
 def test_get_plain_python(caplog):
     caplog.set_level(logging.INFO)
     log_plain()
-    assert "INFO     tests.test_logging:test_logging.py:13 test\n" == caplog.text
+    assert "INFO     tests.test_logging:test_logging.py:14 test\n" == caplog.text
 
 
 def test_get_wrap(log: pytest_structlog.StructuredLogCapture):
@@ -93,3 +94,20 @@ def test_structlog_3rdparty(capsys):
     assert logobj["event"] == "thirdparty-logging"
     assert logobj["level"] == "info"
     # assert "xxxxx" == captured.out
+
+def test_structlog_3rdparty_exception_traceback(capsys, monkeypatch):
+    monkeypatch.setenv("OPENRELIK_LOG_TYPE", "structlog")
+    Logger()
+    foreign_logger = logging.getLogger("celery.app.trace")
+    try:
+        raise FileNotFoundError(2, "No such file or directory")
+    except FileNotFoundError:
+        einfo = ExceptionInfo()
+        foreign_logger.error("Task raised unexpected", exc_info=einfo.exc_info)
+    captured = capsys.readouterr()
+    logobj = json.loads(captured.out)
+    assert logobj["event"] == "Task raised unexpected"
+    assert logobj["level"] == "error"
+    assert "exc_info" not in logobj
+    assert "Traceback (most recent call last):" in logobj["exception"]
+    assert "FileNotFoundError: [Errno 2] No such file or directory" in logobj["exception"]
