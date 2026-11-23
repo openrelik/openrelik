@@ -595,6 +595,87 @@ def test_log2timeline_multiple_inputs_ewf_missing_e01_raises(
         )
 
 
+def test_log2timeline_multiple_inputs_skips_symlinks(
+    tmp_path, fake_subprocess, bound_task, monkeypatch
+):
+    """Dangling, live file, and directory symlinks in multiple non-EWF inputs are skipped."""
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    outside_file = outside_dir / "secret.txt"
+    outside_file.write_text("host secret")
+
+    in_dir = tmp_path / "inputs"
+    in_dir.mkdir()
+    real_file = in_dir / "regular.txt"
+    real_file.write_text("data")
+    dangling_link = in_dir / "dangling_symlink"
+    os.symlink("nonexistent_target", dangling_link)
+    live_file_link = in_dir / "live_file_symlink"
+    os.symlink(str(outside_file), live_file_link)
+    dir_link = in_dir / "dir_symlink"
+    os.symlink(str(outside_dir), dir_link)
+
+    linked_entries = []
+    orig_popen = log2timeline.subprocess.Popen
+
+    def spy_popen(cmd, *args, **kwargs):
+        temp_dir = cmd[-1]
+        linked_entries.extend(os.listdir(temp_dir))
+        return orig_popen(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(log2timeline.subprocess, "Popen", spy_popen)
+
+    inputs = [
+        {"path": str(real_file), "display_name": "regular.txt"},
+        {"path": str(dangling_link), "display_name": "dangling_symlink"},
+        {"path": str(live_file_link), "display_name": "live_file_symlink"},
+        {"path": str(dir_link), "display_name": "dir_symlink"},
+    ]
+
+    raw = log2timeline.log2timeline(
+        bound_task,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf-multi-symlink",
+        task_config=None,
+    )
+
+    assert linked_entries == ["regular.txt"]
+    temp_dir = fake_subprocess[0][-1]
+    assert not os.path.exists(temp_dir)
+    assert len(_decode(raw)["output_files"]) == 1
+
+
+def test_log2timeline_multiple_inputs_all_missing_raises(
+    tmp_path, fake_subprocess, bound_task
+):
+    """If all multiple non-EWF inputs are dangling or missing, clean up and raise."""
+    in_dir = tmp_path / "inputs"
+    in_dir.mkdir()
+    dangling_link = in_dir / "dangling_symlink"
+    os.symlink("nonexistent_target", dangling_link)
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    inputs = [
+        {"path": str(dangling_link), "display_name": "dangling_symlink"},
+        {"path": str(in_dir / "missing.txt"), "display_name": "missing.txt"},
+    ]
+
+    with pytest.raises(RuntimeError, match="No readable input files"):
+        log2timeline.log2timeline(
+            bound_task,
+            input_files=inputs,
+            output_path=str(out_dir),
+            workflow_id="wf-all-missing",
+            task_config=None,
+        )
+
+    # Temp directory must not leak on failure.
+    assert not any(p.is_dir() for p in out_dir.iterdir())
+
+
 def test_log2timeline_extract_single_zip(
     tmp_path, fake_subprocess, bound_task, monkeypatch
 ):

@@ -141,6 +141,23 @@ def extract_full_file_path_task(
                             f"Path traversal attempt detected: {requested_path}"
                         )
 
+                    if os.path.islink(full_path):
+                        logger.warning(
+                            f"Skipping symlink {requested_path} in {mountpoint}"
+                        )
+                        continue
+
+                    real_full_path = os.path.realpath(full_path)
+                    real_mountpoint = os.path.realpath(mountpoint_abs)
+                    if (
+                        os.path.commonpath([real_mountpoint, real_full_path])
+                        != real_mountpoint
+                    ):
+                        logger.warning(
+                            f"Skipping path resolving outside mountpoint {mountpoint}: {requested_path}"
+                        )
+                        continue
+
                     if os.path.exists(full_path) and os.path.isfile(full_path):
                         logger.info(f"Extracting {requested_path} from {mountpoint}")
 

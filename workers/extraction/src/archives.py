@@ -180,7 +180,9 @@ def extract_archive_task(
 
         export_directory_path = Path(export_directory)
         extracted_files = [
-            file for file in export_directory_path.glob("**/*") if file.is_file()
+            file
+            for file in export_directory_path.glob("**/*")
+            if not file.is_symlink() and file.is_file()
         ]
         for file in extracted_files:
             original_path = str(file.relative_to(export_directory_path))
