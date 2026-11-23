@@ -1062,6 +1062,26 @@ class TestContainerRootExists(unittest.TestCase):
             )
             self.assertTrue(container_root_exists(mountpoint))
 
+    def test_cos_stateful_partition_var_overlay_roots(self) -> None:
+        """Detects GKE Container-Optimized OS var_overlay roots when stateful partition is mounted directly."""
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(
+                os.path.join(mountpoint, "var_overlay", "lib", "docker", "containers")
+            )
+            self.assertTrue(container_root_exists(mountpoint))
+
+        with tempfile.TemporaryDirectory() as mountpoint:
+            os.makedirs(
+                os.path.join(
+                    mountpoint,
+                    "var_overlay",
+                    "lib",
+                    "containerd",
+                    "io.containerd.content.v1.content",
+                )
+            )
+            self.assertTrue(container_root_exists(mountpoint))
+
     def test_cos_stateful_partition_roots(self) -> None:
         """Detects GKE Container-Optimized OS stateful_partition container roots."""
         with tempfile.TemporaryDirectory() as mountpoint:

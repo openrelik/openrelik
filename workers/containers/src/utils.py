@@ -344,6 +344,9 @@ _CONTAINER_ROOT_CANDIDATES: tuple[str, ...] = (
     # Dedicated /var partition mounted directly at mountpoint:
     os.path.join("lib", "containerd"),
     os.path.join("lib", "docker"),
+    # GKE Container-Optimized OS stateful partition mounted directly at mountpoint:
+    os.path.join("var_overlay", "lib", "containerd"),
+    os.path.join("var_overlay", "lib", "docker"),
     # GKE Container-Optimized OS stateful partition under root:
     os.path.join("mnt", "stateful_partition", "var", "lib", "containerd"),
     os.path.join("mnt", "stateful_partition", "var", "lib", "docker"),
