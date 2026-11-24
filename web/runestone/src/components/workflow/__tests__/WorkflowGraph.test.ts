@@ -247,10 +247,13 @@ describe('WorkflowGraph', () => {
     await wrapper.get('button[aria-label="Stack the 5 input files"]').trigger('click')
     expect(wrapper.findAll('a')).toHaveLength(0)
 
-    // Task group starts stacked showing summary counts.
-    expect(wrapper.text()).toContain('Strings')
-    expect(wrapper.text()).toContain('×5')
-    expect(wrapper.text()).toContain('2/5 done · 1 failed · 1 running')
+    // Task group starts stacked showing summary counts without a bottom status underline.
+    const stackBtn = wrapper.get('button[aria-label^="Strings ×5"]')
+    expect(stackBtn.text()).toContain('Strings')
+    expect(stackBtn.text()).toContain('×5')
+    expect(stackBtn.text()).toContain('2/5 done · 1 failed · 1 running')
+    expect(stackBtn.find('.bottom-0').exists()).toBe(false)
+    expect(stackBtn.findAll(':scope > span')).toHaveLength(2)
 
     // Clicking the corner toggle expands all 5 tasks; clicking again stacks them back.
     await wrapper.get('button[aria-label="Show all tasks in this group"]').trigger('click')

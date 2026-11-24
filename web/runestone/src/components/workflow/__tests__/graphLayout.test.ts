@@ -204,7 +204,7 @@ describe('graphLayout', () => {
       makeTask('s3', { module: 'm.a', name: 'A', status: 'success' }),
     ])
     expect(stackStatus(sameGroup)).toBe('failed')
-    expect(buildStackSummary(sameGroup, false)).toMatchObject({
+    expect(buildStackSummary(sameGroup, false)).toEqual({
       name: 'A',
       times: '×3',
       line: '1/3 done · 1 failed · 1 won’t run',
@@ -219,7 +219,7 @@ describe('graphLayout', () => {
       makeTask('m2', { module: 'm.b', status: 'pending' }),
     ])
     expect(stackStatus(mixedDraft)).toBe('pending')
-    expect(buildStackSummary(mixedDraft, true)).toMatchObject({
+    expect(buildStackSummary(mixedDraft, true)).toEqual({
       name: '2 workers',
       times: '',
       line: '1 need options',
