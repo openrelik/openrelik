@@ -30,7 +30,7 @@ def test_configure_celery_app_defaults(monkeypatch):
     monkeypatch.delenv(celery_utils.VISIBILITY_TIMEOUT_ENV, raising=False)
     monkeypatch.delenv(celery_utils.WORKER_DISABLE_PREFETCH_ENV, raising=False)
 
-    app = _make_app()
+    app = _make_app(task_acks_late=True)
     returned = celery_utils.configure_celery_app(app)
 
     assert returned is app
