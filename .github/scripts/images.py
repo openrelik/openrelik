@@ -3,7 +3,8 @@
 
   images.py check
       Fails if a Dockerfile in the repository is neither an image in
-      .github/images.toml nor listed under [not-published], or if an entry is broken.
+      .github/images.toml nor listed under [not-published], uses BuildKit
+      --mount=type=cache syntax, or if an entry is broken.
 
   images.py matrix --registry ghcr.io/openrelik --sha <short-id>
                    (--all | --changed <file> | --only <name> ...)
@@ -100,6 +101,13 @@ def check():
         if path not in listed:
             problems.append(f"{path} is not in .github/images.toml: add it as an image, or under "
                             "[not-published] with the reason")
+        with open(os.path.join(ROOT, path), encoding="utf-8") as f:
+            for lineno, line in enumerate(f, 1):
+                if not line.lstrip().startswith("#") and "--mount=type=cache" in line:
+                    problems.append(
+                        f"{path}:{lineno}: uses BuildKit --mount=type=cache; "
+                        "remove it so builds work without BuildKit"
+                    )
     for path in config.get("not-published", {}):
         if not os.path.exists(os.path.join(ROOT, path)):
             problems.append(f"[not-published]: {path} doesn't exist")
