@@ -177,7 +177,6 @@ export default {
         .delete(this.logoutUrl, { withCredentials: true })
         .then((response) => {
           sessionStorage.removeItem("csrfToken");
-          sessionStorage.removeItem("openrelik.auth.user");
           window.location.href = "/";
         })
         .catch((error) => {
