@@ -32,7 +32,7 @@ import { POST_LOGIN_REDIRECT_KEY, safeRedirectTarget } from '@/utils/authRedirec
  */
 const PROVIDER_LABELS: Record<string, string> = {
   oidc: 'OIDC',
-  google: 'Google',
+  iap: 'IAP',
 }
 
 const router = useRouter()

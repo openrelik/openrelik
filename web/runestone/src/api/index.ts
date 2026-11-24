@@ -48,7 +48,7 @@ export default api
 export * from './types'
 export type { ApiKeyRecord, NewApiKey } from './endpoints/users'
 export type { MetricSeries, MetricsQuery } from './endpoints/metrics'
-export { apiConfig, parseAuthMethods } from './config'
+export { apiConfig } from './config'
 export { ApiError, errorMessage } from './errors'
 export { clearCsrfToken, onActivity, onReachability, onUnauthorized, type Activity } from './client'
 export { readSession, removeSession, writeSession } from './session'

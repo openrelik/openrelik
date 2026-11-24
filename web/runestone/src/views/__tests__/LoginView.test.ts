@@ -247,6 +247,8 @@ describe('LoginView', () => {
     '//evil.example/phish',
     '/\\evil.example/phish',
     '/login?redirect=/folder/1',
+    '/login/',
+    '/Login?redirect=/folder/1',
   ])('falls back to / for unsafe redirect query %s', async (unsafeRedirect) => {
     const pinia = createPinia()
     setActivePinia(pinia)
@@ -271,7 +273,7 @@ describe('LoginView', () => {
 
   it('renders external OAuth/OIDC sign-in links alongside the local form when configured', async () => {
     api.config.apiServerUrl = 'https://api.openrelik.example/'
-    api.config.authMethods = ['local', 'oidc', 'google', 'github']
+    api.config.authMethods = ['local', 'oidc', 'iap', 'google', 'github']
 
     const pinia = createPinia()
     setActivePinia(pinia)
@@ -289,6 +291,7 @@ describe('LoginView', () => {
     const links = wrapper.findAll('a')
     expect(links.map((link) => [link.text(), link.attributes('href')])).toEqual([
       ['Sign in with OIDC', 'https://api.openrelik.example/login/oidc'],
+      ['Sign in with IAP', 'https://api.openrelik.example/login/iap'],
       ['Sign in with Google', 'https://api.openrelik.example/login/google'],
       ['Sign in with Github', 'https://api.openrelik.example/login/github'],
     ])

@@ -29,11 +29,7 @@ export function safeRedirectTarget(raw: unknown): string {
   }
   try {
     const url = new URL(raw, 'http://localhost')
-    if (
-      url.origin !== 'http://localhost' ||
-      url.pathname === '/login' ||
-      url.pathname === '/login/'
-    ) {
+    if (url.origin !== 'http://localhost' || /^\/login\/?$/i.test(url.pathname)) {
       return '/'
     }
     return `${url.pathname}${url.search}${url.hash}`
