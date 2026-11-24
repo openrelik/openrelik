@@ -24,19 +24,21 @@ uses the Options API; write new components with `<script setup>`.
 
 ## Commands
 
-The dev stack's `web-sunstone` container has the dependencies installed, so run them
-there, from the checkout (main or `.worktrees/<slug>`):
+With Node and yarn on the host, run `yarn install` and the commands below in
+`web/sunstone/`:
 
 ```bash
-docker compose exec web-sunstone yarn test                                   # all tests
-docker compose exec web-sunstone yarn test src/stores/__tests__/user.spec.js # one file
-docker compose exec web-sunstone yarn test -t "name of the test"             # one test
-docker compose exec web-sunstone yarn lint                                   # eslint --fix
-docker compose exec web-sunstone yarn build                                  # production build
+yarn test                                   # all tests
+yarn test src/stores/__tests__/user.spec.js # one file
+yarn test -t "name of the test"             # one test
+yarn lint                                   # eslint --fix
+yarn build                                  # production build
 ```
 
-Or, with Node and yarn on the host, `yarn install` and the same `yarn` commands in
-`web/sunstone/`.
+`web-sunstone` is commented out by default in `compose.yml` (`web-runestone` runs
+on `UI_PORT`). To run commands inside the dev container instead, comment out
+`web-runestone` and uncomment `web-sunstone` in `compose.yml`, start the stack,
+and prefix the commands above with `docker compose exec web-sunstone`.
 
 ## Conventions
 
@@ -57,9 +59,12 @@ Or, with Node and yarn on the host, `yarn install` and the same `yarn` commands 
 
 ## Dev stack
 
-- `web/sunstone` is mounted at `/app`; Vite hot-reloads changes. `node_modules` is a
-  volume in the container, filled by `yarn install` when it starts, so it's not on the
-  host.
+- `web-sunstone` is commented out by default in `compose.yml`. To run Sunstone in
+  the dev stack, comment out `web-runestone` and uncomment `web-sunstone` in
+  `compose.yml`, then run `./devctl stack up`.
+- When enabled, `web/sunstone` is mounted at `/app` and Vite hot-reloads changes.
+  `node_modules` is a volume in the container, filled by `yarn install` when it
+  starts, so it's not on the host.
 - The browser calls the API directly, at `VITE_OPENRELIK_SERVER_URL`
   (`http://localhost:<API_PORT>`); there's no proxy. In production the image is
   nginx, and `nginx/substitute_env_variables.sh` replaces the `PLACEHOLDER_*` values

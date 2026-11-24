@@ -17,6 +17,7 @@ The complete development lifecycle, guidelines, and conventions are documented i
 
 For component-specific development guides and conventions, see:
 - `server/AGENTS.md` (API, mediator, metrics, migrations)
-- `web/sunstone/AGENTS.md` (web UI, codename sunstone)
+- `web/runestone/AGENTS.md` (default web UI, codename runestone)
+- `web/sunstone/AGENTS.md` (legacy web UI, codename sunstone)
 - `workers/AGENTS.md` (task workers)
 - `AGENTS.md` (monorepo overview and agent instructions)
