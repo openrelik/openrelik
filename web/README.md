@@ -5,65 +5,35 @@ artifact (`sunstone`, `runestone`, `seax`, `mjolnir`, …). Codenames don't age
 the way "ui", "ui-new" or "ui-v2" do, and say nothing about the technology, so
 implementations can come and go without renames.
 
-| Directory       | What                                                     | Status         |
-| --------------- | -------------------------------------------------------- | -------------- |
-| `web/sunstone`  | Vue 3 + Vuetify, the original OpenRelik UI               | default        |
-| `web/runestone` | Vue 3 + TypeScript + Tailwind CSS, console UI            | in development |
-| `web/router`    | Config-driven Nginx UI router (`openrelik-web-router`)   | multi-UI proxy |
+| Directory       | What                                              | Status          |
+| --------------- | ------------------------------------------------- | --------------- |
+| `web/runestone` | Vue 3 + TypeScript + Tailwind CSS, console UI     | default         |
+| `web/sunstone`  | Vue 3 + Vuetify, the original OpenRelik UI        | legacy / opt-in |
 
 Code shared between UIs (API client, types, auth) goes into `shared/` once a
 second implementation needs it.
 
 ## Published images
 
-Four images are built under `web/` and versioned together on `ui-v*` tags:
+Three images are built under `web/` and versioned together on `ui-v*` tags:
 
-| Image | Context | Purpose |
-| ----- | ------- | ------- |
-| `ghcr.io/openrelik/openrelik-ui` | `web/sunstone` | Standalone Sunstone image for single-container deployments |
-| `ghcr.io/openrelik/openrelik-web-sunstone` | `web/sunstone` | Sunstone UI behind `openrelik-web-router` |
-| `ghcr.io/openrelik/openrelik-web-runestone` | `web/runestone` | Runestone UI behind `openrelik-web-router` |
-| `ghcr.io/openrelik/openrelik-web-router` | `web/router` | Multi-UI router on port `8711` (`UI_PORT` in dev) |
+| Image                                       | Context         | Purpose                                                              |
+| ------------------------------------------- | --------------- | -------------------------------------------------------------------- |
+| `ghcr.io/openrelik/openrelik-web-runestone` | `web/runestone` | Runestone UI (default in `deploy/docker/docker-compose.yml`)         |
+| `ghcr.io/openrelik/openrelik-web-sunstone`  | `web/sunstone`  | Sunstone UI (opt-in via `OPENRELIK_UI_IMAGE`)                        |
+| `ghcr.io/openrelik/openrelik-ui`            | `web/sunstone`  | Legacy Sunstone image kept for compatibility with older deployments  |
 
-## Multi-UI routing and switching
+## Selecting a UI
 
-`openrelik-web-router` fronts any set of configured UI containers on a single origin so
-OAuth/OIDC callbacks, CORS `allowed_origins`, and shared links stay consistent while
-individual users choose their UI in the browser. API, upload, and download requests still
-go straight to `openrelik-server` on `:8710`.
+Each deployment runs one web UI container directly on the UI port (`8711` in
+production, `UI_PORT` in development), and the browser calls `openrelik-server`
+directly on `:8710`.
 
-Configure the router through environment variables:
-
-- `OPENRELIK_UIS`: comma-separated `id|Label|upstream_url` entries (default:
-  `sunstone|Sunstone|http://openrelik-web-sunstone:8711,runestone|Runestone|http://openrelik-web-runestone:8711`).
-  Each `id` must match `^[a-z0-9][a-z0-9-]*$` and each upstream must be `http://` or
-  `https://`.
-- `OPENRELIK_DEFAULT_UI`: default UI `id` when no valid `openrelik_ui` cookie is set
-  (defaults to `sunstone`, or the first entry in `OPENRELIK_UIS` if not matched).
-
-Router endpoints:
-
-- `GET /__openrelik/uis.json`: returns `{ "default": "<id>", "uis": [{ "id", "name" }] }`
-  with `Cache-Control: no-store` and no internal upstream URLs. First-party UIs read this
-  endpoint to show or hide switcher controls dynamically.
-- `GET /__openrelik/ui`: zero-JS HTML chooser page listing every registered UI. Useful if
-  a custom frontend has no built-in switcher controls.
-- `GET /__openrelik/switch/<id>`: sets the `openrelik_ui=<id>` cookie
-  (`Path=/; Max-Age=31536000; SameSite=Lax`, plus `; Secure` on HTTPS) for allowlisted
-  IDs and redirects (`302`) to `/`.
-- `/assets/<id>/*`: routed directly to upstream `<id>` regardless of the `openrelik_ui`
-  cookie. All other routes (including WebSocket upgrades) use the allowlisted
-  `openrelik_ui` cookie and emit `Vary: Cookie`.
-
-## Registering a custom frontend container
-
-External teams can run a custom frontend alongside `sunstone` and `runestone` without
-modifying router code:
-
-1. Namespace static build assets under `/assets/<id>/` (matching your UI's `<id>`).
-2. Serve `/index.html` with `Cache-Control: no-cache` and `Vary: Cookie` so browsers
-   revalidate after switching UIs.
-3. Add `,<id>|<Label>|http://<service>:<port>` to `OPENRELIK_UIS` in
-   `deploy/docker/config.env` or your local `.env`.
-4. Optionally fetch `GET /__openrelik/uis.json` to render switcher links in your UI, or
-   link users to `/__openrelik/ui` to switch back.
+- **Production (`deploy/docker/`)**: `deploy/docker/docker-compose.yml` runs a
+  single `openrelik-ui` service configured by `OPENRELIK_UI_IMAGE` in
+  `deploy/docker/config.env`. It defaults to `openrelik-web-runestone`. To
+  deploy Sunstone instead, set `OPENRELIK_UI_IMAGE=openrelik-web-sunstone` in
+  `config.env` and run `docker compose up -d`.
+- **Development (`compose.yml`)**: `web-runestone` runs on `UI_PORT` (`3000` +
+  worktree slot) by default. To run Sunstone instead, comment out `web-runestone`
+  and uncomment `web-sunstone` in `compose.yml`, then run `./devctl stack up`.

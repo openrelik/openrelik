@@ -8,7 +8,7 @@
 # - release tag (made by devctl release): server-v0.18.1 builds the images
 #   from server/ (server, mediator, metrics, gcp-importer), ui-v0.18.1 builds all
 #   web images under web/ (openrelik-ui, openrelik-web-sunstone,
-#   openrelik-web-runestone, openrelik-web-router), mcp-v0.18.1 the MCP server,
+#   openrelik-web-runestone), mcp-v0.18.1 the MCP server,
 #   worker-<name>-v0.18.1 that worker. They're
 #   tagged 0.18.1 and the floating minor tag 0.18 (unless a newer 0.18.x of that
 #   component is released already); `latest` isn't moved. The platform tag

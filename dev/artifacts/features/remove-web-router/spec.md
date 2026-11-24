@@ -34,7 +34,7 @@ Implements `idea.md` (#144), superseding `dev/artifacts/features/ui-switcher/` (
 - [x] T3: Remove UI switcher code, tests, cross-UI sessionStorage cleanup, asset namespacing, `VITE_HMR_CLIENT_PORT`, and `Vary: Cookie` in `web/sunstone`: delete `src/utils/uiSwitch.js` and `src/utils/__tests__/uiSwitch.spec.js`; update `src/components/SystemMenu.vue`, `src/components/UserSettings.vue`, `src/RestApiClient.js`, `src/components/ProfileMenu.vue`, `src/views/Login.vue`, `vite.config.mjs`, `nginx/nginx.conf`, and `nginx/substitute_env_variables.sh` (R3).
 - [x] T4: Update `deploy/docker/docker-compose.yml` and `deploy/docker/config.env` to run a single `openrelik-ui` service on `127.0.0.1:8711:8711` using `OPENRELIK_UI_IMAGE=openrelik-web-runestone` by default (R4).
 - [x] T5: Update `compose.yml`, `.env.example`, and `dev/tools/devctl/tests/test_units.py` to remove `web-router`, serve `web-runestone` directly on `UI_PORT` (`:5173`), keep `web-sunstone` commented out in `compose.yml`, and clean up stale router test fixture names (R5).
-- [ ] T6: Update `.github/images.toml`, `.github/scripts/images.py`, `.github/workflows/images.yml`, `web/README.md`, `README.md`, and `AGENTS.md` to drop `openrelik-web-router`, keep `openrelik-ui` on `web/sunstone`, and document single-UI selection with Runestone as default (R6).
+- [x] T6: Update `.github/images.toml`, `.github/scripts/images.py`, `.github/workflows/images.yml`, `web/README.md`, `README.md`, and `AGENTS.md` to drop `openrelik-web-router`, keep `openrelik-ui` on `web/sunstone`, and document single-UI selection with Runestone as default (R6).
 
 ## Tests
 
