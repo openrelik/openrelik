@@ -16,7 +16,8 @@ repository with its full history; the old repositories are archived.
 | Directory            | What                                  | From                  |
 | -------------------- | ------------------------------------- | --------------------- |
 | server               | API, mediator, metrics, migrations    | openrelik-server      |
-| web/sunstone         | web UI, codename sunstone (see web/)  | openrelik-ui          |
+| web/runestone        | default web UI, codename runestone    | (see web/)            |
+| web/sunstone         | legacy web UI, codename sunstone      | openrelik-ui          |
 | workers              | task workers                          | openrelik-workers     |
 | mcp                  | MCP server                            | openrelik-mcp-server  |
 | libs/common          | shared Python library                 | openrelik-common      |
@@ -56,11 +57,11 @@ docker compose ps                      # plain docker compose works in every che
 
 | Change in                                                   | Effect                                       |
 | ----------------------------------------------------------- | -------------------------------------------- |
-| `server/src`                                                | server hot-reloads; mediator/metrics restart |
-| `web/sunstone`                                              | Vite HMR                                     |
-| `workers/<name>/src`, `mcp/src`                             | that service restarts                        |
-| `libs/*` (common, ai-common, python-client, worker-common)  | services using it restart                    |
-| `pyproject.toml` / `uv.lock` / `package.json` / `yarn.lock` | `./devctl stack up -b` rebuilds the image    |
+| `server/src`                                                            | server hot-reloads; mediator/metrics restart |
+| `web/runestone` (or `web/sunstone`)                                     | Vite HMR                                     |
+| `workers/<name>/src`, `mcp/src`                                         | that service restarts                        |
+| `libs/*` (common, ai-common, python-client, worker-common)              | services using it restart                    |
+| `pyproject.toml` / `uv.lock` / `package.json` / `package-lock.json` / `yarn.lock` | `./devctl stack up -b` rebuilds the image    |
 
 Live reload needs nothing running beside the stack: the source is bind-mounted into
 the containers, so it also works after a restart and with plain `docker compose up`.

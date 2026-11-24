@@ -14,49 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ChevronDown, Monitor, Moon, Sun, X } from '@/components/icons'
+import { Monitor, Moon, Sun, X } from '@/components/icons'
 
 import Switch from '@/components/base/Switch.vue'
 import { FONT_SIZES, settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
 import { PAGE_SIZES } from '@/stores/settings'
-import { CURRENT_UI_ID, getAvailableUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
 
 /**
  * Settings, as a dialog over whatever page you are on — so changing one never
  * costs you your place.
  */
 const settings = useSettings()
-const availableUis = ref<UiOption[]>([])
-let loadGeneration = 0
-
-watch(
-  settingsOpen,
-  async (open) => {
-    const generation = ++loadGeneration
-    if (!open) return
-    const uis = await getAvailableUis()
-    if (generation === loadGeneration && settingsOpen.value) {
-      availableUis.value = uis
-    }
-  },
-  { immediate: true },
-)
-
-const uiOptions = computed<UiOption[]>(() => {
-  if (availableUis.value.length < 2) return []
-  if (availableUis.value.some((ui) => ui.id === CURRENT_UI_ID)) {
-    return availableUis.value
-  }
-  return [{ id: CURRENT_UI_ID, name: 'Runestone' }, ...availableUis.value]
-})
-
-function onUiChange(event: Event): void {
-  const targetId = (event.target as HTMLSelectElement).value
-  if (targetId && targetId !== CURRENT_UI_ID) {
-    switchToUi(targetId)
-  }
-}
 
 const close = () => (settingsOpen.value = false)
 
@@ -157,35 +125,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                 >
                   {{ size }}
                 </button>
-              </div>
-            </div>
-
-            <div v-if="uiOptions.length > 1" class="flex items-center gap-3 px-4 py-2.5">
-              <div class="min-w-0 flex-1">
-                <label for="settings-ui-select" class="block font-medium text-ink">Interface</label>
-                <p id="settings-ui-help" class="text-ink-muted">
-                  Choose which OpenRelik web interface to use
-                </p>
-              </div>
-              <div class="relative shrink-0">
-                <select
-                  id="settings-ui-select"
-                  name="openrelik_ui"
-                  :value="CURRENT_UI_ID"
-                  aria-describedby="settings-ui-help"
-                  class="field h-7 min-w-32 cursor-pointer appearance-none pr-7 pl-2.5 text-[0.75rem] font-medium text-ink"
-                  @change="onUiChange"
-                >
-                  <option v-for="ui in uiOptions" :key="ui.id" :value="ui.id">
-                    {{ ui.name }}
-                  </option>
-                </select>
-                <ChevronDown
-                  :size="13"
-                  :stroke-width="1.5"
-                  aria-hidden="true"
-                  class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
-                />
               </div>
             </div>
           </section>

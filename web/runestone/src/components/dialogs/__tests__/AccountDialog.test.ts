@@ -29,7 +29,6 @@ import { useConfirm } from '@/composables/useConfirm'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
-import { clearUiSwitchCache } from '@/utils/uiSwitch'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -91,21 +90,6 @@ function makeKey(id: number, name: string, expIso: string, description = ''): Ap
   }
 }
 
-function mockManifest(uis: Array<{ id: string; name: string }> | null): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue(
-      uis === null
-        ? { ok: true, headers: { get: () => 'text/html' }, json: async () => ({}) }
-        : {
-            ok: true,
-            headers: { get: () => 'application/json' },
-            json: async () => ({ default: 'sunstone', uis }),
-          },
-    ),
-  )
-}
-
 beforeEach(() => {
   Object.defineProperty(AbortController.prototype, Symbol.toStringTag, {
     value: 'AbortController',
@@ -115,9 +99,6 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
   clearQueryCache()
-  clearUiSwitchCache()
-  document.cookie = 'openrelik_ui=; Path=/; Max-Age=0'
-  mockManifest(null)
   useConfirm().cancel()
   useModalStore().closeAllModals()
   useAuthStore().setUser({
@@ -481,42 +462,6 @@ describe('AccountDialog', () => {
     await nextTick()
     await flushPromises()
     expect(body.find('textarea[aria-label="The new API key"]').exists()).toBe(false)
-  })
-
-  it('hides UI switcher when standalone and switches UI for 2 and 3+ registered UIs', async () => {
-    const body = mountDialog()
-    openAccount()
-    await nextTick()
-    await flushPromises()
-    expect(body.text()).not.toContain('Switch to ')
-
-    accountOpen.value = false
-    await nextTick()
-    clearUiSwitchCache()
-    mockManifest([
-      { id: 'sunstone', name: 'Sunstone' },
-      { id: 'runestone', name: 'Runestone' },
-      { id: 'extra', name: 'Extra UI' },
-    ])
-    const assign = vi.fn()
-    vi.stubGlobal('location', {
-      pathname: '/case/ir-2026/1',
-      search: '',
-      hash: '',
-      protocol: 'http:',
-      assign,
-    })
-
-    openAccount()
-    await nextTick()
-    await flushPromises()
-
-    const switchButtons = body.findAll('button').filter((b) => b.text().startsWith('Switch to '))
-    expect(switchButtons.map((b) => b.text())).toEqual(['Switch to Sunstone', 'Switch to Extra UI'])
-
-    await switchButtons[1]!.trigger('click')
-    expect(document.cookie).toContain('openrelik_ui=extra')
-    expect(assign).toHaveBeenCalledWith('/')
   })
 
   it('renders the authenticated user avatar in the profile header when available', async () => {

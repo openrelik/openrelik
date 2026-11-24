@@ -7,7 +7,8 @@ Instructions for coding agents working in the OpenRelik monorepo.
 | Directory          | What                                  |
 | ------------------ | ------------------------------------- |
 | server             | API, mediator, metrics, migrations    |
-| web/sunstone       | web UI, codename sunstone             |
+| web/runestone      | default web UI, codename runestone    |
+| web/sunstone       | legacy web UI, codename sunstone      |
 | workers            | task workers                          |
 | mcp                | MCP server                            |
 | libs/common        | shared Python library                 |
@@ -18,9 +19,9 @@ Instructions for coding agents working in the OpenRelik monorepo.
 | dev                | dev process, its artifacts, ./devctl  |
 
 Components with their own commands and conventions have an `AGENTS.md` of their own;
-read it before changing code there: `server/AGENTS.md`, `web/sunstone/AGENTS.md`,
-`workers/AGENTS.md`. It adds to this file; where they disagree, the component's
-file wins.
+read it before changing code there: `server/AGENTS.md`, `web/runestone/AGENTS.md`,
+`web/sunstone/AGENTS.md`, `workers/AGENTS.md`. It adds to this file; where they disagree,
+the component's file wins.
 
 For the other directories:
 - `libs/*` and `dev/tools/devctl/`: run tests with `uv run pytest` in that directory.

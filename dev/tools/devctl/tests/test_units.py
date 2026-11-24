@@ -104,10 +104,10 @@ def test_table_counts_tree_characters_as_one_column():
 
 def test_stack_up_checks_ui_api_mcp_ports_only(tmp_path, monkeypatch):
     repo = Repo(tmp_path)
-    wt = repo.worktree_dir("router")
+    wt = repo.worktree_dir("feature")
     wt.mkdir(parents=True)
     (wt / ".env").write_text(
-        "COMPOSE_PROJECT_NAME=openrelik-router\nUI_PORT=3001\nAPI_PORT=8711\nMCP_PORT=7071\n"
+        "COMPOSE_PROJECT_NAME=openrelik-feature\nUI_PORT=3001\nAPI_PORT=8711\nMCP_PORT=7071\n"
     )
 
     checked_ports = []
@@ -115,13 +115,13 @@ def test_stack_up_checks_ui_api_mcp_ports_only(tmp_path, monkeypatch):
     def fake_port_holder(port: str):
         checked_ports.append(port)
         if port == "3001":
-            return ("other-router", "openrelik-main")
+            return ("other-ui", "openrelik-main")
         return None
 
     monkeypatch.setattr(stacks.docker, "ready", lambda: True)
     monkeypatch.setattr(stacks.docker, "port_holder", fake_port_holder)
 
     with pytest.raises(ui.DevError, match="port 3001 is already in use"):
-        stacks.up(repo, "router")
+        stacks.up(repo, "feature")
     assert checked_ports == ["3001"]
     assert "3050" not in checked_ports

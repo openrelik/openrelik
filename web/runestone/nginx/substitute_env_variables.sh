@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ROOT_DIR=/usr/share/nginx/html/assets/runestone
+ROOT_DIR=/usr/share/nginx/html/assets
 # Replace env vars in files served by NGINX
 for file in "$ROOT_DIR"/*.js*;
 do

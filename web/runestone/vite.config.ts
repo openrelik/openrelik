@@ -20,8 +20,6 @@ import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
 
-const hmrClientPort = Number(process.env.VITE_HMR_CLIENT_PORT)
-
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
@@ -30,14 +28,8 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  build: {
-    assetsDir: 'assets/runestone',
-  },
   server: {
     port: 5173,
-    ...(Number.isInteger(hmrClientPort) && hmrClientPort > 0
-      ? { hmr: { clientPort: hmrClientPort } }
-      : {}),
     proxy: {
       '/api': {
         target: 'http://localhost:8710',

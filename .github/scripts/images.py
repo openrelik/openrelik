@@ -16,7 +16,7 @@
       The release build of a git tag: server-v0.18.1 builds the images from
       server/ (server, mediator, metrics, gcp-importer), ui-v0.18.1 builds all
       web images under web/ (openrelik-ui, openrelik-web-sunstone,
-      openrelik-web-runestone, openrelik-web-router), mcp-v0.18.1 the MCP
+      openrelik-web-runestone), mcp-v0.18.1 the MCP
       server, worker-<name>-v0.18.1 that worker (not its variants). The platform
       tag v0.18.0 and the library tags (common-v*, worker-common-v*, ...) build
       nothing. Each image is tagged 0.18.1, and also 0.18 if 0.18.1 is the

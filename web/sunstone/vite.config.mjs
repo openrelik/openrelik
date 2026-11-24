@@ -8,8 +8,6 @@ import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "node:url";
 
 // https://vitejs.dev/config/
-const hmrClientPort = Number(process.env.VITE_HMR_CLIENT_PORT);
-
 export default defineConfig({
   plugins: [
     Vue({
@@ -40,14 +38,8 @@ export default defineConfig({
     },
     extensions: [".js", ".json", ".jsx", ".mjs", ".ts", ".tsx", ".vue"],
   },
-  build: {
-    assetsDir: "assets/sunstone",
-  },
   server: {
     port: 3000,
-    ...(Number.isInteger(hmrClientPort) && hmrClientPort > 0
-      ? { hmr: { clientPort: hmrClientPort } }
-      : {}),
   },
   css: {
     preprocessorOptions: {
