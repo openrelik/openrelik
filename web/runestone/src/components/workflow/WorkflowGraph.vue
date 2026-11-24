@@ -561,14 +561,6 @@ const FRAME: Record<TaskStatus, string> = {
   failed: 'border-danger/50',
   skipped: 'border-border',
 }
-/** A stack's progress bar, one segment per status. */
-const BAR: Record<TaskStatus, string> = {
-  success: 'bg-success',
-  running: 'bg-brand',
-  pending: 'bg-idle',
-  failed: 'bg-danger',
-  skipped: 'bg-border-strong',
-}
 </script>
 
 <template>
@@ -903,19 +895,6 @@ const BAR: Record<TaskStatus, string> = {
                   :class="workflow.draft ? 'text-warning' : 'text-ink-muted'"
                   >{{ stackSummary(node.stack).line }}</span
                 >
-                <!-- how far the group got, in one line -->
-                <span
-                  v-if="!workflow.draft"
-                  class="absolute inset-x-0 bottom-0 flex h-[2px]"
-                  aria-hidden="true"
-                >
-                  <span
-                    v-for="part in stackSummary(node.stack).bar"
-                    :key="part.status"
-                    :class="BAR[part.status]"
-                    :style="{ width: `${part.share * 100}%` }"
-                  />
-                </span>
               </button>
             </div>
 

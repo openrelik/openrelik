@@ -114,7 +114,6 @@ export interface StackSummary {
   name: string
   times: string
   line: string
-  bar: { status: TaskStatus; share: number }[]
 }
 
 /** The deepest column a node or anything after it reaches. */
@@ -217,9 +216,6 @@ export function buildStackSummary(group: TaskGroup, draft: boolean): StackSummar
     name: same ? first!.name : count(group.tasks.length, 'worker'),
     times: same ? `×${group.tasks.length}` : '',
     line: parts.join(' · '),
-    bar: (['success', 'running', 'failed', 'pending', 'skipped'] as TaskStatus[])
-      .map((status) => ({ status, share: by(status) / group.tasks.length }))
-      .filter(({ share }) => share > 0),
   }
 }
 
