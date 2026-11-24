@@ -28,3 +28,19 @@ def test_app_debug_enabled():
 
         importlib.reload(src.app)
         mock_start_debugger.assert_called_once()
+
+
+def test_app_celery_config():
+    from openrelik_common.celery_utils import DEFAULT_VISIBILITY_TIMEOUT
+
+    with mock.patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379/0"}, clear=True):
+        import src.app
+
+        importlib.reload(src.app)
+        assert src.app.celery.conf.worker_disable_prefetch is True
+        assert src.app.celery.conf.worker_prefetch_multiplier == 1
+        assert src.app.celery.conf.task_acks_late is False
+        assert (
+            src.app.celery.conf.broker_transport_options["visibility_timeout"]
+            == DEFAULT_VISIBILITY_TIMEOUT
+        )

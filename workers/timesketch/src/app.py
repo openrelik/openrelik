@@ -17,11 +17,13 @@ import os
 import redis
 from openrelik_common import telemetry
 from celery.app import Celery
+from openrelik_common.celery_utils import configure_celery_app
 
 telemetry.setup_telemetry("openrelik-worker-timesketch")
 
 REDIS_URL = os.getenv("REDIS_URL")
 celery = Celery(broker=REDIS_URL, backend=REDIS_URL, include=["src.tasks"])
+configure_celery_app(celery)
 redis_client = redis.Redis.from_url(REDIS_URL)
 
 telemetry.instrument_celery_app(celery)

@@ -15,6 +15,7 @@
 import os
 
 from celery.app import Celery
+from openrelik_common.celery_utils import configure_celery_app
 
 from openrelik_common import telemetry
 from openrelik_worker_common.debug_utils import start_debugger
@@ -33,5 +34,6 @@ celery = Celery(
     worker_log_format="%(message)s",
     worker_task_log_format="%(message)s",
 )
+configure_celery_app(celery)
 
 telemetry.instrument_celery_app(celery)

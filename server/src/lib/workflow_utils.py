@@ -26,6 +26,7 @@ from celery import signature
 from celery.app import Celery
 from celery.canvas import Signature
 import kombu.exceptions
+from openrelik_common.celery_utils import configure_celery_app
 from sqlalchemy.orm import Session
 
 from api.v1 import schemas
@@ -40,7 +41,7 @@ from lib.celery_utils import get_registered_tasks
 
 # Redis URL and Celery app initialization.
 _redis_url = os.getenv("REDIS_URL")
-celery_app = Celery(broker=_redis_url, backend=_redis_url)
+celery_app = configure_celery_app(Celery(broker=_redis_url, backend=_redis_url))
 
 
 def update_task_config_values(data: dict | list, parameters: dict) -> None:

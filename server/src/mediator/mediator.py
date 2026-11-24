@@ -14,6 +14,7 @@
 
 import base64
 import json
+import logging
 import os
 import time
 import uuid
@@ -26,6 +27,7 @@ from celery.events.state import State as CeleryEventState
 from celery.events.state import Task as CeleryEventTask
 from celery.result import AsyncResult
 from openrelik_common import telemetry
+from openrelik_common.celery_utils import configure_celery_app
 from sqlalchemy.orm import Session
 
 from api.v1 import schemas
@@ -51,6 +53,19 @@ from tasks.hashing.file_hashes_tasks import TASK_NAME as HASHING_TASK_NAME
 # Number of times to retry database lookups
 MAX_DATABASE_LOOKUP_RETRIES = 10
 DATABASE_LOOKUP_RETRY_DELAY_SECONDS = 1
+
+logger = logging.getLogger(__name__)
+
+# Statuses where a subsequent task-received or task-started event indicates broker redelivery.
+_REDELIVERY_WARNING_STATUSES = frozenset(
+    {
+        celery_states.STARTED,
+        "PROGRESS",
+        celery_states.SUCCESS,
+        celery_states.FAILURE,
+        celery_states.REVOKED,
+    }
+)
 
 # How long to cache the openrelik-hashing worker availability check. Detecting the
 # worker requires a ~1s Celery inspect() broadcast, so we cache it to avoid running
@@ -349,15 +364,43 @@ def process_task_event(
         # Task might not be in the database yet, skip processing
         return
 
+    event_type = event.get("type")
+    previous_status = db_task.status_short
+
+    if (
+        event_type in ("task-received", "task-started")
+        and previous_status in _REDELIVERY_WARNING_STATUSES
+    ):
+        logger.warning(
+            "Received redelivered %s event for task %s already in status %s",
+            event_type,
+            celery_task.uuid,
+            previous_status,
+        )
+
     db_task.status_short = celery_task.state
 
-    if celery_task.state == celery_states.SUCCESS:
+    if event_type == "task-succeeded":
         process_successful_task(db, celery_task, db_task, celery_app)
-    elif celery_task.state == celery_states.FAILURE:
+    elif event_type == "task-failed":
         process_failed_task(db, celery_task, db_task)
 
     db_task.runtime = celery_task.runtime
     update_database(db, db_task)
+
+
+def create_celery_app(redis_url: Optional[str]) -> Celery:
+    """Create and configure the mediator's Celery application.
+
+    Args:
+        redis_url: Redis broker and backend URL.
+
+    Returns:
+        A configured and telemetry-instrumented Celery application.
+    """
+    celery_app = configure_celery_app(Celery(broker=redis_url, backend=redis_url))
+    telemetry.instrument_celery_app(celery_app)
+    return celery_app
 
 
 def monitor_celery_tasks(celery_app: Celery, db: Session) -> None:
@@ -390,8 +433,7 @@ def monitor_celery_tasks(celery_app: Celery, db: Session) -> None:
 
 if __name__ == "__main__":
     redis_url = os.getenv("REDIS_URL")
-    celery_app = Celery(broker=redis_url, backend=redis_url)
-    telemetry.instrument_celery_app(celery_app)
+    celery_app = create_celery_app(redis_url)
     db = database.SessionLocal()
     # Start the Celery task monitoring loop
     monitor_celery_tasks(celery_app, db)

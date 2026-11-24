@@ -16,6 +16,7 @@ import os
 
 import redis
 from celery.app import Celery
+from openrelik_common.celery_utils import configure_celery_app
 
 from openrelik_worker_common.debug_utils import start_debugger
 
@@ -27,4 +28,5 @@ if REDIS_URL is None:
     raise ValueError("REDIS_URL environment variable is not set.")
 
 celery = Celery(broker=REDIS_URL, backend=REDIS_URL, include=["src.tasks"])
+configure_celery_app(celery)
 redis_client = redis.Redis.from_url(REDIS_URL)

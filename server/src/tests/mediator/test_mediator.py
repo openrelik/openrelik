@@ -372,3 +372,121 @@ def test_is_hashing_worker_available_handles_inspect_failure(monkeypatch):
     celery_app.control.inspect.return_value.active_queues.side_effect = Exception("boom")
 
     assert mediator.is_hashing_worker_available(celery_app) is False
+
+
+def _task_event(event_type: str, task_uuid: str, clock: int, **extra):
+    """Build a Celery task event dict with the fields CeleryEventState requires."""
+    return {
+        "type": event_type,
+        "uuid": task_uuid,
+        "hostname": "worker@test",
+        "timestamp": 100.0 + clock,
+        "local_received": 100.0 + clock,
+        "clock": clock,
+        **extra,
+    }
+
+
+def test_process_task_event_ignores_redelivered_events_after_success(
+    monkeypatch, fake_dependencies, caplog
+):
+    """Redelivered task-received/task-started after task-succeeded must not duplicate files."""
+    import logging
+
+    from celery.events.state import State as CeleryEventState
+
+    task_uuid = "task-uuid-123"
+    db_task = mock.Mock(id=1, status_short="PENDING", result=None, runtime=None)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    monkeypatch.setattr(mediator, "update_database", mock.Mock())
+    monkeypatch.setattr(mediator, "is_hashing_worker_available", lambda app: False)
+
+    mock_async_result = mock.Mock()
+    mock_async_result.get.return_value = _encoded_result([{"uuid": "file-1"}])
+    monkeypatch.setattr(mediator, "AsyncResult", lambda *a, **kw: mock_async_result)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    mediator.process_task_event(
+        db,
+        state,
+        _task_event("task-succeeded", task_uuid, clock=1, runtime=1.5),
+        celery_app,
+    )
+    assert fake_dependencies == ["file-1"]
+    assert db_task.status_short == "SUCCESS"
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=2), celery_app
+        )
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=3), celery_app
+        )
+
+    assert fake_dependencies == ["file-1"]
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_event_ignores_redelivered_events_after_failure(
+    monkeypatch, caplog
+):
+    """Redelivered task-received/task-started after task-failed must not re-run failure handling."""
+    import logging
+
+    from celery.events.state import State as CeleryEventState
+
+    task_uuid = "task-uuid-fail"
+    db_task = mock.Mock(
+        id=2, status_short="PENDING", error_exception=None, error_traceback=None
+    )
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    monkeypatch.setattr(mediator, "update_database", mock.Mock())
+    mock_process_failed = mock.Mock()
+    monkeypatch.setattr(mediator, "process_failed_task", mock_process_failed)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    mediator.process_task_event(
+        db,
+        state,
+        _task_event(
+            "task-failed",
+            task_uuid,
+            clock=1,
+            exception="RuntimeError('boom')",
+            traceback="tb",
+        ),
+        celery_app,
+    )
+    assert mock_process_failed.call_count == 1
+    assert db_task.status_short == "FAILURE"
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=2), celery_app
+        )
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=3), celery_app
+        )
+
+    assert mock_process_failed.call_count == 1
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
