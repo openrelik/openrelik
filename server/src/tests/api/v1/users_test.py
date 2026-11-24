@@ -29,6 +29,7 @@ search_user_response = UserSearchResponse(
     display_name="Test User",
     username="test_user",
     profile_picture_url="http://localhost/profile/pic",
+    uuid="550e8400-e29b-41d4-a716-446655440000",
     id=1,
     created_at="2025-01-07T18:29:07.772000Z",
     updated_at="2025-01-07T18:29:07.772000Z",

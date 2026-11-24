@@ -27,6 +27,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { hideTooltip } from '@/composables/useTooltip'
 import { useModalStore } from '@/stores/modals'
+import { useSettingsStore } from '@/stores/settings'
 import { api } from '@/api'
 import type { Span } from '@/utils/marks'
 import type { TableKind } from '@/utils/preview'
@@ -669,5 +670,44 @@ describe('TableViewer', () => {
     expect(gutters.map((g) => g.text())).toContain('2458')
     expect(gutters.some((g) => g.text().includes(','))).toBe(false)
     expect(wrapper.text()).toContain('row 2458')
+  })
+
+  it('rescales auto-sized columns on fontSize change while keeping user-resized columns intact', async () => {
+    const csvBytes = encode('name,description\nalpha,a reasonably wide column value\n')
+    vi.mocked(api.files.readRange).mockResolvedValue(csvBytes)
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const settingsStore = useSettingsStore()
+
+    const wrapper = mount(TableViewer, {
+      props: { fileId: 61, size: csvBytes.length, kind: 'csv' },
+      global: { plugins: [pinia, directives, makeRouter()] },
+    })
+    wrappers.push(wrapper)
+    await vi.advanceTimersByTimeAsync(10)
+
+    const widthOf = (index: number) =>
+      parseInt(
+        /width:\s*(\d+)px/.exec(
+          wrapper.findAll('[role="columnheader"]')[index]!.attributes('style') ?? '',
+        )?.[1] ?? '0',
+        10,
+      )
+
+    const initialAutoWidth = widthOf(1)
+
+    // Manually resize column 0 by +60px
+    const col0Handle = wrapper.findAll('[role="columnheader"]')[0]!.get('.cursor-col-resize')
+    await col0Handle.trigger('pointerdown', { pointerId: 1, clientX: 100 })
+    await col0Handle.trigger('pointermove', { clientX: 160 })
+    await col0Handle.trigger('pointerup')
+    const resizedCol0Width = widthOf(0)
+
+    settingsStore.settings.appearance.fontSize = 'large'
+    await nextTick()
+
+    expect(widthOf(0)).toBe(resizedCol0Width)
+    expect(widthOf(1)).toBeGreaterThan(initialAutoWidth)
   })
 })

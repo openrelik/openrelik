@@ -396,14 +396,23 @@ describe('ShareDialog', () => {
         },
       ],
     })
-    vi.mocked(api.directory.searchUsers).mockResolvedValueOnce([
-      {
-        id: 3,
-        username: 'carol',
-        display_name: 'Carol Analyst',
-        profile_picture_url: 'https://example.com/carol.png',
-      },
-    ])
+    const danUser = {
+      id: 4,
+      uuid: '550e8400-e29b-41d4-a716-446655440000',
+      username: 'dan',
+      display_name: 'Dan Responder',
+    }
+    vi.mocked(api.directory.searchUsers)
+      .mockResolvedValueOnce([
+        {
+          id: 3,
+          username: 'carol',
+          display_name: 'Carol Analyst',
+          profile_picture_url: 'https://example.com/carol.png',
+        },
+        danUser,
+      ])
+      .mockResolvedValueOnce([danUser])
 
     const body = mountDialog()
     openShareDialog(makeFolderItem(60))
@@ -424,6 +433,9 @@ describe('ShareDialog', () => {
     expect(dialog.findAll('img').map((img) => img.attributes('src'))).toContain(
       'https://example.com/carol.png',
     )
+    const danOption = dialog.findAll('button').find((b) => b.text().includes('Dan Responder'))!
+    const danSearchAvatarStyle = danOption.get('span[aria-hidden="true"]').attributes('style')
+    expect(danSearchAvatarStyle).toMatch(/--avatar-bg:\s*oklch\(0\.52 0\.12 \d+\)/)
 
     await dialog
       .findAll('button')
@@ -431,9 +443,24 @@ describe('ShareDialog', () => {
       .trigger('click')
     await nextTick()
 
+    await input.trigger('focus')
+    await input.setValue('dan')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    await dialog
+      .findAll('button')
+      .find((b) => b.text().includes('Dan Responder'))!
+      .trigger('click')
+    await nextTick()
+
     expect(dialog.findAll('img').map((img) => img.attributes('src'))).toEqual([
       'https://example.com/jane.png',
       'https://example.com/carol.png',
     ])
+    const collaboratorAvatarStyles = dialog
+      .findAll('span[aria-hidden="true"]')
+      .map((el) => el.attributes('style'))
+      .filter(Boolean)
+    expect(collaboratorAvatarStyles).toContain(danSearchAvatarStyle)
   })
 })

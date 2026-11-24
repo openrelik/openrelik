@@ -18,13 +18,7 @@ import { computed, ref, watch } from 'vue'
 import { ChevronDown, Monitor, Moon, Sun, X } from '@/components/icons'
 
 import Switch from '@/components/base/Switch.vue'
-import {
-  FONT_SIZES,
-  settingsOpen,
-  useSettings,
-  type FontSize,
-  type ThemeChoice,
-} from '@/composables/useSettings'
+import { FONT_SIZES, settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
 import { PAGE_SIZES } from '@/stores/settings'
 import { CURRENT_UI_ID, getAvailableUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
 
@@ -75,11 +69,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'light', icon: Sun },
   { value: 'dark', label: 'dark', icon: Moon },
 ]
-
-const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = FONT_SIZES.map((value) => ({
-  value,
-  label: value,
-}))
 </script>
 
 <template>
@@ -161,20 +150,20 @@ const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = FONT_SIZES.map((
                 aria-label="Font size"
               >
                 <button
-                  v-for="option in FONT_SIZE_OPTIONS"
-                  :key="option.value"
+                  v-for="size in FONT_SIZES"
+                  :key="size"
                   type="button"
                   role="radio"
-                  :aria-checked="settings.appearance.fontSize === option.value"
+                  :aria-checked="settings.appearance.fontSize === size"
                   class="flex h-6 cursor-pointer items-center rounded-(--radius-check) px-2.5 transition-colors duration-120 ease-(--ease-standard)"
                   :class="
-                    settings.appearance.fontSize === option.value
+                    settings.appearance.fontSize === size
                       ? 'bg-brand-tint text-brand'
                       : 'text-ink-muted hover:bg-canvas hover:text-ink-secondary'
                   "
-                  @click="settings.appearance.fontSize = option.value"
+                  @click="settings.appearance.fontSize = size"
                 >
-                  {{ option.label }}
+                  {{ size }}
                 </button>
               </div>
               <code class="tabular w-44 shrink-0 text-right text-[0.6875rem] text-ink-muted"

@@ -118,6 +118,7 @@ class UserSearchResponse(BaseSchema):
     display_name: str
     username: str
     profile_picture_url: Optional[str]
+    uuid: UUID
 
 
 class GroupCreate(BaseSchema):
