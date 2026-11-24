@@ -143,16 +143,10 @@ environment:
 
 ### Updating Container Explorer Version
 
-The OpenRelik container worker currently uses Container Explorer version 0.4.0. To use a different version with OpenRelik, modify the `CE_VER` variable in the `setup.sh` script.
+`container-explorer` is built from source during the Docker image build. To update the version, change the `CE_REF` build argument (a commit SHA or release tag from `google/container-explorer`) in `Dockerfile` and rebuild the image:
 
-```bash
-Example:
-set -e
-
-SCRIPTNAME=$(basename "$0")
-
-CE_VER=0.4.0
-CE_PKG=container-explorer.tar.gz
+```dockerfile
+ARG CE_REF=7189cf9eabc12fc2cc5509f803751652fba07be1
 ```
 
 **Note**: The minimum required version of Container Explorer for the OpenRelik container worker is 0.4.0.

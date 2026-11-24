@@ -1,3 +1,15 @@
+# Build container-explorer from source so the embedded Go dependencies stay patched
+FROM --platform=linux/amd64 golang:1.26-bookworm AS ce-builder
+
+ARG CE_REF=7189cf9eabc12fc2cc5509f803751652fba07be1
+
+WORKDIR /src/container-explorer
+RUN curl -fsSL "https://github.com/google/container-explorer/archive/${CE_REF}.tar.gz" \
+      | tar -xz --strip-components=1 \
+  && mkdir -p /out \
+  && CGO_ENABLED=1 go build -tags "exclude_graphdriver_btrfs containers_image_openpgp" -o /out/ce ./cmd/main.go \
+  && cp supportcontainer.yaml /out/supportcontainer.yaml
+
 # Use the official Docker Hub Ubuntu base image
 FROM --platform=linux/amd64 ubuntu:24.04 AS ubuntu_2404_amd64
 
@@ -19,10 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ntfs-3g \
   && rm -rf /var/lib/apt/lists/*
 
-# Install latest release of container explorer
-COPY ./setup.sh ./setup.sh
-RUN chmod +x ./setup.sh
-RUN ./setup.sh install
+# Install container-explorer built from source
+COPY --from=ce-builder /out/ce /opt/container-explorer/bin/ce
+COPY --from=ce-builder /out/supportcontainer.yaml /opt/container-explorer/etc/supportcontainer.yaml
 
 # Configure debugging
 ARG OPENRELIK_PYDEBUG
