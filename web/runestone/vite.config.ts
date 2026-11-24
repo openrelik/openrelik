@@ -47,6 +47,10 @@ export default defineConfig({
         target: 'http://localhost:8710',
         changeOrigin: true,
       },
+      '/login/': {
+        target: 'http://localhost:8710',
+        changeOrigin: true,
+      },
     },
   },
   test: {

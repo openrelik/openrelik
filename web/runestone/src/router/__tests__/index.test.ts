@@ -23,6 +23,7 @@ import { caseLookupError, clearCaseLookups } from '@/composables/useCaseRef'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import router from '@/router'
 import { useAuthStore } from '@/stores/auth'
+import { POST_LOGIN_REDIRECT_KEY } from '@/utils/authRedirect'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -202,5 +203,23 @@ describe('router', () => {
 
     await router.push('/case/ir-2024/007')
     expect(router.currentRoute.value.path).toBe('/folder/77')
+  })
+
+  it('restores a saved post-login redirect once when returning to / after external auth', async () => {
+    vi.mocked(api.auth.getCurrentUser).mockResolvedValueOnce(operator)
+    sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, '/folder/42?sort=name')
+
+    await router.push('/')
+    expect(router.currentRoute.value.fullPath).toBe('/folder/42?sort=name')
+    expect(sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)).toBeNull()
+  })
+
+  it('ignores and clears unsafe saved post-login redirects', async () => {
+    vi.mocked(api.auth.getCurrentUser).mockResolvedValueOnce(operator)
+    sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, 'https://evil.example/phish')
+
+    await router.push('/')
+    expect(router.currentRoute.value.fullPath).toBe('/')
+    expect(sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)).toBeNull()
   })
 })

@@ -181,6 +181,7 @@ services:
     restart: always
     environment:
       VITE_OPENRELIK_SERVER_URL: http://localhost:${API_PORT:-8710}
+      VITE_OPENRELIK_AUTH_METHODS: ${OPENRELIK_AUTH_METHODS:-local}
       VITE_HMR_CLIENT_PORT: ${UI_PORT:-3000}
     volumes:
       # Vite reloads mounted source changes itself (HMR).
@@ -214,6 +215,7 @@ services:
     restart: always
     environment:
       VITE_OPENRELIK_SERVER_URL: http://localhost:${API_PORT:-8710}
+      VITE_OPENRELIK_AUTH_METHODS: ${OPENRELIK_AUTH_METHODS:-local}
       VITE_HMR_CLIENT_PORT: ${UI_PORT:-3000}
     volumes:
       # Vite reloads mounted source changes itself (HMR).

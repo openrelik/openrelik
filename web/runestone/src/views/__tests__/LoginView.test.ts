@@ -25,6 +25,7 @@ import directives from '@/directives'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { useAuthStore } from '@/stores/auth'
 import { api, ApiError, type User } from '@/api'
+import { POST_LOGIN_REDIRECT_KEY } from '@/utils/authRedirect'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -70,6 +71,8 @@ let wrapper: VueWrapper | null = null
 beforeEach(() => {
   clearQueryCache()
   sessionStorage.clear()
+  api.config.apiServerUrl = ''
+  api.config.authMethods = ['local']
 })
 
 afterEach(() => {
@@ -264,5 +267,80 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.fullPath).toBe('/')
+  })
+
+  it('renders external OAuth/OIDC sign-in links alongside the local form when configured', async () => {
+    api.config.apiServerUrl = 'https://api.openrelik.example/'
+    api.config.authMethods = ['local', 'oidc', 'google', 'github']
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push('/login')
+    await router.isReady()
+
+    wrapper = mount(LoginView, {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+
+    expect(wrapper.find('form').exists()).toBe(true)
+
+    const links = wrapper.findAll('a')
+    expect(links.map((link) => [link.text(), link.attributes('href')])).toEqual([
+      ['Sign in with OIDC', 'https://api.openrelik.example/login/oidc'],
+      ['Sign in with Google', 'https://api.openrelik.example/login/google'],
+      ['Sign in with Github', 'https://api.openrelik.example/login/github'],
+    ])
+  })
+
+  it('hides the local login form when local is not in authMethods', async () => {
+    api.config.apiServerUrl = 'http://localhost:8710'
+    api.config.authMethods = ['oidc']
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push('/login')
+    await router.isReady()
+
+    wrapper = mount(LoginView, {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    const link = wrapper.get('a')
+    expect(link.text()).toBe('Sign in with OIDC')
+    expect(link.attributes('href')).toBe('http://localhost:8710/login/oidc')
+  })
+
+  it('persists a safe redirect path and clears cached user before starting external login', async () => {
+    api.config.authMethods = ['local', 'oidc']
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const authStore = useAuthStore()
+    authStore.setUser(operatorAlice)
+
+    const router = buildRouter()
+    await router.push('/login?redirect=/folder/42?sort=name')
+    await router.isReady()
+
+    wrapper = mount(LoginView, {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+
+    const link = wrapper.get('a[href="/login/oidc"]')
+    await link.trigger('click')
+
+    expect(authStore.isAuthenticated).toBe(false)
+    expect(sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)).toBe('/folder/42?sort=name')
+
+    // Unsafe or root redirect clears any previously saved target instead of storing it.
+    await router.push('/login?redirect=https://evil.example/phish')
+    await link.trigger('click')
+    expect(sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)).toBeNull()
   })
 })
