@@ -222,6 +222,15 @@ def process_task_progress_event(
     state.event(event)
     celery_task = state.tasks.get(event["uuid"])
     db_task = get_task_from_db(db, celery_task.uuid)
+    if not db_task:
+        return
+    if db_task.status_short in _TERMINAL_STATUSES:
+        logger.warning(
+            "Ignoring task-progress event for task %s already in terminal status %s",
+            celery_task.uuid,
+            db_task.status_short,
+        )
+        return
     db_task.status_short = celery_task.state
     db_task.status_progress = json.dumps(event.get("data"))
     update_database(db, db_task)

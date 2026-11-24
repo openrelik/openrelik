@@ -16,9 +16,11 @@
 
 import base64
 import json
+import logging
 from unittest import mock
 
 import pytest
+from celery.events.state import State as CeleryEventState
 
 from mediator import mediator
 
@@ -391,10 +393,6 @@ def test_process_task_event_ignores_redelivered_events_after_success(
     monkeypatch, fake_dependencies, caplog
 ):
     """Redelivered task-received/task-started after task-succeeded must not duplicate files."""
-    import logging
-
-    from celery.events.state import State as CeleryEventState
-
     task_uuid = "task-uuid-123"
     db_task = mock.Mock(id=1, status_short="PENDING", result=None, runtime=None)
     monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
@@ -441,10 +439,6 @@ def test_process_task_event_ignores_redelivered_events_after_failure(
     monkeypatch, caplog
 ):
     """Redelivered task-received/task-started after task-failed must not re-run failure handling."""
-    import logging
-
-    from celery.events.state import State as CeleryEventState
-
     task_uuid = "task-uuid-fail"
     db_task = mock.Mock(
         id=2, status_short="PENDING", error_exception=None, error_traceback=None
@@ -496,10 +490,6 @@ def test_process_task_event_ignores_duplicate_task_succeeded(
     monkeypatch, fake_dependencies, caplog
 ):
     """A second task-succeeded from a redelivered task must not insert duplicate files."""
-    import logging
-
-    from celery.events.state import State as CeleryEventState
-
     task_uuid = "task-uuid-dup-success"
     db_task = mock.Mock(id=3, status_short="PENDING", result=None, runtime=None)
     monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
@@ -546,10 +536,6 @@ def test_process_task_event_preserves_terminal_status_after_mediator_restart(
     monkeypatch, caplog
 ):
     """Redelivered events arriving after a mediator restart must not regress terminal DB state."""
-    import logging
-
-    from celery.events.state import State as CeleryEventState
-
     task_uuid = "task-uuid-post-restart"
     db_task = mock.Mock(id=4, status_short="SUCCESS", runtime=42.0)
     monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
@@ -572,6 +558,86 @@ def test_process_task_event_preserves_terminal_status_after_mediator_restart(
     assert db_task.status_short == "SUCCESS"
     assert db_task.runtime == 42.0
     mock_update.assert_not_called()
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_progress_event_ignores_terminal_task(monkeypatch, caplog):
+    """Post-restart task-progress events must not overwrite a terminal DB status."""
+    task_uuid = "task-uuid-progress-terminal"
+    db_task = mock.Mock(
+        id=5, status_short="SUCCESS", status_progress='{"done": true}'
+    )
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_progress_event(
+            db,
+            state,
+            _task_event("task-progress", task_uuid, clock=1, data={"percent": 50}),
+        )
+
+    assert db_task.status_short == "SUCCESS"
+    assert db_task.status_progress == '{"done": true}'
+    mock_update.assert_not_called()
+    assert any(
+        "task-progress" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_progress_event_skips_missing_db_task(monkeypatch):
+    """task-progress for a task not yet in the DB returns without crashing."""
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: None)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    state = CeleryEventState()
+    mediator.process_task_progress_event(
+        mock.Mock(),
+        state,
+        _task_event("task-progress", "missing-uuid", clock=1, data={"percent": 10}),
+    )
+
+    mock_update.assert_not_called()
+
+
+@pytest.mark.parametrize("active_status", ["STARTED", "PROGRESS"])
+def test_process_task_event_warns_on_redelivery_for_active_task(
+    monkeypatch, caplog, active_status
+):
+    """Redelivered task-received/task-started on an active task logs a warning and updates DB."""
+    task_uuid = f"task-uuid-active-{active_status.lower()}"
+    db_task = mock.Mock(id=6, status_short=active_status, runtime=None)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=1), celery_app
+        )
+        db_task.status_short = active_status
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=2), celery_app
+        )
+
+    assert mock_update.call_count == 2
     assert any(
         "task-received" in rec.message and task_uuid in rec.message
         for rec in caplog.records
