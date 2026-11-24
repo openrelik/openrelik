@@ -29,8 +29,8 @@ import { RouterLink } from 'vue-router'
     v-tooltip="'All folders'"
   >
     <!-- Centred on the table's checkbox column below: both start at the same
-         padding, so the 18px logo steps back half of what it is wider than
+         padding, so the 24px logo steps back half of what it is wider than
          the 13px checkbox. -->
-    <img src="/logo-light-round.png" alt="" class="-ml-[2.5px] size-4.5 max-w-none" />
+    <img src="/logo-light-round.png" alt="" class="-ml-[5.5px] size-6 max-w-none" />
   </RouterLink>
 </template>

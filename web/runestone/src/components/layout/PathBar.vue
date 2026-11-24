@@ -270,7 +270,7 @@ function onBarClick(event: MouseEvent) {
   >
     <!-- the path: links, and a menu behind every slash -->
     <div class="flex max-w-[65%] min-w-0 shrink items-center">
-      <BrandLink class="mr-3" />
+      <BrandLink class="mr-2.5" />
       <span
         v-if="pending && !path.length"
         class="text-ink-muted"
