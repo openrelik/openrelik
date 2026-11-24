@@ -95,7 +95,7 @@ function onKey(event: KeyboardEvent) {
     <div
       ref="sheet"
       tabindex="-1"
-      class="sheet fixed z-50 w-72 p-3 text-[12px] shadow-(--shadow-float) outline-none"
+      class="sheet fixed z-50 w-72 p-3 text-[0.75rem] shadow-(--shadow-float) outline-none"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
       role="dialog"
       :aria-label="`Case of ${item.name}`"
@@ -117,7 +117,7 @@ function onKey(event: KeyboardEvent) {
         :aria-invalid="!!text && !check.ok"
         :readonly="saving"
       />
-      <p class="mt-1 min-h-4 text-[11px] wrap-break-word">
+      <p class="mt-1 min-h-4 text-[0.6875rem] wrap-break-word">
         <span v-if="showSaving" class="inline-flex items-center gap-1.5 text-brand">
           <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
           saving…

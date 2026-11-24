@@ -90,7 +90,12 @@ describe('useFolderLoader', () => {
       {
         id: 9,
         display_name: '',
-        user: { id: 1, username: 'jdoe', profile_picture_url: 'https://example.test/a.png' },
+        user: {
+          id: 1,
+          uuid: '550e8400-e29b-41d4-a716-446655440000',
+          username: 'jdoe',
+          profile_picture_url: 'https://example.test/a.png',
+        },
         magic_mime: 'text/plain',
         data_type: 'text:log',
       },
@@ -103,6 +108,7 @@ describe('useFolderLoader', () => {
       name: 'File 9',
       owner: 'jdoe',
       ownerUsername: 'jdoe',
+      ownerUuid: '550e8400-e29b-41d4-a716-446655440000',
       ownerAvatar: 'https://example.test/a.png',
       size: 0,
       mime: 'text/plain',

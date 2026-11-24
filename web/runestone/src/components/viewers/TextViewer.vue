@@ -23,6 +23,7 @@ import TextSearchBar from '@/components/viewers/TextSearchBar.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
+import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import { useTextSearch } from '@/composables/useTextSearch'
 import { useTextStream } from '@/composables/useTextStream'
 import { useModalStore } from '@/stores/modals'
@@ -52,6 +53,8 @@ const props = defineProps<{
 const range = defineModel<Span | null>('mark', { default: null })
 
 const ROW_H = 20
+const settings = useSettings()
+const rowHeight = () => ROW_H * FONT_SCALE[settings.value.appearance.fontSize]
 
 const text = useTextStream(() => ({ id: props.fileId, size: props.size }))
 const showReading = useDelayedFlag(() => text.reading.value)
@@ -70,7 +73,7 @@ const {
   onThumbMove,
   onThumbUp,
   onTrackDown,
-} = useRowScroller(body, track, () => text.rowCount.value, ROW_H)
+} = useRowScroller(body, track, () => text.rowCount.value, rowHeight)
 
 const topLine = computed(() => {
   void text.version.value
@@ -171,7 +174,7 @@ const rows = computed(() => {
   return out
 })
 
-const gutterChars = computed(() => Math.max(4, text.lineCount.value.toLocaleString('en-US').length))
+const gutterChars = computed(() => Math.max(4, String(text.lineCount.value).length))
 // --- marked lines: from the gutter, go-to, or a link ---
 
 /** A line to land on once it has been read (1-based), and where in it. */
@@ -554,11 +557,11 @@ const linesLabel = computed(() => {
             autocomplete="off"
             placeholder="Go to line"
             aria-label="Go to a line, or a range as 12-40"
-            class="field tabular h-6 w-28 font-mono text-[12px]"
+            class="field tabular h-6 w-28 font-mono text-[0.75rem]"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
-                ? `Not a line in this file (1 to ${text.lineCount.value.toLocaleString('en-US')})`
+                ? `Not a line in this file (1 to ${text.lineCount.value})`
                 : 'A line, or a range as 12-40'
             "
             @input="gotoError = false"
@@ -614,7 +617,7 @@ const linesLabel = computed(() => {
               @pointerdown="marks.onGutterDown($event, lineSpan(row.line))"
               :data-mark-from="lineSpan(row.line).from"
               :data-mark-to="lineSpan(row.line).to"
-              >{{ row.start === 0 ? (row.line + 1).toLocaleString('en-US') : '' }}</span
+              >{{ row.start === 0 ? row.line + 1 : '' }}</span
             >
             <TextRow
               class="pr-6 text-ink"

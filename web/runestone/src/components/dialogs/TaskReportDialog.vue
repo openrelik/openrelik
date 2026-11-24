@@ -37,7 +37,7 @@ const { report, close } = useTaskReport()
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="sheet absolute top-[8vh] left-1/2 flex max-h-[84vh] w-[min(52rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float) outline-none"
+        class="sheet absolute top-[8vh] left-1/2 flex max-h-[84vh] w-[min(52rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="report-title"

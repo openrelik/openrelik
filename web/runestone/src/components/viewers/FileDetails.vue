@@ -118,7 +118,12 @@ const created = computed(() => props.file.created ?? props.file.modified)
       <div v-if="file.owner" :class="ROW">
         <dt class="micro-label">Owner</dt>
         <dd class="flex min-w-0 items-center gap-2 text-ink">
-          <UserAvatar :name="file.owner" :username="file.ownerUsername" :src="file.ownerAvatar" />
+          <UserAvatar
+            :name="file.owner"
+            :username="file.ownerUsername"
+            :src="file.ownerAvatar"
+            :uuid="file.ownerUuid"
+          />
           <span class="truncate">{{ file.owner }}</span>
         </dd>
       </div>

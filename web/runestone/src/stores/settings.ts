@@ -20,6 +20,16 @@ import { ref, watch } from 'vue'
 const THEME_CHOICES = ['system', 'light', 'dark'] as const
 export type ThemeChoice = (typeof THEME_CHOICES)[number]
 
+export const FONT_SIZES = ['compact', 'normal', 'large'] as const
+export type FontSize = (typeof FONT_SIZES)[number]
+
+/** Root scale factor for each font-size preset (matches `:root[data-font-size]` in main.css). */
+export const FONT_SCALE: Record<FontSize, number> = {
+  compact: 1,
+  normal: 1.125,
+  large: 1.25,
+}
+
 /** Folders per page in the top-level list. 40 is the server's own default. */
 export const PAGE_SIZES = [25, 40, 100] as const
 export type PageSize = (typeof PAGE_SIZES)[number]
@@ -27,6 +37,7 @@ export type PageSize = (typeof PAGE_SIZES)[number]
 export interface Settings {
   appearance: {
     theme: ThemeChoice
+    fontSize: FontSize
   }
   ai: {
     enabled: boolean
@@ -42,7 +53,7 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  appearance: { theme: 'system' },
+  appearance: { theme: 'system', fontSize: 'normal' },
   ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
   explorer: { pageSize: 40, showEmptyFiles: false },
 }
@@ -65,6 +76,10 @@ function readStoredSettings(): Settings {
           const theme = stored.appearance.theme
           if (typeof theme === 'string' && THEME_CHOICES.includes(theme as ThemeChoice)) {
             merged.appearance.theme = theme as ThemeChoice
+          }
+          const fontSize = stored.appearance.fontSize
+          if (typeof fontSize === 'string' && FONT_SIZES.includes(fontSize as FontSize)) {
+            merged.appearance.fontSize = fontSize as FontSize
           }
         }
         if (isRecord(stored.ai)) {
@@ -96,6 +111,12 @@ function applyTheme(choice: ThemeChoice): void {
   document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark')
 }
 
+/** Applies the chosen font-size preset to the root element (`rem` scale). */
+function applyFontSize(size: FontSize): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.setAttribute('data-font-size', size)
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Settings>(readStoredSettings())
 
@@ -112,8 +133,9 @@ export const useSettingsStore = defineStore('settings', () => {
     { deep: true },
   )
 
-  // Apply theme on change
+  // Apply theme and font size on change
   watch(() => settings.value.appearance.theme, applyTheme, { immediate: true })
+  watch(() => settings.value.appearance.fontSize, applyFontSize, { immediate: true })
 
   // Listen to OS color scheme changes when theme is set to 'system'
   if (typeof window !== 'undefined') {

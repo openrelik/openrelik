@@ -518,4 +518,21 @@ describe('AccountDialog', () => {
     expect(document.cookie).toContain('openrelik_ui=extra')
     expect(assign).toHaveBeenCalledWith('/')
   })
+
+  it('renders the authenticated user avatar in the profile header when available', async () => {
+    useAuthStore().setUser({
+      id: 1,
+      username: 'analyst',
+      display_name: 'Jane Analyst',
+      email: 'jane@openrelik.org',
+      profile_picture_url: 'https://example.com/jane.png',
+    })
+
+    const body = mountDialog()
+    openAccount()
+    await nextTick()
+    await flushPromises()
+
+    expect(body.get('[role="dialog"] img').attributes('src')).toBe('https://example.com/jane.png')
+  })
 })

@@ -15,9 +15,10 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
-import { ChevronDown, User, Users, X } from '@/components/icons'
+import { ChevronDown, Users, X } from '@/components/icons'
 import Button from '@/components/base/Button.vue'
 import LoadState from '@/components/base/LoadState.vue'
+import UserAvatar from '@/components/base/UserAvatar.vue'
 import type { DirectoryUser, GroupRecord } from '@/api'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { canShare, ensureRole, roleOf } from '@/composables/useFolderPermissions'
@@ -175,6 +176,8 @@ function addPerson(user: DirectoryUser | undefined) {
     id: user.id,
     name: user.display_name || user.username,
     detail: user.username,
+    avatar: user.profile_picture_url || undefined,
+    uuid: user.uuid || undefined,
     role: personRole.value,
     roleIds: [],
   })
@@ -263,7 +266,7 @@ function onKeydown(event: KeyboardEvent) {
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="sheet absolute top-[12vh] left-1/2 flex max-h-[80vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float) outline-none"
+        class="sheet absolute top-[12vh] left-1/2 flex max-h-[80vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="share-title"
@@ -274,7 +277,7 @@ function onKeydown(event: KeyboardEvent) {
           class="flex h-10 shrink-0 items-center justify-between border-b border-border bg-sunken pr-2 pl-4"
         >
           <div class="flex min-w-0 items-center gap-2">
-            <h2 id="share-title" class="card-title text-[14px]">Share folder</h2>
+            <h2 id="share-title" class="card-title text-[0.875rem]">Share folder</h2>
             <span class="truncate font-normal text-ink-muted">
               — {{ shareTarget.folder.name }}
             </span>
@@ -326,15 +329,18 @@ function onKeydown(event: KeyboardEvent) {
                     class="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-sunken"
                     @click="addPerson(user)"
                   >
-                    <div
-                      class="flex size-5 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-muted"
-                    >
-                      <User :size="12" :stroke-width="1.5" />
-                    </div>
+                    <UserAvatar
+                      :name="user.display_name || user.username"
+                      :username="user.username"
+                      :src="user.profile_picture_url"
+                      :uuid="user.uuid"
+                      size="sm"
+                      decorative
+                    />
                     <span class="truncate font-medium text-ink">{{
                       user.display_name || user.username
                     }}</span>
-                    <span class="ml-auto shrink-0 text-[11px] text-ink-muted">{{
+                    <span class="ml-auto shrink-0 text-[0.6875rem] text-ink-muted">{{
                       user.username
                     }}</span>
                   </button>
@@ -422,7 +428,7 @@ function onKeydown(event: KeyboardEvent) {
                       <Users :size="12" :stroke-width="1.5" />
                     </div>
                     <span class="truncate font-medium text-ink">{{ group.name }}</span>
-                    <span class="ml-auto shrink-0 truncate text-[11px] text-ink-muted">{{
+                    <span class="ml-auto shrink-0 truncate text-[0.6875rem] text-ink-muted">{{
                       group.description
                     }}</span>
                   </button>
@@ -464,7 +470,7 @@ function onKeydown(event: KeyboardEvent) {
 
           <!-- Section: People with access -->
           <div class="mt-2 flex flex-col gap-2">
-            <h3 class="text-[13px] font-semibold text-ink">People with access</h3>
+            <h3 class="text-[0.8125rem] font-semibold text-ink">People with access</h3>
 
             <LoadState
               v-if="state"
@@ -486,14 +492,20 @@ function onKeydown(event: KeyboardEvent) {
                 class="flex h-11 items-center gap-3 px-3 transition-colors hover:bg-sunken/50"
               >
                 <!-- Avatar -->
+                <UserAvatar
+                  v-if="collaborator.type === 'user'"
+                  :name="collaborator.name"
+                  :username="collaborator.detail"
+                  :src="collaborator.avatar"
+                  :uuid="collaborator.uuid"
+                  size="md"
+                  decorative
+                />
                 <div
+                  v-else
                   class="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-sunken text-ink-muted"
                 >
-                  <component
-                    :is="collaborator.type === 'group' ? Users : User"
-                    :size="14"
-                    :stroke-width="1.5"
-                  />
+                  <Users :size="14" :stroke-width="1.5" />
                 </div>
 
                 <!-- Identity -->
@@ -502,12 +514,12 @@ function onKeydown(event: KeyboardEvent) {
                     <span class="truncate font-medium text-ink">{{ collaborator.name }}</span>
                     <span
                       v-if="collaborator.type === 'user' && String(collaborator.id) === String(me)"
-                      class="text-[11px] text-ink-muted"
+                      class="text-[0.6875rem] text-ink-muted"
                     >
                       (you)
                     </span>
                   </div>
-                  <p v-if="collaborator.detail" class="truncate text-[11px] text-ink-muted">
+                  <p v-if="collaborator.detail" class="truncate text-[0.6875rem] text-ink-muted">
                     {{ collaborator.detail }}
                   </p>
                 </div>
@@ -516,7 +528,7 @@ function onKeydown(event: KeyboardEvent) {
                 <div class="flex shrink-0 items-center gap-2">
                   <span
                     v-if="collaborator.role === 'Owner' || !mayShare"
-                    class="px-2 py-0.5 text-[11px] font-medium text-ink-muted"
+                    class="px-2 py-0.5 text-[0.6875rem] font-medium text-ink-muted"
                   >
                     {{ collaborator.role }}
                   </span>
@@ -525,7 +537,7 @@ function onKeydown(event: KeyboardEvent) {
                       <select
                         v-model="collaborator.role"
                         :aria-label="`Role of ${collaborator.name}`"
-                        class="h-6 cursor-pointer appearance-none rounded-(--radius-control) border border-border bg-surface pr-6 pl-2 text-[11px] font-medium text-ink"
+                        class="h-6 cursor-pointer appearance-none rounded-(--radius-control) border border-border bg-surface pr-6 pl-2 text-[0.6875rem] font-medium text-ink"
                       >
                         <option value="Editor">Editor</option>
                         <option value="Viewer">Viewer</option>

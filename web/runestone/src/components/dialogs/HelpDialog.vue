@@ -183,7 +183,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="sheet absolute top-[8vh] left-1/2 flex max-h-[84vh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float) outline-none"
+        class="sheet absolute top-[8vh] left-1/2 flex max-h-[84vh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-title"
@@ -211,7 +211,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
             :aria-labelledby="`help-${group.title}`"
           >
             <p :id="`help-${group.title}`" class="micro-label pb-1">{{ group.title }}</p>
-            <p v-if="group.note" class="pb-1.5 text-[11px] text-ink-muted">{{ group.note }}</p>
+            <p v-if="group.note" class="pb-1.5 text-[0.6875rem] text-ink-muted">{{ group.note }}</p>
             <dl class="divide-y divide-border">
               <div
                 v-for="shortcut in group.shortcuts"
@@ -222,7 +222,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
                   <kbd
                     v-for="key in shortcut.keys"
                     :key="key"
-                    class="rounded-(--radius-check) border border-border-strong bg-sunken px-1 text-[11px] leading-4 whitespace-nowrap text-ink"
+                    class="rounded-(--radius-check) border border-border-strong bg-sunken px-1 text-[0.6875rem] leading-4 whitespace-nowrap text-ink"
                     >{{ key }}</kbd
                   >
                 </dt>
@@ -233,7 +233,7 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
         </div>
 
         <div
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[11px] text-ink-muted"
+          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[0.6875rem] text-ink-muted"
         >
           <span>⌘ is Ctrl on Windows and Linux</span>
           <span class="ml-auto flex items-center gap-3">

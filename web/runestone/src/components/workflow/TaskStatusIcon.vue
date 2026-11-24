@@ -36,7 +36,7 @@ const ICON: Record<TaskStatus, { icon: Component; size: number; tone: string }> 
     size: 13,
     tone: '-mx-px text-success-icon [&_circle]:fill-current [&_path]:stroke-surface [&_path]:stroke-3',
   },
-  running: { icon: TaskRunningIcon, size: 13, tone: '-mx-px text-brand-icon' },
+  running: { icon: TaskRunningIcon, size: 13, tone: '-mx-px text-warning-icon' },
   pending: { icon: Circle, size: 11, tone: 'text-idle' },
   failed: {
     icon: AlertCircle,

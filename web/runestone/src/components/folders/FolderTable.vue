@@ -32,6 +32,7 @@ import Button from '@/components/base/Button.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import UserAvatar from '@/components/base/UserAvatar.vue'
 import UploadRow from '@/components/folders/UploadRow.vue'
+import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import type { PendingFolder } from '@/composables/useFolderActions'
 import type { Upload } from '@/composables/useUploadQueue'
 import type { QueryState } from '@/composables/useQueryCache'
@@ -283,6 +284,8 @@ const ROW_H = 28
 const OVERSCAN = 10
 /** Fallback row window before layout measurement (e.g. headless DOM tests). */
 const UNMEASURED_ROWS = 40
+const settings = useSettings()
+const rowH = computed(() => ROW_H * FONT_SCALE[settings.value.appearance.fontSize])
 
 const workflowEl = ref<HTMLElement | null>(null)
 const tableTop = ref(0)
@@ -299,28 +302,30 @@ const prefixCount = computed(
 )
 
 function rowsOrigin(offset = tableTop.value): number {
-  return offset + ROW_H + prefixCount.value * ROW_H
+  return offset + rowH.value + prefixCount.value * rowH.value
 }
 
 function effectiveWindowHeight(): number {
-  return viewHeight.value > ROW_H ? viewHeight.value - ROW_H : UNMEASURED_ROWS * ROW_H
+  const h = rowH.value
+  return viewHeight.value > h ? viewHeight.value - h : UNMEASURED_ROWS * h
 }
 
 const rowWindow = computed(() => {
   void props.hasTask
   const total = props.rows.length
   if (!total) return { start: 0, end: 0, topPad: 0, bottomPad: 0 }
-  const bodyTop = Math.max(0, scrollTop.value + ROW_H - rowsOrigin())
+  const h = rowH.value
+  const bodyTop = Math.max(0, scrollTop.value + h - rowsOrigin())
   const height = effectiveWindowHeight()
-  const visibleStart = Math.min(total, Math.floor(bodyTop / ROW_H))
-  const visibleEnd = Math.min(total, Math.ceil((bodyTop + height) / ROW_H))
+  const visibleStart = Math.min(total, Math.floor(bodyTop / h))
+  const visibleEnd = Math.min(total, Math.ceil((bodyTop + height) / h))
   const start = Math.max(0, visibleStart - OVERSCAN)
   const end = Math.min(total, visibleEnd + OVERSCAN)
   return {
     start,
     end,
-    topPad: start * ROW_H,
-    bottomPad: (total - end) * ROW_H,
+    topPad: start * h,
+    bottomPad: (total - end) * h,
   }
 })
 
@@ -350,13 +355,14 @@ function revealRow(index: number) {
   if (!el || index < UP || index >= props.rows.length) return
   const offset = tableEl.value?.offsetTop ?? tableTop.value
   if (offset !== tableTop.value) tableTop.value = offset
+  const h = rowH.value
   const origin = rowsOrigin(offset)
-  const rowTop = origin + index * ROW_H
-  const viewportH = el.clientHeight > ROW_H ? el.clientHeight : UNMEASURED_ROWS * ROW_H + ROW_H
+  const rowTop = origin + index * h
+  const viewportH = el.clientHeight > h ? el.clientHeight : UNMEASURED_ROWS * h + h
   const currentTop = el.clientHeight > 0 ? el.scrollTop : scrollTop.value
   let nextTop = currentTop
-  if (rowTop < currentTop + ROW_H) nextTop = Math.max(0, rowTop - ROW_H)
-  else if (rowTop + ROW_H > currentTop + viewportH) nextTop = rowTop + ROW_H - viewportH
+  if (rowTop < currentTop + h) nextTop = Math.max(0, rowTop - h)
+  else if (rowTop + h > currentTop + viewportH) nextTop = rowTop + h - viewportH
   if (nextTop !== currentTop) {
     scrollTop.value = nextTop
     el.scrollTop = nextTop
@@ -422,7 +428,8 @@ watch(filter, () => {
 watch(
   () => props.rows.length,
   (total) => {
-    const maxTop = Math.max(0, rowsOrigin() + total * ROW_H - ROW_H)
+    const h = rowH.value
+    const maxTop = Math.max(0, rowsOrigin() + total * h - h)
     if (scrollTop.value > maxTop) scrollTop.value = maxTop
   },
 )
@@ -641,7 +648,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 @click.stop
                 >..</RouterLink
               >
-              <span class="truncate text-[11px] text-ink-muted" v-overflow-tooltip>{{
+              <span class="truncate text-[0.6875rem] text-ink-muted" v-overflow-tooltip>{{
                 parentName
               }}</span>
             </div>
@@ -672,7 +679,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-model="newFolderName"
                 type="text"
                 spellcheck="false"
-                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[12px] font-medium text-ink shadow-sm outline-none"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[0.75rem] font-medium text-ink shadow-sm outline-none"
                 aria-label="New folder name"
                 @keydown="onNewFolderKeydown"
                 @blur="commitNewFolder"
@@ -857,7 +864,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-model="renamingName"
                 type="text"
                 spellcheck="false"
-                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[12px] font-medium text-ink shadow-sm outline-none"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[0.75rem] font-medium text-ink shadow-sm outline-none"
                 :aria-label="`Rename ${row.name}`"
                 @click.stop
                 @dblclick.stop
@@ -944,7 +951,12 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
             </td>
           </template>
           <td class="px-2">
-            <UserAvatar :name="row.owner" :username="row.ownerUsername" :src="row.ownerAvatar" />
+            <UserAvatar
+              :name="row.owner"
+              :username="row.ownerUsername"
+              :src="row.ownerAvatar"
+              :uuid="row.ownerUuid"
+            />
           </td>
           <td class="tabular truncate px-2 text-ink-secondary">{{ stamp(row.modified) }}</td>
           <td class="pr-1">

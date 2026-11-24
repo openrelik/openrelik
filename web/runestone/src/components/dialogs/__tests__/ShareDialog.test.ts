@@ -379,4 +379,88 @@ describe('ShareDialog', () => {
     expect(body.find('[role="dialog"]').exists()).toBe(true)
     expect(body.get('[role="dialog"]').text()).toContain('Case IR-2026')
   })
+
+  it('renders user avatars in collaborator rows and user search results when profile_picture_url is set', async () => {
+    vi.mocked(api.folders.getFolder).mockResolvedValueOnce({
+      ...makeFolderDetail(60),
+      user_roles: [
+        {
+          id: 101,
+          role: 'Owner',
+          user: {
+            id: 1,
+            username: 'jane',
+            display_name: 'Jane Owner',
+            profile_picture_url: 'https://example.com/jane.png',
+          },
+        },
+      ],
+    })
+    const danUser = {
+      id: 4,
+      uuid: '550e8400-e29b-41d4-a716-446655440000',
+      username: 'dan',
+      display_name: 'Dan Responder',
+    }
+    vi.mocked(api.directory.searchUsers)
+      .mockResolvedValueOnce([
+        {
+          id: 3,
+          username: 'carol',
+          display_name: 'Carol Analyst',
+          profile_picture_url: 'https://example.com/carol.png',
+        },
+        danUser,
+      ])
+      .mockResolvedValueOnce([danUser])
+
+    const body = mountDialog()
+    openShareDialog(makeFolderItem(60))
+    await nextTick()
+    await flushPromises()
+
+    const dialog = body.get('[role="dialog"]')
+    expect(dialog.findAll('img').map((img) => img.attributes('src'))).toContain(
+      'https://example.com/jane.png',
+    )
+
+    const input = dialog.get('input[aria-label="Add people"]')
+    await input.trigger('focus')
+    await input.setValue('carol')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+
+    expect(dialog.findAll('img').map((img) => img.attributes('src'))).toContain(
+      'https://example.com/carol.png',
+    )
+    const danOption = dialog.findAll('button').find((b) => b.text().includes('Dan Responder'))!
+    const danSearchAvatarStyle = danOption.get('span[aria-hidden="true"]').attributes('style')
+    expect(danSearchAvatarStyle).toMatch(/--avatar-bg:\s*oklch\(0\.52 0\.12 \d+\)/)
+
+    await dialog
+      .findAll('button')
+      .find((b) => b.text().includes('Carol Analyst'))!
+      .trigger('click')
+    await nextTick()
+
+    await input.trigger('focus')
+    await input.setValue('dan')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    await dialog
+      .findAll('button')
+      .find((b) => b.text().includes('Dan Responder'))!
+      .trigger('click')
+    await nextTick()
+
+    expect(dialog.findAll('img').map((img) => img.attributes('src'))).toEqual([
+      'https://example.com/jane.png',
+      'https://example.com/carol.png',
+    ])
+    const collaboratorAvatarStyles = dialog
+      .findAll('span[aria-hidden="true"]')
+      .map((el) => el.attributes('style'))
+      .filter(Boolean)
+    expect(collaboratorAvatarStyles).toContain(danSearchAvatarStyle)
+  })
 })

@@ -61,7 +61,7 @@ const fields = computed(() =>
       :class="closable ? 'h-9 pr-2' : 'h-7 pr-1'"
     >
       <p class="micro-label">
-        Row <span class="tabular ml-1">{{ number.toLocaleString('en-US') }}</span>
+        Row <span class="tabular ml-1">{{ number }}</span>
       </p>
       <button
         v-if="closable"
@@ -85,7 +85,7 @@ const fields = computed(() =>
           <pre
             v-else-if="field.nested"
             v-copy-to-clipboard="field.text"
-            class="tabular well cursor-pointer overflow-x-auto px-2 py-1 text-[12px] whitespace-pre text-ink hover:text-brand data-[copied=true]:text-success"
+            class="tabular well cursor-pointer overflow-x-auto px-2 py-1 text-[0.75rem] whitespace-pre text-ink hover:text-brand data-[copied=true]:text-success"
             >{{ field.text }}</pre>
           <span
             v-else

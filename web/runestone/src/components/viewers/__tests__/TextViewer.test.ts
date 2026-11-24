@@ -140,9 +140,9 @@ describe('TextViewer', () => {
 
     expect(wrapper.text()).toContain('50 lines')
 
-    // 200px height / 20px row = 10 visible rows + 1 overscan = 11 rendered rows out of 51 total rows
+    // 200px height / 22.5px row (20 * 1.125 at default 'normal' scale) = 8 visible rows + 1 overscan = 9 rendered rows
     const renderedRows = wrapper.findAll('[data-row]')
-    expect(renderedRows).toHaveLength(11)
+    expect(renderedRows).toHaveLength(9)
 
     // Line 1 wrapped into 2 rows: row 0 shows line number "1", continuation row 1 shows blank gutter
     const gutters = wrapper.findAll('[data-gutter]')
@@ -169,7 +169,7 @@ describe('TextViewer', () => {
     await body.trigger('keydown', { key: 'ArrowUp', ctrlKey: true })
     expect(wrapper.find('[data-row="0"]')?.exists()).toBe(true)
 
-    await body.trigger('wheel', { deltaX: 0, deltaY: 60, deltaMode: 0 })
+    await body.trigger('wheel', { deltaX: 0, deltaY: 68, deltaMode: 0 })
     expect(wrapper.findAll('[data-row]')[0]?.attributes('data-row')).toBe('3')
 
     // Switching fileId resets scroll position to top
@@ -547,5 +547,21 @@ describe('TextViewer', () => {
     useConfirm().accept()
     await flushPromises()
     expect(vi.mocked(api.files.readRange).mock.calls.length).toBe(callsBefore)
+  })
+
+  it('renders line numbers as plain integers without thousands separators', async () => {
+    const lines = Array.from({ length: 2458 }, (_, i) => `row ${i + 1}`)
+    const size = mockLines(lines)
+
+    const wrapper = mountTextViewer({ fileId: 260, size, mark: { from: 2458, to: 2458 } })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+
+    const gutters = wrapper.findAll('[data-gutter]')
+    expect(gutters.map((g) => g.text())).toContain('2458')
+    expect(gutters.some((g) => g.text().includes(','))).toBe(false)
+    expect(gutters[0]?.attributes('style')).toContain('calc(4ch + 1.5rem)')
+    expect(wrapper.text()).toContain('line 2458')
   })
 })

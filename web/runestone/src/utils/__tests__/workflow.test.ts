@@ -719,4 +719,72 @@ describe('isActive and runStats across workflow lifecycles', () => {
     const serialized = specFromTasks(wf)
     expect(serialized.workflow.tasks).toHaveLength(1)
   })
+
+  it('assigns deterministic group ids for unmarked task groups and chords across re-parses', () => {
+    const spec = parseSpec(
+      JSON.stringify({
+        workflow: {
+          type: 'chain',
+          isRoot: true,
+          tasks: [
+            {
+              type: 'task',
+              uuid: 'u-1',
+              task_name: 'openrelik-worker-a.tasks.a',
+              queue_name: 'q-a',
+              display_name: 'A',
+              task_config: [],
+              tasks: [],
+            },
+            {
+              type: 'task',
+              uuid: 'u-2',
+              task_name: 'openrelik-worker-b.tasks.b',
+              queue_name: 'q-b',
+              display_name: 'B',
+              task_config: [],
+              tasks: [],
+            },
+            {
+              type: 'chord',
+              tasks: [
+                {
+                  type: 'task',
+                  uuid: 'c-1',
+                  task_name: 'openrelik-worker-c.tasks.c1',
+                  queue_name: 'q-c',
+                  display_name: 'C1',
+                  task_config: [],
+                  tasks: [],
+                },
+                {
+                  type: 'task',
+                  uuid: 'c-2',
+                  task_name: 'openrelik-worker-c.tasks.c2',
+                  queue_name: 'q-c',
+                  display_name: 'C2',
+                  task_config: [],
+                  tasks: [],
+                },
+              ],
+              callback: {
+                type: 'task',
+                uuid: 'cb-1',
+                task_name: 'openrelik-worker-m.tasks.merge',
+                queue_name: 'q-m',
+                display_name: 'Merge',
+                task_config: [],
+                tasks: [],
+              },
+            },
+          ],
+        },
+      }),
+    )
+
+    const first = tasksFromSpec(spec, [])
+    const second = tasksFromSpec(spec, [])
+    expect(first.groups.map((g) => g.id)).toEqual(['group:u-1', 'chord:c-1'])
+    expect(second.groups.map((g) => g.id)).toEqual(first.groups.map((g) => g.id))
+  })
 })

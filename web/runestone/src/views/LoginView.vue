@@ -120,12 +120,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 </script>
 
 <template>
-  <div class="flex h-full min-h-[28rem] items-center justify-center bg-surface p-4 text-[13px]">
+  <div
+    class="flex h-full min-h-[28rem] items-center justify-center bg-surface p-4 text-[0.8125rem]"
+  >
     <div class="flex w-full max-w-[22rem] flex-col gap-8">
       <!-- Wordmark -->
       <div class="flex items-center gap-3">
         <img src="/logo-light-round.png" alt="" class="size-9" />
-        <span class="text-[28px] leading-none font-bold tracking-tight text-ink">OpenRelik</span>
+        <span class="text-[1.75rem] leading-none font-bold tracking-tight text-ink">OpenRelik</span>
       </div>
 
       <div class="flex flex-col gap-5">
@@ -136,7 +138,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
             v-if="errorMessage"
             role="alert"
             aria-live="polite"
-            class="flex items-start gap-2 rounded-(--radius-check) border border-danger/40 bg-danger-tint px-2.5 py-1.5 text-[12px] text-danger"
+            class="flex items-start gap-2 rounded-(--radius-check) border border-danger/40 bg-danger-tint px-2.5 py-1.5 text-[0.75rem] text-danger"
           >
             <AlertCircle :size="13" :stroke-width="1.5" class="mt-0.5 shrink-0" />
             <span class="flex-1 leading-snug">{{ errorMessage }}</span>
@@ -210,7 +212,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         <!-- Divider between local form and external providers -->
         <div
           v-if="hasLocalAuth && externalAuthMethods.length > 0"
-          class="flex items-center gap-3 text-[12px] text-ink-muted"
+          class="flex items-center gap-3 text-[0.75rem] text-ink-muted"
         >
           <span class="h-px flex-1 bg-border" aria-hidden="true" />
           <span>or</span>

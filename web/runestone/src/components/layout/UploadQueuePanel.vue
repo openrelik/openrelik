@@ -54,7 +54,7 @@ const stateOf = (upload: (typeof uploads.all.value)[number]) => {
     <div
       v-if="isOpen"
       v-click-outside="minimize"
-      class="sheet fixed right-3 bottom-9 z-40 flex h-[min(24rem,70vh)] w-[min(34rem,calc(100vw-1.5rem))] flex-col overflow-hidden text-[12px] shadow-(--shadow-float)"
+      class="sheet fixed right-3 bottom-9 z-40 flex h-[min(24rem,70vh)] w-[min(34rem,calc(100vw-1.5rem))] flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float)"
       role="dialog"
       aria-modal="false"
       aria-labelledby="uploads-title"
@@ -62,7 +62,7 @@ const stateOf = (upload: (typeof uploads.all.value)[number]) => {
       <div
         class="flex h-9 shrink-0 items-center justify-between border-b border-border bg-sunken pr-2 pl-4"
       >
-        <h2 id="uploads-title" class="card-title text-[13px]">
+        <h2 id="uploads-title" class="card-title text-[0.8125rem]">
           <template v-if="running.length">{{ count(running.length, 'file') }} uploading</template>
           <template v-else>Upload queue</template>
           <span v-if="failed.length" class="font-normal text-danger"

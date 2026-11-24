@@ -45,7 +45,7 @@ async function retryCaseLookup() {
 </script>
 
 <template>
-  <section class="flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[12px]">
+  <section class="flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[0.75rem]">
     <!-- toolbar -->
     <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
       <RouterLink

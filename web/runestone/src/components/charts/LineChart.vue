@@ -275,7 +275,7 @@ const READING_MAX = 8
     <!-- the reading, beside the crosshair (on the side with room) -->
     <div
       v-if="reading"
-      class="pointer-events-none absolute top-1 z-10 min-w-40 rounded-(--radius-card) border border-border-strong bg-surface px-2 py-1.5 text-[11px] shadow-(--shadow-popover)"
+      class="pointer-events-none absolute top-1 z-10 min-w-40 rounded-(--radius-card) border border-border-strong bg-surface px-2 py-1.5 text-[0.6875rem] shadow-(--shadow-popover)"
       :style="
         reading.x > width / 2
           ? { right: `${width - reading.x + 8}px` }
@@ -301,7 +301,7 @@ const READING_MAX = 8
     </div>
 
     <!-- legend: click to hide or show a line -->
-    <ul v-if="series.length > 1" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+    <ul v-if="series.length > 1" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[0.6875rem]">
       <li v-for="(entry, index) in series" :key="entry.name">
         <button
           type="button"

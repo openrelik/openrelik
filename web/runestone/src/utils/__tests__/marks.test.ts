@@ -97,7 +97,8 @@ describe('markLabel', () => {
   it.each<[Mark, string]>([
     [{ kind: 'line', from: 12, to: 12 }, 'line 12'],
     [{ kind: 'line', from: 12, to: 40 }, 'lines 12–40'],
-    [{ kind: 'line', from: 1000, to: 2500 }, 'lines 1,000–2,500'],
+    [{ kind: 'line', from: 1000, to: 2500 }, 'lines 1000–2500'],
+    [{ kind: 'row', from: 2458, to: 2458 }, 'row 2458'],
     [{ kind: 'line', from: 12, fromCol: 5, to: 12, toCol: 20 }, 'line 12, columns 5–20'],
     [{ kind: 'line', from: 12, fromCol: 5, to: 14, toCol: 20 }, 'lines 12:5–14:20'],
     [{ kind: 'row', from: 5, to: 5 }, 'row 5'],

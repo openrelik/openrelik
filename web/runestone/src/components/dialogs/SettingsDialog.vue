@@ -18,17 +18,13 @@ import { computed, ref, watch } from 'vue'
 import { ChevronDown, Monitor, Moon, Sun, X } from '@/components/icons'
 
 import Switch from '@/components/base/Switch.vue'
-import { settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
+import { FONT_SIZES, settingsOpen, useSettings, type ThemeChoice } from '@/composables/useSettings'
 import { PAGE_SIZES } from '@/stores/settings'
 import { CURRENT_UI_ID, getAvailableUis, switchToUi, type UiOption } from '@/utils/uiSwitch'
 
 /**
  * Settings, as a dialog over whatever page you are on — so changing one never
  * costs you your place.
- *
- * Each row says what it does in words and, on the right, what it is as a
- * config key: `appearance.theme = "dark"`. The words are for deciding; the key
- * is for the person who will later grep a config file for it.
  */
 const settings = useSettings()
 const availableUis = ref<UiOption[]>([])
@@ -79,7 +75,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="sheet absolute top-[10vh] left-1/2 flex max-h-[80vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float) outline-none"
+        class="sheet absolute top-[10vh] left-1/2 flex max-h-[80vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
@@ -133,10 +129,35 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   {{ theme.label }}
                 </button>
               </div>
-              <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
-                >appearance.theme =
-                <span class="text-brand">"{{ settings.appearance.theme }}"</span></code
+            </div>
+
+            <div class="flex items-center gap-3 px-4 py-2.5">
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-ink">Font size</p>
+                <p class="text-ink-muted">Text and control scale across the interface</p>
+              </div>
+              <div
+                class="flex shrink-0 items-center gap-0.5 rounded-(--radius-control) border border-border bg-sunken p-0.5"
+                role="radiogroup"
+                aria-label="Font size"
               >
+                <button
+                  v-for="size in FONT_SIZES"
+                  :key="size"
+                  type="button"
+                  role="radio"
+                  :aria-checked="settings.appearance.fontSize === size"
+                  class="flex h-6 cursor-pointer items-center rounded-(--radius-check) px-2.5 transition-colors duration-120 ease-(--ease-standard)"
+                  :class="
+                    settings.appearance.fontSize === size
+                      ? 'bg-brand-tint text-brand'
+                      : 'text-ink-muted hover:bg-canvas hover:text-ink-secondary'
+                  "
+                  @click="settings.appearance.fontSize = size"
+                >
+                  {{ size }}
+                </button>
+              </div>
             </div>
 
             <div v-if="uiOptions.length > 1" class="flex items-center gap-3 px-4 py-2.5">
@@ -152,7 +173,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   name="openrelik_ui"
                   :value="CURRENT_UI_ID"
                   aria-describedby="settings-ui-help"
-                  class="field h-7 min-w-32 cursor-pointer appearance-none pr-7 pl-2.5 text-[12px] font-medium text-ink"
+                  class="field h-7 min-w-32 cursor-pointer appearance-none pr-7 pl-2.5 text-[0.75rem] font-medium text-ink"
                   @change="onUiChange"
                 >
                   <option v-for="ui in uiOptions" :key="ui.id" :value="ui.id">
@@ -166,9 +187,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
                 />
               </div>
-              <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
-                >openrelik_ui = <span class="text-brand">"runestone"</span></code
-              >
             </div>
           </section>
 
@@ -205,28 +223,20 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   {{ size }}
                 </button>
               </div>
-              <code class="tabular w-44 shrink-0 text-right text-[11px] text-ink-muted"
-                >explorer.pageSize =
-                <span class="text-brand">{{ settings.explorer.pageSize }}</span></code
-              >
             </div>
 
             <div class="flex items-center gap-3 px-4 py-2.5">
-              <Switch v-model="settings.explorer.showEmptyFiles" label="Show empty files" />
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-ink">Show empty files</p>
                 <p class="text-ink-muted">Files with no content; folded away by default</p>
               </div>
-              <code class="tabular shrink-0 text-[11px] text-ink-muted"
-                >explorer.showEmptyFiles =
-                <span class="text-brand">{{ settings.explorer.showEmptyFiles }}</span></code
-              >
+              <Switch v-model="settings.explorer.showEmptyFiles" label="Show empty files" />
             </div>
           </section>
         </div>
 
         <div
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[11px] text-ink-muted"
+          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[0.6875rem] text-ink-muted"
         >
           <span>changes apply immediately</span>
         </div>

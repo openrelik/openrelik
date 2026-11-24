@@ -20,6 +20,7 @@ import { Copy, Maximize, Minimize } from '@/components/icons'
 import StreamStatusBar from '@/components/viewers/StreamStatusBar.vue'
 import TableDetail from '@/components/viewers/TableDetail.vue'
 import { useMarkedRange } from '@/composables/useMarkedRange'
+import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import { useTableStream } from '@/composables/useTableStream'
 import { useModalStore } from '@/stores/modals'
 import { escapeControls } from '@/utils/bytes'
@@ -55,6 +56,10 @@ const OVERSCAN = 10
 const CELL_MAX = 10_000
 const NUMBER_W = 7 // characters for the row number column
 const CH = 7.3 // px per character of the monospace face at 12 px
+const settings = useSettings()
+const fontScale = computed(() => FONT_SCALE[settings.value.appearance.fontSize])
+const rowH = computed(() => ROW_H * fontScale.value)
+const ch = computed(() => CH * fontScale.value)
 
 const table = useTableStream(
   () => ({ id: props.fileId, size: props.size }),
@@ -130,13 +135,14 @@ const widths = ref<number[]>([])
 const resizedCols = new Set<number>()
 let measuredWithRows = false
 watch(
-  () => [columns.value.length, rows.value.length > 0] as const,
-  () => {
+  () => [columns.value.length, rows.value.length > 0, fontScale.value] as const,
+  (_next, prev) => {
+    const scaleChanged = prev !== undefined && prev[2] !== fontScale.value
     const sample = rows.value.slice(0, 200)
     widths.value = columns.value.map((name, index) => {
       if (
         widths.value[index] !== undefined &&
-        (resizedCols.has(index) || measuredWithRows || !sample.length)
+        (resizedCols.has(index) || (!scaleChanged && (measuredWithRows || !sample.length)))
       ) {
         return widths.value[index]!
       }
@@ -144,14 +150,14 @@ watch(
         .map((row) => (table.cellsOf(row)[index] ?? '').length)
         .sort((a, b) => a - b)
       const typical = lengths[Math.floor(lengths.length * 0.9)] ?? 0
-      return Math.round(Math.min(40, Math.max(6, name.length + 2, typical + 1)) * CH + 16)
+      return Math.round(Math.min(40, Math.max(6, name.length + 2, typical + 1)) * ch.value + 16)
     })
     if (sample.length) measuredWithRows = true
   },
   { immediate: true },
 )
 const totalWidth = computed(
-  () => NUMBER_W * CH + 16 + widths.value.reduce((sum, width) => sum + width, 0),
+  () => NUMBER_W * ch.value + 16 + widths.value.reduce((sum, width) => sum + width, 0),
 )
 
 let resizing: { index: number; x: number; width: number } | null = null
@@ -194,11 +200,13 @@ function onScroll(event: Event) {
   if (el.clientHeight) scrollTop.value = el.scrollTop
 }
 
-const firstVisible = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_H) - OVERSCAN))
+const firstVisible = computed(() =>
+  Math.max(0, Math.floor(scrollTop.value / rowH.value) - OVERSCAN),
+)
 const visible = computed(() => {
   const last = Math.min(
     view.value.length,
-    Math.ceil((scrollTop.value + viewHeight.value) / ROW_H) + OVERSCAN,
+    Math.ceil((scrollTop.value + viewHeight.value) / rowH.value) + OVERSCAN,
   )
   const out: { position: number; index: number; cells: string[] }[] = []
   for (let position = firstVisible.value; position < last; position++) {
@@ -236,12 +244,13 @@ watch([() => props.fileId, () => props.kind], () => {
 function moveTo(position: number) {
   if (!view.value.length) return
   cursor.value = Math.min(view.value.length - 1, Math.max(0, position))
-  const top = cursor.value * ROW_H
+  const h = rowH.value
+  const top = cursor.value * h
   const el = scroller.value
   if (!el) return
-  const inner = el.clientHeight - ROW_H // the header row
+  const inner = el.clientHeight - h // the header row
   if (top < el.scrollTop) el.scrollTop = top
-  else if (top + ROW_H > el.scrollTop + inner) el.scrollTop = top + ROW_H - inner
+  else if (top + h > el.scrollTop + inner) el.scrollTop = top + h - inner
 }
 
 // --- marked rows: from the row numbers, or a link ---
@@ -269,7 +278,7 @@ function tryLand() {
     const position = view.value.indexOf(index)
     if (position < 0) return
     cursor.value = position
-    scroller.value?.scrollTo({ top: position * ROW_H - Math.floor(viewHeight.value / 3) })
+    scroller.value?.scrollTo({ top: position * rowH.value - Math.floor(viewHeight.value / 3) })
   })
 }
 watch([rows, table.done, viewHeight], tryLand)
@@ -359,7 +368,7 @@ onMounted(() => window.addEventListener('keydown', onFullscreenKey, { capture: t
 onUnmounted(() => window.removeEventListener('keydown', onFullscreenKey, { capture: true }))
 
 function onKey(event: KeyboardEvent) {
-  const page = Math.max(1, Math.floor(viewHeight.value / ROW_H) - 1)
+  const page = Math.max(1, Math.floor(viewHeight.value / rowH.value) - 1)
   const at = cursor.value ?? -1
   const moves: Record<string, () => number> = {
     ArrowDown: () => at + 1,
@@ -409,7 +418,7 @@ const partialNotice = computed(() => {
       <div
         :class="
           fullscreen
-            ? 'fixed inset-0 z-40 flex bg-surface text-[12px]'
+            ? 'fixed inset-0 z-40 flex bg-surface text-[0.75rem]'
             : 'flex min-h-0 min-w-0 flex-1'
         "
         :role="fullscreen ? 'dialog' : undefined"
@@ -462,7 +471,7 @@ const partialNotice = computed(() => {
               autocomplete="off"
               placeholder="Filter rows"
               aria-label="Filter rows: text, or column:value"
-              class="field h-6 w-52 shrink-0 text-[12px]"
+              class="field h-6 w-52 shrink-0 text-[0.75rem]"
               :class="{ 'ml-auto': !mark }"
               v-tooltip="'Text in any cell, or column:value'"
               @keydown.esc.stop="((filterText = ''), scroller?.focus())"
@@ -493,10 +502,12 @@ const partialNotice = computed(() => {
           >
             <div :style="{ width: `${totalWidth}px` }">
               <!-- header -->
-              <div class="sticky top-0 z-10 flex h-6 border-b border-border bg-sunken text-[11px]">
+              <div
+                class="sticky top-0 z-10 flex h-6 border-b border-border bg-sunken text-[0.6875rem]"
+              >
                 <span
                   class="sticky left-0 z-10 shrink-0 border-r border-border bg-sunken px-2 text-right text-ink-muted"
-                  :style="{ width: `${NUMBER_W * CH + 16}px` }"
+                  :style="{ width: `${NUMBER_W * ch + 16}px` }"
                   >#</span
                 >
                 <span
@@ -530,7 +541,7 @@ const partialNotice = computed(() => {
               </div>
 
               <!-- body: a spacer as tall as every row, the rows in view placed in it -->
-              <div class="relative" :style="{ height: `${view.length * ROW_H}px` }">
+              <div class="relative" :style="{ height: `${view.length * rowH}px` }">
                 <div
                   v-for="line in visible"
                   :key="line.index"
@@ -544,7 +555,7 @@ const partialNotice = computed(() => {
                           ? 'bg-danger-tint/40 hover:bg-sunken'
                           : 'hover:bg-sunken'
                   "
-                  :style="{ top: `${line.position * ROW_H}px`, height: `${ROW_H}px` }"
+                  :style="{ top: `${line.position * rowH}px`, height: `${rowH}px` }"
                   @click="onRowClick(line.position)"
                 >
                   <!-- the row number: click, ⇧-click or drag to mark rows -->
@@ -557,13 +568,13 @@ const partialNotice = computed(() => {
                           ? 'bg-brand-selected text-ink-muted hover:text-ink-secondary'
                           : 'bg-surface text-ink-muted hover:text-ink-secondary'
                     "
-                    :style="{ width: `${NUMBER_W * CH + 16}px` }"
+                    :style="{ width: `${NUMBER_W * ch + 16}px` }"
                     data-gutter
                     @click.stop
                     @pointerdown.stop="marks.onGutterDown($event, rowSpan(line.index))"
                     :data-mark-from="rowSpan(line.index).from"
                     :data-mark-to="rowSpan(line.index).to"
-                    >{{ (line.index + 1).toLocaleString('en-US') }}</span
+                    >{{ line.index + 1 }}</span
                   >
                   <span
                     v-for="(name, index) in columns"
@@ -588,7 +599,7 @@ const partialNotice = computed(() => {
           </div>
 
           <div
-            class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
+            class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
           >
             <span>click a column to sort</span>
           </div>

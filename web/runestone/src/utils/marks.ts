@@ -97,7 +97,6 @@ export function formatMark(mark: Mark): string {
 
 /** A mark for people: `line 12`, `rows 12–40`, `lines 12:5–14:20`, `bytes 0x1f3–0x2a0`. */
 export function markLabel(mark: Mark): string {
-  const n = (value: number) => value.toLocaleString('en-US')
   if (mark.kind === 'offset') {
     return mark.from === mark.to
       ? `byte ${hex(mark.from)}`
@@ -105,11 +104,11 @@ export function markLabel(mark: Mark): string {
   }
   if (mark.kind === 'line' && hasColumns(mark)) {
     return mark.from === mark.to
-      ? `line ${n(mark.from)}, columns ${n(mark.fromCol)}–${n(mark.toCol)}`
-      : `lines ${n(mark.from)}:${n(mark.fromCol)}–${n(mark.to)}:${n(mark.toCol)}`
+      ? `line ${mark.from}, columns ${mark.fromCol}–${mark.toCol}`
+      : `lines ${mark.from}:${mark.fromCol}–${mark.to}:${mark.toCol}`
   }
   const one = mark.kind
-  return mark.from === mark.to ? `${one} ${n(mark.from)}` : `${one}s ${n(mark.from)}–${n(mark.to)}`
+  return mark.from === mark.to ? `${one} ${mark.from}` : `${one}s ${mark.from}–${mark.to}`
 }
 
 /** The smallest span covering both, as whole lines, rows or bytes. */

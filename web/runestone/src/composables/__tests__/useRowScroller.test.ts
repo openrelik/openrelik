@@ -58,7 +58,7 @@ afterEach(() => {
 function mountScroller(options: {
   initialHeight?: number
   totalRows?: () => number
-  rowHeight?: number
+  rowHeight?: number | (() => number)
   withBody?: boolean
 }): {
   scroller: UseRowScrollerReturn
@@ -276,5 +276,38 @@ describe('useRowScroller', () => {
     scroller.onThumbMove({ clientY: 50 } as unknown as PointerEvent)
     expect(Number.isFinite(scroller.topRow.value)).toBe(true)
     expect(scroller.topRow.value).toBe(80)
+  })
+
+  it('reacts to a dynamic rowHeight getter for visibleRows, topRow clamping, and wheel stepping', async () => {
+    const rowH = ref(25)
+    const { scroller } = mountScroller({
+      initialHeight: 200,
+      totalRows: () => 50,
+      rowHeight: () => rowH.value,
+    })
+
+    // 200 / 25 = 8 visible rows, maxTop = 42
+    expect(scroller.visibleRows.value).toBe(8)
+    scroller.scrollTo(42)
+    expect(scroller.topRow.value).toBe(42)
+
+    // Shrink row height to 20px -> 10 visible rows, maxTop drops to 40 -> topRow clamps to 40
+    rowH.value = 20
+    await Promise.resolve()
+    expect(scroller.visibleRows.value).toBe(10)
+    expect(scroller.topRow.value).toBe(40)
+
+    // Grow row height to 40px -> 5 visible rows; a 40px wheel step moves exactly 1 row
+    rowH.value = 40
+    await Promise.resolve()
+    expect(scroller.visibleRows.value).toBe(5)
+    scroller.scrollTo(0)
+    scroller.onWheel({
+      deltaX: 0,
+      deltaY: 40,
+      deltaMode: 0,
+      preventDefault: vi.fn(),
+    } as unknown as WheelEvent)
+    expect(scroller.topRow.value).toBe(1)
   })
 })

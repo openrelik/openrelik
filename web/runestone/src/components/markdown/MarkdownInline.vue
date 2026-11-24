@@ -40,9 +40,11 @@ function onOpen(event: Event, url: string, kind: 'link' | 'image') {
 
 <template>
   <template v-for="(part, i) in inlines" :key="i">
-    <code v-if="part.type === 'code'" class="rounded-(--radius-check) bg-sunken px-1 text-[12px]">{{
-      part.text
-    }}</code>
+    <code
+      v-if="part.type === 'code'"
+      class="rounded-(--radius-check) bg-sunken px-1 text-[0.75rem]"
+      >{{ part.text }}</code
+    >
     <strong v-else-if="part.type === 'strong'" class="font-semibold text-ink">{{
       part.text
     }}</strong>

@@ -61,7 +61,7 @@ watch(
 
       <div
         v-trap-focus
-        class="sheet absolute top-[18vh] left-1/2 flex w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float) outline-none"
+        class="sheet absolute top-[18vh] left-1/2 flex w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
@@ -70,7 +70,7 @@ watch(
         <div
           class="flex h-10 shrink-0 items-center justify-between border-b border-border bg-sunken pr-2 pl-4"
         >
-          <h2 id="confirm-title" class="card-title flex min-w-0 items-center gap-2 text-[14px]">
+          <h2 id="confirm-title" class="card-title flex min-w-0 items-center gap-2 text-[0.875rem]">
             <TriangleAlert
               v-if="request.danger"
               :size="13"

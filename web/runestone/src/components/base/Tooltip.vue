@@ -64,7 +64,7 @@ watch(
       v-if="state.visible"
       :id="TOOLTIP_ID"
       ref="box"
-      class="fixed top-0 left-0 z-100 w-max max-w-[min(60ch,calc(100vw-16px))] rounded-(--radius-control) border border-tooltip-border bg-tooltip px-2 py-1 text-[12px] leading-4 font-normal wrap-anywhere whitespace-pre-line text-tooltip-ink shadow-(--shadow-popover)"
+      class="fixed top-0 left-0 z-100 w-max max-w-[min(60ch,calc(100vw-16px))] rounded-(--radius-control) border border-tooltip-border bg-tooltip px-2 py-1 text-[0.75rem] leading-4 font-normal wrap-anywhere whitespace-pre-line text-tooltip-ink shadow-(--shadow-popover)"
       :class="{ invisible: !state.measured }"
       :style="{ left: `${state.left}px`, top: `${state.top}px` }"
       role="tooltip"

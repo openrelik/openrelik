@@ -35,6 +35,7 @@ import { useItemsStore } from '@/stores/items'
 import { useModalStore } from '@/stores/modals'
 import { isEmptyFile } from '@/utils/item'
 import { foldable, useGroupStacks } from '@/composables/useGroupStacks'
+import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
 import type { TooltipOptions } from '@/composables/useTooltip'
@@ -470,7 +471,10 @@ const besides = computed(() => buildGroupBesides(layout.value))
 
 const MIN = 0.3
 const MAX = 1.5
+const settings = useSettings()
+const fontScale = computed(() => FONT_SCALE[settings.value.appearance.fontSize])
 const scale = ref(1)
+const renderScale = computed(() => scale.value * fontScale.value)
 const viewport = ref<HTMLElement | null>(null)
 const clamp = (value: number) => Math.min(MAX, Math.max(MIN, value))
 
@@ -481,8 +485,11 @@ function zoom(step: number) {
 function fit() {
   const el = viewport.value
   if (!el || el.clientWidth <= 0 || ((props.capped || props.fill) && el.clientHeight <= 0)) return
-  const byWidth = el.clientWidth / layout.value.width
-  const byHeight = props.capped || props.fill ? el.clientHeight / layout.value.height : Infinity
+  const byWidth = el.clientWidth / (layout.value.width * fontScale.value)
+  const byHeight =
+    props.capped || props.fill
+      ? el.clientHeight / (layout.value.height * fontScale.value)
+      : Infinity
   scale.value = clamp(Math.min(1, byWidth, byHeight))
 }
 
@@ -570,7 +577,7 @@ const BAR: Record<TaskStatus, string> = {
       ref="viewport"
       @click="clickCanvas"
       class="flex overflow-auto bg-canvas bg-[radial-gradient(color-mix(in_oklab,var(--color-border)_45%,transparent)_1px,transparent_1px)] bg-size-[14px_14px] bg-local"
-      :class="fill ? 'h-full' : ['min-h-72', { 'max-h-[70vh]': capped }]"
+      :class="fill ? 'h-full' : ['min-h-32', { 'max-h-[70vh]': capped }]"
     >
       <!-- A small chart sits centred in the room it has (in the panel, only
            vertically: it reads from the left); auto margins fall to zero once
@@ -578,14 +585,17 @@ const BAR: Record<TaskStatus, string> = {
       <div
         class="shrink-0"
         :class="fill ? 'm-auto' : 'my-auto'"
-        :style="{ width: `${layout.width * scale}px`, height: `${canvasHeight * scale}px` }"
+        :style="{
+          width: `${layout.width * renderScale}px`,
+          height: `${canvasHeight * renderScale}px`,
+        }"
       >
         <div
-          class="relative origin-top-left"
+          class="relative origin-top-left text-[12px]"
           :style="{
             width: `${layout.width}px`,
             height: `${canvasHeight}px`,
-            transform: `scale(${scale})`,
+            transform: `scale(${renderScale})`,
           }"
         >
           <!-- several input files: a solid, warm box (a group's is dashed and grey:
@@ -602,13 +612,13 @@ const BAR: Record<TaskStatus, string> = {
               }"
             />
             <span
-              class="micro-label absolute bg-canvas px-1 leading-none"
+              class="micro-label absolute bg-canvas px-[4px] text-[12px] leading-none"
               :style="{ left: `${inputsBox.left + 8}px`, top: `${inputsBox.top - 6}px` }"
               >Input</span
             >
             <button
               type="button"
-              class="absolute z-[1] flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-border-strong bg-surface text-ink-muted hover:bg-sunken hover:text-ink"
+              class="absolute z-[1] flex size-[16px] cursor-pointer items-center justify-center rounded-(--radius-check) border border-border-strong bg-surface text-ink-muted hover:bg-sunken hover:text-ink"
               :style="{
                 left: `${inputsBox.left + inputsBox.width - 8}px`,
                 top: `${inputsBox.top - 8}px`,
@@ -698,7 +708,7 @@ const BAR: Record<TaskStatus, string> = {
                 v-if="!manyInputs"
                 :is="inputLinks.get(input.id) ? RouterLink : 'div'"
                 v-bind="inputLinks.get(input.id) ? { to: inputLinks.get(input.id)! } : {}"
-                class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5"
+                class="absolute flex flex-col justify-center gap-[2px] rounded-(--radius-card) border border-border-strong bg-surface px-[10px]"
                 :class="inputLinks.get(input.id) ? 'hover:border-brand' : 'cursor-default'"
                 :style="{
                   left: `${x(node)}px`,
@@ -707,7 +717,7 @@ const BAR: Record<TaskStatus, string> = {
                   height: `${NODE_H}px`,
                 }"
               >
-                <span class="flex min-w-0 items-center gap-1.5 text-ink">
+                <span class="flex min-w-0 items-center gap-[6px] text-ink">
                   <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
                   <span class="truncate text-[11px]">{{ input.name }}</span>
                 </span>
@@ -723,7 +733,7 @@ const BAR: Record<TaskStatus, string> = {
                   :key="file.id"
                   :is="inputLinks.get(file.id) ? RouterLink : 'div'"
                   v-bind="inputLinks.get(file.id) ? { to: inputLinks.get(file.id)! } : {}"
-                  class="absolute flex flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5"
+                  class="absolute flex flex-col justify-center gap-[2px] rounded-(--radius-card) border border-border-strong bg-surface px-[10px]"
                   :class="inputLinks.get(file.id) ? 'hover:border-brand' : 'cursor-default'"
                   :style="{
                     left: `${x(node)}px`,
@@ -732,7 +742,7 @@ const BAR: Record<TaskStatus, string> = {
                     height: `${NODE_H}px`,
                   }"
                 >
-                  <span class="flex min-w-0 items-center gap-1.5 text-ink">
+                  <span class="flex min-w-0 items-center gap-[6px] text-ink">
                     <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
                     <span class="truncate text-[11px]">{{ file.name }}</span>
                   </span>
@@ -763,12 +773,12 @@ const BAR: Record<TaskStatus, string> = {
                 />
                 <button
                   type="button"
-                  class="relative flex h-full w-full cursor-pointer flex-col justify-center gap-0.5 rounded-(--radius-card) border border-border-strong bg-surface px-2.5 text-left hover:bg-sunken"
+                  class="relative flex h-full w-full cursor-pointer flex-col justify-center gap-[2px] rounded-(--radius-card) border border-border-strong bg-surface px-[10px] text-left hover:bg-sunken"
                   :aria-label="`${count(workflow.inputs.length, 'input file')}. Show them`"
                   v-tooltip="inputsTip"
                   @click="setInputsStacked(workflow.id, false)"
                 >
-                  <span class="flex min-w-0 items-center gap-1.5 text-ink">
+                  <span class="flex min-w-0 items-center gap-[6px] text-ink">
                     <Files :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
                     <span class="tabular truncate text-[11px]">{{
                       count(workflow.inputs.length, 'file')
@@ -784,7 +794,7 @@ const BAR: Record<TaskStatus, string> = {
             <button
               v-else-if="node.task"
               type="button"
-              class="absolute flex cursor-pointer flex-col justify-center gap-0.5 rounded-(--radius-card) border px-2.5 text-left transition-colors duration-120 ease-(--ease-standard)"
+              class="absolute flex cursor-pointer flex-col justify-center gap-[2px] rounded-(--radius-card) border px-[10px] text-left transition-colors duration-120 ease-(--ease-standard)"
               :class="[
                 // One background per state, never two: a base bg-surface would
                 // fight these on stylesheet order and win.
@@ -807,7 +817,7 @@ const BAR: Record<TaskStatus, string> = {
               @pointerenter="hovered = node.task.id"
               @pointerleave="hovered = null"
             >
-              <span class="flex min-w-0 items-center gap-1.5">
+              <span class="flex min-w-0 items-center gap-[6px]">
                 <TaskStatusIcon v-if="!workflow.draft" :status="node.task.status" />
                 <span
                   class="truncate text-[11px] font-medium"
@@ -865,7 +875,7 @@ const BAR: Record<TaskStatus, string> = {
               />
               <button
                 type="button"
-                class="relative flex h-full w-full cursor-pointer flex-col justify-center gap-0.5 overflow-hidden rounded-(--radius-card) border px-2.5 text-left"
+                class="relative flex h-full w-full cursor-pointer flex-col justify-center gap-[2px] overflow-hidden rounded-(--radius-card) border px-[10px] text-left"
                 :class="[
                   // One background per state, as on task nodes.
                   holds(node.stack, selectedId)
@@ -878,7 +888,7 @@ const BAR: Record<TaskStatus, string> = {
                 v-tooltip="stackTip(node.stack)"
                 @click="clickStack($event, node.stack.id)"
               >
-                <span class="flex min-w-0 items-center gap-1.5">
+                <span class="flex min-w-0 items-center gap-[6px]">
                   <TaskStatusIcon v-if="!workflow.draft" :status="statusOf(node)" />
                   <span class="truncate text-[11px] font-medium text-ink">{{
                     stackSummary(node.stack).name
@@ -896,7 +906,7 @@ const BAR: Record<TaskStatus, string> = {
                 <!-- how far the group got, in one line -->
                 <span
                   v-if="!workflow.draft"
-                  class="absolute inset-x-0 bottom-0 flex h-0.5"
+                  class="absolute inset-x-0 bottom-0 flex h-[2px]"
                   aria-hidden="true"
                 >
                   <span
@@ -913,7 +923,7 @@ const BAR: Record<TaskStatus, string> = {
             <button
               v-if="editable && node.task"
               type="button"
-              class="absolute flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-danger/60 bg-surface text-danger transition-opacity duration-120 hover:bg-danger-tint focus-visible:opacity-100"
+              class="absolute flex size-[16px] cursor-pointer items-center justify-center rounded-(--radius-check) border border-danger/60 bg-surface text-danger transition-opacity duration-120 hover:bg-danger-tint focus-visible:opacity-100"
               :class="
                 hovered === node.task.id || selectedId === node.task.id
                   ? 'opacity-100'
@@ -937,7 +947,7 @@ const BAR: Record<TaskStatus, string> = {
                 (node.task || (node.key === 'input' && input))
               "
               type="button"
-              class="absolute flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand hover:bg-brand-tint"
+              class="absolute flex size-[16px] cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand hover:bg-brand-tint"
               :style="{
                 left: `${outOf(node).x - 8}px`,
                 top: `${outOf(node).y - 8}px`,
@@ -957,7 +967,7 @@ const BAR: Record<TaskStatus, string> = {
             v-for="toggle in toggles"
             :key="toggle.key"
             type="button"
-            class="absolute flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-border-strong bg-surface text-ink-muted hover:bg-sunken hover:text-ink"
+            class="absolute flex size-[16px] cursor-pointer items-center justify-center rounded-(--radius-check) border border-border-strong bg-surface text-ink-muted hover:bg-sunken hover:text-ink"
             :style="{ left: `${toggle.left}px`, top: `${toggle.top}px` }"
             :aria-label="
               toggle.open ? 'Stack the tasks in this group' : 'Show all tasks in this group'
@@ -978,7 +988,7 @@ const BAR: Record<TaskStatus, string> = {
           <!-- tasks picked with ⌘/⇧-click: split them into a group of their own -->
           <div
             v-if="splitOffer"
-            class="absolute z-10 flex items-center gap-2 rounded-(--radius-card) border border-border-strong bg-surface px-2 py-1.5 text-[11px] whitespace-nowrap"
+            class="absolute z-10 flex items-center gap-[8px] rounded-(--radius-card) border border-border-strong bg-surface px-[8px] py-[6px] text-[11px] whitespace-nowrap"
             :style="{ left: `${splitOffer.left}px`, top: `${splitOffer.top}px` }"
             role="group"
             aria-label="Picked tasks"
@@ -1003,7 +1013,7 @@ const BAR: Record<TaskStatus, string> = {
           <!-- groups picked with ⌘/⇧-click on their boxes: merge them into one -->
           <div
             v-if="mergeOffer"
-            class="absolute z-10 flex w-max max-w-[40rem] items-center gap-2 rounded-(--radius-card) border px-2 py-1.5 text-[11px]"
+            class="absolute z-10 flex w-max max-w-[640px] items-center gap-[8px] rounded-(--radius-card) border px-[8px] py-[6px] text-[11px]"
             :class="
               mergeOffer.problem
                 ? 'border-danger/60 bg-danger-tint text-danger'
@@ -1041,7 +1051,7 @@ const BAR: Record<TaskStatus, string> = {
               v-for="beside in besides"
               :key="beside.key"
               type="button"
-              class="absolute flex size-4 cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand transition-opacity duration-120 hover:bg-brand-tint focus-visible:opacity-100"
+              class="absolute flex size-[16px] cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand transition-opacity duration-120 hover:bg-brand-tint focus-visible:opacity-100"
               :class="
                 beside.ids.includes(hovered ?? '') || beside.ids.includes(selectedId ?? '')
                   ? 'opacity-100'
@@ -1066,7 +1076,7 @@ const BAR: Record<TaskStatus, string> = {
             v-for="ghost in ghosts"
             :key="ghost.key"
             type="button"
-            class="absolute flex cursor-pointer items-center justify-center gap-1.5 rounded-(--radius-card) border border-dashed border-border-strong bg-surface/70 text-[11px] text-ink-muted hover:border-brand hover:bg-brand-tint hover:text-brand"
+            class="absolute flex cursor-pointer items-center justify-center gap-[6px] rounded-(--radius-card) border border-dashed border-border-strong bg-surface/70 text-[11px] text-ink-muted hover:border-brand hover:bg-brand-tint hover:text-brand"
             :style="{
               left: `${ghost.left}px`,
               top: `${ghost.top}px`,
@@ -1105,7 +1115,7 @@ const BAR: Record<TaskStatus, string> = {
       </button>
       <button
         type="button"
-        class="tabular w-10 cursor-pointer text-center text-[11px] text-ink-secondary hover:text-ink"
+        class="tabular w-10 cursor-pointer text-center text-[0.6875rem] text-ink-secondary hover:text-ink"
         aria-label="Reset zoom to 100%"
         v-tooltip="'Reset to 100%'"
         @click="scale = 1"

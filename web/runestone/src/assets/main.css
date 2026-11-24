@@ -120,6 +120,7 @@ limitations under the License.
      fill one, so these are the accents; the light theme lifts them. */
   --color-brand-icon: #a9c7ee;
   --color-success-icon: #6fdea2;
+  --color-warning-icon: #edbb65;
   --color-danger-icon: #efb3b0;
 
   /* Chart bands: three hues at OKLCH lightness 0.56, chroma 0.11. Far below
@@ -235,9 +236,10 @@ limitations under the License.
   /* Solid icons: at 0.449 a filled glyph reads near-black, so they take the
      accent hues up to OKLCH lightness 0.62 — the lightest at which each still
      clears the 3:1 a graphic needs on the panel (brand 3.68, success 3.45,
-     danger 3.95). */
+     warning 3.71, danger 3.95). */
   --color-brand-icon: #4186e0;
   --color-success-icon: #469a6b;
+  --color-warning-icon: #ac7c1c;
   --color-danger-icon: #d95356;
 
   /* The chart bands do not change, and that is a finding rather than an
@@ -252,6 +254,23 @@ limitations under the License.
   --shadow-popover: 0 2px 8px rgb(20 20 30 / 0.08);
 }
 
+/* ---------------------------------------------------------------------------
+   Font size presets (`appearance.fontSize` -> `data-font-size` on `<html>`).
+   Tailwind spacing (`h-6`, `h-7`, `h-9`, `h-10`, `p-*`) and `rem` font sizes
+   all scale together from the root em size.
+   --------------------------------------------------------------------------- */
+:root[data-font-size='compact'] {
+  font-size: 100%;
+}
+
+:root[data-font-size='normal'] {
+  font-size: 112.5%;
+}
+
+:root[data-font-size='large'] {
+  font-size: 125%;
+}
+
 @layer base {
   html {
     @apply bg-canvas text-ink font-sans antialiased;
@@ -264,7 +283,7 @@ limitations under the License.
   }
 
   body {
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.5;
   }
 
@@ -303,7 +322,7 @@ limitations under the License.
      scannable without shouting. */
   .micro-label {
     @apply text-ink-muted font-medium;
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.3;
   }
 
@@ -313,7 +332,7 @@ limitations under the License.
      colour is the default; a tone (brand, danger) overrides it. */
   .card-title {
     @apply text-ink;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     line-height: 1.3;
   }
@@ -371,7 +390,7 @@ limitations under the License.
     @apply inline-flex items-center gap-1.5 border font-medium;
     border-radius: var(--radius-check);
     padding: 2px 6px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     line-height: 1.45;
   }
 }

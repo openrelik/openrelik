@@ -16,9 +16,17 @@ limitations under the License.
 
 import { computed, toRef, type Ref } from 'vue'
 import { useModalStore } from '@/stores/modals'
-import { useSettingsStore, type Settings, type ThemeChoice } from '@/stores/settings'
+import {
+  FONT_SCALE,
+  FONT_SIZES,
+  useSettingsStore,
+  type FontSize,
+  type Settings,
+  type ThemeChoice,
+} from '@/stores/settings'
 
-export type { Settings, ThemeChoice }
+export { FONT_SCALE, FONT_SIZES }
+export type { FontSize, Settings, ThemeChoice }
 
 /** Whether the settings dialog is open. */
 export const settingsOpen = computed({

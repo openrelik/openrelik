@@ -116,6 +116,7 @@ All tokens live in `src/assets/main.css`. A four-line script in `index.html` res
 | `--color-idle-tint`        | `#22222b`  | `#ececf1`   | Idle badge fills.                                                                                        |
 | `--color-brand-icon`       | `#a9c7ee`  | `#4186e0`   | Solid folder and running-workflow icons. Light lifts the accent to OKLCH 0.62 (3.68:1, a graphic's 3:1). |
 | `--color-success-icon`     | `#6fdea2`  | `#469a6b`   | Solid finished-workflow icons (3.45:1 light).                                                            |
+| `--color-warning-icon`     | `#edbb65`  | `#ac7c1c`   | Running-task spinner icons in the workflow flowchart (3.71:1 light).                                     |
 | `--color-danger-icon`      | `#efb3b0`  | `#d95356`   | Solid failed-workflow icons (3.95:1 light).                                                              |
 
 ### Derived Tints Rule
@@ -153,7 +154,7 @@ Why the split: monospace reads more slowly as running text and takes about a fif
 
 ### The 4-Step Type Scale
 
-To prevent visual clutter, the typography scale is restricted to **exactly four sizes**:
+To prevent visual clutter, the typography scale is restricted to **exactly four sizes** (defined in `rem` so they scale together with the user's `data-font-size` preset on `<html>`: `compact` `100%`, `normal` `112.5%` default, `large` `125%`; pixel sizes below are the `compact` `100%` baseline):
 
 ```
 Scale Step     Size      Weight      Line Height   Class / Purpose
@@ -164,11 +165,11 @@ Micro-Label    12px      500 (Med)   1.3           .micro-label (Headers, column
 Badge / Kbd    11px      500 (Med)   1.45          .badge, status bar, HelpDialog <kbd> (10px in KeyHint)
 ```
 
-1. **Card Title (`14px`, weight 600, `line-height: 1.3`)**  
+1. **Card Title (`0.875rem` / `14px` at `compact`, weight 600, `line-height: 1.3`)**  
    Used for sheet headers, modal titles, and section dividers. Sentence case is enforced via CSS:
    ```css
    .card-title {
-     font-size: 14px;
+     font-size: 0.875rem;
      font-weight: 600;
      color: var(--color-ink);
    }
@@ -176,13 +177,13 @@ Badge / Kbd    11px      500 (Med)   1.45          .badge, status bar, HelpDialo
      text-transform: uppercase;
    }
    ```
-2. **Body Text (`13px`, weight 400, `line-height: 1.5`)**  
+2. **Body Text (`0.8125rem` / `13px` at `compact`, weight 400, `line-height: 1.5`)**  
    The foundation of the console. Applied to `body` globally. Used in data rows, descriptions, and inputs.
-3. **Micro-Label (`12px`, weight 500, normal tracking)**  
+3. **Micro-Label (`0.75rem` / `12px` at `compact`, weight 500, normal tracking)**  
    Used for table column headers, form field labels, and property keys.
    _Rule: Write micro-labels in sentence case with normal tracking._ All-caps shouts, and wide tracking breaks lowercase word shape; medium weight and muted tone (`--color-ink-muted`) distinguish labels cleanly while keeping acronyms (`UTC`, `ID`, `API`) natural.
-4. **Badge / Footnote (`11px`, weight 500, `line-height: 1.45`)**  
-   Used in status badges, status bar items, compact viewer column headers (`TableViewer`, `HexViewer`), and `HelpDialog` `<kbd>` shortcut hints. (`KeyHint.vue` `<kbd>` and `UserAvatar` fallback initials step down to `10px`; dense console views, dialogs, and popovers set `12px`; `LoginView`'s wordmark uses `28px`.)
+4. **Badge / Footnote (`0.6875rem` / `11px` at `compact`, weight 500, `line-height: 1.45`)**  
+   Used in status badges, status bar items, compact viewer column headers (`TableViewer`, `HexViewer`), and `HelpDialog` `<kbd>` shortcut hints. (`KeyHint.vue` `<kbd>` and `UserAvatar` fallback initials step down to `0.625rem` / `10px`; dense console views, dialogs, and popovers set `0.75rem` / `12px`; `LoginView`'s wordmark uses `1.75rem` / `28px`.)
 
 ### Numerical Zero-Jitter (`.tabular`)
 
@@ -506,7 +507,7 @@ Data tables are the core workhorse of the technical console.
    - `Shift + Click`, `Shift + Arrow`, or `Shift + J/K` performs continuous range selection.
    - `Space` toggles the active row's checkbox.
    - `⌘A` / `^A` toggles select-all across all visible rows.
-6. **Owner Avatars (`UserAvatar`)**: Ownership is a mark, not a name. An 18px disc in a fixed-width column carries the owner's profile picture, or the first letter of their display name on `bg-sunken` when the server has none (and when the picture fails to load). The avatar is the **one round element** in a system of near-square geometry (§4): it stands for a person rather than a control, and roundness is what says so at 18px. It is also **monochrome**: hue in this console means status, and an owner is not a status. The username rides on `v-tooltip`, with the same text in `aria-label`, so the column stays one glyph wide and never pushes the timestamp around.
+6. **User Avatars (`UserAvatar`)**: Ownership and identity are shown as a round disc (`xs` 16px in the status bar, `sm` 18px in folder listings and search results, `md` 28px in Share collaborator rows, `lg` 32px in the Account dialog) carrying the user's profile picture, or the first letter of their display name when no picture is available or fails to load. The avatar is the **one round element** in a system of near-square geometry (§4): it stands for a person rather than a control, and roundness is what says so at small sizes. When a user UUID is available without a picture, a deterministic hash selects an OKLCH hue (`oklch(0.52 0.12 <hue>)`) with white text so each person keeps a stable color with readable contrast in both themes; without a UUID it falls back to `bg-sunken` and `text-ink-secondary`. In table columns, the username rides on `v-tooltip` and `aria-label` so the column stays one glyph wide; where the name already sits beside the avatar, `decorative` omits the redundant role and tooltip.
 7. **Columns Earn Their Place**: A column that says the same on every row goes. The top-level list holds only folders, so it drops `size` and `type`; in their place a `case` column shows each folder's case reference (`—` for none) in grey `.tabular` text, lined up for scanning. Inside a case, the path bar keeps the reference in view after the top-level folder's name; a row's menu sets, changes and clears it.
 8. **Text Files Are Rows Too (`TextViewer`)**: Plain text is read and drawn in the app, never in a server-styled frame, so it wears the same tokens as every other surface. Rows are 20px (`h-5`) and never wrap; a line longer than 2,000 characters goes on over more rows, whose gutter stays empty. The line numbers are a sticky gutter in `.tabular` `text-ink-muted`. Marked lines (click, `Shift + Click` or drag in the gutter; carried in the URL as `#L12-L40`) are a highlighter, not a row selection: they are what a link points at, so they take the yellow of a marker pen rather than `bg-brand-selected` — `bg-warning-tint` across the row, the gutter's numbers `text-warning` with a 2px `warning` bar on their left edge. A plain click in the text, `Esc`, or clicking the one marked line again unmarks them; selecting text replaces them with a mark of that text (item 9). Search hits share the tint, so each also carries a 1px `outline-warning/60`, which keeps it visible inside marked lines; the current hit is solid `bg-warning` with `text-surface`, the one solid fill in the viewer, as a browser's find marks its current match. The viewer's own scrollbar carries a `bg-warning/70` tick where hits are. Nothing a file holds is rendered as a web page: Markdown is drawn by the app (item 10), and HTML is shown as its source.
 9. **Marks Work the Same in Every Viewer (`useMarkedRange`)**: Text marks lines, the table marks rows, hex marks bytes, and all three the same way: click a number in the gutter (a line number, a row number, a row's offset), `Shift + Click` or drag to extend, click the one marked item again to unmark, `Esc` to clear. The URL carries the mark and opens the view it belongs to: `#L12-L40` text, `#R12-R40` table, `#0x1f3-0x2a0` hex (exact bytes; go-to takes a range too). A mark looks the same everywhere: `bg-warning-tint` on what is marked, the gutter `text-warning` with its 2px `warning` bar when whole lines, rows or byte rows are marked (a mark of exact text or bytes tints only those), and a copy-link button in the viewer's bar. A plain click in the content clears it, in every viewer: in text anywhere in the lines, in the table on a row (which also moves the cursor), in hex on a byte (which also moves the cursor). A selection is the mark, as soon as it is let go of (the drag ended, the `Shift + Arrow` released), so the URL always links to what is selected: in text, selected text marks as `#L12C5-L14C20` (1-based caret columns, as editors give them), only that stretch tinted, the line numbers still yellow; in hex, selected bytes mark as their exact offsets. Selecting inside a mark therefore replaces it. The selection keeps its own highlight, so it can still be copied; the yellow shows once it is gone — `Esc` clears the selection first and the mark second. `m` or the copy-link button copies the link and swaps the selection for the yellow. In table view, selecting text in cells does not mark rows. In text, `Shift + Click` extends exact text past one screen.
@@ -679,7 +680,7 @@ A console is used on hotel Wi-Fi, over VPNs and on congested links, not only on 
 1. **Never wait for data already seen.** Cached data renders at once; a refresh happens behind it and never blanks the screen.
 2. **One place per kind of waiting.** Data that is not there yet waits _where it will appear_; work on data already on screen is shown _in the status bar_; a pending change is shown _on its row_.
 3. **No flashing.** Every indicator appears only after the work has taken **200 ms**, and once visible stays at least **300 ms**. On a fast connection nothing flickers; on a slow one the operator sees at once that something is happening. Use `useDelayedFlag` — never hand-rolled timers.
-4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows. **One exception:** a running task's status mark in the workflow flowchart (`TaskRunningIcon.vue`) is a `brand-icon` dot with a circling ring, because it shows work in progress that may last minutes, not a network wait. Reduced motion stills it.
+4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows. **One exception:** a running task's status mark in the workflow flowchart (`TaskRunningIcon.vue`) is a `warning-icon` dot with a circling ring, because it shows work in progress that may last minutes, not a network wait. Reduced motion stills it.
 5. **No layout shift.** Space for a loading line is reserved before its text appears; indicators have fixed widths; placeholders have the height of the row they stand in for.
 
 ### The Situations

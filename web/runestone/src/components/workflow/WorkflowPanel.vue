@@ -86,8 +86,8 @@ const emit = defineEmits<{
 }>()
 const modalStore = useModalStore()
 
-type View = 'tree' | 'graph'
-const view = useRemembered<View>('openrelik.workflow.view', 'tree')
+type View = 'graph' | 'tree'
+const view = useRemembered<View>('openrelik.workflow.view', 'graph')
 const open = ref(true)
 const fullscreen = ref(false)
 const fullscreenGraph = ref<InstanceType<typeof WorkflowGraph> | null>(null)
@@ -98,8 +98,8 @@ const folderName = computed(
 )
 
 const VIEWS: { value: View; label: string; icon: typeof ListTree }[] = [
-  { value: 'tree', label: 'Tree', icon: ListTree },
   { value: 'graph', label: 'Flowchart', icon: Network },
+  { value: 'tree', label: 'Tree', icon: ListTree },
 ]
 
 const stats = computed(() => runStats(props.workflow))
@@ -297,7 +297,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
     <!-- Right padding as the toolbar's, so the two rows of buttons share an edge. -->
     <div
       class="flex h-9 items-center gap-2.5 border-b border-border bg-sunken pl-3"
-      :class="$slots.end ? 'pr-2' : 'pr-3'"
+      :class="$slots.end ? 'pr-1' : 'pr-2'"
     >
       <button
         type="button"
@@ -371,7 +371,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             @click="((view = option.value), (open = true))"
           >
             <component :is="option.icon" :size="12" :stroke-width="1.5" aria-hidden="true" />
-            <span class="text-[11px]">{{ option.label.toLowerCase() }}</span>
+            <span class="text-[0.6875rem]">{{ option.label.toLowerCase() }}</span>
           </button>
         </div>
 
@@ -471,13 +471,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="fixed inset-0 z-50 flex flex-col bg-canvas text-[12px] outline-none"
+        class="fixed inset-0 z-50 flex flex-col bg-canvas text-[0.75rem] outline-none"
         role="dialog"
         aria-modal="true"
         :aria-label="`${folderName} — flowchart`"
         @keydown="onFullscreenDialogKeydown"
       >
-        <div class="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-surface px-3">
+        <div
+          class="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-surface pr-2 pl-3"
+        >
           <WorkflowSummary :workflow="workflow" :stats="stats" show-name />
           <span v-if="activity.saveError" role="alert" class="flex min-w-0 items-center gap-1.5">
             <span class="truncate text-danger" v-overflow-tooltip
@@ -559,7 +561,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         </div>
 
         <div
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
+          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
         >
           <span>click a task to inspect it</span>
         </div>

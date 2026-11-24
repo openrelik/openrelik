@@ -69,7 +69,7 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
           ]"
           :key="order.label"
           type="button"
-          class="h-4 cursor-pointer rounded-(--radius-check) px-1.5 text-[11px] transition-colors duration-120"
+          class="h-4 cursor-pointer rounded-(--radius-check) px-1.5 text-[0.6875rem] transition-colors duration-120"
           :class="
             littleEndian === order.le
               ? 'bg-brand-tint text-brand'
@@ -123,13 +123,13 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
           >
           <span
             v-if="reading.note"
-            class="text-[11px] text-ink-muted"
+            class="text-[0.6875rem] text-ink-muted"
             v-tooltip="'No time zone is stored: this is the clock of the machine that wrote it'"
             >{{ reading.note }}</span
           >
           <span
             v-if="reading.plausible === false && reading.value !== '–'"
-            class="text-[11px] text-warning"
+            class="text-[0.6875rem] text-warning"
             v-tooltip="
               'Not a time of this kind: before the format starts, in the future, or its zero (no value)'
             "

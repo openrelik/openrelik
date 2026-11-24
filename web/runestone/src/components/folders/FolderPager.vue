@@ -55,7 +55,7 @@ const pageWidth = computed(() => String(props.lastPage).length * 2 + 'page  of '
 
 <template>
   <nav
-    class="flex h-9 shrink-0 items-center gap-3 border-t border-border bg-surface px-3 text-[12px]"
+    class="flex h-9 shrink-0 items-center gap-3 border-t border-border bg-surface px-3 text-[0.75rem]"
     aria-label="Pages"
   >
     <span class="tabular text-ink-muted" :style="{ width: `${rangeWidth}ch` }">{{ range }}</span>

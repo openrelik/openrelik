@@ -99,7 +99,7 @@ describe('TableDetail', () => {
     })
 
     const root = wrapper.get('[aria-label="Row details"]')
-    expect(root.text()).toContain('Row 1,234')
+    expect(root.text()).toContain('Row 1234')
     expect(wrapper.find('.text-danger').exists()).toBe(false)
 
     const dts = wrapper.findAll('dt').map((dt) => dt.text())

@@ -16,8 +16,9 @@ limitations under the License.
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 
+import UserAvatar from '@/components/base/UserAvatar.vue'
 import SettingsTrigger from '@/components/layout/SettingsTrigger.vue'
-import { LogOut, Upload, User as UserIcon } from '@/components/icons'
+import { LogOut, Upload } from '@/components/icons'
 import { refreshAll } from '@/composables/useAutoRefresh'
 import { useConnection } from '@/composables/useConnection'
 import { useNetworkActivity } from '@/composables/useNetworkActivity'
@@ -42,7 +43,7 @@ const { status: connection } = useConnection()
 
 <template>
   <footer
-    class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
+    class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
     role="status"
   >
     <slot />
@@ -136,7 +137,15 @@ const { status: connection } = useConnection()
         v-tooltip="'Account and API keys'"
         @click="openAccount"
       >
-        <UserIcon :size="12" :stroke-width="1.5" class="text-brand" aria-hidden="true" />
+        <UserAvatar
+          v-if="authStore.user"
+          :name="authStore.user.display_name || authStore.user.username"
+          :username="authStore.user.username"
+          :src="authStore.user.profile_picture_url || authStore.user.avatar_url"
+          :uuid="authStore.user.uuid"
+          size="xs"
+          decorative
+        />
         <span class="text-ink">{{ authStore.user?.username }}</span>
       </button>
       <button

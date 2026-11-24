@@ -208,9 +208,9 @@ describe('WorkflowPanel', () => {
       producerId: null,
     })
 
-    // Starts in tree view.
-    expect(wrapper.findComponent(WorkflowTree).exists()).toBe(true)
-    expect(wrapper.findComponent(WorkflowGraph).exists()).toBe(false)
+    // Starts in flowchart view.
+    expect(wrapper.findComponent(WorkflowGraph).exists()).toBe(true)
+    expect(wrapper.findComponent(WorkflowTree).exists()).toBe(false)
 
     // Collapse and expand toggle.
     const collapseBtn = wrapper.get('button[aria-label="Collapse workflow"]')
@@ -219,13 +219,17 @@ describe('WorkflowPanel', () => {
       'false',
     )
 
-    // Clicking flowchart view switches to WorkflowGraph and re-opens the pane.
+    // Clicking tree view switches to WorkflowTree and re-opens the pane.
     const viewButtons = wrapper.get('[role="group"][aria-label="Workflow view"]').findAll('button')
     await viewButtons[1]!.trigger('click')
-    expect(wrapper.findComponent(WorkflowGraph).exists()).toBe(true)
+    expect(wrapper.findComponent(WorkflowTree).exists()).toBe(true)
     expect(wrapper.get('button[aria-label="Collapse workflow"]').attributes('aria-expanded')).toBe(
       'true',
     )
+
+    // Switching back to flowchart enables the group stack toggle.
+    await viewButtons[0]!.trigger('click')
+    expect(wrapper.findComponent(WorkflowGraph).exists()).toBe(true)
 
     // Group stack toggle opens all 3 tasks, then stacks them all again.
     await wrapper.get('button[aria-label="Show all tasks in every group"]').trigger('click')
@@ -312,9 +316,7 @@ describe('WorkflowPanel', () => {
       producerId: null,
     })
 
-    // Switch to graph view, then press 'f' to enter fullscreen.
-    const viewButtons = wrapper.get('[role="group"][aria-label="Workflow view"]').findAll('button')
-    await viewButtons[1]!.trigger('click')
+    // Starts in graph view; press 'f' to enter fullscreen.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }))
     await nextTick()
 
@@ -381,9 +383,6 @@ describe('WorkflowPanel', () => {
       selectedId: null,
       producerId: null,
     })
-
-    const viewButtons = wrapper.get('[role="group"][aria-label="Workflow view"]').findAll('button')
-    await viewButtons[1]!.trigger('click')
 
     const graph = wrapper.getComponent(WorkflowGraph)
     graph.vm.$emit('split', ['t1', 't2'])
@@ -480,9 +479,7 @@ describe('WorkflowPanel', () => {
       producerId: 't2',
     })
 
-    // Switch to flowchart and open fullscreen.
-    const viewButtons = wrapper.get('[role="group"][aria-label="Workflow view"]').findAll('button')
-    await viewButtons[1]!.trigger('click')
+    // Open fullscreen from the default flowchart view.
     await wrapper.get('button[aria-label="Full-screen flowchart"]').trigger('click')
 
     const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!

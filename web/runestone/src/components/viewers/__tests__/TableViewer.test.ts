@@ -27,6 +27,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { hideTooltip } from '@/composables/useTooltip'
 import { useModalStore } from '@/stores/modals'
+import { useSettingsStore } from '@/stores/settings'
 import { api } from '@/api'
 import type { Span } from '@/utils/marks'
 import type { TableKind } from '@/utils/preview'
@@ -340,17 +341,18 @@ describe('TableViewer', () => {
     await grid.trigger('keydown', { key: 'ArrowDown' })
     expect(sideRowTarget?.textContent).toContain('Row 2')
 
+    // 240px / 27px (24 * 1.125 at default 'normal' scale) = 8 rows -> page step = 7
     await grid.trigger('keydown', { key: 'PageDown' })
-    expect(sideRowTarget?.textContent).toContain('Row 11')
+    expect(sideRowTarget?.textContent).toContain('Row 9')
 
     await grid.trigger('keydown', { key: 'End' })
     expect(sideRowTarget?.textContent).toContain('Row 15')
 
     await grid.trigger('keydown', { key: 'PageUp' })
-    expect(sideRowTarget?.textContent).toContain('Row 6')
+    expect(sideRowTarget?.textContent).toContain('Row 8')
 
     await grid.trigger('keydown', { key: 'ArrowUp' })
-    expect(sideRowTarget?.textContent).toContain('Row 5')
+    expect(sideRowTarget?.textContent).toContain('Row 7')
 
     await grid.trigger('keydown', { key: 'Home' })
     expect(sideRowTarget?.textContent).toContain('Row 1')
@@ -636,5 +638,76 @@ describe('TableViewer', () => {
     ).not.toBeNull()
     expect(mark.value).toEqual({ from: 1, to: 1 })
     modals.closeModal('confirm')
+  })
+
+  it('renders row numbers as plain integers without thousands separators', async () => {
+    const csv = ['k,v', ...Array.from({ length: 2458 }, (_, i) => `r${i + 1},${i + 1}`)].join('\n')
+    const bytes = encode(csv)
+    vi.mocked(api.files.readRange).mockImplementation(async (_id, start, end) =>
+      bytes.slice(start, end + 1),
+    )
+
+    const wrapper = mount(TableViewer, {
+      props: {
+        fileId: 60,
+        size: bytes.length,
+        kind: 'csv',
+        mark: { from: 2458, to: 2458 },
+      },
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+
+    const scroller = wrapper.get('[role="grid"]')
+    Object.defineProperty(scroller.element, 'scrollTop', { value: 2457 * 27, configurable: true })
+    await scroller.trigger('scroll')
+    await nextTick()
+
+    const gutters = wrapper.findAll('[data-gutter]')
+    expect(gutters.map((g) => g.text())).toContain('2458')
+    expect(gutters.some((g) => g.text().includes(','))).toBe(false)
+    expect(wrapper.text()).toContain('row 2458')
+  })
+
+  it('rescales auto-sized columns on fontSize change while keeping user-resized columns intact', async () => {
+    const csvBytes = encode('name,description\nalpha,a reasonably wide column value\n')
+    vi.mocked(api.files.readRange).mockResolvedValue(csvBytes)
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const settingsStore = useSettingsStore()
+
+    const wrapper = mount(TableViewer, {
+      props: { fileId: 61, size: csvBytes.length, kind: 'csv' },
+      global: { plugins: [pinia, directives, makeRouter()] },
+    })
+    wrappers.push(wrapper)
+    await vi.advanceTimersByTimeAsync(10)
+
+    const widthOf = (index: number) =>
+      parseInt(
+        /width:\s*(\d+)px/.exec(
+          wrapper.findAll('[role="columnheader"]')[index]!.attributes('style') ?? '',
+        )?.[1] ?? '0',
+        10,
+      )
+
+    const initialAutoWidth = widthOf(1)
+
+    // Manually resize column 0 by +60px
+    const col0Handle = wrapper.findAll('[role="columnheader"]')[0]!.get('.cursor-col-resize')
+    await col0Handle.trigger('pointerdown', { pointerId: 1, clientX: 100 })
+    await col0Handle.trigger('pointermove', { clientX: 160 })
+    await col0Handle.trigger('pointerup')
+    const resizedCol0Width = widthOf(0)
+
+    settingsStore.settings.appearance.fontSize = 'large'
+    await nextTick()
+
+    expect(widthOf(0)).toBe(resizedCol0Width)
+    expect(widthOf(1)).toBeGreaterThan(initialAutoWidth)
   })
 })

@@ -20,9 +20,11 @@
     <script>
       ;(function () {
         var chosen = ''
+        var fontSize = ''
         try {
           var stored = JSON.parse(localStorage.getItem('openrelik.settings') || '{}')
           chosen = (stored.appearance && stored.appearance.theme) || ''
+          fontSize = (stored.appearance && stored.appearance.fontSize) || ''
         } catch (e) {
           // Site data blocked, or not JSON: fall back to the OS.
         }
@@ -33,6 +35,12 @@
               ? 'light'
               : 'dark'
         document.documentElement.setAttribute('data-theme', mode)
+        document.documentElement.setAttribute(
+          'data-font-size',
+          fontSize === 'compact' || fontSize === 'normal' || fontSize === 'large'
+            ? fontSize
+            : 'normal',
+        )
       })()
     </script>
   </head>

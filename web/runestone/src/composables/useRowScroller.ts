@@ -56,10 +56,11 @@ export function useRowScroller(
   body: Readonly<Ref<HTMLElement | null>>,
   track: Readonly<Ref<HTMLElement | null>>,
   totalRows: () => number,
-  rowHeight: number,
+  rowHeight: number | (() => number),
 ): UseRowScrollerReturn {
+  const rowH = () => (typeof rowHeight === 'function' ? rowHeight() : rowHeight)
   const bodyHeight = ref(0)
-  const visibleRows = computed(() => Math.max(1, Math.floor(bodyHeight.value / rowHeight)))
+  const visibleRows = computed(() => Math.max(1, Math.floor(bodyHeight.value / rowH())))
   const maxTop = computed(() => Math.max(0, totalRows() - visibleRows.value))
   const topRow = ref(0)
   const clampTop = (row: number) => Math.min(maxTop.value, Math.max(0, Math.round(row)))
@@ -89,13 +90,14 @@ export function useRowScroller(
   function onWheel(event: WheelEvent) {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
     event.preventDefault()
+    const h = rowH()
     const px =
       event.deltaMode === 1
-        ? event.deltaY * rowHeight
+        ? event.deltaY * h
         : event.deltaMode === 2
           ? event.deltaY * bodyHeight.value
           : event.deltaY
-    wheelRest += px / rowHeight
+    wheelRest += px / h
     const step = Math.trunc(wheelRest)
     if (!step) return
     wheelRest -= step
