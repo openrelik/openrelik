@@ -16,6 +16,7 @@ import os
 
 from celery import Celery
 from celery.utils import nodesplit
+from openrelik_common.celery_utils import configure_celery_app
 from prometheus_client import CollectorRegistry, Counter, Histogram, start_http_server
 from prometheus_client.core import CounterMetricFamily
 from prometheus_client.registry import Collector
@@ -164,9 +165,14 @@ def run_metrics_exporter(celery_app):
         recv.capture(limit=None, timeout=None, wakeup=True)
 
 
+def create_celery_app(redis_url):
+    """Create and configure the metrics exporter's Celery application."""
+    return configure_celery_app(Celery(broker=redis_url, backend=redis_url))
+
+
 if __name__ == "__main__":
     redis_url = os.getenv("REDIS_URL")
-    celery_app = Celery(broker=redis_url, backend=redis_url)
+    celery_app = create_celery_app(redis_url)
 
     # Register the queue metrics collector
     PROMETHEUS_REGISTRY.register(QueueMetricsCollector(celery_app))

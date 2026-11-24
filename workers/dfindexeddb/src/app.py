@@ -16,6 +16,7 @@ import os
 
 import redis
 from celery.app import Celery
+from openrelik_common.celery_utils import configure_celery_app
 
 from openrelik_worker_common.debug_utils import start_debugger
 
@@ -31,5 +32,6 @@ celery = Celery(
         "src.leveldb",
     ]
 )
+configure_celery_app(celery)
 
 redis_client = redis.Redis.from_url(REDIS_URL)

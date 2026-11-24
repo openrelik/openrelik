@@ -20,10 +20,11 @@ from fastapi import APIRouter
 from lib import celery_utils
  
 from openrelik_common import telemetry
+from openrelik_common.celery_utils import configure_celery_app
 
 
 redis_url = os.getenv("REDIS_URL")
-celery = Celery(broker=redis_url, backend=redis_url)
+celery = configure_celery_app(Celery(broker=redis_url, backend=redis_url))
 
 telemetry.setup_telemetry(service_name='openrelik-server')
 telemetry.instrument_celery_app(celery)

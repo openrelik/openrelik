@@ -6,8 +6,8 @@ authors = [{ name = "Johan Berggren", email = "jberggren@gmail.com" }]
 requires-python = ">=3.12,<4"
 readme = "README.md"
 dependencies = [
-    "celery[redis]>=5.4.0,<6",
-    "openrelik-common~=0.18.0",
+    "celery[redis]>=5.6.0,<6.0.0",
+    "openrelik-common~=0.18.1",
     "openrelik-worker-common~=0.18.0",
     "timesketch-api-client>=20260312",
     "timesketch-import-client>=20230721",

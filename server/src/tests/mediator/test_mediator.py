@@ -16,9 +16,11 @@
 
 import base64
 import json
+import logging
 from unittest import mock
 
 import pytest
+from celery.events.state import State as CeleryEventState
 
 from mediator import mediator
 
@@ -372,3 +374,275 @@ def test_is_hashing_worker_available_handles_inspect_failure(monkeypatch):
     celery_app.control.inspect.return_value.active_queues.side_effect = Exception("boom")
 
     assert mediator.is_hashing_worker_available(celery_app) is False
+
+
+def _task_event(event_type: str, task_uuid: str, clock: int, **extra):
+    """Build a Celery task event dict with the fields CeleryEventState requires."""
+    return {
+        "type": event_type,
+        "uuid": task_uuid,
+        "hostname": "worker@test",
+        "timestamp": 100.0 + clock,
+        "local_received": 100.0 + clock,
+        "clock": clock,
+        **extra,
+    }
+
+
+def test_process_task_event_ignores_redelivered_events_after_success(
+    monkeypatch, fake_dependencies, caplog
+):
+    """Redelivered task-received/task-started after task-succeeded must not duplicate files."""
+    task_uuid = "task-uuid-123"
+    db_task = mock.Mock(id=1, status_short="PENDING", result=None, runtime=None)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    monkeypatch.setattr(mediator, "update_database", mock.Mock())
+    monkeypatch.setattr(mediator, "is_hashing_worker_available", lambda app: False)
+
+    mock_async_result = mock.Mock()
+    mock_async_result.get.return_value = _encoded_result([{"uuid": "file-1"}])
+    monkeypatch.setattr(mediator, "AsyncResult", lambda *a, **kw: mock_async_result)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    mediator.process_task_event(
+        db,
+        state,
+        _task_event("task-succeeded", task_uuid, clock=1, runtime=1.5),
+        celery_app,
+    )
+    assert fake_dependencies == ["file-1"]
+    assert db_task.status_short == "SUCCESS"
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=2), celery_app
+        )
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=3), celery_app
+        )
+
+    assert fake_dependencies == ["file-1"]
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_event_ignores_redelivered_events_after_failure(
+    monkeypatch, caplog
+):
+    """Redelivered task-received/task-started after task-failed must not re-run failure handling."""
+    task_uuid = "task-uuid-fail"
+    db_task = mock.Mock(
+        id=2, status_short="PENDING", error_exception=None, error_traceback=None
+    )
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    monkeypatch.setattr(mediator, "update_database", mock.Mock())
+    mock_process_failed = mock.Mock()
+    monkeypatch.setattr(mediator, "process_failed_task", mock_process_failed)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    mediator.process_task_event(
+        db,
+        state,
+        _task_event(
+            "task-failed",
+            task_uuid,
+            clock=1,
+            exception="RuntimeError('boom')",
+            traceback="tb",
+        ),
+        celery_app,
+    )
+    assert mock_process_failed.call_count == 1
+    assert db_task.status_short == "FAILURE"
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=2), celery_app
+        )
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=3), celery_app
+        )
+
+    assert mock_process_failed.call_count == 1
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_event_ignores_duplicate_task_succeeded(
+    monkeypatch, fake_dependencies, caplog
+):
+    """A second task-succeeded from a redelivered task must not insert duplicate files."""
+    task_uuid = "task-uuid-dup-success"
+    db_task = mock.Mock(id=3, status_short="PENDING", result=None, runtime=None)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+    monkeypatch.setattr(mediator, "is_hashing_worker_available", lambda app: False)
+
+    mock_async_result = mock.Mock()
+    mock_async_result.get.return_value = _encoded_result([{"uuid": "file-1"}])
+    monkeypatch.setattr(mediator, "AsyncResult", lambda *a, **kw: mock_async_result)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    mediator.process_task_event(
+        db,
+        state,
+        _task_event("task-succeeded", task_uuid, clock=1, runtime=10.0),
+        celery_app,
+    )
+    assert fake_dependencies == ["file-1"]
+    assert db_task.status_short == "SUCCESS"
+    assert mock_update.call_count == 1
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db,
+            state,
+            _task_event("task-succeeded", task_uuid, clock=2, runtime=12.0),
+            celery_app,
+        )
+
+    assert fake_dependencies == ["file-1"]
+    assert db_task.runtime == 10.0
+    assert mock_update.call_count == 1
+    assert any(
+        "task-succeeded" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_event_preserves_terminal_status_after_mediator_restart(
+    monkeypatch, caplog
+):
+    """Redelivered events arriving after a mediator restart must not regress terminal DB state."""
+    task_uuid = "task-uuid-post-restart"
+    db_task = mock.Mock(id=4, status_short="SUCCESS", runtime=42.0)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    # Fresh CeleryEventState has no memory of the prior SUCCESS event.
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=1), celery_app
+        )
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=2), celery_app
+        )
+
+    assert db_task.status_short == "SUCCESS"
+    assert db_task.runtime == 42.0
+    mock_update.assert_not_called()
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_progress_event_ignores_terminal_task(monkeypatch, caplog):
+    """Post-restart task-progress events must not overwrite a terminal DB status."""
+    task_uuid = "task-uuid-progress-terminal"
+    db_task = mock.Mock(
+        id=5, status_short="SUCCESS", status_progress='{"done": true}'
+    )
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_progress_event(
+            db,
+            state,
+            _task_event("task-progress", task_uuid, clock=1, data={"percent": 50}),
+        )
+
+    assert db_task.status_short == "SUCCESS"
+    assert db_task.status_progress == '{"done": true}'
+    mock_update.assert_not_called()
+    assert any(
+        "task-progress" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_progress_event_skips_missing_db_task(monkeypatch):
+    """task-progress for a task not yet in the DB returns without crashing."""
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: None)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    state = CeleryEventState()
+    mediator.process_task_progress_event(
+        mock.Mock(),
+        state,
+        _task_event("task-progress", "missing-uuid", clock=1, data={"percent": 10}),
+    )
+
+    mock_update.assert_not_called()
+
+
+@pytest.mark.parametrize("active_status", ["STARTED", "PROGRESS"])
+def test_process_task_event_warns_on_redelivery_for_active_task(
+    monkeypatch, caplog, active_status
+):
+    """Redelivered task-received/task-started on an active task logs a warning and updates DB."""
+    task_uuid = f"task-uuid-active-{active_status.lower()}"
+    db_task = mock.Mock(id=6, status_short=active_status, runtime=None)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=1), celery_app
+        )
+        db_task.status_short = active_status
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=2), celery_app
+        )
+
+    assert mock_update.call_count == 2
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )

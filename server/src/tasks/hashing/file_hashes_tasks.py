@@ -26,6 +26,7 @@ import os
 
 from celery.app import Celery
 from openrelik_common import telemetry
+from openrelik_common.celery_utils import configure_celery_app
 
 from lib.file_hashes import generate_hashes
 
@@ -34,10 +35,12 @@ TASK_NAME = f"{QUEUE_NAME}.tasks.generate_hashes"
 
 REDIS_URL = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
 
-celery = Celery(
-    broker=REDIS_URL,
-    backend=REDIS_URL,
-    include=["tasks.hashing.file_hashes_tasks"],
+celery = configure_celery_app(
+    Celery(
+        broker=REDIS_URL,
+        backend=REDIS_URL,
+        include=["tasks.hashing.file_hashes_tasks"],
+    )
 )
 
 telemetry.instrument_celery_app(celery)

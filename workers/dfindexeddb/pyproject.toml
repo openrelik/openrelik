@@ -7,8 +7,9 @@ requires-python = ">=3.12,<4.0"
 readme = "README.md"
 
 dependencies = [
-    "celery[redis]>=5.4.0,<6",
+    "celery[redis]>=5.6.0,<6.0.0",
     "openrelik-worker-common~=0.18.0",
+    "openrelik-common~=0.18.1",
     "dfindexeddb[plugins]>=20251109,<20251110",
 ]
 

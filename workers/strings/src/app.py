@@ -15,6 +15,7 @@
 import os
 
 from celery.app import Celery
+from openrelik_common.celery_utils import configure_celery_app
 
 from openrelik_common import telemetry
 
@@ -22,4 +23,5 @@ telemetry.setup_telemetry('openrelik-worker-strings')
 
 REDIS_URL = os.getenv("REDIS_URL")
 celery = Celery(broker=REDIS_URL, backend=REDIS_URL, include=["src.tasks"])
+configure_celery_app(celery)
 telemetry.instrument_celery_app(celery)

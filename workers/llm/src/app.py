@@ -15,6 +15,7 @@
 import os
 
 from celery.app import Celery
+from openrelik_common.celery_utils import configure_celery_app
 
 from openrelik_worker_common.debug_utils import start_debugger
 
@@ -27,3 +28,4 @@ celery = Celery(
     backend=REDIS_URL,
     include=["src.tasks"],
 )
+configure_celery_app(celery)

@@ -19,6 +19,7 @@ from celery.app import Celery
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from openrelik_common import telemetry
+from openrelik_common.celery_utils import configure_celery_app
 from sqlalchemy import not_, or_, text
 from sqlalchemy.exc import ProgrammingError
 from starlette.middleware.sessions import SessionMiddleware
@@ -217,6 +218,6 @@ api_v1.include_router(
 # Setup the queues. This function take all registered tasks on the celery task queue
 # and generate the task queue config automatically.
 redis_url = os.getenv("REDIS_URL")
-celery = Celery(broker=redis_url, backend=redis_url)
+celery = configure_celery_app(Celery(broker=redis_url, backend=redis_url))
 telemetry.instrument_fast_api(api_v1, excluded_urls='/files/*/download_stream,/files/*/download,/files/upload')
 celery_utils.update_task_queues(celery)
