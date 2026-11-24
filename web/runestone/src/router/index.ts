@@ -15,9 +15,10 @@ limitations under the License.
 */
 
 import { createRouter, createWebHistory } from 'vue-router'
-import { errorMessage } from '@/api'
 import { caseLookupError, findCaseFolder } from '@/composables/useCaseRef'
 import { useAuthStore } from '@/stores/auth'
+import { errorMessage, readSession, removeSession } from '@/api'
+import { POST_LOGIN_REDIRECT_KEY, safeRedirectTarget } from '@/utils/authRedirect'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -103,6 +104,24 @@ router.beforeEach(async (to) => {
       return {
         name: 'login',
         query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : undefined,
+      }
+    }
+  }
+
+  // 2b. Restore a saved pre-login destination after returning to / from an external IdP.
+  if (to.name === 'folders' && to.fullPath === '/') {
+    const savedRedirect = readSession(POST_LOGIN_REDIRECT_KEY)
+    if (savedRedirect !== null) {
+      removeSession(POST_LOGIN_REDIRECT_KEY)
+      const target = safeRedirectTarget(savedRedirect)
+      if (target !== '/') {
+        const resolved = router.resolve(target)
+        return {
+          path: resolved.path,
+          query: resolved.query,
+          hash: resolved.hash,
+          replace: true,
+        }
       }
     }
   }

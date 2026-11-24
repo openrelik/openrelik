@@ -24,9 +24,26 @@ const apiServerUrl = import.meta.env.VITE_OPENRELIK_SERVER_URL || ''
 const apiServerVersion = import.meta.env.VITE_OPENRELIK_API_VERSION || 'v1'
 const useMockApi = import.meta.env.VITE_USE_MOCK_API === 'true'
 
+/**
+ * Parses a comma-separated list of auth methods (e.g. "local,oidc").
+ * Falls back to `['local']` when unset or blank so runtime substitution
+ * with an empty OPENRELIK_AUTH_METHODS still allows local login.
+ */
+export function parseAuthMethods(raw?: string): string[] {
+  const seen = new Set<string>()
+  for (const entry of (raw ?? '').split(',')) {
+    const method = entry.trim().toLowerCase()
+    if (method) seen.add(method)
+  }
+  return seen.size > 0 ? [...seen] : ['local']
+}
+
+const authMethods = parseAuthMethods(import.meta.env.VITE_OPENRELIK_AUTH_METHODS)
+
 export const apiConfig = {
   apiServerUrl,
   apiServerVersion,
+  authMethods,
   useMockApi,
   /** Full base path for versioned REST API calls: e.g. "/api/v1" or "http://localhost:8710/api/v1" */
   get basePath(): string {

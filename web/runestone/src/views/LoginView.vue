@@ -14,20 +14,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { AlertCircle, Eye, EyeOff, Lock, User } from '@/components/icons'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
-import { errorMessage as toMessage } from '@/api'
+import { AlertCircle, Eye, EyeOff, KeyRound, Lock, User } from '@/components/icons'
 import { useAuthStore } from '@/stores/auth'
+import { api, errorMessage as toMessage, removeSession, writeSession } from '@/api'
+import { POST_LOGIN_REDIRECT_KEY, safeRedirectTarget } from '@/utils/authRedirect'
 
 /**
  * LoginView — Minimal Console Authentication View
  *
- * Flat by design: no card, no shadow — the wordmark, two fields with leading
- * icons and placeholders in place of labels, and one full-width primary button.
+ * Flat by design: no card, no shadow — the wordmark, local username/password
+ * form when `local` is enabled, and external OAuth/OIDC provider sign-in links
+ * configured via `VITE_OPENRELIK_AUTH_METHODS`.
  */
+const PROVIDER_LABELS: Record<string, string> = {
+  oidc: 'OIDC',
+  iap: 'IAP',
+}
+
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
@@ -40,23 +47,38 @@ const errorMessage = ref('')
 
 const usernameInput = ref<HTMLInputElement | null>(null)
 
+const hasLocalAuth = computed(() => api.config.authMethods.includes('local'))
+const externalAuthMethods = computed(() =>
+  api.config.authMethods.filter((method) => method !== 'local'),
+)
+
+function providerLabel(method: string): string {
+  const displayName =
+    PROVIDER_LABELS[method] ?? `${method.charAt(0).toUpperCase()}${method.slice(1)}`
+  return `Sign in with ${displayName}`
+}
+
+function providerLoginUrl(method: string): string {
+  const serverRoot = api.config.apiServerUrl.replace(/\/+$/, '')
+  return `${serverRoot}/login/${encodeURIComponent(method)}`
+}
+
+function prepareExternalLogin() {
+  // Clear any stale cached user so the return from the IdP hydrates the fresh session.
+  authStore.setUser(null)
+  const target = safeRedirectTarget(route.query.redirect)
+  if (target !== '/') {
+    writeSession(POST_LOGIN_REDIRECT_KEY, target)
+  } else {
+    removeSession(POST_LOGIN_REDIRECT_KEY)
+  }
+}
+
 function resetForm() {
   username.value = ''
   password.value = ''
   errorMessage.value = ''
   usernameInput.value?.focus()
-}
-
-/** Accepts only same-origin non-login app paths so a tampered query cannot bounce off-site. */
-function safeRedirectTarget(raw: unknown): string {
-  if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//')) return '/'
-  try {
-    const url = new URL(raw, 'http://localhost')
-    if (url.origin !== 'http://localhost' || url.pathname === '/login') return '/'
-    return `${url.pathname}${url.search}${url.hash}`
-  } catch {
-    return '/'
-  }
 }
 
 async function handleLogin() {
@@ -72,6 +94,7 @@ async function handleLogin() {
 
   try {
     await authStore.login(trimmedUser, password.value)
+    removeSession(POST_LOGIN_REDIRECT_KEY)
     await router.push(safeRedirectTarget(route.query.redirect))
   } catch (err: unknown) {
     errorMessage.value = toMessage(err, 'Authentication failed.')
@@ -105,83 +128,114 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         <span class="text-[28px] leading-none font-bold tracking-tight text-ink">OpenRelik</span>
       </div>
 
-      <!-- Authentication Form -->
-      <form class="flex flex-col gap-3" @submit.prevent="handleLogin">
-        <!-- Error Alert -->
+      <div class="flex flex-col gap-5">
+        <!-- Local Authentication Form -->
+        <form v-if="hasLocalAuth" class="flex flex-col gap-3" @submit.prevent="handleLogin">
+          <!-- Error Alert -->
+          <div
+            v-if="errorMessage"
+            role="alert"
+            aria-live="polite"
+            class="flex items-start gap-2 rounded-(--radius-check) border border-danger/40 bg-danger-tint px-2.5 py-1.5 text-[12px] text-danger"
+          >
+            <AlertCircle :size="13" :stroke-width="1.5" class="mt-0.5 shrink-0" />
+            <span class="flex-1 leading-snug">{{ errorMessage }}</span>
+          </div>
+
+          <!-- Username Field -->
+          <label class="relative block">
+            <User
+              :size="16"
+              :stroke-width="1.5"
+              class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-muted"
+            />
+            <input
+              ref="usernameInput"
+              v-model="username"
+              v-autofocus
+              type="text"
+              name="username"
+              aria-label="Username"
+              placeholder="Username"
+              autocomplete="username"
+              required
+              class="field h-10 w-full pl-9 placeholder:text-ink-muted"
+              :disabled="isSubmitting"
+            />
+          </label>
+
+          <!-- Password Field -->
+          <label class="relative block">
+            <Lock
+              :size="16"
+              :stroke-width="1.5"
+              class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-muted"
+            />
+            <input
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              name="password"
+              aria-label="Password"
+              placeholder="Password"
+              autocomplete="current-password"
+              required
+              class="field h-10 w-full pr-9 pl-9 placeholder:text-ink-muted"
+              :class="{ 'font-mono': password }"
+              :disabled="isSubmitting"
+            />
+            <button
+              v-tooltip="showPassword ? 'Hide password' : 'Show password'"
+              type="button"
+              :aria-pressed="showPassword"
+              :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              class="absolute top-1/2 right-3 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-(--radius-check) p-0.5 text-ink-muted hover:text-ink"
+              @click="showPassword = !showPassword"
+            >
+              <component :is="showPassword ? EyeOff : Eye" :size="14" :stroke-width="1.5" />
+            </button>
+          </label>
+
+          <!-- Submit Button -->
+          <Button
+            type="submit"
+            variant="primary"
+            size="default"
+            :disabled="isSubmitting"
+            class="h-10 w-full justify-center font-semibold"
+          >
+            {{ isSubmitting ? 'Signing in...' : 'Login' }}
+          </Button>
+        </form>
+
+        <!-- Divider between local form and external providers -->
         <div
-          v-if="errorMessage"
-          role="alert"
-          aria-live="polite"
-          class="flex items-start gap-2 rounded-(--radius-check) border border-danger/40 bg-danger-tint px-2.5 py-1.5 text-[12px] text-danger"
+          v-if="hasLocalAuth && externalAuthMethods.length > 0"
+          class="flex items-center gap-3 text-[12px] text-ink-muted"
         >
-          <AlertCircle :size="13" :stroke-width="1.5" class="shrink-0 mt-0.5" />
-          <span class="flex-1 leading-snug">{{ errorMessage }}</span>
+          <span class="h-px flex-1 bg-border" aria-hidden="true" />
+          <span>or</span>
+          <span class="h-px flex-1 bg-border" aria-hidden="true" />
         </div>
 
-        <!-- Username Field -->
-        <label class="relative block">
-          <User
-            :size="16"
-            :stroke-width="1.5"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-muted"
-          />
-          <input
-            ref="usernameInput"
-            v-model="username"
-            v-autofocus
-            type="text"
-            name="username"
-            aria-label="Username"
-            placeholder="Username"
-            autocomplete="username"
-            required
-            class="field h-10 w-full pl-9 placeholder:text-ink-muted"
-            :disabled="isSubmitting"
-          />
-        </label>
-
-        <!-- Password Field -->
-        <label class="relative block">
-          <Lock
-            :size="16"
-            :stroke-width="1.5"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-muted"
-          />
-          <input
-            v-model="password"
-            :type="showPassword ? 'text' : 'password'"
-            name="password"
-            aria-label="Password"
-            placeholder="Password"
-            autocomplete="current-password"
-            required
-            class="field h-10 w-full pr-9 pl-9 placeholder:text-ink-muted"
-            :class="{ 'font-mono': password }"
-            :disabled="isSubmitting"
-          />
-          <button
-            v-tooltip="showPassword ? 'Hide password' : 'Show password'"
-            type="button"
-            :aria-pressed="showPassword"
-            :aria-label="showPassword ? 'Hide password' : 'Show password'"
-            class="absolute top-1/2 right-3 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-(--radius-check) p-0.5 text-ink-muted hover:text-ink"
-            @click="showPassword = !showPassword"
+        <!-- External OAuth / OIDC Providers -->
+        <div v-if="externalAuthMethods.length > 0" class="flex flex-col gap-2.5">
+          <a
+            v-for="method in externalAuthMethods"
+            :key="method"
+            :href="providerLoginUrl(method)"
+            class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-(--radius-control) px-3 py-1.5 font-semibold transition-colors duration-120 ease-(--ease-standard)"
+            :class="
+              !hasLocalAuth && externalAuthMethods.length === 1
+                ? 'bg-brand-strong text-canvas hover:bg-brand-stronger'
+                : 'border border-border-strong bg-surface text-ink hover:bg-sunken'
+            "
+            @click="prepareExternalLogin"
           >
-            <component :is="showPassword ? EyeOff : Eye" :size="14" :stroke-width="1.5" />
-          </button>
-        </label>
-
-        <!-- Submit Button -->
-        <Button
-          type="submit"
-          variant="primary"
-          size="default"
-          :disabled="isSubmitting"
-          class="h-10 w-full justify-center font-semibold"
-        >
-          {{ isSubmitting ? 'Signing in...' : 'Login' }}
-        </Button>
-      </form>
+            <KeyRound :size="15" :stroke-width="1.5" />
+            <span>{{ providerLabel(method) }}</span>
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 </template>
