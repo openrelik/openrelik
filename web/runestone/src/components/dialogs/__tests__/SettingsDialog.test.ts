@@ -99,10 +99,13 @@ describe('SettingsDialog', () => {
 
     const dialog = body.get('[role="dialog"]')
     expect(dialog.get('#settings-title').text()).toBe('settings')
-    expect(dialog.text()).toContain('appearance.theme =')
-    expect(dialog.text()).toContain('appearance.fontSize =')
-    expect(dialog.text()).toContain('explorer.pageSize =')
-    expect(dialog.text()).not.toContain('ai.enabled =')
+    expect(dialog.text()).toContain('Appearance')
+    expect(dialog.text()).toContain('Theme')
+    expect(dialog.text()).toContain('Font size')
+    expect(dialog.text()).toContain('Explorer')
+    expect(dialog.text()).toContain('Folders per page')
+    expect(dialog.text()).toContain('Show empty files')
+    expect(dialog.find('code').exists()).toBe(false)
   })
 
   it('switches font size between compact, normal, and large and updates data-font-size', async () => {

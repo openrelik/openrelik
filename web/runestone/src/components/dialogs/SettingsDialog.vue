@@ -25,10 +25,6 @@ import { CURRENT_UI_ID, getAvailableUis, switchToUi, type UiOption } from '@/uti
 /**
  * Settings, as a dialog over whatever page you are on — so changing one never
  * costs you your place.
- *
- * Each row says what it does in words and, on the right, what it is as a
- * config key: `appearance.theme = "dark"`. The words are for deciding; the key
- * is for the person who will later grep a config file for it.
  */
 const settings = useSettings()
 const availableUis = ref<UiOption[]>([])
@@ -79,7 +75,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="sheet absolute top-[10vh] left-1/2 flex max-h-[80vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
+        class="sheet absolute top-[10vh] left-1/2 flex max-h-[80vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
@@ -133,10 +129,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   {{ theme.label }}
                 </button>
               </div>
-              <code class="tabular w-44 shrink-0 text-right text-[0.6875rem] text-ink-muted"
-                >appearance.theme =
-                <span class="text-brand">"{{ settings.appearance.theme }}"</span></code
-              >
             </div>
 
             <div class="flex items-center gap-3 px-4 py-2.5">
@@ -166,10 +158,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   {{ size }}
                 </button>
               </div>
-              <code class="tabular w-44 shrink-0 text-right text-[0.6875rem] text-ink-muted"
-                >appearance.fontSize =
-                <span class="text-brand">"{{ settings.appearance.fontSize }}"</span></code
-              >
             </div>
 
             <div v-if="uiOptions.length > 1" class="flex items-center gap-3 px-4 py-2.5">
@@ -199,9 +187,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-ink-muted"
                 />
               </div>
-              <code class="tabular w-44 shrink-0 text-right text-[0.6875rem] text-ink-muted"
-                >openrelik_ui = <span class="text-brand">"runestone"</span></code
-              >
             </div>
           </section>
 
@@ -238,22 +223,14 @@ const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
                   {{ size }}
                 </button>
               </div>
-              <code class="tabular w-44 shrink-0 text-right text-[0.6875rem] text-ink-muted"
-                >explorer.pageSize =
-                <span class="text-brand">{{ settings.explorer.pageSize }}</span></code
-              >
             </div>
 
             <div class="flex items-center gap-3 px-4 py-2.5">
-              <Switch v-model="settings.explorer.showEmptyFiles" label="Show empty files" />
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-ink">Show empty files</p>
                 <p class="text-ink-muted">Files with no content; folded away by default</p>
               </div>
-              <code class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
-                >explorer.showEmptyFiles =
-                <span class="text-brand">{{ settings.explorer.showEmptyFiles }}</span></code
-              >
+              <Switch v-model="settings.explorer.showEmptyFiles" label="Show empty files" />
             </div>
           </section>
         </div>
