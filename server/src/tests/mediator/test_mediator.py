@@ -490,3 +490,93 @@ def test_process_task_event_ignores_redelivered_events_after_failure(
         "task-started" in rec.message and task_uuid in rec.message
         for rec in caplog.records
     )
+
+
+def test_process_task_event_ignores_duplicate_task_succeeded(
+    monkeypatch, fake_dependencies, caplog
+):
+    """A second task-succeeded from a redelivered task must not insert duplicate files."""
+    import logging
+
+    from celery.events.state import State as CeleryEventState
+
+    task_uuid = "task-uuid-dup-success"
+    db_task = mock.Mock(id=3, status_short="PENDING", result=None, runtime=None)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+    monkeypatch.setattr(mediator, "is_hashing_worker_available", lambda app: False)
+
+    mock_async_result = mock.Mock()
+    mock_async_result.get.return_value = _encoded_result([{"uuid": "file-1"}])
+    monkeypatch.setattr(mediator, "AsyncResult", lambda *a, **kw: mock_async_result)
+
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    mediator.process_task_event(
+        db,
+        state,
+        _task_event("task-succeeded", task_uuid, clock=1, runtime=10.0),
+        celery_app,
+    )
+    assert fake_dependencies == ["file-1"]
+    assert db_task.status_short == "SUCCESS"
+    assert mock_update.call_count == 1
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db,
+            state,
+            _task_event("task-succeeded", task_uuid, clock=2, runtime=12.0),
+            celery_app,
+        )
+
+    assert fake_dependencies == ["file-1"]
+    assert db_task.runtime == 10.0
+    assert mock_update.call_count == 1
+    assert any(
+        "task-succeeded" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_task_event_preserves_terminal_status_after_mediator_restart(
+    monkeypatch, caplog
+):
+    """Redelivered events arriving after a mediator restart must not regress terminal DB state."""
+    import logging
+
+    from celery.events.state import State as CeleryEventState
+
+    task_uuid = "task-uuid-post-restart"
+    db_task = mock.Mock(id=4, status_short="SUCCESS", runtime=42.0)
+    monkeypatch.setattr(mediator, "get_task_from_db", lambda db, uid: db_task)
+    mock_update = mock.Mock()
+    monkeypatch.setattr(mediator, "update_database", mock_update)
+
+    # Fresh CeleryEventState has no memory of the prior SUCCESS event.
+    state = CeleryEventState()
+    db = mock.Mock()
+    celery_app = mock.Mock()
+
+    with caplog.at_level(logging.WARNING):
+        mediator.process_task_event(
+            db, state, _task_event("task-received", task_uuid, clock=1), celery_app
+        )
+        mediator.process_task_event(
+            db, state, _task_event("task-started", task_uuid, clock=2), celery_app
+        )
+
+    assert db_task.status_short == "SUCCESS"
+    assert db_task.runtime == 42.0
+    mock_update.assert_not_called()
+    assert any(
+        "task-received" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )
+    assert any(
+        "task-started" in rec.message and task_uuid in rec.message
+        for rec in caplog.records
+    )

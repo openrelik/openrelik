@@ -56,16 +56,16 @@ DATABASE_LOOKUP_RETRY_DELAY_SECONDS = 1
 
 logger = logging.getLogger(__name__)
 
-# Statuses where a subsequent task-received or task-started event indicates broker redelivery.
-_REDELIVERY_WARNING_STATUSES = frozenset(
+# Terminal task statuses: once reached, subsequent events for the same task UUID
+# are ignored so broker redeliveries cannot duplicate outputs or regress status.
+_TERMINAL_STATUSES = frozenset(
     {
-        celery_states.STARTED,
-        "PROGRESS",
         celery_states.SUCCESS,
         celery_states.FAILURE,
         celery_states.REVOKED,
     }
 )
+_ACTIVE_STATUSES = frozenset({celery_states.STARTED, "PROGRESS"})
 
 # How long to cache the openrelik-hashing worker availability check. Detecting the
 # worker requires a ~1s Celery inspect() broadcast, so we cache it to avoid running
@@ -367,9 +367,18 @@ def process_task_event(
     event_type = event.get("type")
     previous_status = db_task.status_short
 
+    if previous_status in _TERMINAL_STATUSES:
+        logger.warning(
+            "Ignoring %s event for task %s already in terminal status %s",
+            event_type,
+            celery_task.uuid,
+            previous_status,
+        )
+        return
+
     if (
         event_type in ("task-received", "task-started")
-        and previous_status in _REDELIVERY_WARNING_STATUSES
+        and previous_status in _ACTIVE_STATUSES
     ):
         logger.warning(
             "Received redelivered %s event for task %s already in status %s",
