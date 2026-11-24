@@ -29,7 +29,7 @@ Implements `idea.md` (#144), superseding `dev/artifacts/features/ui-switcher/` (
 
 ## Tasks
 
-- [ ] T1: Delete `web/router/.dockerignore`, `web/router/Dockerfile`, `web/router/nginx/configure_router.sh`, and `web/router/nginx/nginx.conf` (R1).
+- [x] T1: Delete `web/router/.dockerignore`, `web/router/Dockerfile`, `web/router/nginx/configure_router.sh`, and `web/router/nginx/nginx.conf` (R1).
 - [ ] T2: Remove UI switcher code, tests, asset namespacing, `VITE_HMR_CLIENT_PORT`, and `Vary: Cookie` in `web/runestone`: delete `src/utils/uiSwitch.ts` and `src/utils/__tests__/uiSwitch.test.ts`; update `src/components/dialogs/SettingsDialog.vue`, `src/components/dialogs/AccountDialog.vue`, `src/stores/auth.ts`, `src/components/dialogs/__tests__/SettingsDialog.test.ts`, `src/components/dialogs/__tests__/AccountDialog.test.ts`, `vite.config.ts`, `nginx/nginx.conf`, `nginx/substitute_env_variables.sh`, `src/assets/main.css`, `AGENTS.md`, and `docs/design-system.md`; move `public/assets/runestone/fonts/` back to `public/fonts/` (R2).
 - [ ] T3: Remove UI switcher code, tests, cross-UI sessionStorage cleanup, asset namespacing, `VITE_HMR_CLIENT_PORT`, and `Vary: Cookie` in `web/sunstone`: delete `src/utils/uiSwitch.js` and `src/utils/__tests__/uiSwitch.spec.js`; update `src/components/SystemMenu.vue`, `src/components/UserSettings.vue`, `src/RestApiClient.js`, `src/components/ProfileMenu.vue`, `src/views/Login.vue`, `vite.config.mjs`, `nginx/nginx.conf`, and `nginx/substitute_env_variables.sh` (R3).
 - [ ] T4: Update `deploy/docker/docker-compose.yml` and `deploy/docker/config.env` to run a single `openrelik-ui` service on `127.0.0.1:8711:8711` using `OPENRELIK_UI_IMAGE=openrelik-web-runestone` by default (R4).
