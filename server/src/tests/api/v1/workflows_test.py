@@ -252,7 +252,6 @@ async def test_run_workflow(
     mock_create_workflow = mocker.patch("lib.workflow_utils.create_workflow_signature")
     mock_create_workflow.return_value.apply_async.return_value = mocker.ANY
     mock_makedirs = mocker.patch("os.makedirs")
-    mocker.patch("os.path.exists", return_value=False)  # Path doesn't exist
 
     folder_id = 1
     workflow_id = 1
@@ -286,7 +285,7 @@ async def test_run_workflow(
     mock_get_workflow_from_db.assert_called_once_with(
         db, mocker.ANY, workflow_id, [Role.EDITOR, Role.OWNER]
     )
-    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path)
+    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path, exist_ok=True)
     mock_create_workflow.assert_called_once()
     mock_create_workflow.return_value.apply_async.assert_called_once()
 
@@ -312,7 +311,6 @@ async def test_run_workflow_nested_tasks(
     mock_create_workflow = mocker.patch("lib.workflow_utils.create_workflow_signature")
     mock_create_workflow.return_value.apply_async.return_value = mocker.ANY
     mock_makedirs = mocker.patch("os.makedirs")
-    mocker.patch("os.path.exists", return_value=False)  # Path doesn't exist
 
     folder_id = 1
     workflow_id = 1
@@ -355,7 +353,7 @@ async def test_run_workflow_nested_tasks(
     mock_get_workflow_from_db.assert_called_once_with(
         db, mocker.ANY, workflow_id, [Role.EDITOR, Role.OWNER]
     )
-    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path)
+    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path, exist_ok=True)
     mock_create_workflow.assert_called_once()
     mock_create_workflow.return_value.apply_async.assert_called_once()
 
