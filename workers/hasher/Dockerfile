@@ -31,15 +31,13 @@ WORKDIR /openrelik
 
 # Copy pyproject.toml and uv.lock, then install dependencies
 COPY ./pyproject.toml ./uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+RUN uv sync --locked --no-dev
 
 # Copy files needed to build
 COPY . ./
 
 # Final sync to compile bytecode/ensure sync if any local modifications affect it
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+RUN uv sync --locked --no-dev
 
 # Set environment to use the correct python interpreter.
 ENV VIRTUAL_ENV=/openrelik/.venv PATH="/openrelik/.venv/bin:$PATH"
