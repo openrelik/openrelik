@@ -327,7 +327,7 @@ def delete_file(
 # Upload file
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def upload_files(
+def upload_files(
     file: UploadFile = File(...),
     resumableChunkNumber: int = Query(...),
     resumableChunkSize: int | None = None,
@@ -392,9 +392,9 @@ async def upload_files(
     # Save the chunk to disk. If the chunk fails to save return a 503 error to signal to the client
     # to retry the chunk.
     try:
-        async with aiofiles.open(chunk_file_path, "wb") as fh:
-            while content := await file.read(4096000):  # Read 4MB chunks
-                await fh.write(content)
+        with open(chunk_file_path, "wb") as fh:
+            while content := file.file.read(4096000):  # Read 4MB chunks
+                fh.write(content)
                 redis_client.sadd(redis_uploaded_chunks_key, resumableChunkNumber)
     except Exception:
         redis_client.incr(redis_upload_retries_key, 1)
@@ -422,12 +422,12 @@ async def upload_files(
 
     chunks_to_remove = set()
     try:
-        async with aiofiles.open(output_path, "wb") as outfile:
+        with open(output_path, "wb") as outfile:
             for chunk_number in range(1, resumableTotalChunks + 1):
                 chunk_path = os.path.join(folder.path, f"{resumableIdentifier}.{chunk_number}")
-                async with aiofiles.open(chunk_path, "rb") as infile:
-                    while content := await infile.read(1024000):  # Read 1MB chunks
-                        await outfile.write(content)
+                with open(chunk_path, "rb") as infile:
+                    while content := infile.read(1024000):  # Read 1MB chunks
+                        outfile.write(content)
                 chunks_to_remove.add(chunk_path)
     except Exception:
         # If there is any error while writing the file, remove all chunks and return a 500 error.
