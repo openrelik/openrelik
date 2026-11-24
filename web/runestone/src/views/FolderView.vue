@@ -839,7 +839,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
   <section
     v-else
-    class="explorer flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[12px]"
+    class="explorer flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[0.75rem]"
   >
     <!-- toolbar -->
     <FolderToolbar

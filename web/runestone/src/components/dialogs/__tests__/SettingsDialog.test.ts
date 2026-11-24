@@ -35,7 +35,7 @@ let wrapper: VueWrapper | null = null
 function resetPreferences(): void {
   const settings = useSettings()
   settings.value = {
-    appearance: { theme: 'system' },
+    appearance: { theme: 'system', fontSize: 'normal' },
     ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
     explorer: { pageSize: 40, showEmptyFiles: false },
   }
@@ -100,8 +100,31 @@ describe('SettingsDialog', () => {
     const dialog = body.get('[role="dialog"]')
     expect(dialog.get('#settings-title').text()).toBe('settings')
     expect(dialog.text()).toContain('appearance.theme =')
+    expect(dialog.text()).toContain('appearance.fontSize =')
     expect(dialog.text()).toContain('explorer.pageSize =')
     expect(dialog.text()).not.toContain('ai.enabled =')
+  })
+
+  it('switches font size between compact, normal, and large and updates data-font-size', async () => {
+    const body = mountDialog()
+    const settings = useSettings()
+    openSettings()
+    await nextTick()
+
+    const fontGroup = body.get('[role="radiogroup"][aria-label="Font size"]')
+    const radios = fontGroup.findAll('[role="radio"]')
+    expect(radios.map((b) => b.text())).toEqual(['compact', 'normal', 'large'])
+    expect(radios[1]!.attributes('aria-checked')).toBe('true')
+
+    await radios[2]!.trigger('click')
+    expect(settings.value.appearance.fontSize).toBe('large')
+    expect(document.documentElement.getAttribute('data-font-size')).toBe('large')
+    expect(radios[2]!.attributes('aria-checked')).toBe('true')
+
+    await radios[0]!.trigger('click')
+    expect(settings.value.appearance.fontSize).toBe('compact')
+    expect(document.documentElement.getAttribute('data-font-size')).toBe('compact')
+    expect(radios[0]!.attributes('aria-checked')).toBe('true')
   })
 
   it('switches theme between system, light, and dark and updates data-theme', async () => {

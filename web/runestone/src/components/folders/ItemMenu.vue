@@ -99,7 +99,7 @@ function run(action: ItemAction) {
     <div
       ref="menu"
       tabindex="-1"
-      class="sheet fixed z-50 w-64 py-1 text-[12px] shadow-(--shadow-float) outline-none"
+      class="sheet fixed z-50 w-64 py-1 text-[0.75rem] shadow-(--shadow-float) outline-none"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
       role="menu"
       :aria-label="`Actions for ${item.name}`"
@@ -111,7 +111,7 @@ function run(action: ItemAction) {
         <p class="truncate font-medium text-ink" v-overflow-tooltip>
           {{ item.name }}{{ item.kind === 'folder' ? '/' : '' }}
         </p>
-        <p class="tabular truncate text-[11px] text-ink-muted">
+        <p class="tabular truncate text-[0.6875rem] text-ink-muted">
           id {{ item.id }} · created {{ stamp(item.created ?? item.modified) }}
         </p>
       </div>
@@ -139,7 +139,7 @@ function run(action: ItemAction) {
         </template>
         <p
           v-if="showPending"
-          class="flex h-6 items-center gap-1.5 px-3 text-[11px] text-ink-muted"
+          class="flex h-6 items-center gap-1.5 px-3 text-[0.6875rem] text-ink-muted"
           aria-live="polite"
         >
           <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />

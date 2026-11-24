@@ -79,15 +79,15 @@ function attrs(block: Block) {
 function headingClass(level: number): string {
   if (!doc.value) return level <= 2 ? 'card-title mt-2 text-ink' : 'micro-label mt-1'
   if (level === 1)
-    return 'mt-4 max-w-[90ch] border-b border-border pb-1 text-[14px] font-semibold text-ink'
-  if (level === 2) return 'mt-3 max-w-[90ch] text-[14px] font-semibold text-ink'
+    return 'mt-4 max-w-[90ch] border-b border-border pb-1 text-[0.875rem] font-semibold text-ink'
+  if (level === 2) return 'mt-3 max-w-[90ch] text-[0.875rem] font-semibold text-ink'
   return 'mt-2 max-w-[90ch] font-semibold text-ink'
 }
 </script>
 
 <template>
   <div
-    class="flex flex-col text-[13px] leading-relaxed text-ink-secondary"
+    class="flex flex-col text-[0.8125rem] leading-relaxed text-ink-secondary"
     :class="doc ? 'gap-3' : 'gap-2'"
   >
     <template v-for="(block, i) in blocks" :key="i">
@@ -143,7 +143,7 @@ function headingClass(level: number): string {
         v-bind="attrs(block)"
       >
         <span v-if="block.lang" class="micro-label">{{ block.lang }}</span>
-        <pre class="overflow-x-auto text-[12px] text-ink">{{ block.text }}</pre>
+        <pre class="overflow-x-auto text-[0.75rem] text-ink">{{ block.text }}</pre>
       </div>
       <hr
         v-else-if="block.type === 'rule'"
@@ -157,7 +157,7 @@ function headingClass(level: number): string {
         :class="[wide, { 'markdown-block': doc }]"
         v-bind="attrs(block)"
       >
-        <table class="border-collapse text-[12px]" :class="doc ? 'min-w-[45ch]' : 'w-full'">
+        <table class="border-collapse text-[0.75rem]" :class="doc ? 'min-w-[45ch]' : 'w-full'">
           <thead>
             <tr class="border-b border-border-strong bg-sunken">
               <th

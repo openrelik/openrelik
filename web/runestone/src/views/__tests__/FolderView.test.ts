@@ -775,10 +775,10 @@ describe('FolderView', () => {
       'New folders are off until the workflow has produced its outputs.',
     )
 
-    // Clicking the 'Strings' task row in WorkflowTree selects it and opens TaskInspector!
-    const taskRow = wrapper.findAll('tr').find((r) => r.text().includes('Strings'))
-    expect(taskRow).toBeDefined()
-    await taskRow!.trigger('click')
+    // Clicking the 'Strings' task in WorkflowGraph selects it and opens TaskInspector!
+    const taskNode = wrapper.findAll('[data-task]').find((r) => r.text().includes('Strings'))
+    expect(taskNode).toBeDefined()
+    await taskNode!.trigger('click')
     await nextTick()
     expect(wrapper.text()).toContain('Extract ASCII and Unicode strings')
 
@@ -793,7 +793,7 @@ describe('FolderView', () => {
     await closeInspectorBtn.trigger('click')
     await nextTick()
     expect(wrapper.find('button[aria-label="Close task"]').exists()).toBe(false)
-    await taskRow!.trigger('click')
+    await taskNode!.trigger('click')
     await nextTick()
 
     // Escape closes the TaskInspector first.
@@ -1010,10 +1010,10 @@ describe('FolderView', () => {
     await flushPromises()
 
     expect(api.workflows.get).toHaveBeenCalledTimes(2)
-    // Select the task row inside WorkflowTree to open TaskInspector.
-    const taskRow = wrapper.findAll('tr').find((r) => r.text().includes('Strings'))
-    expect(taskRow).toBeDefined()
-    await taskRow!.trigger('click')
+    // Select the task inside WorkflowGraph to open TaskInspector.
+    const taskNode = wrapper.findAll('[data-task]').find((r) => r.text().includes('Strings'))
+    expect(taskNode).toBeDefined()
+    await taskNode!.trigger('click')
     await nextTick()
     expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Remove')).toBe(true)
 

@@ -61,6 +61,10 @@ export interface Collaborator {
   name: string
   /** A user's username, a group's description. */
   detail: string
+  /** A user's profile picture URL when available. */
+  avatar?: string
+  /** A user's UUID, used to derive a stable placeholder avatar color. */
+  uuid?: string
   role: FolderRole
   /** Their roles on the server (normally one); empty until saved. */
   roleIds: number[]
@@ -96,6 +100,8 @@ function collaboratorsOf(folder: FolderDetail): Collaborator[] {
         id: user.id,
         name: user.display_name || user.username,
         detail: user.username,
+        avatar: user.profile_picture_url || undefined,
+        uuid: user.uuid || undefined,
         role,
       },
       id,

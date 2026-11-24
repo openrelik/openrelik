@@ -340,17 +340,18 @@ describe('TableViewer', () => {
     await grid.trigger('keydown', { key: 'ArrowDown' })
     expect(sideRowTarget?.textContent).toContain('Row 2')
 
+    // 240px / 27px (24 * 1.125 at default 'normal' scale) = 8 rows -> page step = 7
     await grid.trigger('keydown', { key: 'PageDown' })
-    expect(sideRowTarget?.textContent).toContain('Row 11')
+    expect(sideRowTarget?.textContent).toContain('Row 9')
 
     await grid.trigger('keydown', { key: 'End' })
     expect(sideRowTarget?.textContent).toContain('Row 15')
 
     await grid.trigger('keydown', { key: 'PageUp' })
-    expect(sideRowTarget?.textContent).toContain('Row 6')
+    expect(sideRowTarget?.textContent).toContain('Row 8')
 
     await grid.trigger('keydown', { key: 'ArrowUp' })
-    expect(sideRowTarget?.textContent).toContain('Row 5')
+    expect(sideRowTarget?.textContent).toContain('Row 7')
 
     await grid.trigger('keydown', { key: 'Home' })
     expect(sideRowTarget?.textContent).toContain('Row 1')
@@ -636,5 +637,37 @@ describe('TableViewer', () => {
     ).not.toBeNull()
     expect(mark.value).toEqual({ from: 1, to: 1 })
     modals.closeModal('confirm')
+  })
+
+  it('renders row numbers as plain integers without thousands separators', async () => {
+    const csv = ['k,v', ...Array.from({ length: 2458 }, (_, i) => `r${i + 1},${i + 1}`)].join('\n')
+    const bytes = encode(csv)
+    vi.mocked(api.files.readRange).mockImplementation(async (_id, start, end) =>
+      bytes.slice(start, end + 1),
+    )
+
+    const wrapper = mount(TableViewer, {
+      props: {
+        fileId: 60,
+        size: bytes.length,
+        kind: 'csv',
+        mark: { from: 2458, to: 2458 },
+      },
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+
+    const scroller = wrapper.get('[role="grid"]')
+    Object.defineProperty(scroller.element, 'scrollTop', { value: 2457 * 27, configurable: true })
+    await scroller.trigger('scroll')
+    await nextTick()
+
+    const gutters = wrapper.findAll('[data-gutter]')
+    expect(gutters.map((g) => g.text())).toContain('2458')
+    expect(gutters.some((g) => g.text().includes(','))).toBe(false)
+    expect(wrapper.text()).toContain('row 2458')
   })
 })

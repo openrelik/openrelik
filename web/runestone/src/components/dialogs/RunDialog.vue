@@ -181,7 +181,7 @@ function onOptionsKey(event: KeyboardEvent) {
         @pointerdown="close"
       />
       <div
-        class="sheet absolute flex flex-col overflow-hidden text-[12px]"
+        class="sheet absolute flex flex-col overflow-hidden text-[0.75rem]"
         :class="
           popover
             ? 'shadow-(--shadow-popover)'
@@ -314,7 +314,7 @@ function onOptionsKey(event: KeyboardEvent) {
 
         <div
           v-if="configuring ? missing.length : !popover"
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[11px] text-ink-muted"
+          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
         >
           <span v-if="configuring">fill in {{ missing.join(', ') }}</span>
           <span v-else>{{

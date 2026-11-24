@@ -379,4 +379,61 @@ describe('ShareDialog', () => {
     expect(body.find('[role="dialog"]').exists()).toBe(true)
     expect(body.get('[role="dialog"]').text()).toContain('Case IR-2026')
   })
+
+  it('renders user avatars in collaborator rows and user search results when profile_picture_url is set', async () => {
+    vi.mocked(api.folders.getFolder).mockResolvedValueOnce({
+      ...makeFolderDetail(60),
+      user_roles: [
+        {
+          id: 101,
+          role: 'Owner',
+          user: {
+            id: 1,
+            username: 'jane',
+            display_name: 'Jane Owner',
+            profile_picture_url: 'https://example.com/jane.png',
+          },
+        },
+      ],
+    })
+    vi.mocked(api.directory.searchUsers).mockResolvedValueOnce([
+      {
+        id: 3,
+        username: 'carol',
+        display_name: 'Carol Analyst',
+        profile_picture_url: 'https://example.com/carol.png',
+      },
+    ])
+
+    const body = mountDialog()
+    openShareDialog(makeFolderItem(60))
+    await nextTick()
+    await flushPromises()
+
+    const dialog = body.get('[role="dialog"]')
+    expect(dialog.findAll('img').map((img) => img.attributes('src'))).toContain(
+      'https://example.com/jane.png',
+    )
+
+    const input = dialog.get('input[aria-label="Add people"]')
+    await input.trigger('focus')
+    await input.setValue('carol')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+
+    expect(dialog.findAll('img').map((img) => img.attributes('src'))).toContain(
+      'https://example.com/carol.png',
+    )
+
+    await dialog
+      .findAll('button')
+      .find((b) => b.text().includes('Carol Analyst'))!
+      .trigger('click')
+    await nextTick()
+
+    expect(dialog.findAll('img').map((img) => img.attributes('src'))).toEqual([
+      'https://example.com/jane.png',
+      'https://example.com/carol.png',
+    ])
+  })
 })

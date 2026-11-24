@@ -99,6 +99,7 @@ const failed = computed(() => props.upload.status === 'failed')
         :name="owner.display_name || owner.username"
         :username="owner.username"
         :src="owner.profile_picture_url ?? undefined"
+        :uuid="owner.uuid"
       />
     </td>
 

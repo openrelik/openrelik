@@ -120,7 +120,7 @@ onUnmounted(() => clearInterval(timer))
 </script>
 
 <template>
-  <section class="flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[12px]">
+  <section class="flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[0.75rem]">
     <!-- toolbar: path · the period and how often to read -->
     <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-2 pl-3">
       <PathBar :path="[]" />
@@ -128,7 +128,7 @@ onUnmounted(() => clearInterval(timer))
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <label class="flex items-center gap-1.5 text-ink-muted">
           period
-          <select v-model.number="range" class="field h-6 cursor-pointer text-[12px]">
+          <select v-model.number="range" class="field h-6 cursor-pointer text-[0.75rem]">
             <option v-for="option in RANGES" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
@@ -138,7 +138,7 @@ onUnmounted(() => clearInterval(timer))
           every
           <select
             v-model.number="step"
-            class="field h-6 cursor-pointer text-[12px]"
+            class="field h-6 cursor-pointer text-[0.75rem]"
             v-tooltip="'The time between points, and what each point counts'"
           >
             <option v-for="option in STEPS" :key="option.value" :value="option.value">
@@ -148,7 +148,7 @@ onUnmounted(() => clearInterval(timer))
         </label>
         <select
           v-model.number="every"
-          class="field h-6 cursor-pointer text-[12px]"
+          class="field h-6 cursor-pointer text-[0.75rem]"
           aria-label="Auto-refresh"
         >
           <option v-for="option in REFRESH" :key="option.value" :value="option.value">

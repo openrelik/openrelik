@@ -60,7 +60,7 @@ function onInputKey(event: KeyboardEvent) {
     <div v-if="promptOpen" class="fixed inset-0 z-50">
       <div class="absolute inset-0 bg-ink/20" aria-hidden="true" @pointerdown="close" />
       <div
-        class="sheet absolute top-[12vh] left-1/2 flex max-h-[70vh] w-[min(46rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float)"
+        class="sheet absolute top-[12vh] left-1/2 flex max-h-[70vh] w-[min(46rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float)"
         role="dialog"
         aria-modal="true"
         aria-label="Prompt"

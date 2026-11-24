@@ -156,12 +156,13 @@ describe('StatusBar', () => {
     await helpBtn.trigger('click')
     expect(modalStore.isModalOpen('help')).toBe(true)
 
-    // Authenticated: shows username, opens account dialog, and calls logout.
+    // Authenticated: shows avatar and username, opens account dialog, and calls logout.
     authStore.setUser({
       id: 7,
       username: 'analyst',
       display_name: 'Analyst',
       email: 'analyst@example.com',
+      profile_picture_url: 'https://example.com/analyst.png',
       is_admin: false,
       created_at: '2026-11-01T00:00:00Z',
     })
@@ -170,6 +171,7 @@ describe('StatusBar', () => {
 
     const accountBtn = wrapper.get('[aria-label="Account and API keys"]')
     expect(accountBtn.text()).toContain('analyst')
+    expect(accountBtn.get('img').attributes('src')).toBe('https://example.com/analyst.png')
     await accountBtn.trigger('click')
     expect(modalStore.isModalOpen('account')).toBe(true)
 

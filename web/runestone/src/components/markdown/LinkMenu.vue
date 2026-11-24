@@ -166,7 +166,7 @@ function open() {
       <div
         v-if="state"
         ref="menu"
-        class="sheet fixed z-50 w-80 py-1 text-[12px] shadow-(--shadow-float)"
+        class="sheet fixed z-50 w-80 py-1 text-[0.75rem] shadow-(--shadow-float)"
         :style="{ left: `${position.left}px`, top: `${position.top}px` }"
         role="menu"
         :aria-label="state.kind === 'image' ? 'Image link' : 'Link'"
@@ -187,7 +187,7 @@ function open() {
               state.kind === 'image' ? 'Image, not loaded' : (host ?? 'Not a web link')
             }}</span>
           </p>
-          <p class="line-clamp-3 text-[11px] break-all text-ink-muted">{{ displayUrl }}</p>
+          <p class="line-clamp-3 text-[0.6875rem] break-all text-ink-muted">{{ displayUrl }}</p>
         </div>
         <div class="pt-1">
           <button
@@ -225,7 +225,7 @@ function open() {
               />
               Open in a new tab
             </button>
-            <p class="px-3 pt-0.5 pb-1 pl-8 text-[11px] text-ink-muted">
+            <p class="px-3 pt-0.5 pb-1 pl-8 text-[0.6875rem] text-ink-muted">
               {{
                 target
                   ? target.openable

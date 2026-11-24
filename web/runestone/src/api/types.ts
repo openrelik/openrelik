@@ -20,6 +20,7 @@ limitations under the License.
 
 export interface User {
   id: number | string
+  uuid?: string
   username: string
   display_name?: string
   email?: string
@@ -114,6 +115,7 @@ export interface FolderDetail extends Folder {
 /** A user as the directory lists them (search results, role holders). */
 export interface DirectoryUser {
   id: number
+  uuid?: string
   display_name: string
   username: string
   profile_picture_url?: string | null

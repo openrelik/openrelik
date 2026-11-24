@@ -116,6 +116,7 @@ All tokens live in `src/assets/main.css`. A four-line script in `index.html` res
 | `--color-idle-tint`        | `#22222b`  | `#ececf1`   | Idle badge fills.                                                                                        |
 | `--color-brand-icon`       | `#a9c7ee`  | `#4186e0`   | Solid folder and running-workflow icons. Light lifts the accent to OKLCH 0.62 (3.68:1, a graphic's 3:1). |
 | `--color-success-icon`     | `#6fdea2`  | `#469a6b`   | Solid finished-workflow icons (3.45:1 light).                                                            |
+| `--color-warning-icon`     | `#edbb65`  | `#ac7c1c`   | Running-task spinner icons in the workflow flowchart (3.71:1 light).                                     |
 | `--color-danger-icon`      | `#efb3b0`  | `#d95356`   | Solid failed-workflow icons (3.95:1 light).                                                              |
 
 ### Derived Tints Rule
@@ -679,7 +680,7 @@ A console is used on hotel Wi-Fi, over VPNs and on congested links, not only on 
 1. **Never wait for data already seen.** Cached data renders at once; a refresh happens behind it and never blanks the screen.
 2. **One place per kind of waiting.** Data that is not there yet waits _where it will appear_; work on data already on screen is shown _in the status bar_; a pending change is shown _on its row_.
 3. **No flashing.** Every indicator appears only after the work has taken **200 ms**, and once visible stays at least **300 ms**. On a fast connection nothing flickers; on a slow one the operator sees at once that something is happening. Use `useDelayedFlag` — never hand-rolled timers.
-4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows. **One exception:** a running task's status mark in the workflow flowchart (`TaskRunningIcon.vue`) is a `brand-icon` dot with a circling ring, because it shows work in progress that may last minutes, not a network wait. Reduced motion stills it.
+4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows. **One exception:** a running task's status mark in the workflow flowchart (`TaskRunningIcon.vue`) is a `warning-icon` dot with a circling ring, because it shows work in progress that may last minutes, not a network wait. Reduced motion stills it.
 5. **No layout shift.** Space for a loading line is reserved before its text appears; indicators have fixed widths; placeholders have the height of the row they stand in for.
 
 ### The Situations

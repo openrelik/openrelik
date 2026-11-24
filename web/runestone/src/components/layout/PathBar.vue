@@ -301,11 +301,11 @@ function onBarClick(event: MouseEvent) {
 
           <div
             v-if="openAt === at"
-            class="sheet absolute top-full left-0 z-30 mt-1.5 max-h-72 min-w-56 overflow-y-auto py-1 text-[12px] shadow-(--shadow-float)"
+            class="sheet absolute top-full left-0 z-30 mt-1.5 max-h-72 min-w-56 overflow-y-auto py-1 text-[0.75rem] shadow-(--shadow-float)"
             role="menu"
             @keydown="onMenuKey"
           >
-            <p class="px-3 pb-1 text-[11px] text-ink-muted">
+            <p class="px-3 pb-1 text-[0.6875rem] text-ink-muted">
               folders in {{ `${path[at]!.name}/` }}
             </p>
             <RouterLink
@@ -322,7 +322,7 @@ function onBarClick(event: MouseEvent) {
               <span class="text-brand" :class="{ 'font-semibold': entry.id === onPath?.id }"
                 >{{ entry.name }}/</span
               >
-              <span class="tabular ml-auto pl-4 text-[11px] text-ink-muted">{{
+              <span class="tabular ml-auto pl-4 text-[0.6875rem] text-ink-muted">{{
                 entry.workflowId !== undefined ? 'workflow' : itemsStore.childrenOf(entry.id).length
               }}</span>
             </RouterLink>

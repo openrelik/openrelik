@@ -275,7 +275,7 @@ function onHover(event: PointerEvent) {
           </template>
           <template v-else>
             rendered up to line
-            <span class="tabular">{{ rendered.lines.toLocaleString('en-US') }}</span> (the first
+            <span class="tabular">{{ rendered.lines }}</span> (the first
             <span class="tabular">{{ formatSize(RENDER_MAX) }}</span
             >); the rest is in the source
           </template>
@@ -343,7 +343,7 @@ function onHover(event: PointerEvent) {
         v-tooltip="'Show in the source'"
         @click="emit('source', hovered.line)"
       >
-        line {{ hovered.line.toLocaleString('en-US') }}
+        line {{ hovered.line }}
       </Button>
     </div>
   </div>

@@ -625,8 +625,9 @@ describe('FolderTable', () => {
     expect(wrapper.find('tr[data-row="25000"]').exists()).toBe(false)
 
     // Scrolling halfway through the 50,000-row table mounts the middle window and emits true indices.
+    // Default font size is 'normal' (1.125x): 28 * 1.125 = 31.5px per row.
     const scroller = wrapper.get('div').element as HTMLElement
-    scroller.scrollTop = 25_000 * 28
+    scroller.scrollTop = 25_000 * 31.5
     await wrapper.get('div').trigger('scroll')
 
     const midRow = wrapper.get('tr[data-row="25000"]')

@@ -26,6 +26,8 @@ export interface Item {
   owner: string
   /** The login the server knows the owner by. */
   ownerUsername?: string
+  /** The owner's UUID, used to color the fallback avatar consistently. */
+  ownerUuid?: string
   /** The owner's profile picture, when the server has one for them. */
   ownerAvatar?: string
   created?: string

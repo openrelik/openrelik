@@ -298,9 +298,9 @@ describe('HexViewer', () => {
     await grid.trigger('keydown', { key: 'ArrowUp' })
     expect(wrapper.text()).toContain('0x00000000')
 
-    // PageDown moves by 8 visible rows * 16 = 128 (0x80)
+    // PageDown moves by 7 visible rows (160px / 22.5px at default 'normal' scale) * 16 = 112 (0x70)
     await grid.trigger('keydown', { key: 'PageDown' })
-    expect(wrapper.text()).toContain('0x00000080')
+    expect(wrapper.text()).toContain('0x00000070')
 
     await grid.trigger('keydown', { key: 'PageUp' })
     expect(wrapper.text()).toContain('0x00000000')

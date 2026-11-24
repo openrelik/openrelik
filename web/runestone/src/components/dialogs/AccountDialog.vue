@@ -15,10 +15,11 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { Copy, KeyRound, LogOut, Plus, Trash2, TriangleAlert, User, X } from '@/components/icons'
+import { Copy, KeyRound, LogOut, Plus, Trash2, TriangleAlert, X } from '@/components/icons'
 
 import Button from '@/components/base/Button.vue'
 import LoadState from '@/components/base/LoadState.vue'
+import UserAvatar from '@/components/base/UserAvatar.vue'
 import { errorMessage, type ApiKeyRecord } from '@/api'
 import {
   accountOpen,
@@ -221,7 +222,7 @@ const user = computed(() => auth.user)
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="sheet absolute top-[10vh] left-1/2 flex max-h-[80vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float) outline-none"
+        class="sheet absolute top-[10vh] left-1/2 flex max-h-[80vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="account-title"
@@ -257,7 +258,7 @@ const user = computed(() => auth.user)
             readonly
             rows="3"
             spellcheck="false"
-            class="field tabular resize-none py-1.5 text-[11px] break-all"
+            class="field tabular resize-none py-1.5 text-[0.6875rem] break-all"
             aria-label="The new API key"
             :value="newKey.token"
             @focus="($event.target as HTMLTextAreaElement).select()"
@@ -283,11 +284,14 @@ const user = computed(() => auth.user)
         <div v-else class="min-h-0 flex-1 overflow-y-auto">
           <!-- who -->
           <section class="flex items-center gap-3 border-b border-border px-4 py-3">
-            <div
-              class="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-sunken text-ink-muted"
-            >
-              <User :size="15" :stroke-width="1.5" />
-            </div>
+            <UserAvatar
+              :name="user?.display_name || user?.username || ''"
+              :username="user?.username"
+              :src="user?.profile_picture_url || user?.avatar_url"
+              :uuid="user?.uuid"
+              size="lg"
+              decorative
+            />
             <div class="min-w-0">
               <p class="truncate font-medium text-ink">
                 {{ user?.display_name || user?.username }}
@@ -377,11 +381,11 @@ const user = computed(() => auth.user)
                 <KeyRound :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
                 <div class="min-w-0 flex-1">
                   <p class="truncate font-medium text-ink">{{ key.display_name }}</p>
-                  <p v-if="key.description" class="truncate text-[11px] text-ink-muted">
+                  <p v-if="key.description" class="truncate text-[0.6875rem] text-ink-muted">
                     {{ key.description }}
                   </p>
                 </div>
-                <div class="shrink-0 text-right text-[11px]">
+                <div class="shrink-0 text-right text-[0.6875rem]">
                   <p class="tabular text-ink-secondary">expires {{ stamp(key.token_exp) }}</p>
                   <p :class="expiry(key).tone">{{ expiry(key).text }}</p>
                 </div>
@@ -402,7 +406,7 @@ const user = computed(() => auth.user)
 
         <div
           v-if="!newKey"
-          class="flex min-h-10 shrink-0 flex-wrap items-center gap-3 border-t border-border bg-sunken px-4 py-1.5 text-[11px] text-ink-muted"
+          class="flex min-h-10 shrink-0 flex-wrap items-center gap-3 border-t border-border bg-sunken px-4 py-1.5 text-[0.6875rem] text-ink-muted"
         >
           <Button variant="danger" size="row" @click="(close(), auth.logout())">
             <template #icon><LogOut :size="12" :stroke-width="1.5" /></template>

@@ -149,14 +149,17 @@ export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRe
    * Tasks with the same marker form a group, in the order they first appear;
    * unmarked ones (older specs, the original editor) form one group. A chord
    * is a group of its own, with its callback as the join.
+   *
+   * Groups without an explicit marker derive a stable id from their first task
+   * so polling refreshes keep UI state (like expanded stacks) attached to them.
    */
   const fromList = (nodes: SpecNode[]): TaskGroup[] => {
     const groups: TaskGroup[] = []
     const byMarker = new Map<string, TaskGroup>()
-    const groupFor = (marker: string) => {
+    const groupFor = (marker: string, fallbackId: string) => {
       let group = byMarker.get(marker)
       if (!group) {
-        group = { id: marker || hexId(), tasks: [] }
+        group = { id: marker || fallbackId, tasks: [] }
         byMarker.set(marker, group)
         groups.push(group)
       }
@@ -164,13 +167,14 @@ export function tasksFromSpec(spec: WorkflowSpec | null, records: WorkflowTaskRe
     }
     for (const node of nodes) {
       if (node.type === 'task') {
-        groupFor(node.group ?? '').tasks.push(fromSpec(node))
+        const task = fromSpec(node)
+        groupFor(node.group ?? '', `group:${task.id}`).tasks.push(task)
       } else if (node.type === 'chord') {
         const tasks = (node.tasks ?? []).filter((t) => t.type === 'task').map(fromSpec)
         const join = node.callback?.type === 'task' ? fromSpec(node.callback) : undefined
         // A chord without a header would only be its callback.
-        if (tasks.length) groups.push({ id: hexId(), tasks, join })
-        else if (join) groups.push({ id: hexId(), tasks: [join] })
+        if (tasks.length) groups.push({ id: `chord:${tasks[0]!.id}`, tasks, join })
+        else if (join) groups.push({ id: `chord:${join.id}`, tasks: [join] })
       }
     }
     return groups

@@ -22,6 +22,7 @@ import { useByteChunks } from '@/composables/useByteChunks'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
+import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import { copyToClipboard } from '@/directives/copyToClipboard'
 import {
   decodings,
@@ -58,6 +59,8 @@ const mark = defineModel<Span | null>('mark', { default: null })
 
 const ROW = 16
 const ROW_H = 20
+const settings = useSettings()
+const rowHeight = () => ROW_H * FONT_SCALE[settings.value.appearance.fontSize]
 /** Copying a selection reads its bytes: capped, so a stray ⌘A cannot pull in a disk image. */
 const COPY_MAX = 64 * 1024
 const DECODE_MAX = 256
@@ -89,7 +92,7 @@ const {
   onThumbMove,
   onThumbUp,
   onTrackDown,
-} = useRowScroller(body, track, () => totalRows.value, ROW_H)
+} = useRowScroller(body, track, () => totalRows.value, rowHeight)
 
 const rows = computed(() => {
   const out: { row: number; offset: number; cells: (number | undefined)[] }[] = []
@@ -486,7 +489,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             autocomplete="off"
             placeholder="Go to offset"
             aria-label="Go to an offset, or a range as 0x1f0-0x2a0"
-            class="field tabular h-6 w-36 font-mono text-[12px]"
+            class="field tabular h-6 w-36 font-mono text-[0.75rem]"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
@@ -520,7 +523,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         <div class="tabular flex min-w-0 flex-1 flex-col overflow-x-auto select-none">
           <!-- column heads -->
           <div
-            class="flex h-6 shrink-0 items-center border-b border-border text-[11px] text-ink-muted"
+            class="flex h-6 shrink-0 items-center border-b border-border text-[0.6875rem] text-ink-muted"
           >
             <span class="shrink-0 px-3" :style="{ width: `${width + 3}ch` }">Offset</span>
             <span class="flex shrink-0">

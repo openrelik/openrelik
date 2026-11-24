@@ -19,7 +19,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
-import { PAGE_SIZES, useSettingsStore } from '@/stores/settings'
+import { FONT_SCALE, FONT_SIZES, PAGE_SIZES, useSettingsStore } from '@/stores/settings'
 
 const STORAGE_KEY = 'openrelik.settings'
 
@@ -58,6 +58,7 @@ describe('stores/settings', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     document.documentElement.removeAttribute('data-theme')
+    document.documentElement.removeAttribute('data-font-size')
   })
 
   it('initializes with defaults, applies OS theme, and tracks OS scheme changes', async () => {
@@ -65,30 +66,37 @@ describe('stores/settings', () => {
     const store = useSettingsStore()
 
     expect(PAGE_SIZES).toEqual([25, 40, 100])
+    expect(FONT_SIZES).toEqual(['compact', 'normal', 'large'])
+    expect(FONT_SCALE).toEqual({ compact: 1, normal: 1.125, large: 1.25 })
     expect(store.settings.explorer.pageSize).toBe(40)
     expect(store.settings.explorer.showEmptyFiles).toBe(false)
     expect(store.settings.appearance.theme).toBe('system')
+    expect(store.settings.appearance.fontSize).toBe('normal')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(document.documentElement.getAttribute('data-font-size')).toBe('normal')
 
     // OS switches to light while theme is 'system'
     media.setLight(true)
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
 
-    // Explicit theme overrides OS changes and persists to localStorage
+    // Explicit theme and fontSize override defaults and persist to localStorage
     store.settings.appearance.theme = 'dark'
+    store.settings.appearance.fontSize = 'large'
     store.settings.explorer.pageSize = 100
     await nextTick()
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(document.documentElement.getAttribute('data-font-size')).toBe('large')
     media.setLight(true)
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
 
     const persisted = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
       explorer?: { pageSize?: number }
-      appearance?: { theme?: string }
+      appearance?: { theme?: string; fontSize?: string }
     }
     expect(persisted.explorer?.pageSize).toBe(100)
     expect(persisted.appearance?.theme).toBe('dark')
+    expect(persisted.appearance?.fontSize).toBe('large')
   })
 
   it('merges partial stored settings and sanitizes unsupported pageSize values back to 40', () => {
@@ -96,7 +104,7 @@ describe('stores/settings', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        appearance: { theme: 'light' },
+        appearance: { theme: 'light', fontSize: 'compact' },
         ai: { chat: false },
         explorer: { pageSize: 999, showEmptyFiles: true },
       }),
@@ -105,6 +113,8 @@ describe('stores/settings', () => {
     const store = useSettingsStore()
 
     expect(store.settings.appearance.theme).toBe('light')
+    expect(store.settings.appearance.fontSize).toBe('compact')
+    expect(document.documentElement.getAttribute('data-font-size')).toBe('compact')
     expect(store.settings.ai).toEqual({
       enabled: true,
       summaries: true,
@@ -135,7 +145,7 @@ describe('stores/settings', () => {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(['not', 'an', 'object']))
     expect(useSettingsStore().settings).toEqual({
-      appearance: { theme: 'system' },
+      appearance: { theme: 'system', fontSize: 'normal' },
       ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
       explorer: { pageSize: 40, showEmptyFiles: false },
     })
@@ -145,13 +155,13 @@ describe('stores/settings', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        appearance: { theme: 'sepia' },
+        appearance: { theme: 'sepia', fontSize: 'huge' },
         ai: 'bad-section',
         explorer: { pageSize: '100', showEmptyFiles: 'yes' },
       }),
     )
     expect(useSettingsStore().settings).toEqual({
-      appearance: { theme: 'system' },
+      appearance: { theme: 'system', fontSize: 'normal' },
       ai: { enabled: true, summaries: true, chat: true, workflowNames: true },
       explorer: { pageSize: 40, showEmptyFiles: false },
     })

@@ -72,7 +72,7 @@ const meta = (item: Item) => {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col text-[12px]" @pointerdown.prevent>
+  <div class="flex min-h-0 flex-col text-[0.75rem]" @pointerdown.prevent>
     <p class="shrink-0 px-3 pt-2 pb-1 text-ink-muted">
       <template v-if="results[0]?.kind === 'mkdir'">mkdir: create folder</template>
       <template v-else-if="rmMode">rm: delete folder in {{ cwdPath }}</template>
@@ -132,18 +132,18 @@ const meta = (item: Item) => {
         </span>
         <span
           v-if="result.kind === 'mkdir' && result.folderName"
-          class="tabular shrink-0 text-[11px] text-ink-muted"
+          class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
         >
           new folder
         </span>
         <span
           v-if="result.kind === 'item' && result.caseRef"
-          class="tabular shrink-0 text-[11px] text-ink-muted"
+          class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
           >case {{ result.caseRef }}</span
         >
         <span
           v-else-if="result.kind === 'item' && result.remote"
-          class="shrink-0 text-[11px] text-ink-muted"
+          class="shrink-0 text-[0.6875rem] text-ink-muted"
           v-tooltip="'Found by the server search; not opened yet in this session'"
           >server</span
         >

@@ -234,7 +234,7 @@ function onKeydown(event: KeyboardEvent) {
     <div v-if="workflowTarget" class="fixed inset-0 z-50">
       <div class="absolute inset-0 bg-ink/20" aria-hidden="true" @pointerdown="close" />
       <div
-        class="sheet absolute top-[14vh] left-1/2 flex max-h-[70vh] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[12px] shadow-(--shadow-float)"
+        class="sheet absolute top-[14vh] left-1/2 flex max-h-[70vh] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float)"
         role="dialog"
         aria-modal="true"
         aria-label="Create workflow"
@@ -257,7 +257,7 @@ function onKeydown(event: KeyboardEvent) {
             placeholder="type a template or empty…"
             @keydown="onKeydown"
           />
-          <span class="shrink-0 text-[11px] text-ink-muted">
+          <span class="shrink-0 text-[0.6875rem] text-ink-muted">
             {{ count(filteredTemplates.length, 'template') }}
           </span>
         </div>
@@ -281,7 +281,7 @@ function onKeydown(event: KeyboardEvent) {
             </div>
             <div class="flex min-w-0 flex-1 flex-col">
               <span class="font-medium text-ink">New workflow</span>
-              <span class="text-[11px] text-ink-muted">
+              <span class="text-[0.6875rem] text-ink-muted">
                 {{
                   showCreating && creatingFrom === null
                     ? 'Creating…'
@@ -294,7 +294,7 @@ function onKeydown(event: KeyboardEvent) {
           <!-- Templates section header -->
           <li
             v-if="filteredTemplates.length || !query.trim()"
-            class="mt-1 border-t border-border px-3 pt-2 pb-1 text-[11px] text-ink-muted"
+            class="mt-1 border-t border-border px-3 pt-2 pb-1 text-[0.6875rem] text-ink-muted"
             role="presentation"
           >
             templates
@@ -330,14 +330,14 @@ function onKeydown(event: KeyboardEvent) {
                 @blur="commitRename"
               />
               <span v-else class="truncate font-medium text-ink">{{ template.name }}</span>
-              <span class="truncate text-[11px] text-ink-muted">
+              <span class="truncate text-[0.6875rem] text-ink-muted">
                 {{
                   showCreating && creatingFrom === template.id
                     ? 'Creating…'
                     : template.description || template.workers || 'No workers'
                 }}
               </span>
-              <span v-if="template.creator" class="truncate text-[11px] text-ink-muted">
+              <span v-if="template.creator" class="truncate text-[0.6875rem] text-ink-muted">
                 by {{ template.creator }}<template v-if="ownsTemplate(template)"> (you)</template>
               </span>
             </div>

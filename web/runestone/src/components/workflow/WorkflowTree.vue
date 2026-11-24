@@ -292,7 +292,7 @@ const inputs = computed(() =>
                 <span class="flex min-w-0 items-center pl-1">
                   <button
                     type="button"
-                    class="flex h-5 min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-control) border border-dashed border-border-strong px-1.5 text-[11px] text-ink-muted hover:border-brand hover:text-brand"
+                    class="flex h-5 min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-control) border border-dashed border-border-strong px-1.5 text-[0.6875rem] text-ink-muted hover:border-brand hover:text-brand"
                     :aria-label="`Add worker after all ${row.what}`"
                     v-tooltip="{
                       text: 'Add worker after all of them',
@@ -357,7 +357,7 @@ const inputs = computed(() =>
                   >
                   <span
                     v-if="row.parallel > 1"
-                    class="tabular shrink-0 text-[11px] text-ink-muted"
+                    class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
                     v-tooltip="'Tasks running in parallel on its output'"
                     >⇉ {{ row.parallel }}</span
                   >
