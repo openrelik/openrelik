@@ -18,7 +18,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = config["auth"]["jwt_cookie_access_expire_minutes"]
 
 
 @router.post("/auth/local")
-async def auth_local(
+def auth_local(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db_connection),

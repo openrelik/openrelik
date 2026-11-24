@@ -95,7 +95,7 @@ def _validate_user_info(user_info: dict[str, Any]) -> None:
 
 
 @router.get("/login/iap")
-async def login(
+def login(
     x_goog_iap_jwt_assertion: Annotated[str | None, Header()] = None,
     db: Session = Depends(get_db_connection),
 ) -> RedirectResponse:

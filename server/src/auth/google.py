@@ -95,7 +95,7 @@ def _validate_user_info(user_info: dict[str, Any]) -> None:
 
 
 @router.get("/auth/google/token")
-async def auth_header_token(
+def auth_header_token(
     x_goog_id_token: Annotated[str | None, Header()] = None,
     db: Session = Depends(get_db_connection),
 ) -> dict[str, str]:

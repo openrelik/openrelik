@@ -20,8 +20,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from auth.local import auth_local
 
 
-@pytest.mark.asyncio
-async def test_auth_local_success(mocker, db):
+def test_auth_local_success(mocker, db):
     """Test auth_local success."""
     # Setup mocks
     mock_generate_csrf = mocker.patch("auth.local.generate_csrf_token")
@@ -45,7 +44,7 @@ async def test_auth_local_success(mocker, db):
     request = mocker.MagicMock()
 
     # Call function
-    response = await auth_local(request, form_data, db)
+    response = auth_local(request, form_data, db)
 
     # Assertions
     mock_get_user.assert_called_once_with(db, username="testuser")
@@ -53,8 +52,7 @@ async def test_auth_local_success(mocker, db):
     assert response.status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_auth_local_wrong_password(mocker, db):
+def test_auth_local_wrong_password(mocker, db):
     """Test auth_local with wrong password."""
     import argon2
 
@@ -78,14 +76,13 @@ async def test_auth_local_wrong_password(mocker, db):
 
     # Call function and assert exception
     with pytest.raises(HTTPException) as exc_info:
-        await auth_local(request, form_data, db)
+        auth_local(request, form_data, db)
 
     assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert "Incorrect username or password" in exc_info.value.detail
 
 
-@pytest.mark.asyncio
-async def test_auth_local_user_not_found(mocker, db):
+def test_auth_local_user_not_found(mocker, db):
     """Test auth_local with user not found."""
     # Setup mocks
     mock_get_user = mocker.patch("auth.local.get_user_by_username_from_db")
@@ -99,7 +96,7 @@ async def test_auth_local_user_not_found(mocker, db):
 
     # Call function and assert exception
     with pytest.raises(HTTPException) as exc_info:
-        await auth_local(request, form_data, db)
+        auth_local(request, form_data, db)
 
     assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert "Incorrect username or password" in exc_info.value.detail
