@@ -373,7 +373,7 @@ def create_subfolder(
 # Update folder
 @router.patch("/{folder_id}")
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def update_folder(
+def update_folder(
     folder_id: int,
     folder_from_request: schemas.FolderUpdateRequest,
     current_user: schemas.User = Depends(get_current_active_user),
@@ -694,7 +694,7 @@ def delete_user_role(
 # Create a new session in ADK
 @router.post("/{folder_id}/investigations/init")
 @require_access(allowed_roles=[Role.VIEWER, Role.EDITOR, Role.OWNER])
-async def create_adk_session(
+def create_adk_session(
     folder_id: int,
     request: schemas.AgentSessionRequest,
     db: Session = Depends(get_db_connection),
@@ -710,7 +710,7 @@ async def create_adk_session(
             detail="ADK server URL is not configured.",
         )
 
-    async def _get_folder_contents():
+    def _get_folder_contents():
         """
         Retrieves file metadata for a specific folder.
 
@@ -733,7 +733,7 @@ async def create_adk_session(
 
         return file_data_list
 
-    async def _create_adk_session(session_id: str):
+    def _create_adk_session(session_id: str):
         """Creates a new session to ADK for the given app and user.
 
         Args:
@@ -744,7 +744,7 @@ async def create_adk_session(
         """
         url = f"{ADK_BASE_URL}/apps/dfir_multi_agent/users/{current_user.id}/sessions/{session_id}"
         headers = {"Content-Type": "application/json"}
-        files_list = await _get_folder_contents()
+        files_list = _get_folder_contents()
         payload = generate_initial_state(context=request.context, files=files_list)
 
         try:
@@ -758,7 +758,7 @@ async def create_adk_session(
             print(f"Request error creating session: {e}")
             return None, session_id
 
-    session = await _create_adk_session(session_id=str(uuid.uuid4()))
+    session = _create_adk_session(session_id=str(uuid.uuid4()))
     session_id = session[1]
 
     return schemas.AgentSessionResponse(session_id=session_id)

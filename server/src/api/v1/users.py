@@ -52,7 +52,7 @@ def get_current_user(
 
 
 @router.get("/me/apikeys/")
-async def get_api_key_for_current_user(
+def get_api_key_for_current_user(
     current_user: schemas.User = Depends(get_current_active_user),
     db: Session = Depends(get_db_connection),
 ) -> list[schemas.UserApiKeyResponse]:
@@ -70,7 +70,7 @@ async def get_api_key_for_current_user(
 
 
 @router.post("/me/apikeys/")
-async def create_api_key_for_current_user(
+def create_api_key_for_current_user(
     request: schemas.UserApiKeyRequest,
     current_user: schemas.User = Depends(get_current_active_user),
     db: Session = Depends(get_db_connection),
@@ -110,7 +110,7 @@ async def create_api_key_for_current_user(
 
 
 @router.delete("/me/apikeys/{apikey_id}")
-async def delete_api_key(
+def delete_api_key(
     apikey_id: int,
     current_user: schemas.User = Depends(get_current_active_user),
     db: Session = Depends(get_db_connection),
