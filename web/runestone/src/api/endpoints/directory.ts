@@ -21,8 +21,8 @@ limitations under the License.
  * searched (by name or username); groups are listed whole.
  */
 
-import { httpClient, type RequestOptions } from '../client'
-import type { DirectoryUser, GroupRecord } from '../types'
+import { httpClient, type RequestOptions } from '@/api/client'
+import type { DirectoryUser, GroupRecord } from '@/api/types'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 

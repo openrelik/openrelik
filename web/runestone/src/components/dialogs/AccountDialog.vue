@@ -19,6 +19,7 @@ import { Copy, KeyRound, LogOut, Plus, Trash2, TriangleAlert, X } from '@/compon
 
 import Button from '@/components/base/Button.vue'
 import LoadState from '@/components/base/LoadState.vue'
+import ModalSheet from '@/components/base/ModalSheet.vue'
 import UserAvatar from '@/components/base/UserAvatar.vue'
 import { errorMessage, type ApiKeyRecord } from '@/api'
 import {
@@ -151,11 +152,6 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey, { capture: true }))
 onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }))
 
-function onBackdrop() {
-  if (newKey.value) warned.value = true
-  else close()
-}
-
 // --- revoking ---
 
 async function revoke(key: ApiKeyRecord) {
@@ -201,209 +197,196 @@ function expiry(key: ApiKeyRecord): { text: string; tone: string } {
   return { text, tone: days < 2 ? 'text-warning' : 'text-ink-muted' }
 }
 
+function onBackdrop() {
+  if (newKey.value) warned.value = true
+  else close()
+}
+
 const user = computed(() => auth.user)
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="accountOpen" class="fixed inset-0 z-50">
-      <div class="absolute inset-0 bg-ink/20" aria-hidden="true" @pointerdown="onBackdrop" />
-      <div
-        tabindex="-1"
-        v-autofocus
-        v-trap-focus
-        class="sheet absolute top-[10vh] left-1/2 flex max-h-[80vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="account-title"
+  <ModalSheet
+    :open="accountOpen"
+    size="lg"
+    aria-labelledby="account-title"
+    tabindex="-1"
+    @close="onBackdrop"
+  >
+    <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken pr-2 pl-4">
+      <h2 id="account-title" class="card-title">Account</h2>
+      <button
+        v-if="!newKey"
+        type="button"
+        class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
+        aria-label="Close account"
+        v-tooltip="'Close'"
+        @click="close"
       >
-        <div
-          class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken pr-2 pl-4"
+        <X :size="14" :stroke-width="1.5" />
+      </button>
+    </div>
+
+    <!-- a key just created: shown once -->
+    <div v-if="newKey" v-autofocus tabindex="-1" class="flex flex-col gap-3 p-5 outline-none">
+      <p class="flex items-center gap-2 font-medium text-ink">
+        <KeyRound :size="14" :stroke-width="1.5" class="text-brand" />
+        “{{ newKey.name }}” is ready
+      </p>
+      <p class="flex items-start gap-2 text-warning">
+        <TriangleAlert :size="13" :stroke-width="1.5" class="mt-0.5 shrink-0" />
+        This is the only time the key is shown. Copy it now and keep it somewhere safe; the server
+        keeps only its name and expiry.
+      </p>
+      <textarea
+        readonly
+        rows="3"
+        spellcheck="false"
+        class="field tabular resize-none py-1.5 text-badge break-all"
+        aria-label="The new API key"
+        :value="newKey.token"
+        @focus="($event.target as HTMLTextAreaElement).select()"
+      />
+      <p v-if="warned" class="text-warning" role="alert">
+        Copy the key before you leave: it cannot be shown again. Press Done when it is safe.
+      </p>
+      <p v-if="error" class="text-danger" role="alert">{{ error }}</p>
+      <div class="flex items-center gap-2">
+        <Button variant="primary" @click="copyKey">
+          <template #icon><Copy :size="13" :stroke-width="1.5" /></template>
+          {{ copied ? 'Copied' : 'Copy key' }}
+        </Button>
+        <Button
+          :tooltip="copied ? 'Back to your keys' : 'Leave without copying: the key is lost'"
+          @click="done"
         >
-          <h2 id="account-title" class="card-title">account</h2>
-          <button
-            v-if="!newKey"
-            type="button"
-            class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
-            aria-label="Close account"
-            v-tooltip="'Close'"
-            @click="close"
-          >
-            <X :size="14" :stroke-width="1.5" />
-          </button>
-        </div>
-
-        <!-- a key just created: shown once -->
-        <div v-if="newKey" class="flex flex-col gap-3 p-5">
-          <p class="flex items-center gap-2 font-medium text-ink">
-            <KeyRound :size="14" :stroke-width="1.5" class="text-brand" />
-            “{{ newKey.name }}” is ready
-          </p>
-          <p class="flex items-start gap-2 text-warning">
-            <TriangleAlert :size="13" :stroke-width="1.5" class="mt-0.5 shrink-0" />
-            This is the only time the key is shown. Copy it now and keep it somewhere safe; the
-            server keeps only its name and expiry.
-          </p>
-          <textarea
-            readonly
-            rows="3"
-            spellcheck="false"
-            class="field tabular resize-none py-1.5 text-[0.6875rem] break-all"
-            aria-label="The new API key"
-            :value="newKey.token"
-            @focus="($event.target as HTMLTextAreaElement).select()"
-          />
-          <p v-if="warned" class="text-warning" role="alert">
-            Copy the key before you leave: it cannot be shown again. Press Done when it is safe.
-          </p>
-          <p v-if="error" class="text-danger" role="alert">{{ error }}</p>
-          <div class="flex items-center gap-2">
-            <Button variant="primary" @click="copyKey">
-              <template #icon><Copy :size="13" :stroke-width="1.5" /></template>
-              {{ copied ? 'Copied' : 'Copy key' }}
-            </Button>
-            <Button
-              :tooltip="copied ? 'Back to your keys' : 'Leave without copying: the key is lost'"
-              @click="done"
-            >
-              Done
-            </Button>
-          </div>
-        </div>
-
-        <div v-else class="min-h-0 flex-1 overflow-y-auto">
-          <!-- who -->
-          <section class="flex items-center gap-3 border-b border-border px-4 py-3">
-            <UserAvatar
-              :name="user?.display_name || user?.username || ''"
-              :username="user?.username"
-              :src="user?.profile_picture_url || user?.avatar_url"
-              :uuid="user?.uuid"
-              size="lg"
-              decorative
-            />
-            <div class="min-w-0">
-              <p class="truncate font-medium text-ink">
-                {{ user?.display_name || user?.username }}
-              </p>
-              <p class="truncate text-ink-muted">
-                {{ user?.username }}<template v-if="user?.email"> · {{ user.email }}</template>
-              </p>
-            </div>
-          </section>
-
-          <!-- API keys -->
-          <section aria-labelledby="account-keys" class="px-4 py-3">
-            <div class="flex items-center gap-2">
-              <p id="account-keys" class="micro-label">API keys</p>
-              <Button
-                v-if="!creating"
-                size="row"
-                class="ml-auto"
-                tooltip="A key for scripts and the command line"
-                @click="startCreate"
-              >
-                <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
-                Create API key
-              </Button>
-            </div>
-            <p class="mt-1 text-ink-muted">
-              For scripts and the command line: a key acts as you. Revoke one you no longer use.
-            </p>
-
-            <!-- the new key's name -->
-            <form
-              v-if="creating"
-              class="well mt-3 flex flex-col gap-2 p-3"
-              @submit.prevent="create"
-            >
-              <label class="flex flex-col gap-1">
-                <span class="micro-label">Name</span>
-                <input
-                  ref="nameInput"
-                  v-model="name"
-                  type="text"
-                  spellcheck="false"
-                  placeholder="e.g. laptop CLI"
-                  class="field h-7"
-                  required
-                />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="micro-label">Description (optional)</span>
-                <input v-model="description" type="text" class="field h-7" />
-              </label>
-              <p class="text-ink-muted">How long it lasts is set by the server.</p>
-              <div class="flex items-center gap-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="row"
-                  :disabled="!name.trim() || saving"
-                >
-                  {{ showSaving ? 'Creating…' : 'Create key' }}
-                </Button>
-                <Button size="row" variant="ghost" @click="cancelCreate">Cancel</Button>
-              </div>
-            </form>
-
-            <p v-if="error" class="mt-2 text-danger" role="alert">{{ error }}</p>
-
-            <!-- the keys -->
-            <LoadState
-              :state="state"
-              noun="API keys"
-              :has-content="keys.length > 0"
-              @retry="loadApiKeys({ force: true })"
-            >
-              <template #empty>You have no API keys.</template>
-            </LoadState>
-            <ul
-              v-if="keys.length"
-              class="mt-3 divide-y divide-border/60 rounded-(--radius-control) border border-border"
-            >
-              <li
-                v-for="key in keys"
-                :key="key.id"
-                class="flex items-center gap-3 px-3 py-2"
-                :class="{ 'opacity-50': deletingIds.has(key.id) }"
-              >
-                <KeyRound :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
-                <div class="min-w-0 flex-1">
-                  <p class="truncate font-medium text-ink">{{ key.display_name }}</p>
-                  <p v-if="key.description" class="truncate text-[0.6875rem] text-ink-muted">
-                    {{ key.description }}
-                  </p>
-                </div>
-                <div class="shrink-0 text-right text-[0.6875rem]">
-                  <p class="tabular text-ink-secondary">expires {{ stamp(key.token_exp) }}</p>
-                  <p :class="expiry(key).tone">{{ expiry(key).text }}</p>
-                </div>
-                <button
-                  type="button"
-                  class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted transition-colors hover:bg-danger-tint hover:text-danger"
-                  :aria-label="`Revoke ${key.display_name}`"
-                  v-tooltip="'Revoke key'"
-                  :disabled="deletingIds.has(key.id)"
-                  @click="revoke(key)"
-                >
-                  <Trash2 :size="13" :stroke-width="1.5" />
-                </button>
-              </li>
-            </ul>
-          </section>
-        </div>
-
-        <div
-          v-if="!newKey"
-          class="flex h-10 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[0.6875rem] text-ink-muted"
-        >
-          <Button variant="danger" size="row" @click="(close(), auth.logout())">
-            <template #icon><LogOut :size="12" :stroke-width="1.5" /></template>
-            Sign out
-          </Button>
-        </div>
+          Done
+        </Button>
       </div>
     </div>
-  </Teleport>
+
+    <div v-else v-autofocus tabindex="-1" class="min-h-0 flex-1 overflow-y-auto outline-none">
+      <!-- who -->
+      <section class="flex items-center gap-3 border-b border-border px-4 py-3">
+        <UserAvatar
+          :name="user?.display_name || user?.username || ''"
+          :username="user?.username"
+          :src="user?.profile_picture_url || user?.avatar_url"
+          :uuid="user?.uuid"
+          size="lg"
+          decorative
+        />
+        <div class="min-w-0">
+          <p class="truncate font-medium text-ink">
+            {{ user?.display_name || user?.username }}
+          </p>
+          <p class="truncate text-ink-muted">
+            {{ user?.username }}<template v-if="user?.email"> · {{ user.email }}</template>
+          </p>
+        </div>
+      </section>
+
+      <!-- API keys -->
+      <section aria-labelledby="account-keys" class="px-4 py-3">
+        <div class="flex items-center gap-2">
+          <p id="account-keys" class="micro-label">API keys</p>
+          <Button
+            v-if="!creating"
+            size="row"
+            class="ml-auto"
+            tooltip="A key for scripts and the command line"
+            @click="startCreate"
+          >
+            <template #icon><Plus :size="13" :stroke-width="1.5" /></template>
+            Create API key
+          </Button>
+        </div>
+        <p class="mt-1 text-ink-muted">
+          For scripts and the command line: a key acts as you. Revoke one you no longer use.
+        </p>
+
+        <!-- the new key's name -->
+        <form v-if="creating" class="well mt-3 flex flex-col gap-2 p-3" @submit.prevent="create">
+          <label class="flex flex-col gap-1">
+            <span class="micro-label">Name</span>
+            <input
+              ref="nameInput"
+              v-model="name"
+              type="text"
+              spellcheck="false"
+              placeholder="e.g. laptop CLI"
+              class="field h-7"
+              required
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="micro-label">Description (optional)</span>
+            <input v-model="description" type="text" class="field h-7" />
+          </label>
+          <p class="text-ink-muted">How long it lasts is set by the server.</p>
+          <div class="flex items-center gap-2">
+            <Button type="submit" variant="primary" size="row" :disabled="!name.trim() || saving">
+              {{ showSaving ? 'Creating…' : 'Create key' }}
+            </Button>
+            <Button size="row" variant="ghost" @click="cancelCreate">Cancel</Button>
+          </div>
+        </form>
+
+        <p v-if="error" class="mt-2 text-danger" role="alert">{{ error }}</p>
+
+        <!-- the keys -->
+        <LoadState
+          :state="state"
+          noun="API keys"
+          :has-content="keys.length > 0"
+          @retry="loadApiKeys({ force: true })"
+        >
+          <template #empty>You have no API keys.</template>
+        </LoadState>
+        <ul
+          v-if="keys.length"
+          class="mt-3 divide-y divide-border/60 rounded-(--radius-control) border border-border"
+        >
+          <li
+            v-for="key in keys"
+            :key="key.id"
+            class="flex items-center gap-3 px-3 py-2"
+            :class="{ 'opacity-50': deletingIds.has(key.id) }"
+          >
+            <KeyRound :size="13" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-medium text-ink">{{ key.display_name }}</p>
+              <p v-if="key.description" class="truncate text-badge text-ink-muted">
+                {{ key.description }}
+              </p>
+            </div>
+            <div class="shrink-0 text-right text-badge">
+              <p class="tabular text-ink-secondary">expires {{ stamp(key.token_exp) }}</p>
+              <p :class="expiry(key).tone">{{ expiry(key).text }}</p>
+            </div>
+            <button
+              type="button"
+              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted transition-colors hover:bg-danger-tint hover:text-danger"
+              :aria-label="`Revoke ${key.display_name}`"
+              v-tooltip="'Revoke key'"
+              :disabled="deletingIds.has(key.id)"
+              @click="revoke(key)"
+            >
+              <Trash2 :size="13" :stroke-width="1.5" />
+            </button>
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <div
+      v-if="!newKey"
+      class="flex h-10 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-badge text-ink-muted"
+    >
+      <Button variant="danger" size="row" @click="(close(), auth.logout())">
+        <template #icon><LogOut :size="12" :stroke-width="1.5" /></template>
+        Sign out
+      </Button>
+    </div>
+  </ModalSheet>
 </template>

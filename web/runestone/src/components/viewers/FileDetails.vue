@@ -72,7 +72,7 @@ const created = computed(() => props.file.created ?? props.file.modified)
 </script>
 
 <template>
-  <div aria-label="File details" class="flex flex-col gap-4 px-3 py-3">
+  <div aria-label="File details" class="flex flex-col gap-4 px-3 py-3 text-body">
     <!-- what the file is -->
     <div>
       <p :class="magic ? 'text-ink' : 'text-ink-muted'">

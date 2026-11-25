@@ -17,6 +17,7 @@ limitations under the License.
 import { computed } from 'vue'
 
 import Button from '@/components/base/Button.vue'
+import StatusDot from '@/components/base/StatusDot.vue'
 import UserAvatar from '@/components/base/UserAvatar.vue'
 import { File, X } from '@/components/icons'
 import { sentBytes, uploadPercent, type Upload } from '@/composables/useUploadQueue'
@@ -82,7 +83,7 @@ const failed = computed(() => props.upload.status === 'failed')
     <td class="truncate px-2 text-ink-muted">
       <span v-if="failed" class="text-danger">failed</span>
       <span v-else-if="showPending" class="inline-flex items-center gap-1.5 text-brand">
-        <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+        <StatusDot pulse />
         <template v-if="upload.waiting">waiting for the network…</template>
         <template v-else-if="upload.status === 'queued'">queued…</template>
         <template v-else>

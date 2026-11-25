@@ -128,7 +128,7 @@ describe('LoginView', () => {
     await wrapper.get('form').trigger('submit')
 
     expect(api.auth.login).toHaveBeenCalledWith('alice', 'secret-pass')
-    expect(wrapper.get('button[type="submit"]').text()).toContain('Signing in...')
+    expect(wrapper.get('button[type="submit"]').text()).toContain('Signing in…')
     expect(wrapper.get('input[name="username"]').attributes('disabled')).toBeDefined()
 
     resolveLogin!(operatorAlice)
@@ -196,7 +196,7 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toContain('Invalid username or password')
-    expect(wrapper.get('button[type="submit"]').text()).toContain('Login')
+    expect(wrapper.get('button[type="submit"]').text()).toContain('Sign in')
   })
 
   it('dismisses error message first on Escape, then resets form fields on a second Escape', async () => {

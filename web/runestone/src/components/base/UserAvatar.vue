@@ -29,10 +29,10 @@ import { computed, ref, watch } from 'vue'
 type AvatarSize = 'xs' | 'sm' | 'md' | 'lg'
 
 const SIZE_CLASS: Record<AvatarSize, { box: string; text: string }> = {
-  xs: { box: 'size-4', text: 'text-[0.5625rem]' },
-  sm: { box: 'size-[1.125rem]', text: 'text-[0.625rem]' },
-  md: { box: 'size-7', text: 'text-[0.75rem]' },
-  lg: { box: 'size-8', text: 'text-[0.8125rem]' },
+  xs: { box: 'size-4', text: 'text-2xs' },
+  sm: { box: 'size-[1.125rem]', text: 'text-micro' },
+  md: { box: 'size-7', text: 'text-dense' },
+  lg: { box: 'size-8', text: 'text-body' },
 }
 
 function avatarColorFor(uuid: string): string {
@@ -102,7 +102,7 @@ const placeholderColor = computed(() =>
     <span
       v-else
       class="leading-none font-medium"
-      :class="[sizing.text, placeholderColor ? 'text-white' : 'text-ink-secondary']"
+      :class="[sizing.text, placeholderColor ? 'text-on-avatar' : 'text-ink-secondary']"
       aria-hidden="true"
     >
       {{ initial }}

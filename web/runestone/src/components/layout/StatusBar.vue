@@ -16,6 +16,7 @@ limitations under the License.
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 
+import StatusDot from '@/components/base/StatusDot.vue'
 import UserAvatar from '@/components/base/UserAvatar.vue'
 import SettingsTrigger from '@/components/layout/SettingsTrigger.vue'
 import { LogOut, Upload } from '@/components/icons'
@@ -43,7 +44,7 @@ const { status: connection } = useConnection()
 
 <template>
   <footer
-    class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
+    class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-badge text-ink-muted"
     role="status"
   >
     <slot />
@@ -75,11 +76,7 @@ const { status: connection } = useConnection()
         :aria-label="`Network: ${network}`"
         v-tooltip="NETWORK_TOOLTIP[network]"
       >
-        <span
-          class="size-1.5 shrink-0 rounded-full"
-          :class="network === 'idle' ? 'bg-success' : 'animate-pulse bg-warning'"
-          aria-hidden="true"
-        />
+        <StatusDot :tone="network === 'idle' ? 'success' : 'warning'" :pulse="network !== 'idle'" />
       </span>
 
       <!-- Always here, so the queue is somewhere to go back to, not a notice

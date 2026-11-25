@@ -15,6 +15,7 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import BrandMark from '@/components/layout/BrandMark.vue'
 </script>
 
 <template>
@@ -30,6 +31,6 @@ import { RouterLink } from 'vue-router'
     aria-label="All folders"
     v-tooltip="'All folders'"
   >
-    <img src="/logo-light-round.png" alt="" class="size-6" />
+    <BrandMark class="size-6" />
   </RouterLink>
 </template>

@@ -17,6 +17,7 @@ limitations under the License.
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import PopoverSurface from '@/components/base/PopoverSurface.vue'
 import { Pencil } from '@/components/icons'
 import BrandLink from '@/components/layout/BrandLink.vue'
 import PromptResults from '@/components/prompt/PromptResults.vue'
@@ -299,15 +300,13 @@ function onBarClick(event: MouseEvent) {
             /
           </button>
 
-          <div
+          <PopoverSurface
             v-if="openAt === at"
-            class="sheet absolute top-full left-0 z-30 mt-1.5 max-h-72 min-w-56 overflow-y-auto py-1 text-[0.75rem] shadow-(--shadow-float)"
+            class="absolute top-full left-0 z-(--z-popover) mt-1.5 max-h-72 min-w-56 overflow-y-auto py-1 text-dense"
             role="menu"
             @keydown="onMenuKey"
           >
-            <p class="px-3 pb-1 text-[0.6875rem] text-ink-muted">
-              folders in {{ `${path[at]!.name}/` }}
-            </p>
+            <p class="px-3 pb-1 text-badge text-ink-muted">folders in {{ `${path[at]!.name}/` }}</p>
             <RouterLink
               v-for="entry in entries"
               :key="entry.id"
@@ -322,12 +321,12 @@ function onBarClick(event: MouseEvent) {
               <span class="text-brand" :class="{ 'font-semibold': entry.id === onPath?.id }"
                 >{{ entry.name }}/</span
               >
-              <span class="tabular ml-auto pl-4 text-[0.6875rem] text-ink-muted">{{
+              <span class="tabular ml-auto pl-4 text-badge text-ink-muted">{{
                 entry.workflowId !== undefined ? 'workflow' : itemsStore.childrenOf(entry.id).length
               }}</span>
             </RouterLink>
             <p v-if="!entries.length" class="px-3 py-1 text-ink-muted">(no subfolders)</p>
-          </div>
+          </PopoverSurface>
         </span>
 
         <template v-if="at + 1 < path.length">
@@ -416,25 +415,28 @@ function onBarClick(event: MouseEvent) {
       />
       <span
         aria-hidden="true"
-        class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate select-none peer-placeholder-shown:block"
-        :class="focused ? 'text-ink-muted/60' : 'text-ink-muted/45'"
+        class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate text-ink-muted select-none peer-placeholder-shown:block"
         >cd, or type to find…</span
       >
     </div>
 
     <!-- what the prompt would print -->
-    <PromptResults
+    <PopoverSurface
       v-if="dropdown"
-      class="sheet absolute top-full right-0 left-0 z-30 mt-1.5 max-h-[60vh] overflow-hidden shadow-(--shadow-float)"
-      :results="results"
-      :index="index"
-      :query="query"
-      :mode="isRm ? 'rm' : 'search'"
-      :cwd-path="cwdPath"
-      :scope-path="scopePath"
-      :server-search="serverSearch"
-      @go="go"
-      @hover="index = $event"
-    />
+      class="absolute top-full right-0 left-0 z-(--z-popover) mt-1.5 flex max-h-[60vh] flex-col overflow-hidden"
+    >
+      <PromptResults
+        class="min-h-0 flex-1"
+        :results="results"
+        :index="index"
+        :query="query"
+        :mode="isRm ? 'rm' : 'search'"
+        :cwd-path="cwdPath"
+        :scope-path="scopePath"
+        :server-search="serverSearch"
+        @go="go"
+        @hover="index = $event"
+      />
+    </PopoverSurface>
   </div>
 </template>

@@ -214,15 +214,18 @@ describe('AccountDialog', () => {
     // Close button and Sign out are hidden while key is displayed
     expect(body.find('button[aria-label="Close account"]').exists()).toBe(false)
 
-    // Escape and backdrop warn instead of closing
+    // Backdrop click warns instead of closing (tested before Escape sets warned)
+    expect(body.text()).not.toContain('Copy the key before you leave')
+    await body.get('[aria-hidden="true"]').trigger('pointerdown')
+    await nextTick()
+    expect(accountOpen.value).toBe(true)
+    expect(body.text()).toContain('Copy the key before you leave')
+
+    // Escape also warns instead of closing
     const esc = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
     window.dispatchEvent(esc)
     await nextTick()
     expect(esc.defaultPrevented).toBe(true)
-    expect(accountOpen.value).toBe(true)
-    expect(body.text()).toContain('Copy the key before you leave')
-
-    await body.get('[aria-hidden="true"]').trigger('pointerdown')
     expect(accountOpen.value).toBe(true)
 
     // Clipboard failure shows error, then clipboard success shows Copied

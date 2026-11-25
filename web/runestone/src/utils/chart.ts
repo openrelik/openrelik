@@ -69,27 +69,25 @@ export function timeTicks(start: number, end: number, count = 5): number[] {
   const span = Math.max(1, end - start)
   const step = TIME_STEPS.find((candidate) => span / candidate <= count) ?? span / count
   const ticks: number[] = []
-  // Aligned to the step in local time, so ticks land on :00, midnight and so on.
-  const offset = new Date(start).getTimezoneOffset() * 60e3
-  for (let t = Math.ceil((start - offset) / step) * step + offset; t <= end; t += step)
-    ticks.push(t)
+  // Aligned to the step in UTC, so ticks land on :00, 00:00 UTC, and so on.
+  for (let t = Math.ceil(start / step) * step; t <= end; t += step) ticks.push(t)
   return ticks
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/** A time on the axis: the clock within a day, the date across days. */
+/** A time on the axis, in UTC: the clock within a day, the date across days. */
 export function formatTime(ms: number, span: number): string {
   const date = new Date(ms)
-  const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}`
-  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  const clock = `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
+  const day = `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
   if (span <= 86400e3) return clock
   if (span <= 3 * 86400e3) return `${day.slice(5)} ${clock}`
   return day
 }
 
-/** A time in full, for the tooltip. */
+/** A time in full (UTC), for the tooltip. */
 export function formatMoment(ms: number): string {
   const date = new Date(ms)
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())} UTC`
 }

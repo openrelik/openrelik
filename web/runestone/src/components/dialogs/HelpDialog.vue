@@ -18,6 +18,7 @@ import { X } from '@/components/icons'
 import { onMounted, onUnmounted } from 'vue'
 
 import KeyHint from '@/components/base/KeyHint.vue'
+import ModalSheet from '@/components/base/ModalSheet.vue'
 import { useHelp } from '@/composables/useHelp'
 import { useModalStore } from '@/stores/modals'
 
@@ -176,72 +177,68 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="helpOpen" class="fixed inset-0 z-50">
-      <div class="absolute inset-0 bg-ink/20" aria-hidden="true" @pointerdown="close" />
-      <div
-        tabindex="-1"
-        v-autofocus
-        v-trap-focus
-        class="sheet absolute top-[8vh] left-1/2 flex max-h-[84vh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float) outline-none"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="help-title"
+  <ModalSheet
+    :open="helpOpen"
+    size="xl"
+    max-height-class="max-h-[84vh]"
+    aria-labelledby="help-title"
+    tabindex="-1"
+    @close="close"
+  >
+    <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken pr-2 pl-4">
+      <h2 id="help-title" class="card-title">Keyboard shortcuts</h2>
+      <button
+        type="button"
+        class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
+        aria-label="Close help"
+        v-tooltip="'Close'"
+        @click="close"
       >
-        <div
-          class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken pr-2 pl-4"
-        >
-          <h2 id="help-title" class="card-title">keyboard shortcuts</h2>
-          <button
-            type="button"
-            class="ml-auto flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
-            aria-label="Close help"
-            v-tooltip="'Close'"
-            @click="close"
-          >
-            <X :size="14" :stroke-width="1.5" />
-          </button>
-        </div>
-
-        <div class="min-h-0 flex-1 columns-2 gap-6 overflow-y-auto px-4 py-3 max-md:columns-1">
-          <section
-            v-for="group in GROUPS"
-            :key="group.title"
-            class="mb-4 break-inside-avoid"
-            :aria-labelledby="`help-${group.title}`"
-          >
-            <p :id="`help-${group.title}`" class="micro-label pb-1">{{ group.title }}</p>
-            <p v-if="group.note" class="pb-1.5 text-[0.6875rem] text-ink-muted">{{ group.note }}</p>
-            <dl class="divide-y divide-border">
-              <div
-                v-for="shortcut in group.shortcuts"
-                :key="shortcut.does"
-                class="flex items-baseline gap-3 py-1.5"
-              >
-                <dt class="flex w-24 shrink-0 flex-wrap gap-1">
-                  <kbd
-                    v-for="key in shortcut.keys"
-                    :key="key"
-                    class="rounded-(--radius-check) border border-border-strong bg-sunken px-1 text-[0.6875rem] leading-4 whitespace-nowrap text-ink"
-                    >{{ key }}</kbd
-                  >
-                </dt>
-                <dd class="text-ink-secondary">{{ shortcut.does }}</dd>
-              </div>
-            </dl>
-          </section>
-        </div>
-
-        <div
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-[0.6875rem] text-ink-muted"
-        >
-          <span>⌘ is Ctrl on Windows and Linux</span>
-          <span class="ml-auto flex items-center gap-3">
-            <KeyHint keys="?" label="close" />
-            <KeyHint keys="esc" label="close" />
-          </span>
-        </div>
-      </div>
+        <X :size="14" :stroke-width="1.5" />
+      </button>
     </div>
-  </Teleport>
+
+    <div
+      v-autofocus
+      tabindex="-1"
+      class="min-h-0 flex-1 columns-2 gap-6 overflow-y-auto px-4 py-3 outline-none max-md:columns-1"
+    >
+      <section
+        v-for="group in GROUPS"
+        :key="group.title"
+        class="mb-4 break-inside-avoid"
+        :aria-labelledby="`help-${group.title}`"
+      >
+        <p :id="`help-${group.title}`" class="micro-label pb-1">{{ group.title }}</p>
+        <p v-if="group.note" class="pb-1.5 text-badge text-ink-muted">{{ group.note }}</p>
+        <dl class="divide-y divide-border">
+          <div
+            v-for="shortcut in group.shortcuts"
+            :key="shortcut.does"
+            class="flex items-baseline gap-3 py-1.5"
+          >
+            <dt class="flex w-24 shrink-0 flex-wrap gap-1">
+              <kbd
+                v-for="key in shortcut.keys"
+                :key="key"
+                class="rounded-(--radius-check) border border-border-strong bg-sunken px-1 text-badge leading-4 whitespace-nowrap text-ink"
+                >{{ key }}</kbd
+              >
+            </dt>
+            <dd class="text-ink-secondary">{{ shortcut.does }}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+
+    <div
+      class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-4 text-badge text-ink-muted"
+    >
+      <span>⌘ is Ctrl on Windows and Linux</span>
+      <span class="ml-auto flex items-center gap-3">
+        <KeyHint keys="?" label="close" />
+        <KeyHint keys="esc" label="close" />
+      </span>
+    </div>
+  </ModalSheet>
 </template>

@@ -23,7 +23,7 @@ limitations under the License.
  * series; with Prometheus down, it fails.
  */
 
-import { httpClient, type RequestOptions } from '../client'
+import { httpClient, type RequestOptions } from '@/api/client'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 

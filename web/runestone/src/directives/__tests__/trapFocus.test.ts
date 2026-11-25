@@ -176,4 +176,109 @@ describe('vTrapFocus', () => {
     dialog.dispatchEvent(tabAfter)
     expect(tabAfter.defaultPrevented).toBe(false)
   })
+
+  it('wraps Tab from a tabindex="-1" body after the last control and Shift+Tab from one before the first', () => {
+    const Comp = defineComponent({
+      directives: { trapFocus: vTrapFocus },
+      template: `
+        <div role="dialog" tabindex="-1" v-trap-focus data-testid="dialog">
+          <div tabindex="-1" data-testid="lead">Lead</div>
+          <button data-testid="close">Close</button>
+          <div tabindex="-1" data-testid="body">Scrollable body</div>
+        </div>
+      `,
+    })
+
+    const wrapper = track(mount(Comp, { attachTo: document.body }))
+    const dialog = wrapper.get('[data-testid="dialog"]').element as HTMLElement
+    const lead = wrapper.get('[data-testid="lead"]').element as HTMLElement
+    const close = wrapper.get('[data-testid="close"]').element as HTMLElement
+    const body = wrapper.get('[data-testid="body"]').element as HTMLElement
+    markVisible([close])
+
+    // Forward Tab from a scrollable body placed after the only button wraps back to Close.
+    body.focus()
+    const tabFromBody = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+    })
+    body.dispatchEvent(tabFromBody)
+    expect(tabFromBody.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(close)
+
+    // Backward Shift+Tab from a container placed before the first button wraps to Close.
+    lead.focus()
+    const shiftTabFromLead = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    lead.dispatchEvent(shiftTabFromLead)
+    expect(shiftTabFromLead.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(close)
+
+    // Backward Shift+Tab from the dialog container itself also wraps to Close.
+    dialog.focus()
+    const shiftTabFromDialog = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    dialog.dispatchEvent(shiftTabFromDialog)
+    expect(shiftTabFromDialog.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(close)
+
+    // Forward Tab from the dialog container lets the browser move naturally to Close.
+    dialog.focus()
+    const tabFromDialog = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+    })
+    dialog.dispatchEvent(tabFromDialog)
+    expect(tabFromDialog.defaultPrevented).toBe(false)
+  })
+
+  it('ignores controls inside an inert subtree (such as a closed SlidePane)', () => {
+    const Comp = defineComponent({
+      directives: { trapFocus: vTrapFocus },
+      template: `
+        <div role="dialog" v-trap-focus data-testid="dialog">
+          <button data-testid="first">First</button>
+          <button data-testid="last">Last visible</button>
+          <div inert>
+            <button data-testid="hidden-inert">Inert hidden</button>
+          </div>
+        </div>
+      `,
+    })
+
+    const wrapper = track(mount(Comp, { attachTo: document.body }))
+    const first = wrapper.get('[data-testid="first"]').element as HTMLElement
+    const last = wrapper.get('[data-testid="last"]').element as HTMLElement
+    const hiddenInert = wrapper.get('[data-testid="hidden-inert"]').element as HTMLElement
+    markVisible([first, last, hiddenInert])
+
+    // Forward Tab from the last visible button wraps to first instead of targeting the inert button.
+    last.focus()
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    last.dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    // Backward Shift+Tab from first wraps to last visible instead of stalling on the inert button.
+    first.focus()
+    const shiftTab = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    first.dispatchEvent(shiftTab)
+    expect(shiftTab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+  })
 })

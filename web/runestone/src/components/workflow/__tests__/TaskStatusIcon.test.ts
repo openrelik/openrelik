@@ -50,7 +50,7 @@ describe('TaskStatusIcon', () => {
     {
       status: 'running',
       size: 13,
-      toneClass: 'text-warning-icon',
+      toneClass: 'text-brand-icon',
       usesRunningSpinner: true,
     },
     {

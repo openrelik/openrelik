@@ -18,6 +18,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
+import BrandMark from '@/components/layout/BrandMark.vue'
 import { AlertCircle, Eye, EyeOff, KeyRound, Lock, User } from '@/components/icons'
 import { useAuthStore } from '@/stores/auth'
 import { api, errorMessage as toMessage, removeSession, writeSession } from '@/api'
@@ -120,14 +121,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 </script>
 
 <template>
-  <div
-    class="flex h-full min-h-[28rem] items-center justify-center bg-surface p-4 text-[0.8125rem]"
-  >
+  <div class="flex h-full min-h-[28rem] items-center justify-center bg-surface p-4 text-body">
     <div class="flex w-full max-w-[22rem] flex-col gap-8">
       <!-- Wordmark -->
       <div class="flex items-center gap-3">
-        <img src="/logo-light-round.png" alt="" class="size-9" />
-        <span class="text-[1.75rem] leading-none font-bold tracking-tight text-ink">OpenRelik</span>
+        <BrandMark class="size-9" />
+        <span class="text-display leading-none font-semibold tracking-tight text-ink"
+          >OpenRelik</span
+        >
       </div>
 
       <div class="flex flex-col gap-5">
@@ -138,7 +139,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
             v-if="errorMessage"
             role="alert"
             aria-live="polite"
-            class="flex items-start gap-2 rounded-(--radius-check) border border-danger/40 bg-danger-tint px-2.5 py-1.5 text-[0.75rem] text-danger"
+            class="flex items-start gap-2 rounded-(--radius-check) border border-danger/40 bg-danger-tint px-2.5 py-1.5 text-dense text-danger"
           >
             <AlertCircle :size="13" :stroke-width="1.5" class="mt-0.5 shrink-0" />
             <span class="flex-1 leading-snug">{{ errorMessage }}</span>
@@ -205,14 +206,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
             :disabled="isSubmitting"
             class="h-10 w-full justify-center font-semibold"
           >
-            {{ isSubmitting ? 'Signing in...' : 'Login' }}
+            {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
           </Button>
         </form>
 
         <!-- Divider between local form and external providers -->
         <div
           v-if="hasLocalAuth && externalAuthMethods.length > 0"
-          class="flex items-center gap-3 text-[0.75rem] text-ink-muted"
+          class="flex items-center gap-3 text-dense text-ink-muted"
         >
           <span class="h-px flex-1 bg-border" aria-hidden="true" />
           <span>or</span>

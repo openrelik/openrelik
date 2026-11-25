@@ -20,20 +20,14 @@ import type { TooltipInput } from '@/composables/useTooltip'
 // Five variants, and only five. A view that wants a sixth look is a view that
 // has drifted from §6 — fix the view, not this file.
 //
-// `brand` was the fifth, and it was a deliberate change to §6, not drift: the
-// answer on a row of Review needed to stand out from the buttons beside it, and
-// the only emphasis there was, a solid primary, is one per view — which the
-// queue's Commit already is. Outlined in brand, it leads each row and leaves
-// Commit the only solid button on the screen.
+// `brand` is outlined in the brand accent so a row-level leading action can
+// stand out without competing with the view's single solid `primary` button.
 type Variant = 'primary' | 'brand' | 'secondary' | 'danger' | 'ghost'
 
 /** Two heights, and only two.
  *
- * `row` is for a control that sits *inside* a table row rather than above one.
- * At the standard 12px/6px the Accept button measured 33.5px in a 36px row —
- * 1.25px of clearance, which reads as a box overflowing its line rather than a
- * control belonging to it. Table rows have a 36px floor in this system (§9), so
- * the button gives way, not the row. */
+ * `row` is for controls that sit inside dense `28px` (`h-7`) table rows or
+ * compact toolbars so they stay vertically clear of row hairlines. */
 type Size = 'default' | 'row'
 
 const props = withDefaults(
@@ -48,12 +42,14 @@ const props = withDefaults(
 )
 
 // Status colours stay tints and text: the danger button is outlined, never solid.
+// Every variant carries a subtle `:active` press shift so clicks feel tactile
+// without moving layout.
 const variants: Record<Variant, string> = {
-  primary: 'bg-brand-strong text-canvas hover:bg-brand-stronger',
-  brand: 'bg-surface text-brand border border-brand hover:bg-brand-tint',
-  secondary: 'bg-surface text-ink border border-border-strong hover:bg-sunken',
-  danger: 'bg-surface text-danger border border-danger/60 hover:bg-danger-tint',
-  ghost: 'text-ink-secondary hover:text-ink',
+  primary: 'bg-brand-strong text-canvas hover:bg-brand-stronger active:bg-brand',
+  brand: 'bg-surface text-brand border border-brand hover:bg-brand-tint active:bg-brand-tint-hover',
+  secondary: 'bg-surface text-ink border border-border-strong hover:bg-sunken active:bg-border',
+  danger: 'bg-surface text-danger border border-danger/60 hover:bg-danger-tint active:bg-danger/20',
+  ghost: 'text-ink-secondary hover:text-ink active:bg-sunken',
 }
 
 /** Padding is the whole of the size. The face and the scale do not change —

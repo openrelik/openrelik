@@ -174,7 +174,7 @@ function remove() {
 </script>
 
 <template>
-  <aside class="flex min-h-0 flex-col" aria-label="Task">
+  <aside class="flex min-h-0 flex-col text-body" aria-label="Task">
     <div class="flex h-7 shrink-0 items-center border-b border-border pr-1 pl-3">
       <p class="micro-label">Task</p>
       <button
@@ -205,7 +205,7 @@ function remove() {
       <p v-if="task.description" class="mt-0.5 text-ink-muted">{{ task.description }}</p>
       <p
         v-if="task.status === 'running' && task.progress"
-        class="tabular mt-2 truncate text-[0.6875rem] text-ink-muted"
+        class="tabular mt-2 truncate text-badge text-ink-muted"
         v-overflow-tooltip
       >
         {{ task.progress }}
@@ -214,7 +214,7 @@ function remove() {
       <!-- What went wrong: the exception, and the traceback behind it for whoever debugs it. -->
       <div v-if="task.error" class="mt-2.5 border border-danger/40 bg-danger-tint px-2 py-1.5">
         <p class="wrap-break-word text-danger">{{ task.error }}</p>
-        <details v-if="task.traceback" class="mt-1 text-[0.6875rem]">
+        <details v-if="task.traceback" class="mt-1 text-badge">
           <summary class="cursor-pointer text-danger/80 hover:text-danger">traceback</summary>
           <pre
             v-copy-to-clipboard="{ text: task.traceback, hint: 'Click to copy the traceback' }"
@@ -283,14 +283,14 @@ function remove() {
                 >{{ row.priority }}</span
               >
               <span
-                class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
+                class="tabular shrink-0 text-badge text-ink-muted"
                 :class="{ 'ml-auto': !row.report }"
                 >{{ row.empty ? '—' : formatSize(row.file.size ?? 0) }}</span
               >
             </RouterLink>
             <p
               v-if="row.report?.summary"
-              class="truncate pb-1 pl-5 text-[0.6875rem] text-ink-muted"
+              class="truncate pb-1 pl-5 text-badge text-ink-muted"
               v-overflow-tooltip
             >
               {{ row.report.summary }}
@@ -369,7 +369,7 @@ function remove() {
       </template>
       <template v-else-if="used.length">
         <p class="micro-label mt-3 pb-1">Options</p>
-        <dl class="well px-2 py-1 text-[0.75rem]">
+        <dl class="well px-2 py-1 text-dense">
           <div v-for="option in used" :key="option.key" class="flex justify-between gap-3 py-0.5">
             <dt class="text-ink-muted">{{ option.label }}</dt>
             <dd class="min-w-0 break-all text-ink">{{ task.config[option.key] }}</dd>
@@ -422,7 +422,7 @@ function remove() {
 
     <div
       v-if="timing"
-      class="tabular flex h-7 shrink-0 items-center border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
+      class="tabular flex h-7 shrink-0 items-center border-t border-border bg-sunken px-3 text-badge text-ink-muted"
     >
       {{ timing }}
     </div>

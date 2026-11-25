@@ -237,7 +237,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
   <section
     v-else
-    class="explorer flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[0.75rem]"
+    class="explorer flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-dense"
   >
     <!-- toolbar: path · actions -->
     <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-2 pl-3">

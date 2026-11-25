@@ -18,8 +18,8 @@ limitations under the License.
  * Folders API
  */
 
-import { httpClient, type RequestOptions } from '../client'
-import type { Folder, FolderDetail, FolderFile, FolderPage, FolderRole } from '../types'
+import { httpClient, type RequestOptions } from '@/api/client'
+import type { Folder, FolderDetail, FolderFile, FolderPage, FolderRole } from '@/api/types'
 
 /** Roles a folder can be shared with. */
 export type ShareRole = Extract<FolderRole, 'Editor' | 'Viewer'>

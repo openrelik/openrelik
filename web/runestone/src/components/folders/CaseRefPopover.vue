@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, type ComponentPublicInstance } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
+import PopoverSurface from '@/components/base/PopoverSurface.vue'
+import StatusDot from '@/components/base/StatusDot.vue'
 import { useCaseRef } from '@/composables/useCaseRef'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import type { Item } from '@/types/item'
@@ -39,7 +41,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const { error, takenBy, clearError, savingIds, setCaseRef, clearCaseRef } = useCaseRef()
 
-const sheet = ref<HTMLElement | null>(null)
+const sheet = ref<ComponentPublicInstance | null>(null)
 const position = ref({ left: props.x, top: props.y })
 const text = ref(props.item.caseRef ?? '')
 
@@ -53,7 +55,7 @@ let alive = true
 onMounted(async () => {
   clearError()
   await nextTick()
-  const el = sheet.value
+  const el = sheet.value?.$el instanceof HTMLElement ? sheet.value.$el : null
   if (!el) return
   const { width, height } = el.getBoundingClientRect()
   position.value = {
@@ -92,10 +94,10 @@ function onKey(event: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <div
+    <PopoverSurface
       ref="sheet"
       tabindex="-1"
-      class="sheet fixed z-50 w-72 p-3 text-[0.75rem] shadow-(--shadow-float) outline-none"
+      class="fixed z-(--z-popover) w-72 p-3 text-dense outline-none"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
       role="dialog"
       :aria-label="`Case of ${item.name}`"
@@ -117,9 +119,9 @@ function onKey(event: KeyboardEvent) {
         :aria-invalid="!!text && !check.ok"
         :readonly="saving"
       />
-      <p class="mt-1 min-h-4 text-[0.6875rem] wrap-break-word">
+      <p class="mt-1 min-h-4 text-badge wrap-break-word">
         <span v-if="showSaving" class="inline-flex items-center gap-1.5 text-brand">
-          <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+          <StatusDot tone="brand" pulse />
           saving…
         </span>
         <span v-else-if="error" class="text-danger" role="alert">
@@ -140,6 +142,7 @@ function onKey(event: KeyboardEvent) {
       </p>
       <div class="mt-2 flex gap-1.5">
         <Button
+          variant="primary"
           size="row"
           :disabled="saving || !check.ok"
           :tooltip="item.caseRef ? undefined : 'Make this the case folder'"
@@ -160,6 +163,6 @@ function onKey(event: KeyboardEvent) {
           Clear
         </Button>
       </div>
-    </div>
+    </PopoverSurface>
   </Teleport>
 </template>

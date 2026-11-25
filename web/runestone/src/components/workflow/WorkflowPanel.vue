@@ -27,7 +27,7 @@ import {
   Shrink,
   Trash2,
 } from '@/components/icons'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowGraph from '@/components/workflow/WorkflowGraph.vue'
@@ -134,6 +134,18 @@ function toggleGroups() {
 }
 const selectedTask = computed(
   () => everyTask(props.workflow).find((task) => task.id === props.selectedId) ?? null,
+)
+// Keep the last selected task mounted while SlidePane collapses so the panel
+// slides out with its content instead of flashing an empty box.
+const shownTask = shallowRef<Task | null>(selectedTask.value)
+watch(selectedTask, (current) => {
+  if (current) shownTask.value = current
+})
+watch(
+  () => props.workflow.id,
+  () => {
+    shownTask.value = selectedTask.value
+  },
 )
 
 function enterFullscreen() {
@@ -295,10 +307,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
 <template>
   <section aria-label="Workflow">
     <!-- Right padding as the toolbar's, so the two rows of buttons share an edge. -->
-    <div
-      class="flex h-9 items-center gap-2.5 border-b border-border bg-sunken pl-3"
-      :class="$slots.end ? 'pr-1' : 'pr-2'"
-    >
+    <div class="flex h-9 items-center gap-2.5 border-b border-border bg-sunken pr-2 pl-3">
       <button
         type="button"
         class="flex size-4 cursor-pointer items-center justify-center text-ink-muted hover:text-ink"
@@ -325,7 +334,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         tooltip="Deletes the draft and its folder"
         @click="emit('discard')"
       >
-        <template #icon><Trash2 :size="11" :stroke-width="2" /></template>
+        <template #icon><Trash2 :size="11" :stroke-width="1.5" /></template>
         Discard
       </Button>
       <span v-if="activity.saveError" role="alert" class="flex min-w-0 items-center gap-1.5">
@@ -371,7 +380,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             @click="((view = option.value), (open = true))"
           >
             <component :is="option.icon" :size="12" :stroke-width="1.5" aria-hidden="true" />
-            <span class="text-[0.6875rem]">{{ option.label.toLowerCase() }}</span>
+            <span class="text-badge">{{ option.label.toLowerCase() }}</span>
           </button>
         </div>
 
@@ -408,14 +417,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             :tooltip="blocker ?? undefined"
             @click="run"
           >
-            <template #icon><Play :size="11" :stroke-width="2" /></template>
+            <template #icon><Play :size="11" :stroke-width="1.5" /></template>
             {{ showRunning ? 'Starting…' : 'Run workflow' }}
           </Button>
         </template>
         <!-- after a run: take it further as a new draft, or keep its shape -->
         <template v-else>
           <Button size="row" tooltip="A template to start new workflows from" @click="saveTemplate">
-            <template #icon><Save :size="11" :stroke-width="2" /></template>
+            <template #icon><Save :size="11" :stroke-width="1.5" /></template>
             Save as template
           </Button>
           <Button
@@ -424,12 +433,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             tooltip="A new draft on the same input files, to change and run again"
             @click="copy"
           >
-            <template #icon><Copy :size="11" :stroke-width="2" /></template>
+            <template #icon><Copy :size="11" :stroke-width="1.5" /></template>
             {{ showCopying ? 'Copying…' : 'Copy workflow' }}
           </Button>
         </template>
-        <!-- the page's control for its side panel (show), at the far right -->
-        <slot name="end" />
       </div>
     </div>
 
@@ -471,7 +478,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="fixed inset-0 z-50 flex flex-col bg-canvas text-[0.75rem] outline-none"
+        class="fixed inset-0 z-(--z-overlay) flex flex-col bg-canvas text-dense outline-none"
         role="dialog"
         aria-modal="true"
         :aria-label="`${folderName} — flowchart`"
@@ -521,7 +528,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
                 :tooltip="blocker ?? undefined"
                 @click="run"
               >
-                <template #icon><Play :size="11" :stroke-width="2" /></template>
+                <template #icon><Play :size="11" :stroke-width="1.5" /></template>
                 {{ showRunning ? 'Starting…' : 'Run workflow' }}
               </Button>
               <span class="w-1.5 shrink-0" aria-hidden="true" />
@@ -549,19 +556,23 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
             @split="split"
             @merge="merge"
           />
-          <TaskInspector
-            v-if="selectedTask"
-            :task="selectedTask"
-            :folder-id="workflow.folderId"
-            :editable="editable"
-            class="w-72 shrink-0 border-l border-border bg-surface"
-            @close="emit('select', null)"
-            @add="add"
-          />
+          <SlidePane :open="Boolean(selectedTask)" edge="right" class="shrink-0">
+            <div class="flex min-h-0 w-72 flex-col border-l border-border bg-surface">
+              <TaskInspector
+                v-if="shownTask"
+                :task="shownTask"
+                :folder-id="workflow.folderId"
+                :editable="editable"
+                class="min-h-0 flex-1"
+                @close="emit('select', null)"
+                @add="add"
+              />
+            </div>
+          </SlidePane>
         </div>
 
         <div
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
+          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-badge text-ink-muted"
         >
           <span>click a task to inspect it</span>
         </div>

@@ -30,13 +30,13 @@ Before reaching for `npm install`:
 
 The app is a high-density technical console instrument, not a consumer web app. Every UI element must conform to [`docs/design-system.md`](docs/design-system.md):
 
-- **Typography**: `IBM Plex Sans` for UI and prose, `IBM Plex Mono` (`font-mono`) for data the operator copies, compares character by character, or lines up (file contents, names, paths, hashes, IDs, case references, offsets, detail values). Both are self-hosted from `public/fonts/`; never load external fonts. Use the 4-step type scale (`.card-title` 14px, body 13px, `.micro-label` 12px sentence case with normal tracking, badge/keycap 11px).
-- **Numbers & Dates**: Always apply `.tabular` (`tabular-nums`) to dynamic numbers, counters, timestamps, and sizes to eliminate layout shift.
-- **Buttons**: Exactly 5 variants (`primary` [max 1 per view], `brand`, `secondary`, `danger` [never solid], `ghost`) and 2 heights (`default` 32px, `row` 24px) via `Button.vue`. Group buttons with space (`gap-1.5` / `w-1.5`), not vertical divider lines.
-- **Geometry**: Near-square corners (`4px` sheets/cards, `3px` controls, `2px` badges/checkboxes). No pill shapes (`UserAvatar` 18px disc and the `Switch` internal knob are the only round elements).
-- **Colors**: Use OKLCH-balanced CSS tokens (`--color-surface`, `--color-sunken`, `--color-brand`, etc.) from `src/assets/main.css` in Tailwind classes (`bg-surface`, `text-ink-muted`). Support both dark (default) and light (`:root[data-theme='light']`) themes. Never invent custom hex codes; use derived tints for status, never solid status banners.
-- **Motion**: Every pane that opens and closes uses `<SlidePane>` (§12 of the design system). Transitions stay snappy (`120ms` / `200ms` with `ease-(--ease-standard)`).
-- **Shortcuts are not advertised**: Keycaps (`KeyHint.vue`) appear in `HelpDialog.vue` only.
+- **Typography**: `IBM Plex Sans` for UI and prose, `IBM Plex Mono` (`font-mono`) for data the operator copies, compares character by character, or lines up (file contents, names, paths, hashes, IDs, case references, offsets, detail values). Both are self-hosted from `public/fonts/` (`400`/`500`/`600` weights only — never use `font-bold`); never load external fonts. Use semantic Tailwind type tokens (`text-title` 14px, `text-body` 13px in dialogs/inspectors, `text-dense` 12px in dense tables/micro-labels, `text-badge` 11px, `text-micro` 10px).
+- **Numbers & Dates**: Always apply `.tabular` (`tabular-nums`) to dynamic numbers, counters, timestamps, and sizes to eliminate layout shift. Format all timestamps (tables, details, hex inspector, and metric charts) in **UTC**.
+- **Buttons**: Exactly 5 variants (`primary` [max 1 per view], `brand`, `secondary`, `danger` [never solid], `ghost`) with tactile `:active` states and 2 heights (`default` 32px, `row` 24px) via `Button.vue`. Group buttons with space (`gap-1.5` / `w-1.5`), not vertical divider lines.
+- **Geometry & Floating Surfaces**: Near-square corners (`4px` sheets/cards, `3px` controls, `2px` badges/checkboxes). No pill shapes (`UserAvatar` discs, `Switch`, `StatusDot`, and `ShareDialog` group discs are the only `rounded-full` elements, enforced by ESLint). Compose `ModalSheet.vue` for all dialogs/prompts (`bg-scrim`, `top-[10vh]`, no `backdrop-blur`) and `PopoverSurface.vue` for anchored menus/popovers.
+- **Colors**: Use OKLCH-balanced CSS tokens (`--color-surface`, `--color-sunken` recessed below `surface` in both themes, `--color-brand`, `--color-scrim`, etc.) from `src/assets/main.css` (locked via `--color-*: initial` and tested by `src/assets/__tests__/tokens.test.ts`). Support both dark (default) and light (`:root[data-theme='light']`) themes, including `BrandMark.vue` (monochrome SVG in dark mode, `/logo-light-round.png` in light mode). Never opacity-wash `text-ink-muted` below AA, never invent custom hex codes, and use `TASK_STATUS_TONE` (`src/utils/workflow.ts`) so task status hues stay unified across views.
+- **Motion**: Every pane that opens and closes (`FileSidePanel`, `WorkflowPanel`, `TaskInspector`) uses `<SlidePane>` (§12 of the design system). Tailwind `@theme` sets `120ms` and `cubic-bezier(0.2, 0, 0, 1)` as the default transition timing.
+- **Shortcuts are not advertised**: Keycaps (`KeyHint.vue`) appear in `HelpDialog.vue` only (enforced by ESLint).
 
 ### Built for Slow Connections
 
@@ -145,7 +145,7 @@ Every route except `/login` requires an authenticated session; the guard hydrate
 
 1. **Views (`src/views/`)**: Orchestrate top-level layout panes (Top Bar → Workspace → Status Bar) and bind route params/queries to composables and components. Delegate algorithms and DOM hooks to utils, composables, and directives.
 2. **Components (`src/components/`)**:
-   - `base/`: `Button`, `Switch`, `LoadState`, `SlidePane`, `PanelResizeHandle`, `PanelToggle`, `KeyValueRow`, `CopyValue`, `Tooltip`, `UserAvatar`, `KeyHint` (Help dialog only).
+   - `base/`: `Button`, `Switch`, `LoadState`, `ModalSheet`, `PopoverSurface`, `StatusDot`, `SlidePane`, `PanelResizeHandle`, `PanelToggle`, `KeyValueRow`, `CopyValue`, `Tooltip`, `UserAvatar`, `KeyHint` (Help dialog only).
    - `layout/`: `PathBar`, `StatusBar`, `BrandLink`, `SettingsTrigger`, `UploadQueuePanel`.
    - `dialogs/`: `SettingsDialog`, `AccountDialog`, `HelpDialog`, `ShareDialog`, `RunDialog`, `WorkflowDialog`, `TaskReportDialog`, `ConfirmDialog`.
    - `icons/`: `index.ts` barrel. **Always import icons from `@/components/icons`**, never from `lucide-vue-next` directly.
@@ -300,7 +300,7 @@ Vitest covers every runtime `.ts` and `.vue` file in `src/` (excluding `src/**/_
 2. Format and lint modified files: `npm run format` (`prettier --write --experimental-cli src/`) and `npm run lint` (`eslint . --fix --cache`). If editing root docs like `AGENTS.md`, check them with `npx prettier --check AGENTS.md`.
 3. Run the non-fixing gate: `npm run check`, plus `npm run build` when verifying the production bundle.
 4. Confirm all commands exit with code 0 before concluding.
-5. For UI changes, verify behaviour in the running app (`npm run dev`) when a server is available, including the slow-connection checks in §1.
+5. For UI changes, verify behaviour in the running app (`npm run dev`) across four checks: (a) dark and light themes, (b) `compact` and `large` font presets, (c) narrow (`1024px`) and desktop (`1440px`) viewports, and (d) empty, error, long-name, and Slow 4G / Offline states (§1).
 
 ### Commit Messages
 

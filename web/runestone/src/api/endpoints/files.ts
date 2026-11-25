@@ -18,10 +18,10 @@ limitations under the License.
  * Files API
  */
 
-import { httpClient, readBody, type RequestOptions, type UploadOptions } from '../client'
-import { apiConfig } from '../config'
-import { ApiError } from '../errors'
-import type { FileDetail, UploadedFile } from '../types'
+import { httpClient, readBody, type RequestOptions, type UploadOptions } from '@/api/client'
+import { apiConfig } from '@/api/config'
+import { ApiError } from '@/api/errors'
+import type { FileDetail, UploadedFile } from '@/api/types'
 
 /** Where a chunk belongs. The server takes these as query parameters. */
 export interface ChunkParams {

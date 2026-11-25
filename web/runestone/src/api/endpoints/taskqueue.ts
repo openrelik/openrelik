@@ -18,8 +18,8 @@ limitations under the License.
  * Task Queue API
  */
 
-import { httpClient, type RequestOptions } from '../client'
-import type { RegisteredTask, TaskqueueStatus } from '../types'
+import { httpClient, type RequestOptions } from '@/api/client'
+import type { RegisteredTask, TaskqueueStatus } from '@/api/types'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 

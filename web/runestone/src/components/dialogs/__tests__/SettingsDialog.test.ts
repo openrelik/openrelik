@@ -78,7 +78,7 @@ describe('SettingsDialog', () => {
     await nextTick()
 
     const dialog = body.get('[role="dialog"]')
-    expect(dialog.get('#settings-title').text()).toBe('settings')
+    expect(dialog.get('#settings-title').text()).toBe('Settings')
     expect(dialog.text()).toContain('Appearance')
     expect(dialog.text()).toContain('Theme')
     expect(dialog.text()).toContain('Font size')

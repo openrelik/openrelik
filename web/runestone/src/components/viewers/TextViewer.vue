@@ -557,7 +557,7 @@ const linesLabel = computed(() => {
             autocomplete="off"
             placeholder="Go to line"
             aria-label="Go to a line, or a range as 12-40"
-            class="field tabular h-6 w-28 font-mono text-[0.75rem]"
+            class="field tabular h-6 w-28 font-mono text-dense"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError

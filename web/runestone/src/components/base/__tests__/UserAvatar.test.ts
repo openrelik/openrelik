@@ -107,7 +107,7 @@ describe('UserAvatar', () => {
     expect(other.attributes('style')).not.toBe(firstStyle)
     expect(first.classes()).toContain('border-transparent')
     expect(first.classes()).toContain('bg-(--avatar-bg)')
-    expect(first.get('span > span').classes()).toContain('text-white')
+    expect(first.get('span > span').classes()).toContain('text-on-avatar')
 
     expect(neutral.attributes('style')).toBeUndefined()
     expect(neutral.classes()).toContain('bg-sunken')

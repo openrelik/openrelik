@@ -18,8 +18,8 @@ limitations under the License.
  * System Config & Storage Status API
  */
 
-import { httpClient, type RequestOptions } from '../client'
-import type { SystemStorageStatus } from '../types'
+import { httpClient, type RequestOptions } from '@/api/client'
+import type { SystemStorageStatus } from '@/api/types'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 

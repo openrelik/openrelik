@@ -53,7 +53,7 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
 </script>
 
 <template>
-  <div aria-label="Byte inspector">
+  <div aria-label="Byte inspector" class="text-body">
     <div class="flex h-7 items-center border-b border-border px-3">
       <p class="micro-label">Byte order</p>
       <!-- byte order: a segmented pick of two -->
@@ -69,7 +69,7 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
           ]"
           :key="order.label"
           type="button"
-          class="h-4 cursor-pointer rounded-(--radius-check) px-1.5 text-[0.6875rem] transition-colors duration-120"
+          class="h-4 cursor-pointer rounded-(--radius-check) px-1.5 text-badge transition-colors duration-120"
           :class="
             littleEndian === order.le
               ? 'bg-brand-tint text-brand'
@@ -123,13 +123,13 @@ const littleEndian = defineModel<boolean>('littleEndian', { required: true })
           >
           <span
             v-if="reading.note"
-            class="text-[0.6875rem] text-ink-muted"
+            class="text-badge text-ink-muted"
             v-tooltip="'No time zone is stored: this is the clock of the machine that wrote it'"
             >{{ reading.note }}</span
           >
           <span
             v-if="reading.plausible === false && reading.value !== '–'"
-            class="text-[0.6875rem] text-warning"
+            class="text-badge text-warning"
             v-tooltip="
               'Not a time of this kind: before the format starts, in the future, or its zero (no value)'
             "

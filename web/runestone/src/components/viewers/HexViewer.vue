@@ -489,7 +489,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
             autocomplete="off"
             placeholder="Go to offset"
             aria-label="Go to an offset, or a range as 0x1f0-0x2a0"
-            class="field tabular h-6 w-36 font-mono text-[0.75rem]"
+            class="field tabular h-6 w-36 font-mono text-dense"
             :class="{ 'border-danger': gotoError }"
             v-tooltip="
               gotoError
@@ -523,7 +523,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         <div class="tabular flex min-w-0 flex-1 flex-col overflow-x-auto select-none">
           <!-- column heads -->
           <div
-            class="flex h-6 shrink-0 items-center border-b border-border text-[0.6875rem] text-ink-muted"
+            class="flex h-6 shrink-0 items-center border-b border-border text-badge text-ink-muted"
           >
             <span class="shrink-0 px-3" :style="{ width: `${width + 3}ch` }">Offset</span>
             <span class="flex shrink-0">
@@ -569,7 +569,7 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
                     isCursor(line.offset + i)
                       ? 'outline outline-1 outline-brand -outline-offset-1'
                       : '',
-                    byte === undefined ? 'text-ink-muted/50' : 'text-ink',
+                    byte === undefined ? 'text-ink-muted' : 'text-ink',
                   ]"
                   @pointerdown="onByteDown($event, line.offset + i)"
                   @pointerenter="onByteEnter(line.offset + i)"
@@ -588,10 +588,10 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
                       ? 'outline outline-1 outline-brand -outline-offset-1'
                       : '',
                     byte === undefined
-                      ? 'text-ink-muted/50'
+                      ? 'text-ink-muted'
                       : byte >= 0x20 && byte <= 0x7e
                         ? 'text-ink'
-                        : 'text-ink-muted/60',
+                        : 'text-ink-muted',
                   ]"
                   @pointerdown="onByteDown($event, line.offset + i)"
                   @pointerenter="onByteEnter(line.offset + i)"

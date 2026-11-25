@@ -30,6 +30,7 @@ import { RouterLink } from 'vue-router'
 
 import Button from '@/components/base/Button.vue'
 import LoadState from '@/components/base/LoadState.vue'
+import StatusDot from '@/components/base/StatusDot.vue'
 import UserAvatar from '@/components/base/UserAvatar.vue'
 import UploadRow from '@/components/folders/UploadRow.vue'
 import { FONT_SCALE, useSettings } from '@/composables/useSettings'
@@ -469,8 +470,8 @@ const WORKFLOW_TONE: Record<WorkflowState | 'unknown', string> = {
   // A stroke colour alone is too thin to tell apart at this size: a state that
   // ran also fills the icon's two boxes solid (not the connector, an open
   // path); a draft stays an outline.
-  unknown: 'text-ink-muted/60',
-  draft: 'text-ink-muted/60',
+  unknown: 'text-ink-muted',
+  draft: 'text-ink-muted',
   pending: '[&_rect]:fill-current text-brand-icon',
   running: '[&_rect]:fill-current text-brand-icon motion-safe:animate-pulse',
   success: '[&_rect]:fill-current text-success-icon',
@@ -648,7 +649,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 @click.stop
                 >..</RouterLink
               >
-              <span class="truncate text-[0.6875rem] text-ink-muted" v-overflow-tooltip>{{
+              <span class="truncate text-badge text-ink-muted" v-overflow-tooltip>{{
                 parentName
               }}</span>
             </div>
@@ -679,7 +680,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-model="newFolderName"
                 type="text"
                 spellcheck="false"
-                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[0.75rem] font-medium text-ink shadow-sm outline-none"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-dense font-medium text-ink outline-none"
                 aria-label="New folder name"
                 @keydown="onNewFolderKeydown"
                 @blur="commitNewFolder"
@@ -757,7 +758,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
           <template v-if="atRoot">
             <td class="truncate px-2 text-ink-muted">
               <span v-if="showPending" class="inline-flex items-center gap-1.5 text-brand">
-                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                <StatusDot pulse />
                 creating…
               </span>
               <template v-else>—</template>
@@ -770,7 +771,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
             </td>
             <td class="truncate px-2 text-ink-muted">
               <span v-if="showPending" class="inline-flex items-center gap-1.5 text-brand">
-                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                <StatusDot pulse />
                 creating…
               </span>
               <template v-else>directory</template>
@@ -831,7 +832,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                   row.kind === 'file' ? File : row.workflowId !== undefined ? WorkflowIcon : Folder
                 "
                 :size="13"
-                :stroke-width="row.workflowId !== undefined ? 2 : 1.5"
+                :stroke-width="1.5"
                 class="shrink-0"
                 :class="
                   row.workflowId !== undefined
@@ -864,7 +865,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-model="renamingName"
                 type="text"
                 spellcheck="false"
-                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[0.75rem] font-medium text-ink shadow-sm outline-none"
+                class="h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-dense font-medium text-ink outline-none"
                 :aria-label="`Rename ${row.name}`"
                 @click.stop
                 @dblclick.stop
@@ -891,7 +892,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-if="showPending && (isSaving(row) || isDeleting(row))"
                 class="inline-flex items-center gap-1.5 text-brand"
               >
-                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                <StatusDot pulse />
                 {{ isDeleting(row) ? 'deleting…' : 'saving…' }}
               </span>
               <span v-else-if="row.caseRef" class="tabular text-ink-secondary" v-overflow-tooltip>{{
@@ -944,7 +945,7 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
                 v-if="showPending && (isSaving(row) || isDeleting(row))"
                 class="inline-flex items-center gap-1.5 text-brand"
               >
-                <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+                <StatusDot pulse />
                 {{ isDeleting(row) ? 'deleting…' : 'saving…' }}
               </span>
               <template v-else>{{ typeOf(row) }}</template>

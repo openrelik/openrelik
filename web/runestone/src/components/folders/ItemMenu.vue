@@ -14,8 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref, type ComponentPublicInstance } from 'vue'
 
+import PopoverSurface from '@/components/base/PopoverSurface.vue'
+import StatusDot from '@/components/base/StatusDot.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
 import type { ItemAction } from '@/composables/useItemActions'
 import type { Item } from '@/types/item'
@@ -42,14 +44,15 @@ const emit = defineEmits<{ close: [] }>()
 
 const showPending = useDelayedFlag(() => !!props.pending)
 
-const menu = ref<HTMLElement | null>(null)
+const menu = ref<ComponentPublicInstance | null>(null)
+const menuEl = () => (menu.value?.$el instanceof HTMLElement ? menu.value.$el : null)
 const position = ref({ left: props.x, top: props.y })
 
 const MARGIN = 8
 
 onMounted(async () => {
   await nextTick()
-  const el = menu.value
+  const el = menuEl()
   if (!el) return
   const { width, height } = el.getBoundingClientRect()
   position.value = {
@@ -62,7 +65,7 @@ onMounted(async () => {
 })
 
 function items(): HTMLElement[] {
-  return [...(menu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  return [...(menuEl()?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
 }
 
 function onKey(event: KeyboardEvent) {
@@ -96,10 +99,10 @@ function run(action: ItemAction) {
 
 <template>
   <Teleport to="body">
-    <div
+    <PopoverSurface
       ref="menu"
       tabindex="-1"
-      class="sheet fixed z-50 w-64 py-1 text-[0.75rem] shadow-(--shadow-float) outline-none"
+      class="fixed z-(--z-popover) w-64 py-1 text-dense outline-none"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
       role="menu"
       :aria-label="`Actions for ${item.name}`"
@@ -111,7 +114,7 @@ function run(action: ItemAction) {
         <p class="truncate font-medium text-ink" v-overflow-tooltip>
           {{ item.name }}{{ item.kind === 'folder' ? '/' : '' }}
         </p>
-        <p class="tabular truncate text-[0.6875rem] text-ink-muted">
+        <p class="tabular truncate text-badge text-ink-muted">
           id {{ item.id }} · created {{ stamp(item.created ?? item.modified) }}
         </p>
       </div>
@@ -139,13 +142,13 @@ function run(action: ItemAction) {
         </template>
         <p
           v-if="showPending"
-          class="flex h-6 items-center gap-1.5 px-3 text-[0.6875rem] text-ink-muted"
+          class="flex h-6 items-center gap-1.5 px-3 text-badge text-ink-muted"
           aria-live="polite"
         >
-          <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+          <StatusDot tone="brand" pulse />
           checking your access…
         </p>
       </div>
-    </div>
+    </PopoverSurface>
   </Teleport>
 </template>
