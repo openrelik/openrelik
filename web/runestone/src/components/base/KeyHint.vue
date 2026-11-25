@@ -21,7 +21,7 @@ defineProps<{ keys: string; label: string }>()
 <template>
   <span class="inline-flex items-center gap-1 whitespace-nowrap">
     <kbd
-      class="rounded-(--radius-check) border border-border-strong bg-surface px-1 text-[0.625rem] leading-4 text-ink-secondary"
+      class="rounded-(--radius-check) border border-border-strong bg-surface px-1 text-micro leading-4 text-ink-secondary"
       >{{ keys }}</kbd
     >
     <span>{{ label }}</span>
