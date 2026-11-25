@@ -31,11 +31,20 @@ const LEVELS: [number, PriorityLevel][] = [
 export const priorityLevel = (priority: number): PriorityLevel =>
   LEVELS.find(([floor]) => priority >= floor)?.[1] ?? 'info'
 
-/** Tints and text, as every status in the system: only what needs attention gets a hue. */
+/** Tints and text for report header badges: only what needs attention gets a hue. */
 export const PRIORITY_TONE: Record<PriorityLevel, string> = {
   critical: 'border-danger/40 bg-danger-tint text-danger',
   high: 'border-warning/40 bg-warning-tint text-warning',
   medium: 'border-border-strong bg-sunken text-ink-secondary',
   low: 'border-border bg-sunken text-ink-muted',
   info: 'border-border bg-sunken text-ink-muted',
+}
+
+/** Text-only tones for dense rows where a bordered badge would crowd the line. */
+export const PRIORITY_TEXT_TONE: Record<PriorityLevel, string> = {
+  critical: 'text-danger',
+  high: 'text-warning',
+  medium: 'text-ink-secondary',
+  low: 'text-ink-muted',
+  info: 'text-ink-muted',
 }

@@ -200,6 +200,7 @@ describe('TaskInspector', () => {
     expect(wrapper.text()).toContain('Worker crashed unexpectedly')
     expect(wrapper.text()).toContain('Traceback (most recent call last):')
     expect(wrapper.text()).toContain('Found suspicious indicators')
+    expect(wrapper.get('section[aria-label="Report"] .badge').text()).toBe('critical')
     expect(wrapper.text()).toContain('1 file flagged')
     expect(wrapper.text()).toContain('failed after 45s')
 
@@ -314,6 +315,9 @@ describe('TaskInspector', () => {
       expect.stringContaining('plain.txt'),
     ])
     expect(outSection.text()).toContain('Malware signature matched')
+    // Output rows use plain text priority rather than bordered badges.
+    expect(outSection.find('.badge').exists()).toBe(false)
+    expect(outSection.get('a span.text-danger').text()).toBe('critical')
 
     const toggleBtn = outSection.get('button')
     expect(toggleBtn.text()).toBe('+3 empty')

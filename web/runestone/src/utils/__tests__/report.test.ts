@@ -16,7 +16,12 @@ limitations under the License.
 
 import { describe, expect, it } from 'vitest'
 
-import { PRIORITY_TONE, priorityLevel, type PriorityLevel } from '@/utils/report'
+import {
+  PRIORITY_TEXT_TONE,
+  PRIORITY_TONE,
+  priorityLevel,
+  type PriorityLevel,
+} from '@/utils/report'
 
 describe('utils/report', () => {
   it.each<[number, PriorityLevel]>([
@@ -32,7 +37,9 @@ describe('utils/report', () => {
     [0, 'info'],
     [-5, 'info'],
   ])('maps numeric priority %d to %s', (score, expected) => {
-    expect(priorityLevel(score)).toBe(expected)
-    expect(PRIORITY_TONE[priorityLevel(score)]).toBeTruthy()
+    const level = priorityLevel(score)
+    expect(level).toBe(expected)
+    expect(PRIORITY_TONE[level]).toBeTruthy()
+    expect(PRIORITY_TEXT_TONE[level]).toBeTruthy()
   })
 })

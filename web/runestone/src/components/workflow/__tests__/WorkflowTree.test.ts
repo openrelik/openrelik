@@ -151,7 +151,7 @@ describe('WorkflowTree', () => {
     expect(wrapper.emitted('add')?.[0]?.[0]).toEqual({ after: null })
   })
 
-  it('renders hierarchical tasks, parallel & waitsFor indicators, status badges, durations, and empty output counts', () => {
+  it('renders hierarchical tasks, parallel & waitsFor indicators, task statuses, durations, and empty output counts', () => {
     useItemsStore().upsertItems([
       {
         id: 501,
@@ -205,6 +205,20 @@ describe('WorkflowTree', () => {
     expect(wrapper.text()).toContain('1m 05s')
     expect(wrapper.text()).toContain('2 out (1 empty)')
     expect(wrapper.find('[aria-label="waits for 2 tasks"]').exists()).toBe(true)
+
+    // Status column renders TaskStatusIcon + plain text rather than bordered badges.
+    expect(wrapper.find('.badge').exists()).toBe(false)
+    const statusOf = (taskId: string) => wrapper.get(`tr[data-task="${taskId}"]`).findAll('td')[2]!
+    expect(statusOf('p1').text()).toBe('success')
+    expect(statusOf('p1').get('span').classes()).toContain('text-ink-secondary')
+    expect(statusOf('c1').text()).toBe('queued')
+    expect(statusOf('c1').get('span').classes()).toContain('text-ink-muted')
+    expect(statusOf('c2').text()).toBe('won’t run')
+    expect(statusOf('c2').get('span').classes()).toContain('text-ink-muted')
+    expect(statusOf('s1').text()).toBe('running')
+    expect(statusOf('s1').get('span').classes()).toContain('text-warning')
+    expect(statusOf('s2').text()).toBe('failed')
+    expect(statusOf('s2').get('span').classes()).toContain('text-danger')
 
     // Second sibling group's first row gets a dashed top separator.
     const sibARow = wrapper.get('tr[data-task="s1"]')
