@@ -19,6 +19,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import LoadState from '@/components/base/LoadState.vue'
+import ModalSheet from '@/components/base/ModalSheet.vue'
 import { errorMessage } from '@/api'
 import { confirmAction } from '@/composables/useConfirm'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
@@ -230,174 +231,163 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="workflowTarget" class="fixed inset-0 z-50">
-      <div class="absolute inset-0 bg-ink/20" aria-hidden="true" @pointerdown="close" />
-      <div
-        class="sheet absolute top-[14vh] left-1/2 flex max-h-[70vh] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float)"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Create workflow"
-        v-trap-focus
+  <ModalSheet :open="!!workflowTarget" size="lg" aria-label="Create workflow" @close="close">
+    <!-- Header -->
+    <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken px-3">
+      <span class="shrink-0 text-ink-muted">create workflow on</span>
+      <span class="truncate font-medium text-ink">{{ title }}</span>
+      <span class="shrink-0 text-ink-muted">—</span>
+      <input
+        ref="filterInput"
+        v-autofocus
+        v-model="query"
+        type="text"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="Filter templates"
+        class="min-w-0 flex-1 bg-transparent text-ink caret-ink outline-none [caret-shape:block] placeholder:text-ink-muted"
+        placeholder="type a template or empty…"
+        @keydown="onKeydown"
+      />
+      <span class="shrink-0 text-badge text-ink-muted">
+        {{ count(filteredTemplates.length, 'template') }}
+      </span>
+    </div>
+
+    <!-- List -->
+    <ul class="min-h-0 flex-1 overflow-y-auto py-1" role="listbox">
+      <!-- New empty workflow -->
+      <li
+        v-if="showEmpty"
+        role="option"
+        :aria-selected="selectedIndex === 0"
+        class="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
+        :class="selectedIndex === 0 ? 'bg-sunken' : 'hover:bg-sunken'"
+        @pointermove="selectedIndex = 0"
+        @click="select()"
       >
-        <!-- Header -->
-        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken px-3">
-          <span class="shrink-0 text-ink-muted">create workflow on</span>
-          <span class="truncate font-medium text-ink">{{ title }}</span>
-          <span class="shrink-0 text-ink-muted">—</span>
+        <div
+          class="flex size-5 shrink-0 items-center justify-center rounded-(--radius-check) border border-brand/30 bg-brand-tint text-brand"
+        >
+          <Plus :size="13" :stroke-width="1.5" />
+        </div>
+        <div class="flex min-w-0 flex-1 flex-col">
+          <span class="font-medium text-ink">New workflow</span>
+          <span class="text-badge text-ink-muted">
+            {{
+              showCreating && creatingFrom === null
+                ? 'Creating…'
+                : 'Start with an empty workflow in a new folder, and add workers'
+            }}
+          </span>
+        </div>
+      </li>
+
+      <!-- Templates section header -->
+      <li
+        v-if="filteredTemplates.length || !query.trim()"
+        class="mt-1 border-t border-border px-3 pt-2 pb-1 text-badge text-ink-muted"
+        role="presentation"
+      >
+        templates
+      </li>
+
+      <!-- Template items -->
+      <li
+        v-for="(template, i) in filteredTemplates"
+        :key="template.id"
+        role="option"
+        :aria-selected="selectedIndex === (showEmpty ? i + 1 : i)"
+        class="group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
+        :class="selectedIndex === (showEmpty ? i + 1 : i) ? 'bg-sunken' : 'hover:bg-sunken'"
+        @pointermove="selectedIndex = showEmpty ? i + 1 : i"
+        @click="select(template.id)"
+      >
+        <div
+          class="flex size-5 shrink-0 items-center justify-center rounded-(--radius-check) border border-border bg-canvas text-ink-muted"
+        >
+          <Workflow :size="12" :stroke-width="1.5" />
+        </div>
+        <div class="flex min-w-0 flex-1 flex-col">
           <input
-            ref="filterInput"
-            v-autofocus
-            v-model="query"
+            v-if="renamingId === template.id"
+            v-model="renameText"
+            v-autofocus.select
             type="text"
             spellcheck="false"
-            autocomplete="off"
-            aria-label="Filter templates"
-            class="min-w-0 flex-1 bg-transparent text-ink caret-ink outline-none [caret-shape:block] placeholder:text-ink-muted/60"
-            placeholder="type a template or empty…"
-            @keydown="onKeydown"
+            class="field h-5.5 font-medium"
+            :aria-label="`Rename ${template.name}`"
+            @click.stop
+            @keydown="onRenameKeydown"
+            @blur="commitRename"
           />
-          <span class="shrink-0 text-[0.6875rem] text-ink-muted">
-            {{ count(filteredTemplates.length, 'template') }}
+          <span v-else class="truncate font-medium text-ink">{{ template.name }}</span>
+          <span class="truncate text-badge text-ink-muted">
+            {{
+              showCreating && creatingFrom === template.id
+                ? 'Creating…'
+                : template.description || template.workers || 'No workers'
+            }}
+          </span>
+          <span v-if="template.creator" class="truncate text-badge text-ink-muted">
+            by {{ template.creator }}<template v-if="ownsTemplate(template)"> (you)</template>
           </span>
         </div>
 
-        <!-- List -->
-        <ul class="min-h-0 flex-1 overflow-y-auto py-1" role="listbox">
-          <!-- New empty workflow -->
-          <li
-            v-if="showEmpty"
-            role="option"
-            :aria-selected="selectedIndex === 0"
-            class="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
-            :class="selectedIndex === 0 ? 'bg-sunken' : 'hover:bg-sunken'"
-            @pointermove="selectedIndex = 0"
-            @click="select()"
-          >
-            <div
-              class="flex size-5 shrink-0 items-center justify-center rounded-(--radius-check) border border-brand/30 bg-brand-tint text-brand"
-            >
-              <Plus :size="13" :stroke-width="2" />
-            </div>
-            <div class="flex min-w-0 flex-1 flex-col">
-              <span class="font-medium text-ink">New workflow</span>
-              <span class="text-[0.6875rem] text-ink-muted">
-                {{
-                  showCreating && creatingFrom === null
-                    ? 'Creating…'
-                    : 'Start with an empty workflow in a new folder, and add workers'
-                }}
-              </span>
-            </div>
-          </li>
-
-          <!-- Templates section header -->
-          <li
-            v-if="filteredTemplates.length || !query.trim()"
-            class="mt-1 border-t border-border px-3 pt-2 pb-1 text-[0.6875rem] text-ink-muted"
-            role="presentation"
-          >
-            templates
-          </li>
-
-          <!-- Template items -->
-          <li
-            v-for="(template, i) in filteredTemplates"
-            :key="template.id"
-            role="option"
-            :aria-selected="selectedIndex === (showEmpty ? i + 1 : i)"
-            class="group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-120"
-            :class="selectedIndex === (showEmpty ? i + 1 : i) ? 'bg-sunken' : 'hover:bg-sunken'"
-            @pointermove="selectedIndex = showEmpty ? i + 1 : i"
-            @click="select(template.id)"
-          >
-            <div
-              class="flex size-5 shrink-0 items-center justify-center rounded-(--radius-check) border border-border bg-canvas text-ink-muted"
-            >
-              <Workflow :size="12" :stroke-width="1.5" />
-            </div>
-            <div class="flex min-w-0 flex-1 flex-col">
-              <input
-                v-if="renamingId === template.id"
-                v-model="renameText"
-                v-autofocus.select
-                type="text"
-                spellcheck="false"
-                class="field h-5.5 font-medium"
-                :aria-label="`Rename ${template.name}`"
-                @click.stop
-                @keydown="onRenameKeydown"
-                @blur="commitRename"
-              />
-              <span v-else class="truncate font-medium text-ink">{{ template.name }}</span>
-              <span class="truncate text-[0.6875rem] text-ink-muted">
-                {{
-                  showCreating && creatingFrom === template.id
-                    ? 'Creating…'
-                    : template.description || template.workers || 'No workers'
-                }}
-              </span>
-              <span v-if="template.creator" class="truncate text-[0.6875rem] text-ink-muted">
-                by {{ template.creator }}<template v-if="ownsTemplate(template)"> (you)</template>
-              </span>
-            </div>
-
-            <!-- rename any; delete only one's own. Shown on the row under the cursor -->
-            <div
-              v-if="renamingId !== template.id"
-              class="flex shrink-0 items-center gap-1 transition-opacity duration-120 group-hover:opacity-100 focus-within:opacity-100"
-              :class="selectedIndex === (showEmpty ? i + 1 : i) ? 'opacity-100' : 'opacity-0'"
-            >
-              <button
-                type="button"
-                class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
-                :aria-label="`Rename ${template.name}`"
-                v-tooltip="'Rename'"
-                @click.stop="startRename(template)"
-              >
-                <Pencil :size="12" :stroke-width="1.5" />
-              </button>
-              <button
-                v-if="ownsTemplate(template)"
-                type="button"
-                class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-danger-tint hover:text-danger"
-                :aria-label="`Delete ${template.name}`"
-                v-tooltip="'Delete template'"
-                @click.stop="removeTemplate(template)"
-              >
-                <Trash2 :size="12" :stroke-width="1.5" />
-              </button>
-            </div>
-          </li>
-
-          <!-- Loading, failed, or none saved yet -->
-          <li v-if="!query.trim()" role="presentation">
-            <LoadState
-              :state="templatesState"
-              noun="templates"
-              :has-content="templates.length > 0"
-              @retry="loadTemplates({ force: true })"
-            >
-              <template #empty> No templates yet. Save one from a workflow that has run. </template>
-            </LoadState>
-          </li>
-
-          <li
-            v-if="!showEmpty && !filteredTemplates.length"
-            class="px-3 py-6 text-center text-ink-muted"
-          >
-            No templates matching "{{ query }}"
-          </li>
-        </ul>
-
-        <p
-          v-if="error || templatesError"
-          role="alert"
-          class="border-t border-border px-3 py-2 text-danger"
+        <!-- rename any; delete only one's own. Shown on the row under the cursor -->
+        <div
+          v-if="renamingId !== template.id"
+          class="flex shrink-0 items-center gap-1 transition-opacity duration-120 group-hover:opacity-100 focus-within:opacity-100"
+          :class="selectedIndex === (showEmpty ? i + 1 : i) ? 'opacity-100' : 'opacity-0'"
         >
-          {{ error ?? templatesError }}
-        </p>
-      </div>
-    </div>
-  </Teleport>
+          <button
+            type="button"
+            class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-surface hover:text-ink"
+            :aria-label="`Rename ${template.name}`"
+            v-tooltip="'Rename'"
+            @click.stop="startRename(template)"
+          >
+            <Pencil :size="12" :stroke-width="1.5" />
+          </button>
+          <button
+            v-if="ownsTemplate(template)"
+            type="button"
+            class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) text-ink-muted hover:bg-danger-tint hover:text-danger"
+            :aria-label="`Delete ${template.name}`"
+            v-tooltip="'Delete template'"
+            @click.stop="removeTemplate(template)"
+          >
+            <Trash2 :size="12" :stroke-width="1.5" />
+          </button>
+        </div>
+      </li>
+
+      <!-- Loading, failed, or none saved yet -->
+      <li v-if="!query.trim()" role="presentation">
+        <LoadState
+          :state="templatesState"
+          noun="templates"
+          :has-content="templates.length > 0"
+          @retry="loadTemplates({ force: true })"
+        >
+          <template #empty> No templates yet. Save one from a workflow that has run. </template>
+        </LoadState>
+      </li>
+
+      <li
+        v-if="!showEmpty && !filteredTemplates.length"
+        class="px-3 py-6 text-center text-ink-muted"
+      >
+        No templates matching "{{ query }}"
+      </li>
+    </ul>
+
+    <p
+      v-if="error || templatesError"
+      role="alert"
+      class="border-t border-border px-3 py-2 text-danger"
+    >
+      {{ error ?? templatesError }}
+    </p>
+  </ModalSheet>
 </template>

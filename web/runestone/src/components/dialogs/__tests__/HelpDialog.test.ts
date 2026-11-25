@@ -68,7 +68,7 @@ describe('HelpDialog', () => {
     await nextTick()
 
     const dialog = body.get('[role="dialog"]')
-    expect(dialog.get('#help-title').text()).toBe('keyboard shortcuts')
+    expect(dialog.get('#help-title').text()).toBe('Keyboard shortcuts')
     expect(dialog.text()).toContain('Anywhere')
     expect(dialog.text()).toContain('Prompt')
     expect(dialog.text()).toContain('Listing')

@@ -15,11 +15,24 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { Settings2 } from '@/components/icons'
-import { computed, reactive, ref, watch } from 'vue'
+import {
+  computed,
+  createVNode,
+  defineComponent,
+  h,
+  reactive,
+  ref,
+  Teleport,
+  watch,
+  withDirectives,
+} from 'vue'
 
 import LoadState from '@/components/base/LoadState.vue'
+import ModalSheet from '@/components/base/ModalSheet.vue'
+import PopoverSurface from '@/components/base/PopoverSurface.vue'
 import { runTarget, startRun } from '@/composables/useRun'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
+import { vTrapFocus } from '@/directives/trapFocus'
 import { missingOptions } from '@/utils/worker'
 import type { Worker } from '@/types/worker'
 
@@ -168,160 +181,194 @@ function onOptionsKey(event: KeyboardEvent) {
   } else return
   event.preventDefault()
 }
+
+const AnchoredPopover = defineComponent({
+  props: {
+    open: { type: Boolean, required: true },
+    ariaLabel: { type: String, default: undefined },
+    popoverStyle: { type: Object as () => Record<string, string>, default: undefined },
+  },
+  emits: ['close'],
+  setup(props, { slots, emit }) {
+    return () =>
+      createVNode(
+        Teleport,
+        { to: 'body' },
+        props.open
+          ? [
+              h('div', { class: 'fixed inset-0 z-(--z-popover)' }, [
+                h('div', {
+                  class: 'absolute inset-0',
+                  'aria-hidden': 'true',
+                  onPointerdown: () => emit('close'),
+                }),
+                withDirectives(
+                  h(
+                    PopoverSurface,
+                    {
+                      class: 'absolute flex flex-col overflow-hidden text-body outline-none',
+                      style: props.popoverStyle,
+                      role: 'dialog',
+                      'aria-modal': 'true',
+                      'aria-label': props.ariaLabel,
+                    },
+                    slots,
+                  ),
+                  [[vTrapFocus]],
+                ),
+              ]),
+            ]
+          : null,
+      )
+  },
+})
+
+const shellProps = computed(() =>
+  popover.value
+    ? {
+        open: !!runTarget.value,
+        ariaLabel: adding.value ? 'Add a worker' : 'Run a worker',
+        popoverStyle: popover.value,
+      }
+    : {
+        open: !!runTarget.value,
+        size: 'lg' as const,
+        ariaLabel: adding.value ? 'Add a worker' : 'Run a worker',
+      },
+)
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="runTarget" class="fixed inset-0 z-50">
-      <!-- a popover leaves the page as it is; a dialog dims it -->
+  <component :is="popover ? AnchoredPopover : ModalSheet" v-bind="shellProps" @close="close">
+    <template v-if="runTarget">
+      <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken px-3">
+        <!-- beside its +, where it goes needs no saying: the filter gets the room -->
+        <template v-if="!popover">
+          <span class="shrink-0 text-ink-muted">{{ placing.header }}</span>
+          <span class="truncate font-medium text-ink">{{ runTarget.label }}</span>
+          <span class="shrink-0 text-ink-muted">—</span>
+        </template>
+        <input
+          v-autofocus="!configuring"
+          v-model="query"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="Filter workers"
+          :disabled="!!configuring"
+          class="min-w-0 flex-1 bg-transparent text-ink caret-ink outline-none [caret-shape:block] placeholder:text-ink-muted"
+          placeholder="find a worker…"
+          @keydown="onListKey"
+        />
+      </div>
+
+      <!-- the list -->
+      <template v-if="!configuring">
+        <LoadState
+          :state="state"
+          noun="workers"
+          :has-content="workers.length > 0"
+          @retry="loadWorkers({ force: true })"
+        >
+          <template #empty>No workers are online.</template>
+        </LoadState>
+        <ul
+          v-if="workers.length"
+          class="min-h-0 flex-1 overflow-y-auto py-1"
+          role="listbox"
+          aria-label="Workers"
+        >
+          <li
+            v-for="(worker, i) in flat"
+            :key="worker.id"
+            role="option"
+            :aria-selected="i === index"
+            class="flex h-7 cursor-pointer items-center gap-3 px-3"
+            :class="i === index ? 'bg-sunken' : 'hover:bg-sunken'"
+            v-tooltip="needsInput(worker) ? 'Set its options first' : undefined"
+            @pointermove="index = i"
+            @click="choose(worker)"
+          >
+            <span class="min-w-0 flex-1 truncate text-ink">{{ worker.name }}</span>
+            <Settings2
+              v-if="worker.options.length"
+              :size="12"
+              :stroke-width="1.5"
+              class="shrink-0"
+              :class="needsInput(worker) ? 'text-warning' : 'text-ink-muted'"
+              :aria-label="needsInput(worker) ? 'needs options' : 'has options'"
+              v-tooltip="
+                needsInput(worker) ? 'Needs options before it can run' : 'Has options you can set'
+              "
+            />
+          </li>
+          <li v-if="!flat.length" class="px-3 py-2 text-ink-muted">no worker matches</li>
+        </ul>
+      </template>
+
+      <!-- a worker's options -->
       <div
-        class="absolute inset-0"
-        :class="{ 'bg-ink/20': !popover }"
-        aria-hidden="true"
-        @pointerdown="close"
-      />
-      <div
-        class="sheet absolute flex flex-col overflow-hidden text-[0.75rem]"
-        :class="
-          popover
-            ? 'shadow-(--shadow-popover)'
-            : 'top-[14vh] left-1/2 max-h-[70vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 shadow-(--shadow-float)'
-        "
-        :style="popover ?? undefined"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="adding ? 'Add a worker' : 'Run a worker'"
-        v-trap-focus
+        v-else
+        v-autofocus
+        tabindex="-1"
+        class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5 outline-none"
+        @keydown="onOptionsKey"
       >
-        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken px-3">
-          <!-- beside its +, where it goes needs no saying: the filter gets the room -->
-          <template v-if="!popover">
-            <span class="shrink-0 text-ink-muted">{{ placing.header }}</span>
-            <span class="truncate font-medium text-ink">{{ runTarget.label }}</span>
-            <span class="shrink-0 text-ink-muted">—</span>
-          </template>
+        <p class="font-medium text-ink">{{ configuring.name }}</p>
+        <p class="pb-2 text-ink-muted">{{ configuring.id }}</p>
+        <label
+          v-for="option in configuring.options"
+          :key="option.key"
+          class="flex gap-3 py-1.5"
+          :class="option.type === 'textarea' ? 'items-start' : 'items-center'"
+          v-tooltip="option.description ?? ''"
+        >
+          <span class="w-28 shrink-0 text-ink-muted"
+            >{{ option.label }}<span v-if="option.required" class="text-warning"> *</span></span
+          >
           <input
-            v-autofocus="!configuring"
-            v-model="query"
+            v-if="option.type === 'checkbox'"
+            type="checkbox"
+            class="size-3.5 accent-brand"
+            :checked="config[option.key] === 'true'"
+            @change="config[option.key] = String(($event.target as HTMLInputElement).checked)"
+          />
+          <select
+            v-else-if="option.items?.length"
+            v-model="config[option.key]"
+            class="field h-7 min-w-0 flex-1"
+          >
+            <option v-if="!option.required" value="">–</option>
+            <option v-for="item in option.items" :key="item" :value="item">{{ item }}</option>
+          </select>
+          <textarea
+            v-else-if="option.type === 'textarea'"
+            v-model="config[option.key]"
+            rows="3"
+            spellcheck="false"
+            class="field min-w-0 flex-1 py-1"
+            :placeholder="option.required ? 'required' : ''"
+          />
+          <input
+            v-else
+            v-model="config[option.key]"
             type="text"
             spellcheck="false"
-            autocomplete="off"
-            aria-label="Filter workers"
-            :disabled="!!configuring"
-            class="min-w-0 flex-1 bg-transparent text-ink caret-ink outline-none [caret-shape:block] placeholder:text-ink-muted/60"
-            placeholder="find a worker…"
-            @keydown="onListKey"
+            class="field h-7 min-w-0 flex-1"
+            :placeholder="option.required ? 'required' : ''"
           />
-        </div>
-
-        <!-- the list -->
-        <template v-if="!configuring">
-          <LoadState
-            :state="state"
-            noun="workers"
-            :has-content="workers.length > 0"
-            @retry="loadWorkers({ force: true })"
-          >
-            <template #empty>No workers are online.</template>
-          </LoadState>
-          <ul
-            v-if="workers.length"
-            class="min-h-0 flex-1 overflow-y-auto py-1"
-            role="listbox"
-            aria-label="Workers"
-          >
-            <li
-              v-for="(worker, i) in flat"
-              :key="worker.id"
-              role="option"
-              :aria-selected="i === index"
-              class="flex h-7 cursor-pointer items-center gap-3 px-3"
-              :class="i === index ? 'bg-sunken' : 'hover:bg-sunken'"
-              v-tooltip="needsInput(worker) ? 'Set its options first' : undefined"
-              @pointermove="index = i"
-              @click="choose(worker)"
-            >
-              <span class="min-w-0 flex-1 truncate text-ink">{{ worker.name }}</span>
-              <Settings2
-                v-if="worker.options.length"
-                :size="12"
-                :stroke-width="1.5"
-                class="shrink-0"
-                :class="needsInput(worker) ? 'text-warning' : 'text-ink-muted'"
-                :aria-label="needsInput(worker) ? 'needs options' : 'has options'"
-                v-tooltip="
-                  needsInput(worker) ? 'Needs options before it can run' : 'Has options you can set'
-                "
-              />
-            </li>
-            <li v-if="!flat.length" class="px-3 py-2 text-ink-muted">no worker matches</li>
-          </ul>
-        </template>
-
-        <!-- a worker's options -->
-        <div
-          v-else
-          v-autofocus
-          tabindex="-1"
-          class="min-h-0 flex-1 overflow-y-auto px-3 py-2.5 outline-none"
-          @keydown="onOptionsKey"
-        >
-          <p class="font-medium text-ink">{{ configuring.name }}</p>
-          <p class="pb-2 text-ink-muted">{{ configuring.id }}</p>
-          <label
-            v-for="option in configuring.options"
-            :key="option.key"
-            class="flex gap-3 py-1.5"
-            :class="option.type === 'textarea' ? 'items-start' : 'items-center'"
-            v-tooltip="option.description ?? ''"
-          >
-            <span class="w-28 shrink-0 text-ink-muted"
-              >{{ option.label }}<span v-if="option.required" class="text-warning"> *</span></span
-            >
-            <input
-              v-if="option.type === 'checkbox'"
-              type="checkbox"
-              class="size-3.5 accent-brand"
-              :checked="config[option.key] === 'true'"
-              @change="config[option.key] = String(($event.target as HTMLInputElement).checked)"
-            />
-            <select
-              v-else-if="option.items?.length"
-              v-model="config[option.key]"
-              class="field h-7 min-w-0 flex-1"
-            >
-              <option v-if="!option.required" value="">–</option>
-              <option v-for="item in option.items" :key="item" :value="item">{{ item }}</option>
-            </select>
-            <textarea
-              v-else-if="option.type === 'textarea'"
-              v-model="config[option.key]"
-              rows="3"
-              spellcheck="false"
-              class="field min-w-0 flex-1 py-1"
-              :placeholder="option.required ? 'required' : ''"
-            />
-            <input
-              v-else
-              v-model="config[option.key]"
-              type="text"
-              spellcheck="false"
-              class="field h-7 min-w-0 flex-1"
-              :placeholder="option.required ? 'required' : ''"
-            />
-          </label>
-        </div>
-
-        <div
-          v-if="configuring ? missing.length : !popover"
-          class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
-        >
-          <span v-if="configuring">fill in {{ missing.join(', ') }}</span>
-          <span v-else>{{
-            adding ? placing.footer : `one task over ${runTarget.label}, in a new folder`
-          }}</span>
-        </div>
+        </label>
       </div>
-    </div>
-  </Teleport>
+
+      <div
+        v-if="configuring ? missing.length : !popover"
+        class="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-badge text-ink-muted"
+      >
+        <span v-if="configuring">fill in {{ missing.join(', ') }}</span>
+        <span v-else>{{
+          adding ? placing.footer : `one task over ${runTarget.label}, in a new folder`
+        }}</span>
+      </div>
+    </template>
+  </component>
 </template>

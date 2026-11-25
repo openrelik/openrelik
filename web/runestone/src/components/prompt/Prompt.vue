@@ -16,6 +16,7 @@ limitations under the License.
 <script setup lang="ts">
 import { watch } from 'vue'
 
+import ModalSheet from '@/components/base/ModalSheet.vue'
 import PromptResults from '@/components/prompt/PromptResults.vue'
 import { usePrompt } from '@/composables/usePrompt'
 
@@ -56,55 +57,44 @@ function onInputKey(event: KeyboardEvent) {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="promptOpen" class="fixed inset-0 z-50">
-      <div class="absolute inset-0 bg-ink/20" aria-hidden="true" @pointerdown="close" />
-      <div
-        class="sheet absolute top-[12vh] left-1/2 flex max-h-[70vh] w-[min(46rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden text-[0.75rem] shadow-(--shadow-float)"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Prompt"
-        v-trap-focus
-      >
-        <label class="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-sunken px-3">
-          <span class="max-w-[45%] shrink-0 truncate text-brand">{{ cwdPath }}</span>
-          <span class="shrink-0 text-ink-muted" aria-hidden="true">&gt;</span>
-          <div class="relative ml-1 flex min-w-0 flex-1 items-center">
-            <input
-              v-autofocus
-              v-model="line"
-              type="text"
-              role="combobox"
-              spellcheck="false"
-              autocomplete="off"
-              aria-label="Find a folder or file"
-              aria-controls="prompt-results"
-              :aria-expanded="results.length > 0"
-              :aria-activedescendant="results.length ? `prompt-${index}` : undefined"
-              class="peer w-full min-w-0 bg-transparent font-mono text-ink caret-ink outline-none [caret-shape:block] placeholder:text-transparent"
-              placeholder="cd, or type to find…"
-              @keydown="onInputKey"
-            />
-            <span
-              aria-hidden="true"
-              class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate font-mono text-ink-muted/60 select-none peer-placeholder-shown:block"
-              >cd, or type to find…</span
-            >
-          </div>
-        </label>
-        <PromptResults
-          class="min-h-0 flex-1"
-          :results="results"
-          :index="index"
-          :query="query"
-          :mode="isRm ? 'rm' : 'search'"
-          :cwd-path="cwdPath"
-          :scope-path="scopePath"
-          :server-search="serverSearch"
-          @go="go"
-          @hover="index = $event"
+  <ModalSheet :open="promptOpen" size="lg" aria-label="Prompt" @close="close">
+    <label class="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-sunken px-3">
+      <span class="max-w-[45%] shrink-0 truncate text-brand">{{ cwdPath }}</span>
+      <span class="shrink-0 text-ink-muted" aria-hidden="true">&gt;</span>
+      <div class="relative ml-1 flex min-w-0 flex-1 items-center">
+        <input
+          v-autofocus
+          v-model="line"
+          type="text"
+          role="combobox"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="Find a folder or file"
+          aria-controls="prompt-results"
+          :aria-expanded="results.length > 0"
+          :aria-activedescendant="results.length ? `prompt-${index}` : undefined"
+          class="peer w-full min-w-0 bg-transparent font-mono text-ink caret-ink outline-none [caret-shape:block] placeholder:text-transparent"
+          placeholder="cd, or type to find…"
+          @keydown="onInputKey"
         />
+        <span
+          aria-hidden="true"
+          class="pointer-events-none absolute top-1/2 right-0 left-[1.5ch] hidden -translate-y-1/2 truncate font-mono text-ink-muted select-none peer-placeholder-shown:block"
+          >cd, or type to find…</span
+        >
       </div>
-    </div>
-  </Teleport>
+    </label>
+    <PromptResults
+      class="min-h-0 flex-1"
+      :results="results"
+      :index="index"
+      :query="query"
+      :mode="isRm ? 'rm' : 'search'"
+      :cwd-path="cwdPath"
+      :scope-path="scopePath"
+      :server-search="serverSearch"
+      @go="go"
+      @hover="index = $event"
+    />
+  </ModalSheet>
 </template>

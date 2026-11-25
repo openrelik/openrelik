@@ -14,9 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+  type ComponentPublicInstance,
+} from 'vue'
 import { useRoute } from 'vue-router'
 
+import PopoverSurface from '@/components/base/PopoverSurface.vue'
 import { Copy, ExternalLink, ImageOff } from '@/components/icons'
 import { closeLinkMenu, useLinkMenu } from '@/composables/useLinkMenu'
 import { copyToClipboard } from '@/directives/copyToClipboard'
@@ -43,7 +52,8 @@ const target = computed(() => (state.value ? linkTarget(state.value.url) : null)
 const host = computed(() => (target.value?.openable ? target.value.host : null))
 const displayUrl = computed(() => (state.value ? revealHidden(state.value.url, true) : ''))
 
-const menu = ref<HTMLElement | null>(null)
+const menu = ref<ComponentPublicInstance | null>(null)
+const menuEl = () => (menu.value?.$el instanceof HTMLElement ? menu.value.$el : null)
 const position = ref({ left: 0, top: 0 })
 const copied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | undefined
@@ -65,7 +75,7 @@ watch(state, async (opened) => {
   position.value = { left: box.left, top: box.bottom + GAP }
   await nextTick()
   if (state.value !== opened) return
-  const el = menu.value
+  const el = menuEl()
   if (!el) return
   const { width, height } = el.getBoundingClientRect()
   position.value = {
@@ -82,7 +92,7 @@ watch(state, async (opened) => {
 // It hangs under its link: when the link moves away (a scroll, a resize, another page), it goes.
 const close = () => state.value && closeLinkMenu()
 function onScroll(event: Event) {
-  if (menu.value?.contains(event.target as Node)) return
+  if (menuEl()?.contains(event.target as Node)) return
   close()
 }
 function onWindowKeydown(event: KeyboardEvent) {
@@ -106,9 +116,8 @@ onUnmounted(() => {
 
 function items(): HTMLElement[] {
   return [
-    ...(menu.value?.querySelectorAll<HTMLElement>(
-      '[role="menuitem"]:not([aria-disabled="true"])',
-    ) ?? []),
+    ...(menuEl()?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ??
+      []),
   ]
 }
 
@@ -163,10 +172,10 @@ function open() {
       leave-active-class="transition duration-120 ease-(--ease-standard)"
       leave-to-class="-translate-y-1 opacity-0"
     >
-      <div
+      <PopoverSurface
         v-if="state"
         ref="menu"
-        class="sheet fixed z-50 w-80 py-1 text-[0.75rem] shadow-(--shadow-float)"
+        class="fixed z-(--z-popover) w-80 py-1 text-dense"
         :style="{ left: `${position.left}px`, top: `${position.top}px` }"
         role="menu"
         :aria-label="state.kind === 'image' ? 'Image link' : 'Link'"
@@ -187,7 +196,7 @@ function open() {
               state.kind === 'image' ? 'Image, not loaded' : (host ?? 'Not a web link')
             }}</span>
           </p>
-          <p class="line-clamp-3 text-[0.6875rem] break-all text-ink-muted">{{ displayUrl }}</p>
+          <p class="line-clamp-3 text-badge break-all text-ink-muted">{{ displayUrl }}</p>
         </div>
         <div class="pt-1">
           <button
@@ -212,7 +221,7 @@ function open() {
               :class="
                 target?.openable
                   ? 'cursor-pointer text-ink hover:bg-sunken focus:bg-brand-selected'
-                  : 'cursor-default text-ink-muted/60'
+                  : 'cursor-default text-ink-muted'
               "
               :aria-disabled="!target?.openable || undefined"
               @click="open"
@@ -225,7 +234,7 @@ function open() {
               />
               Open in a new tab
             </button>
-            <p class="px-3 pt-0.5 pb-1 pl-8 text-[0.6875rem] text-ink-muted">
+            <p class="px-3 pt-0.5 pb-1 pl-8 text-badge text-ink-muted">
               {{
                 target
                   ? target.openable
@@ -236,7 +245,7 @@ function open() {
             </p>
           </template>
         </div>
-      </div>
+      </PopoverSurface>
     </Transition>
   </Teleport>
 </template>

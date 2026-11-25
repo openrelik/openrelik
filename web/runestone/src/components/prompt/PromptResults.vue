@@ -15,6 +15,7 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
+import StatusDot from '@/components/base/StatusDot.vue'
 import { useItemsStore } from '@/stores/items'
 import type { Item } from '@/types/item'
 import type { PromptResult } from '@/composables/usePrompt'
@@ -72,7 +73,7 @@ const meta = (item: Item) => {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col text-[0.75rem]" @pointerdown.prevent>
+  <div class="flex min-h-0 flex-col text-dense" @pointerdown.prevent>
     <p class="shrink-0 px-3 pt-2 pb-1 text-ink-muted">
       <template v-if="results[0]?.kind === 'mkdir'">mkdir: create folder</template>
       <template v-else-if="rmMode">rm: delete folder in {{ cwdPath }}</template>
@@ -89,7 +90,7 @@ const meta = (item: Item) => {
         class="ml-2 inline-flex items-center gap-1.5"
         aria-live="polite"
       >
-        <span class="size-1.5 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+        <StatusDot tone="brand" pulse />
         searching server…
       </span>
       <span v-else-if="serverSearch?.error" class="ml-2 text-warning">
@@ -132,18 +133,18 @@ const meta = (item: Item) => {
         </span>
         <span
           v-if="result.kind === 'mkdir' && result.folderName"
-          class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
+          class="tabular shrink-0 text-badge text-ink-muted"
         >
           new folder
         </span>
         <span
           v-if="result.kind === 'item' && result.caseRef"
-          class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
+          class="tabular shrink-0 text-badge text-ink-muted"
           >case {{ result.caseRef }}</span
         >
         <span
           v-else-if="result.kind === 'item' && result.remote"
-          class="shrink-0 text-[0.6875rem] text-ink-muted"
+          class="shrink-0 text-badge text-ink-muted"
           v-tooltip="'Found by the server search; not opened yet in this session'"
           >server</span
         >
