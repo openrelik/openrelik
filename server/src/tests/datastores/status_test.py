@@ -37,10 +37,8 @@ _DiskUsage = namedtuple("usage", ["total", "used", "free"])
 
 @pytest.fixture(autouse=True)
 def reset_storage_cache():
-    status_crud._last_collected_monotonic = 0.0
     status_crud._redis_client = None
     yield
-    status_crud._last_collected_monotonic = 0.0
     status_crud._redis_client = None
 
 
@@ -279,7 +277,9 @@ def test_get_system_storage_status_aggregates_files_folders_workflows_and_provid
 def test_get_system_storage_status_redis_cache_and_cooldown(
     sqlite_db, mocker, tmp_path
 ):
-    """Caches payload in Redis for 60s and honors 5s refresh cooldown."""
+    """Caches payload in Redis for 60s and honors 5s refresh cooldown across workers."""
+    from datetime import datetime, timedelta, timezone
+
     fake_kv: dict[str, str] = {}
     fake_redis = mocker.MagicMock()
     fake_redis.get.side_effect = lambda k: fake_kv.get(k)
@@ -293,23 +293,26 @@ def test_get_system_storage_status_redis_cache_and_cooldown(
         return_value={"server": {"storage_path": str(tmp_path)}},
     )
 
-    fake_now = [200.0]
-    mocker.patch(
-        "datastores.sql.crud.status.time.monotonic", side_effect=lambda: fake_now[0]
-    )
-
     first = get_system_storage_status_from_db(sqlite_db)
     assert fake_redis.setex.call_count == 1
     assert fake_redis.setex.call_args.args[1] == 60
 
-    # Within 5s cooldown: refresh=True still serves cached value.
-    fake_now[0] = 202.0
+    # Within 5s cooldown (even from a cold worker sharing only Redis): refresh=True serves cache.
+    recent_payload = dict(
+        first,
+        collected_at=(datetime.now(timezone.utc) - timedelta(seconds=2)).isoformat(),
+    )
+    fake_kv[status_crud.STORAGE_STATUS_CACHE_KEY] = json.dumps(recent_payload)
     second = get_system_storage_status_from_db(sqlite_db, refresh=True)
-    assert second == first
+    assert second == recent_payload
     assert fake_redis.setex.call_count == 1
 
     # Past 5s cooldown: refresh=True recomputes and writes cache again.
-    fake_now[0] = 206.0
+    stale_payload = dict(
+        first,
+        collected_at=(datetime.now(timezone.utc) - timedelta(seconds=6)).isoformat(),
+    )
+    fake_kv[status_crud.STORAGE_STATUS_CACHE_KEY] = json.dumps(stale_payload)
     get_system_storage_status_from_db(sqlite_db, refresh=True)
     assert fake_redis.setex.call_count == 2
 

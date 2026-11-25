@@ -19,7 +19,6 @@ import json
 import os
 import shutil
 import threading
-import time
 
 import redis
 import redis.exceptions
@@ -36,7 +35,6 @@ STORAGE_STATUS_CACHE_TTL_SECONDS = 60
 STORAGE_REFRESH_COOLDOWN_SECONDS = 5.0
 
 _storage_lock = threading.Lock()
-_last_collected_monotonic = 0.0
 _redis_client = None
 
 
@@ -109,6 +107,27 @@ def _collect_storage_providers_config() -> tuple[str, list[dict]]:
     return default_name, providers
 
 
+def _cached_storage_if_usable(client, *, refresh: bool) -> dict | None:
+    """Return cached storage payload when valid and still within refresh cooldown."""
+    cached = _read_cached_storage_status(client)
+    if cached is None:
+        return None
+    if not refresh:
+        return cached
+    collected_at_raw = cached.get("collected_at")
+    if isinstance(collected_at_raw, str):
+        try:
+            collected_at = datetime.fromisoformat(collected_at_raw)
+            if collected_at.tzinfo is None:
+                collected_at = collected_at.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - collected_at).total_seconds()
+            if age < STORAGE_REFRESH_COOLDOWN_SECONDS:
+                return cached
+        except ValueError:
+            pass
+    return None
+
+
 def get_system_storage_status_from_db(db: Session, *, refresh: bool = False) -> dict:
     """Compute aggregate file, folder, workflow, and disk usage counts.
 
@@ -122,29 +141,15 @@ def get_system_storage_status_from_db(db: Session, *, refresh: bool = False) -> 
     Returns:
         dict: Payload matching ``SystemStorageStatusResponse``.
     """
-    global _last_collected_monotonic
-
     client = _get_redis_client()
-    now = time.monotonic()
-    can_bypass = (
-        refresh
-        and (now - _last_collected_monotonic) >= STORAGE_REFRESH_COOLDOWN_SECONDS
-    )
-    if not can_bypass:
-        cached = _read_cached_storage_status(client)
-        if cached is not None:
-            return cached
+    cached = _cached_storage_if_usable(client, refresh=refresh)
+    if cached is not None:
+        return cached
 
     with _storage_lock:
-        now = time.monotonic()
-        can_bypass = (
-            refresh
-            and (now - _last_collected_monotonic) >= STORAGE_REFRESH_COOLDOWN_SECONDS
-        )
-        if not can_bypass:
-            cached = _read_cached_storage_status(client)
-            if cached is not None:
-                return cached
+        cached = _cached_storage_if_usable(client, refresh=refresh)
+        if cached is not None:
+            return cached
 
         default_provider, provider_configs = _collect_storage_providers_config()
         # Legacy root folders with NULL storage_provider resolve to "server_default"
@@ -298,7 +303,6 @@ def get_system_storage_status_from_db(db: Session, *, refresh: bool = False) -> 
             "storage_providers": storage_providers,
         }
 
-        _last_collected_monotonic = time.monotonic()
         if client is not None:
             try:
                 client.setex(
