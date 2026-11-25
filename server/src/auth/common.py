@@ -184,9 +184,6 @@ def verify_csrf(
         x_csrf_token (str, optional): The CSRF token from the X-CSRF-Token header.
         csrf_token (str, optional): The CSRF token from the cookie.
 
-    Yields:
-        None: Yields nothing (importand for FastAPI dependency injection).
-
     Raises:
         HTTPException: If the CSRF token is invalid.
     """
@@ -212,10 +209,6 @@ def verify_csrf(
     ):
         if not csrf_token or x_csrf_token != csrf_token:
             raise HTTPException(status_code=400, detail="X-CSRF-Token is invalid")
-    else:
-        pass
-
-    yield
 
 
 def get_current_user(

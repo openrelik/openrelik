@@ -152,15 +152,17 @@ def test_verify_csrf_browser_get(mocker):
     mock_validate = mocker.patch("auth.common.validate_jwt_token")
     mock_validate.return_value = {"aud": "browser-client"}
 
-    for _ in verify_csrf(
-        request=mock_request,
-        access_token_from_cookie="cookie_token",
-        access_token_from_header=None,
-        x_csrf_token="csrf",
-        csrf_token="csrf",
-        db=mock_db,
-    ):
-        pass
+    assert (
+        verify_csrf(
+            request=mock_request,
+            access_token_from_cookie="cookie_token",
+            access_token_from_header=None,
+            x_csrf_token="csrf",
+            csrf_token="csrf",
+            db=mock_db,
+        )
+        is None
+    )
 
 
 def test_verify_csrf_browser_post_invalid(mocker):
@@ -173,15 +175,14 @@ def test_verify_csrf_browser_post_invalid(mocker):
     mock_validate.return_value = {"aud": "browser-client"}
 
     with pytest.raises(HTTPException) as exc_info:
-        for _ in verify_csrf(
+        verify_csrf(
             request=mock_request,
             access_token_from_cookie="cookie_token",
             access_token_from_header=None,
             x_csrf_token="wrong_csrf",
             csrf_token="csrf",
             db=mock_db,
-        ):
-            pass
+        )
     assert exc_info.value.status_code == 400
     assert "X-CSRF-Token is invalid" in exc_info.value.detail
 

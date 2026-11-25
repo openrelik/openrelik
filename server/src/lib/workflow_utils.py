@@ -142,6 +142,7 @@ def get_task_signature(
         },
         queue=queue_name,
         task_id=task_uuid,
+        app=celery_app,
     )
     return task_signature
 
@@ -203,7 +204,8 @@ def create_workflow_signature(
                         db, current_user, task, input_files, output_path, workflow
                     )
                     for task in task_data["tasks"]
-                ]
+                ],
+                app=celery_app,
             )
         else:
             return celery_chain(
@@ -214,7 +216,8 @@ def create_workflow_signature(
                     input_files,
                     output_path,
                     workflow,
-                )
+                ),
+                app=celery_app,
             )
 
     elif task_data["type"] == "chord":
@@ -233,7 +236,7 @@ def create_workflow_signature(
             db, current_user, callback_task_data, input_files, output_path, workflow
         )
 
-        return celery_chord(header_tasks, callback_signature)
+        return celery_chord(header_tasks, callback_signature, app=celery_app)
 
     elif task_data["type"] == "task":
         task_signature = get_task_signature(
@@ -249,8 +252,10 @@ def create_workflow_signature(
                                 db, current_user, t, input_files, output_path, workflow
                             )
                             for t in task_data["tasks"]
-                        ]
+                        ],
+                        app=celery_app,
                     ),
+                    app=celery_app,
                 )
             else:
                 return celery_chain(
@@ -263,6 +268,7 @@ def create_workflow_signature(
                         output_path,
                         workflow,
                     ),
+                    app=celery_app,
                 )
         else:
             return task_signature

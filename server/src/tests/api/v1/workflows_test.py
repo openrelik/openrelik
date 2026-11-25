@@ -852,8 +852,10 @@ def test_create_workflow_signature_chain_multiple(
     mock_get_task_signature = mocker.patch("lib.workflow_utils.get_task_signature")
     mock_get_task_signature.return_value = mocker.MagicMock(spec=Signature)
 
-    # Mock celery_group to consume the generator
-    mocker.patch("lib.workflow_utils.celery_group", side_effect=lambda x: list(x))
+    # Mock celery_group to consume the tasks list
+    mocker.patch(
+        "lib.workflow_utils.celery_group", side_effect=lambda x, **_kwargs: list(x)
+    )
 
     from lib.workflow_utils import create_workflow_signature
 
