@@ -121,34 +121,31 @@ def test_validate_iap_assertion_wrong_issuer(mocker):
     assert excinfo.value.detail == "Unauthorized. Invalid issuer."
 
 
-@pytest.mark.asyncio
-async def test_login_missing_header(mocker):
+def test_login_missing_header(mocker):
     """Test login without an assertion header."""
     mock_db = mocker.MagicMock()
 
     with pytest.raises(HTTPException) as excinfo:
-        await iap_auth.login(x_goog_iap_jwt_assertion=None, db=mock_db)
+        iap_auth.login(x_goog_iap_jwt_assertion=None, db=mock_db)
 
     assert excinfo.value.status_code == 401
     assert "Missing X-Goog-IAP-JWT-Assertion" in excinfo.value.detail
 
 
-@pytest.mark.asyncio
-async def test_login_missing_email_claim(mocker):
+def test_login_missing_email_claim(mocker):
     """Test login with an assertion that has no email claim."""
     mock_validate_assertion = mocker.patch("auth.iap._validate_iap_assertion")
     mock_validate_assertion.return_value = {"iss": "https://cloud.google.com/iap"}
     mock_db = mocker.MagicMock()
 
     with pytest.raises(HTTPException) as excinfo:
-        await iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
+        iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
 
     assert excinfo.value.status_code == 401
     assert "no email claim" in excinfo.value.detail
 
 
-@pytest.mark.asyncio
-async def test_login_success(mocker):
+def test_login_success(mocker):
     """Test login success with existing user."""
     mock_validate_assertion = mocker.patch("auth.iap._validate_iap_assertion")
     mock_get_user = mocker.patch("auth.iap.get_user_by_email_from_db")
@@ -165,7 +162,7 @@ async def test_login_success(mocker):
 
     mock_db = mocker.MagicMock()
 
-    response = await iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
+    response = iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
 
     assert isinstance(response, RedirectResponse)
     assert response.status_code == 307
@@ -173,8 +170,7 @@ async def test_login_success(mocker):
     mock_get_user.assert_called_once_with(mock_db, email="user@example.com")
 
 
-@pytest.mark.asyncio
-async def test_login_new_user(mocker):
+def test_login_new_user(mocker):
     """Test login with new user."""
     mock_validate_assertion = mocker.patch("auth.iap._validate_iap_assertion")
     mock_get_user = mocker.patch("auth.iap.get_user_by_email_from_db")
@@ -195,7 +191,7 @@ async def test_login_new_user(mocker):
 
     mock_db = mocker.MagicMock()
 
-    response = await iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
+    response = iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
 
     assert isinstance(response, RedirectResponse)
     mock_create_user.assert_called_once()
@@ -206,8 +202,7 @@ async def test_login_new_user(mocker):
     assert new_user.auth_method == "iap"
 
 
-@pytest.mark.asyncio
-async def test_login_not_in_allowlist(mocker):
+def test_login_not_in_allowlist(mocker):
     """Test login with a user that is not authorized."""
     mock_validate_assertion = mocker.patch("auth.iap._validate_iap_assertion")
     mock_validate_assertion.return_value = {"email": "user@notallowed.com"}
@@ -217,6 +212,6 @@ async def test_login_not_in_allowlist(mocker):
     mock_db = mocker.MagicMock()
 
     with pytest.raises(HTTPException) as excinfo:
-        await iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
+        iap_auth.login(x_goog_iap_jwt_assertion="assertion", db=mock_db)
 
     assert excinfo.value.status_code == 401

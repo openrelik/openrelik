@@ -102,17 +102,15 @@ def test_validate_user_info_allowlist_fail():
     assert excinfo.value.detail == "Unauthorized. Not in allowlist."
 
 
-@pytest.mark.asyncio
-async def test_auth_header_token_missing_header(mocker):
+def test_auth_header_token_missing_header(mocker):
     """Test auth_header_token with missing header."""
     with pytest.raises(HTTPException) as excinfo:
-        await google_auth.auth_header_token(x_goog_id_token=None, db=mocker.MagicMock())
+        google_auth.auth_header_token(x_goog_id_token=None, db=mocker.MagicMock())
     assert excinfo.value.status_code == 401
     assert excinfo.value.detail == "Unauthorized, missing x-google-id-token header."
 
 
-@pytest.mark.asyncio
-async def test_auth_header_token_valid_new_user(mocker):
+def test_auth_header_token_valid_new_user(mocker):
     """Test auth_header_token with valid token and new user."""
     mock_validate_google_token = mocker.patch("auth.google._validate_google_token")
     mock_get_user = mocker.patch("auth.google.get_user_by_email_from_db")
@@ -129,17 +127,14 @@ async def test_auth_header_token_valid_new_user(mocker):
 
     mock_db = mocker.MagicMock()
 
-    response = await google_auth.auth_header_token(
-        x_goog_id_token="valid_token", db=mock_db
-    )
+    response = google_auth.auth_header_token(x_goog_id_token="valid_token", db=mock_db)
 
     assert response["x-openrelik-refresh-token"] == "mocked_jwt"
     assert response["x-openrelik-access-token"] == "mocked_jwt"
     mock_validate_user_info.assert_called_once()
 
 
-@pytest.mark.asyncio
-async def test_auth_header_token_valid_existing_user(mocker):
+def test_auth_header_token_valid_existing_user(mocker):
     """Test auth_header_token with valid token and existing user."""
     mock_validate_google_token = mocker.patch("auth.google._validate_google_token")
     mock_get_user = mocker.patch("auth.google.get_user_by_email_from_db")
@@ -158,9 +153,7 @@ async def test_auth_header_token_valid_existing_user(mocker):
 
     mock_db = mocker.MagicMock()
 
-    response = await google_auth.auth_header_token(
-        x_goog_id_token="valid_token", db=mock_db
-    )
+    response = google_auth.auth_header_token(x_goog_id_token="valid_token", db=mock_db)
 
     assert response["x-openrelik-refresh-token"] == "mocked_jwt"
     assert response["x-openrelik-access-token"] == "mocked_jwt"

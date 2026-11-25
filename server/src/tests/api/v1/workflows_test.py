@@ -252,7 +252,6 @@ async def test_run_workflow(
     mock_create_workflow = mocker.patch("lib.workflow_utils.create_workflow_signature")
     mock_create_workflow.return_value.apply_async.return_value = mocker.ANY
     mock_makedirs = mocker.patch("os.makedirs")
-    mocker.patch("os.path.exists", return_value=False)  # Path doesn't exist
 
     folder_id = 1
     workflow_id = 1
@@ -286,7 +285,7 @@ async def test_run_workflow(
     mock_get_workflow_from_db.assert_called_once_with(
         db, mocker.ANY, workflow_id, [Role.EDITOR, Role.OWNER]
     )
-    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path)
+    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path, exist_ok=True)
     mock_create_workflow.assert_called_once()
     mock_create_workflow.return_value.apply_async.assert_called_once()
 
@@ -312,7 +311,6 @@ async def test_run_workflow_nested_tasks(
     mock_create_workflow = mocker.patch("lib.workflow_utils.create_workflow_signature")
     mock_create_workflow.return_value.apply_async.return_value = mocker.ANY
     mock_makedirs = mocker.patch("os.makedirs")
-    mocker.patch("os.path.exists", return_value=False)  # Path doesn't exist
 
     folder_id = 1
     workflow_id = 1
@@ -355,7 +353,7 @@ async def test_run_workflow_nested_tasks(
     mock_get_workflow_from_db.assert_called_once_with(
         db, mocker.ANY, workflow_id, [Role.EDITOR, Role.OWNER]
     )
-    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path)
+    mock_makedirs.assert_called_once_with(workflow_db_model.folder.path, exist_ok=True)
     mock_create_workflow.assert_called_once()
     mock_create_workflow.return_value.apply_async.assert_called_once()
 
@@ -1194,3 +1192,50 @@ async def test_generate_workflow_name_with_inaccessible_file(
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     mock_get_llm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_generate_workflow_name_success(
+    fastapi_async_test_client, mocker, workflow_db_model, file_db_model
+):
+    """generate_workflow_name calls llm.generate directly and caps output at 5 words."""
+    workflow_db_model.spec_json = json.dumps(
+        {
+            "workflow": {
+                "type": "chain",
+                "tasks": [
+                    {
+                        "type": "task",
+                        "task_name": "openrelik-worker-strings.tasks.strings",
+                        "task_config": [{"name": "secret", "value": "should_be_stripped"}],
+                        "tasks": [],
+                    }
+                ],
+            }
+        }
+    )
+    workflow_db_model.files = [file_db_model]
+    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model)
+    mocker.patch("api.v1.workflows._check_files_accessible")
+    mocker.patch(
+        "api.v1.workflows.get_active_llm",
+        return_value={"name": "googleai", "config": {"model": "gemini-test"}},
+    )
+
+    mock_llm = mocker.MagicMock()
+    mock_llm.generate.return_value = "  Evtx Timeline And Report Extra Words  "
+    mock_provider = mocker.MagicMock(return_value=mock_llm)
+    mock_manager = mocker.MagicMock()
+    mock_manager.get_provider.return_value = mock_provider
+    mocker.patch("api.v1.workflows.manager.LLMManager", return_value=mock_manager)
+
+    response = await fastapi_async_test_client.get("/folders/1/workflows/1/generate_name/")
+
+    assert response.status_code == 200
+    assert response.json() == {"generated_name": "Evtx Timeline And Report Extra"}
+    mock_manager.get_provider.assert_called_once_with("googleai")
+    mock_provider.assert_called_once_with(model_name="gemini-test")
+    mock_llm.generate.assert_called_once()
+    sent_prompt = mock_llm.generate.call_args.kwargs["prompt"]
+    assert file_db_model.display_name in sent_prompt
+    assert "should_be_stripped" not in sent_prompt

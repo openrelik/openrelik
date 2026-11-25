@@ -408,8 +408,7 @@ def run_workflow(
     ]
 
     output_path = workflow.folder.path
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
+    os.makedirs(output_path, exist_ok=True)
 
     celery_workflow = create_workflow_signature(
         db,

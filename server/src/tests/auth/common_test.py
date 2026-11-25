@@ -143,8 +143,7 @@ def test_validate_jwt_token_check_denylist_invalid(mocker):
     assert "Invalid API key" in str(exc_info.value.detail)
 
 
-@pytest.mark.asyncio
-async def test_verify_csrf_browser_get(mocker):
+def test_verify_csrf_browser_get(mocker):
     """Test verify_csrf for GET request from browser."""
     mock_request = mocker.MagicMock()
     mock_request.method = "GET"
@@ -153,7 +152,7 @@ async def test_verify_csrf_browser_get(mocker):
     mock_validate = mocker.patch("auth.common.validate_jwt_token")
     mock_validate.return_value = {"aud": "browser-client"}
 
-    async for _ in verify_csrf(
+    for _ in verify_csrf(
         request=mock_request,
         access_token_from_cookie="cookie_token",
         access_token_from_header=None,
@@ -164,8 +163,7 @@ async def test_verify_csrf_browser_get(mocker):
         pass
 
 
-@pytest.mark.asyncio
-async def test_verify_csrf_browser_post_invalid(mocker):
+def test_verify_csrf_browser_post_invalid(mocker):
     """Test verify_csrf for POST request from browser with invalid csrf."""
     mock_request = mocker.MagicMock()
     mock_request.method = "POST"
@@ -175,7 +173,7 @@ async def test_verify_csrf_browser_post_invalid(mocker):
     mock_validate.return_value = {"aud": "browser-client"}
 
     with pytest.raises(HTTPException) as exc_info:
-        async for _ in verify_csrf(
+        for _ in verify_csrf(
             request=mock_request,
             access_token_from_cookie="cookie_token",
             access_token_from_header=None,
@@ -188,24 +186,21 @@ async def test_verify_csrf_browser_post_invalid(mocker):
     assert "X-CSRF-Token is invalid" in exc_info.value.detail
 
 
-@pytest.mark.asyncio
-async def test_get_current_user_no_token():
+def test_get_current_user_no_token():
     """Test get_current_user with no token."""
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(None, None, None)
+        get_current_user(None, None, None)
     assert "Token is missing" in exc_info.value.detail
 
 
-@pytest.mark.asyncio
-async def test_get_current_user_both_tokens():
+def test_get_current_user_both_tokens():
     """Test get_current_user with both tokens provided."""
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user("cookie", "header", None)
+        get_current_user("cookie", "header", None)
     assert "Only one authentication method allowed" in exc_info.value.detail
 
 
-@pytest.mark.asyncio
-async def test_get_current_user_success(mocker):
+def test_get_current_user_success(mocker):
     """Test get_current_user success."""
     mock_db = mocker.MagicMock()
     mock_validate = mocker.patch("auth.common.validate_jwt_token")
@@ -215,12 +210,11 @@ async def test_get_current_user_success(mocker):
     mock_user = mocker.MagicMock()
     mock_get_user.return_value = mock_user
 
-    user = await get_current_user("cookie", None, mock_db)
+    user = get_current_user("cookie", None, mock_db)
     assert user == mock_user
 
 
-@pytest.mark.asyncio
-async def test_get_current_user_not_found(mocker):
+def test_get_current_user_not_found(mocker):
     """Test get_current_user when user is not found."""
     mock_db = mocker.MagicMock()
     mock_validate = mocker.patch("auth.common.validate_jwt_token")
@@ -230,26 +224,24 @@ async def test_get_current_user_not_found(mocker):
     mock_get_user.return_value = None
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user("cookie", None, mock_db)
+        get_current_user("cookie", None, mock_db)
     assert "No such user" in exc_info.value.detail
 
 
-@pytest.mark.asyncio
-async def test_get_current_active_user_active(mocker):
+def test_get_current_active_user_active(mocker):
     """Test get_current_active_user with active user."""
     mock_user = mocker.MagicMock()
     mock_user.is_active = True
-    user = await get_current_active_user(mock_user)
+    user = get_current_active_user(mock_user)
     assert user == mock_user
 
 
-@pytest.mark.asyncio
-async def test_get_current_active_user_inactive(mocker):
+def test_get_current_active_user_inactive(mocker):
     """Test get_current_active_user with inactive user."""
     mock_user = mocker.MagicMock()
     mock_user.is_active = False
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_active_user(mock_user)
+        get_current_active_user(mock_user)
     assert exc_info.value.status_code == 400
     assert "Inactive user" in exc_info.value.detail
 
@@ -272,16 +264,14 @@ def test_authenticated_as_admin_false(mocker):
     assert "User is not an admin" in exc_info.value.detail
 
 
-@pytest.mark.asyncio
-async def test_refresh_no_token():
+def test_refresh_no_token():
     """Test refresh with no token."""
     with pytest.raises(HTTPException) as exc_info:
-        await refresh(None, None, None)
+        refresh(None, None, None)
     assert "Token is missing" in exc_info.value.detail
 
 
-@pytest.mark.asyncio
-async def test_refresh_cookie(mocker):
+def test_refresh_cookie(mocker):
     """Test refresh with cookie token."""
     mocker.patch(
         "auth.common.config",
@@ -297,15 +287,14 @@ async def test_refresh_cookie(mocker):
     mock_generate = mocker.patch("auth.common.generate_csrf_token")
     mock_generate.return_value = "new_csrf_token"
 
-    response = await refresh("cookie_token", None, mock_db)
+    response = refresh("cookie_token", None, mock_db)
     assert response.status_code == 200
     data = json.loads(response.body)
     assert data["new_access_token"] == "new_access_token"
     assert data["new_csrf_token"] == "new_csrf_token"
 
 
-@pytest.mark.asyncio
-async def test_refresh_header(mocker):
+def test_refresh_header(mocker):
     """Test refresh with header token."""
     mocker.patch(
         "auth.common.config",
@@ -321,26 +310,24 @@ async def test_refresh_header(mocker):
     mock_generate = mocker.patch("auth.common.generate_csrf_token")
     mock_generate.return_value = "new_csrf_token"
 
-    response = await refresh(None, "header_token", mock_db)
+    response = refresh(None, "header_token", mock_db)
     assert response.status_code == 200
     data = json.loads(response.body)
     assert data["new_access_token"] == "new_access_token"
     assert data["new_csrf_token"] == "new_csrf_token"
 
 
-@pytest.mark.asyncio
-async def test_csrf(mocker):
+def test_csrf(mocker):
     """Test csrf endpoint."""
     mock_user = mocker.MagicMock()
-    token = await csrf("cookie_token", mock_user)
+    token = csrf("cookie_token", mock_user)
     assert token == "cookie_token"
 
 
-@pytest.mark.asyncio
-async def test_logout(mocker):
+def test_logout(mocker):
     """Test logout endpoint."""
     mock_response = mocker.MagicMock()
-    result = await logout(mock_response)
+    result = logout(mock_response)
     assert result == {"message": "Logged out"}
     mock_response.delete_cookie.assert_any_call(key="refresh_token")
     mock_response.delete_cookie.assert_any_call(key="access_token")

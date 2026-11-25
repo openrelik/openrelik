@@ -651,7 +651,9 @@ async def test_upload_files_complete(
 
     # Mock Redis
     mock_redis = mocker.patch("api.v1.files.redis_client")
+    mock_redis.get.return_value = None
     mock_redis.smembers.return_value = {b"1", b"2", b"3"}
+    mock_redis.delete.return_value = 1
 
     resumable_identifier = "12345"
     resumable_filename = "test_file.txt"
@@ -684,6 +686,21 @@ async def test_upload_files_complete(
     assert response.status_code == 201
     assert mock_create_file_in_db.called
     assert mock_background_tasks_add_task.called
+    mock_redis.sadd.assert_called_once_with(
+        f"uploaded_chunks:{resumable_identifier}", chunk_number
+    )
+
+    # Verify temporary chunks were removed and the assembled file has exact bytes.
+    remaining_files = os.listdir(expected_folder_path)
+    assert len(remaining_files) == 1
+    assert remaining_files[0].endswith(".txt")
+    for i in range(1, total_chunks + 1):
+        assert not os.path.exists(
+            os.path.join(expected_folder_path, f"{resumable_identifier}.{i}")
+        )
+    assembled_path = os.path.join(expected_folder_path, remaining_files[0])
+    with open(assembled_path, "rb") as fh:
+        assert fh.read() == b"content of chunk 1content of chunk 2last chunk content"
 
 
 def test_generate_file_summary_no_llm(fastapi_test_client, mocker, file_db_model):
@@ -841,3 +858,172 @@ async def test_upload_files_rejects_unsafe_identifier(
     assert response.status_code in (400, 422)
     assert mock_redis.method_calls == []
     assert list(tmp_path.rglob("*")) == [folder_path]
+
+
+@pytest.mark.asyncio
+async def test_upload_files_write_failure_returns_503_and_increments_retries(
+    fastapi_async_test_client, mocker, tmp_path
+):
+    """A chunk write error increments the retry counter and returns 503."""
+    missing_folder = tmp_path / "does_not_exist"
+    mocker.patch(
+        "api.v1.files.get_folder_from_db",
+        return_value=SimpleNamespace(path=str(missing_folder)),
+    )
+    mock_redis = mocker.patch("api.v1.files.redis_client")
+    mock_redis.get.return_value = None
+
+    response = await fastapi_async_test_client.post(
+        "/files/upload",
+        files={"file": ("evidence.bin", b"chunk-bytes")},
+        params={
+            "resumableChunkNumber": 1,
+            "resumableTotalChunks": 2,
+            "resumableIdentifier": "retry503",
+            "resumableFilename": "evidence.bin",
+            "folder_id": 1,
+        },
+    )
+
+    assert response.status_code == 503
+    mock_redis.incr.assert_called_once_with("upload_retries:retry503:1", 1)
+    mock_redis.sadd.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_upload_files_retry_limit_returns_429_and_cleans_up(
+    fastapi_async_test_client, mocker, tmp_path
+):
+    """Exceeding MAX_CHUNK_RETRIES deletes chunk files and Redis keys and returns 429."""
+    folder_path = tmp_path / "folder"
+    folder_path.mkdir()
+    (folder_path / "retry429.1").write_bytes(b"part1")
+    (folder_path / "retry429.2").write_bytes(b"part2")
+
+    mocker.patch(
+        "api.v1.files.get_folder_from_db",
+        return_value=SimpleNamespace(path=str(folder_path)),
+    )
+    mock_redis = mocker.patch("api.v1.files.redis_client")
+    mock_redis.get.return_value = b"5"
+
+    response = await fastapi_async_test_client.post(
+        "/files/upload",
+        files={"file": ("evidence.bin", b"part2")},
+        params={
+            "resumableChunkNumber": 2,
+            "resumableTotalChunks": 2,
+            "resumableIdentifier": "retry429",
+            "resumableFilename": "evidence.bin",
+            "folder_id": 1,
+        },
+    )
+
+    assert response.status_code == 429
+    assert list(folder_path.iterdir()) == []
+    mock_redis.delete.assert_any_call("uploaded_chunks:retry429")
+    mock_redis.delete.assert_any_call("upload_retries:retry429:2")
+
+
+@pytest.mark.asyncio
+async def test_upload_files_concurrent_final_chunks_reassemble_once(
+    fastapi_async_test_client, mocker, tmp_path, file_response
+):
+    """Parallel final chunks write completely before sadd and reassemble exactly once."""
+    import asyncio
+    import threading
+
+    folder_path = tmp_path / "folder"
+    folder_path.mkdir()
+    mocker.patch(
+        "api.v1.files.get_folder_from_db",
+        return_value=SimpleNamespace(path=str(folder_path)),
+    )
+    mock_create_file = mocker.patch(
+        "api.v1.files.create_file_in_db", return_value=file_response
+    )
+    mocker.patch("api.v1.files.BackgroundTasks.add_task")
+
+    # Synchronize both threads right after sadd so both observe all chunks present and
+    # deterministically race on atomic redis_client.delete().
+    both_uploaded = threading.Barrier(2, timeout=2.0)
+
+    class FakeRedis:
+        def __init__(self):
+            self._lock = threading.Lock()
+            self._sets: dict[str, set[str]] = {}
+            self._kv: dict[str, int] = {}
+            self.sadd_calls = 0
+
+        def get(self, key):
+            with self._lock:
+                val = self._kv.get(key)
+                return str(val).encode() if val is not None else None
+
+        def sadd(self, key, value):
+            with self._lock:
+                self.sadd_calls += 1
+                self._sets.setdefault(key, set()).add(str(value))
+            both_uploaded.wait()
+            return 1
+
+        def smembers(self, key):
+            with self._lock:
+                return set(self._sets.get(key, set()))
+
+        def delete(self, key):
+            with self._lock:
+                removed = 0
+                if key in self._sets:
+                    del self._sets[key]
+                    removed = 1
+                if key in self._kv:
+                    del self._kv[key]
+                    removed = 1
+                return removed
+
+        def incr(self, key, amount=1):
+            with self._lock:
+                self._kv[key] = self._kv.get(key, 0) + amount
+                return self._kv[key]
+
+    fake_redis = FakeRedis()
+    mocker.patch("api.v1.files.redis_client", fake_redis)
+
+    # Chunk 1 exceeds the 4MB read buffer to exercise multi-iteration writes before sadd.
+    chunk1_bytes = b"A" * (4_096_000 + 512)
+    chunk2_bytes = b"B" * 2048
+
+    resp1, resp2 = await asyncio.gather(
+        fastapi_async_test_client.post(
+            "/files/upload",
+            files={"file": ("disk.bin", chunk1_bytes)},
+            params={
+                "resumableChunkNumber": 1,
+                "resumableTotalChunks": 2,
+                "resumableIdentifier": "concurrent123",
+                "resumableFilename": "disk.bin",
+                "folder_id": 1,
+            },
+        ),
+        fastapi_async_test_client.post(
+            "/files/upload",
+            files={"file": ("disk.bin", chunk2_bytes)},
+            params={
+                "resumableChunkNumber": 2,
+                "resumableTotalChunks": 2,
+                "resumableIdentifier": "concurrent123",
+                "resumableFilename": "disk.bin",
+                "folder_id": 1,
+            },
+        ),
+    )
+
+    assert resp1.status_code == 201
+    assert resp2.status_code == 201
+    assert fake_redis.sadd_calls == 2
+    assert mock_create_file.call_count == 1
+    output_files = list(folder_path.iterdir())
+    assert len(output_files) == 1
+    assert output_files[0].suffix == ".bin"
+    assert output_files[0].read_bytes() == chunk1_bytes + chunk2_bytes

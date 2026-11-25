@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
-import functools
 import json
 from typing import List
 
@@ -101,7 +99,7 @@ router_root = APIRouter()
 # /folders/{folder_id}/workflows
 @router.post("/")
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def create_workflow(
+def create_workflow(
     folder_id: int,
     request_body: schemas.WorkflowCreateRequest,
     db: Session = Depends(get_db_connection),
@@ -179,7 +177,7 @@ def get_workflows(
 # /folders/{folder_id}/workflows/{workflow_id}
 @router.get("/{workflow_id}")
 @require_access(allowed_roles=[Role.VIEWER, Role.EDITOR, Role.OWNER])
-async def get_workflow(
+def get_workflow(
     folder_id: int,
     workflow_id: int,
     db: Session = Depends(get_db_connection),
@@ -213,7 +211,7 @@ async def get_workflow(
 # /folders/{folder_id}/workflows/{workflow_id}
 @router.patch("/{workflow_id}")
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def update_workflow(
+def update_workflow(
     folder_id: int,
     workflow_id: int,
     workflow_from_request: schemas.Workflow,
@@ -261,7 +259,7 @@ async def update_workflow(
 # /folders/{folder_id}/workflows/{workflow_id}/copy
 @router.post("/{workflow_id}/copy/")
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def copy_workflow(
+def copy_workflow(
     folder_id: int,
     workflow_id: int,
     db: Session = Depends(get_db_connection),
@@ -326,7 +324,7 @@ async def copy_workflow(
 # /folders/{folder_id}/workflows/{workflow_id}
 @router.delete("/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT)
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def delete_workflow(
+def delete_workflow(
     folder_id: int,
     workflow_id: int,
     db: Session = Depends(get_db_connection),
@@ -348,7 +346,7 @@ async def delete_workflow(
 # /folders/{folder_id}/workflows/{workflow_id}/run
 @router.post("/{workflow_id}/run/")
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def run_workflow(
+def run_workflow(
     folder_id: int,
     workflow_id: int,
     request_body: schemas.WorkflowRunRequest,
@@ -384,7 +382,7 @@ async def run_workflow(
 # /folders/{folder_id}/workflows/{workflow_id}/status
 @router.get("/{workflow_id}/status")
 @require_access(allowed_roles=[Role.VIEWER, Role.EDITOR, Role.OWNER])
-async def get_workflow_status(
+def get_workflow_status(
     folder_id: int,
     workflow_id: int,
     db: Session = Depends(get_db_connection),
@@ -427,7 +425,7 @@ async def get_workflow_status(
 # Get all workflow templates
 # /workflows/templates
 @router_root.get("/templates/")
-async def get_workflow_templates(
+def get_workflow_templates(
     db: Session = Depends(get_db_connection),
 ) -> List[schemas.WorkflowTemplateResponse]:
     """Get all workflow templates.
@@ -444,7 +442,7 @@ async def get_workflow_templates(
 # Get workflow template by id
 # /workflows/templates/id
 @router_root.get("/templates/{template_id}")
-async def get_workflow_template_by_id(
+def get_workflow_template_by_id(
     template_id: int,
     db: Session = Depends(get_db_connection),
 ) -> schemas.WorkflowTemplateResponse:
@@ -463,7 +461,7 @@ async def get_workflow_template_by_id(
 # Create workflow template
 # /workflows/templates
 @router_root.post("/templates/")
-async def create_workflow_template(
+def create_workflow_template(
     request_body: schemas.WorkflowTemplateCreateRequest,
     db: Session = Depends(get_db_connection),
     current_user: schemas.User = Depends(get_current_active_user),
@@ -529,7 +527,7 @@ def _check_can_delete_workflow_template(
 # Update workflow template
 # /workflows/templates/{template_id}
 @router_root.patch("/templates/{template_id}")
-async def update_workflow_template(
+def update_workflow_template(
     template_id: int,
     request_body: schemas.WorkflowTemplateUpdateRequest,
     db: Session = Depends(get_db_connection),
@@ -572,7 +570,7 @@ async def update_workflow_template(
 # Delete workflow template
 # /workflows/templates/{template_id}
 @router_root.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_workflow_template(
+def delete_workflow_template(
     template_id: int,
     db: Session = Depends(get_db_connection),
     current_user: schemas.User = Depends(get_current_active_user),
@@ -594,7 +592,7 @@ async def delete_workflow_template(
 # /folders/{folder_id}/workflows/{workflow_id}
 @router.get("/{workflow_id}/generate_name/")
 @require_access(allowed_roles=[Role.EDITOR, Role.OWNER])
-async def generate_workflow_name(
+def generate_workflow_name(
     folder_id: int,
     workflow_id: int,
     db: Session = Depends(get_db_connection),
@@ -667,10 +665,7 @@ async def generate_workflow_name(
         )
     provider = manager.LLMManager().get_provider(active_llm["name"])
     llm = provider(model_name=active_llm["config"]["model"])
-    loop = asyncio.get_running_loop()
-    generated_name = await loop.run_in_executor(
-        None, functools.partial(llm.generate, prompt=prompt)
-    )
+    generated_name = llm.generate(prompt=prompt)
     # Limit the generated name to a maximum number of MAX_WORDS
     generated_name = " ".join(generated_name.split()[:MAX_WORDS])
     return {"generated_name": generated_name.strip()}
@@ -679,7 +674,7 @@ async def generate_workflow_name(
 # Get workflow
 # /workflows/{workflow_id}
 @router_root.get("/{workflow_id}")
-async def get_workflow(
+def get_workflow(
     workflow_id: int,
     db: Session = Depends(get_db_connection),
     current_user: schemas.User = Depends(get_current_active_user),
@@ -709,7 +704,7 @@ async def get_workflow(
 # Generate workflow report
 # /workflows/{workflow_id}/report
 @router_root.get("/{workflow_id}/report/")
-async def generate_workflow_report(
+def generate_workflow_report(
     workflow_id: int,
     db: Session = Depends(get_db_connection),
     current_user: schemas.User = Depends(get_current_active_user),

@@ -166,7 +166,7 @@ def validate_jwt_token(
     return payload
 
 
-async def verify_csrf(
+def verify_csrf(
     request: Request,
     access_token_from_cookie: str | None = Depends(access_token_cookie),
     access_token_from_header: str | None = Depends(access_token_header),
@@ -218,7 +218,7 @@ async def verify_csrf(
     yield
 
 
-async def get_current_user(
+def get_current_user(
     access_token_from_cookie: str | None = Depends(access_token_cookie),
     access_token_from_header: str | None = Depends(access_token_header),
     db: Session = Depends(get_db_connection),
@@ -266,7 +266,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(
+def get_current_active_user(
     current_user: schemas.User = Depends(get_current_user),
 ) -> schemas.User:
     """Retrieves the currently logged-in active user from the request.
@@ -305,7 +305,7 @@ def authenticated_as_admin(
 
 
 @router.get("/auth/refresh")
-async def refresh(
+def refresh(
     refresh_token_from_cookie: str | None = Depends(refresh_token_cookie),
     refresh_token_from_header: str | None = Depends(refresh_token_header),
     db: Session = Depends(get_db_connection),
@@ -369,7 +369,7 @@ async def refresh(
 
 
 @router.get("/auth/csrf")
-async def csrf(
+def csrf(
     csrf_token_from_cookie: str | None = Depends(csrf_token_cookie),
     current_user: schemas.User = Depends(get_current_active_user),
 ) -> str | None:
@@ -387,7 +387,7 @@ async def csrf(
 
 
 @router.delete("/auth/logout")
-async def logout(response: Response):
+def logout(response: Response):
     """Logs out the currently logged-in user by deleting the access token cookie.
 
     Args:
