@@ -18,8 +18,8 @@ limitations under the License.
  * Authentication Endpoints
  */
 
-import { clearCsrfToken, httpClient } from '../client'
-import type { User } from '../types'
+import { clearCsrfToken, httpClient } from '@/api/client'
+import type { User } from '@/api/types'
 
 export const authApi = {
   /**

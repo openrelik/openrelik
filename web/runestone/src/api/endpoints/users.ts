@@ -21,7 +21,7 @@ limitations under the License.
  * once, when it is created; afterwards only its name and expiry can be read.
  */
 
-import { httpClient, type RequestOptions } from '../client'
+import { httpClient, type RequestOptions } from '@/api/client'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 

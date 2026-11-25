@@ -21,13 +21,13 @@ limitations under the License.
  * through that folder, which is also what the server checks access on.
  */
 
-import { httpClient, type RequestOptions } from '../client'
+import { httpClient, type RequestOptions } from '@/api/client'
 import type {
   ActiveWorkflowSummary,
   WorkflowRecord,
   WorkflowSpec,
   WorkflowTemplateRecord,
-} from '../types'
+} from '@/api/types'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 
