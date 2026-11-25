@@ -37,6 +37,7 @@ import { useWorkflowsStore } from '@/stores/workflows'
 import type { FileReport, Task } from '@/types/workflow'
 import { count, formatDuration, formatSize } from '@/utils/format'
 import { isEmptyFile } from '@/utils/item'
+import { PRIORITY_TEXT_TONE, priorityLevel } from '@/utils/report'
 
 /**
  * One task: what it does, how it went, what it found, what it ran on and
@@ -138,11 +139,15 @@ const shownOutputs = computed(() =>
     : outputs.value,
 )
 const outputRows = computed(() =>
-  shownOutputs.value.map((file) => ({
-    file,
-    report: reportsByFile.value.get(file.id),
-    empty: isEmptyFile(file),
-  })),
+  shownOutputs.value.map((file) => {
+    const report = reportsByFile.value.get(file.id)
+    return {
+      file,
+      report,
+      priority: report ? priorityLevel(report.priority) : null,
+      empty: isEmptyFile(file),
+    }
+  }),
 )
 /** There is more to read than the summary shows. */
 const hasReport = computed(() => !!props.task.report || props.task.fileReports.length > 0)
@@ -270,7 +275,13 @@ function remove() {
             >
               <File :size="12" :stroke-width="1.5" class="shrink-0 text-ink-muted" />
               <span class="truncate">{{ row.file.name }}</span>
-              <PriorityBadge v-if="row.report" :priority="row.report.priority" class="ml-auto" />
+              <span
+                v-if="row.report && row.priority"
+                class="ml-auto shrink-0 text-[0.6875rem] font-medium"
+                :class="PRIORITY_TEXT_TONE[row.priority]"
+                v-tooltip="`Priority ${row.report.priority} of 100`"
+                >{{ row.priority }}</span
+              >
               <span
                 class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
                 :class="{ 'ml-auto': !row.report }"

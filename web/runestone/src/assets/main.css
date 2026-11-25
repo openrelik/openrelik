@@ -384,8 +384,9 @@ limitations under the License.
     @apply flex flex-col gap-1;
   }
 
-  /* Every piece of state in this system: a bordered rectangle on its own tint.
-     Pair with a tone — .badge.bg-success-tint.text-success.border-success/40. */
+  /* Standalone callout tag: a bordered rectangle on its own tint (report priority
+     headers, path bar case ID). Use plain text or icons in table and list rows.
+     Pair with a tone — .badge.bg-warning-tint.text-warning.border-warning/40. */
   .badge {
     @apply inline-flex items-center gap-1.5 border font-medium;
     border-radius: var(--radius-check);

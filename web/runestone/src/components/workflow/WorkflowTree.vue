@@ -18,14 +18,14 @@ import { File, ListPlus, Merge, Plus, X } from '@/components/icons'
 import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import TaskStatusBadge from '@/components/workflow/TaskStatusBadge.vue'
+import TaskStatusIcon from '@/components/workflow/TaskStatusIcon.vue'
 import { useItemsStore } from '@/stores/items'
 import { isEmptyFile } from '@/utils/item'
 import { missingOptions, workerShortName } from '@/utils/worker'
 import { anchorOf, type Anchor } from '@/composables/useRun'
 import type { AddAt } from '@/composables/useWorkflow'
-import { canJoin, canJoinAll, unchainable } from '@/utils/workflow'
-import type { Task, TaskGroup, Workflow } from '@/types/workflow'
+import { canJoin, canJoinAll, STATUS_LABEL, unchainable } from '@/utils/workflow'
+import type { Task, TaskGroup, TaskStatus, Workflow } from '@/types/workflow'
 import { count, formatDuration, formatSize } from '@/utils/format'
 import { revealIn } from '@/utils/scroll'
 
@@ -196,6 +196,15 @@ const ADD_AFTER =
 /** Like the +, but also kept in sight while its row is selected. */
 const REMOVE =
   'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-danger/60 bg-surface text-danger hover:bg-danger-tint focus-visible:opacity-100'
+
+/** Only running and failed tasks take hue in the status column; the rest stay quiet. */
+const STATUS_TONE: Record<TaskStatus, string> = {
+  success: 'text-ink-secondary',
+  running: 'text-warning',
+  pending: 'text-ink-muted',
+  failed: 'text-danger',
+  skipped: 'text-ink-muted',
+}
 
 /** Inputs come from the folder the workflow was made in; sizes are known once it is loaded. */
 const inputFolder = computed(() => itemsStore.findFolder(props.workflow.folderId)?.parent ?? null)
@@ -422,7 +431,14 @@ const inputs = computed(() =>
               <span v-if="workflow.draft && row.missing.length" class="block truncate text-warning"
                 >needs {{ row.missing.join(', ') }}</span
               >
-              <TaskStatusBadge v-else-if="!workflow.draft" :status="row.task.status" />
+              <span
+                v-else-if="!workflow.draft"
+                class="inline-flex max-w-full items-center gap-1.5"
+                :class="STATUS_TONE[row.task.status]"
+              >
+                <TaskStatusIcon :status="row.task.status" />
+                <span class="truncate">{{ STATUS_LABEL[row.task.status] }}</span>
+              </span>
             </td>
             <td class="tabular px-2 text-right whitespace-nowrap text-ink-secondary">
               {{ row.task.duration === undefined ? '–' : formatDuration(row.task.duration) }}

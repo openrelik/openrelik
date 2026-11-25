@@ -395,9 +395,9 @@ Used for code previews, raw terminal outputs, log displays, or secondary groupin
 }
 ```
 
-### 4. `.badge` (State Pill-Box)
+### 4. `.badge` (Standalone Callout Tag)
 
-Compact status tag representing an entity's operational state:
+Compact bordered tag reserved for standalone callouts that sit beside prose or need a clear boundary from surrounding chrome:
 
 ```css
 .badge {
@@ -414,13 +414,15 @@ Compact status tag representing an entity's operational state:
 }
 ```
 
+_When to use text or icons instead:_ Do **not** use `.badge` in table columns, dense lists, or toolbars. Repeating bordered chips down a column adds box clutter and drowns out abnormal states. Prefer a status icon with plain text (`WorkflowTree`, coloring only states that need attention such as `running` and `failed`), an icon alone (`FolderTable`, `WorkflowGraph`), or plain text (`TaskInspector` output rows, `WorkflowSummary`, `UploadQueuePanel`, `ShareDialog`, `AccountDialog`, `PromptResults`). Reserve `.badge` for standalone callouts such as report priority headers (`PriorityBadge` in `TaskInspector` report summaries and `TaskReportDialog`) and the copyable case identifier in `PathBar`.
+
 _Rule: Always combine `.badge` with a corresponding semantic tint and border:_
 
 ```html
-<span class="badge border border-brand/40 bg-brand-tint text-brand">queued</span>
+<span class="badge border border-warning/40 bg-warning-tint text-warning">high</span>
 ```
 
-_Exception — identifiers:_ a badge holding an id rather than a state (a case reference in the path bar) is neutral, `border-border-strong bg-sunken text-ink-secondary`, because hue means status and an id is not one.
+_Exception — identifiers and neutral severity levels:_ a badge holding an id rather than a state (a case reference in the path bar) or a low-attention report level (`medium`, `low`, `info`) is neutral (`border-border-strong bg-sunken text-ink-secondary` or `border-border bg-sunken text-ink-muted`), because hue is rationed for what needs attention.
 
 ---
 
@@ -497,7 +499,7 @@ Data tables are the core workhorse of the technical console.
 3. **Alignment Discipline**:
    - String names, descriptors, and folder `Modified (UTC)` timestamps (`.tabular`): **Left-aligned**.
    - Byte `size` (folder listing) and `TableViewer` row-number/numeric/date columns: **Right-aligned** with `.tabular`.
-   - Action buttons and status badges: **Right-aligned** or centered in fixed-width columns.
+   - Action buttons: **Right-aligned** or centered in fixed-width columns. Status columns use an icon and plain text rather than `.badge`.
 4. **Visual Row States**:
    - **Active Cursor**: Indicated with a left inset brand border: `shadow-[inset_2px_0_0_var(--color-brand)]` with `bg-sunken` when unselected or `bg-brand-selected` when selected in `FolderTable`; `TableViewer` uses `bg-brand-selected` for cursor rows and `bg-warning-tint` for marked rows.
    - **Selected Rows**: Highlighted with `bg-brand-selected` and checked checkbox (plus `bg-brand-tint/50` and `opacity-40` for lineage-traced dimming in `FolderTable`).
