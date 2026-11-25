@@ -517,9 +517,9 @@ All modal dialogs and the command prompt compose `src/components/base/ModalSheet
 
 - **Teleported & Centered**: `<ModalSheet>` renders via `<Teleport to="body">` on `z-(--z-modal)` with a `bg-scrim` backdrop (no `backdrop-blur`, never `bg-ink/20`), `role="dialog"` (`role="alertdialog"` on `ConfirmDialog`), `aria-modal="true"`, `text-body` (`13px`) prose typography, and a `120ms` enter fade (unmounting synchronously on close so dialogs never flash empty frames or delay focus restoration). (`UploadQueuePanel` is modeless at bottom-right `z-(--z-overlay)` with `aria-modal="false"` and no backdrop.)
 - **Positioning & Width Tiers**: Anchored at one optical top offset (`top-[10vh]`) across named width tiers (`sm` `26rem`, `md` `32rem`, `lg` `40rem`, `xl` `48rem`, `2xl` `52rem`, clamped by `calc(100vw-2rem)`) with `--shadow-float`.
-- **Anchored Popovers (`PopoverSurface.vue`)**: Menus and anchored popovers (`ItemMenu`, `CaseRefPopover`, `LinkMenu`, `PathBar` dropdowns, `ShareDialog` pickers, popover `RunDialog`) use `<PopoverSurface>` (`border-border-strong`, `--shadow-popover`, `z-(--z-popover)`) so they sit on a distinct elevation tier from top-level modals.
+- **Anchored Popovers (`PopoverSurface.vue`)**: Menus and anchored popovers (`ItemMenu`, `CaseRefPopover`, `LinkMenu`, `PathBar` dropdowns, `ShareDialog` pickers) use `<PopoverSurface>` (`border-border-strong`, `--shadow-popover`, `z-(--z-popover)`) so they sit on a distinct elevation tier from top-level modals. `RunDialog`'s anchored `+` mode passes `:anchor-style` to `<ModalSheet>`, which switches it onto the same popover border, shadow, and `z-(--z-popover)` tier without a scrim.
 - **Focus Management**: Automatically traps focus (`v-trap-focus`) and places cursor into the primary input on mount (`v-autofocus`).
-- **Dismissal**: Clicking the scrim (`@pointerdown`) dismisses unless `:dismissible="false"` (e.g. `AccountDialog` while a one-time API key is displayed). Pressing `Escape` pops the modal from `useModalStore`.
+- **Dismissal**: Clicking the scrim (`@pointerdown`) always emits `close`, letting the caller decide whether to close or warn (e.g. `AccountDialog` shows a warning while a one-time API key is displayed). Pressing `Escape` pops the modal from `useModalStore`.
 
 ### 2. Singleton Tooltip Coordinator
 

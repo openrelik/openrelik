@@ -21,19 +21,12 @@ limitations under the License.
  * and `--shadow-popover` (lighter than modal `--shadow-float`) so anchored
  * popovers read on a distinct elevation tier from top-level modals.
  */
-withDefaults(
-  defineProps<{
-    as?: 'div' | 'section' | 'ul' | 'menu'
-  }>(),
-  { as: 'div' },
-)
 </script>
 
 <template>
-  <component
-    :is="as"
+  <div
     class="rounded-(--radius-sheet) border border-border-strong bg-surface shadow-(--shadow-popover)"
   >
     <slot />
-  </component>
+  </div>
 </template>

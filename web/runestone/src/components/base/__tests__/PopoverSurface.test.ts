@@ -21,19 +21,13 @@ import { describe, expect, it } from 'vitest'
 import PopoverSurface from '@/components/base/PopoverSurface.vue'
 
 describe('PopoverSurface', () => {
-  it('renders standardized popover border and elevation classes with configurable tag', () => {
-    const divWrapper = mount(PopoverSurface, {
+  it('renders standardized popover border and elevation classes', () => {
+    const wrapper = mount(PopoverSurface, {
       slots: { default: 'Menu body' },
     })
-    expect(divWrapper.element.tagName).toBe('DIV')
-    expect(divWrapper.classes()).toContain('border-border-strong')
-    expect(divWrapper.classes()).toContain('shadow-(--shadow-popover)')
-    expect(divWrapper.text()).toBe('Menu body')
-
-    const ulWrapper = mount(PopoverSurface, {
-      props: { as: 'ul' },
-      slots: { default: '<li>One</li>' },
-    })
-    expect(ulWrapper.element.tagName).toBe('UL')
+    expect(wrapper.element.tagName).toBe('DIV')
+    expect(wrapper.classes()).toContain('border-border-strong')
+    expect(wrapper.classes()).toContain('shadow-(--shadow-popover)')
+    expect(wrapper.text()).toBe('Menu body')
   })
 })

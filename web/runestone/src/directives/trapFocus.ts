@@ -51,14 +51,25 @@ export const vTrapFocus: Directive<TrapFocusElement> = {
 
       const first = focusable[0]!
       const last = focusable[focusable.length - 1]!
+      const active = document.activeElement
+      const outside = !active || !el.contains(active)
 
       if (e.shiftKey) {
-        if (document.activeElement === first || !el.contains(document.activeElement)) {
+        const beforeOrAtFirst =
+          outside ||
+          active === first ||
+          Boolean(first.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_PRECEDING)
+        if (beforeOrAtFirst) {
           last.focus()
           e.preventDefault()
         }
       } else {
-        if (document.activeElement === last || !el.contains(document.activeElement)) {
+        const afterOrAtLast =
+          outside ||
+          active === last ||
+          (active !== el &&
+            Boolean(last.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_FOLLOWING))
+        if (afterOrAtLast) {
           first.focus()
           e.preventDefault()
         }
