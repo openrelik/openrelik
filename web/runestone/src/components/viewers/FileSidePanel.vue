@@ -52,7 +52,7 @@ const panel = usePanelWidth('openrelik.file.sidePanelWidth', { initial: 416, min
 <template>
   <SlidePane :open="open" edge="right" class="shrink-0 max-xl:hidden">
     <aside
-      class="relative flex flex-col border-l border-border"
+      class="relative flex flex-col border-l border-border text-body"
       :style="{ width: `${panel.width.value}px` }"
       aria-label="Side panel"
     >

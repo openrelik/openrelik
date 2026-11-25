@@ -25,6 +25,7 @@ import CaseRefPopover from '@/components/folders/CaseRefPopover.vue'
 import ItemMenu from '@/components/folders/ItemMenu.vue'
 import PanelResizeHandle from '@/components/base/PanelResizeHandle.vue'
 import LoadState from '@/components/base/LoadState.vue'
+import SlidePane from '@/components/base/SlidePane.vue'
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowPanel from '@/components/workflow/WorkflowPanel.vue'
 import { useRowSelection } from '@/composables/useRowSelection'
@@ -839,7 +840,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
   <section
     v-else
-    class="explorer flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-[0.75rem]"
+    class="explorer flex h-full min-h-[28rem] flex-col overflow-hidden bg-surface text-dense"
   >
     <!-- toolbar -->
     <FolderToolbar
@@ -947,21 +948,23 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       </div>
 
       <!-- the task picked in the workflow chart: one width, dragged by its left edge -->
-      <div
-        v-if="task && workflow"
-        class="relative flex shrink-0 flex-col border-l border-border max-xl:hidden"
-        :style="{ width: `${inspectorPanel.width.value}px` }"
-      >
-        <PanelResizeHandle :panel="inspectorPanel" label="Resize the task panel" />
-        <TaskInspector
-          :task="task"
-          :folder-id="workflow.folderId"
-          :editable="workflowEditable"
-          class="min-h-0 flex-1"
-          @close="taskId = null"
-          @add="openAdd"
-        />
-      </div>
+      <SlidePane v-if="workflow" :open="Boolean(task)" edge="right" class="shrink-0 max-xl:hidden">
+        <div
+          class="relative flex min-h-0 flex-col border-l border-border"
+          :style="{ width: `${inspectorPanel.width.value}px` }"
+        >
+          <PanelResizeHandle :panel="inspectorPanel" label="Resize the task panel" />
+          <TaskInspector
+            v-if="task"
+            :task="task"
+            :folder-id="workflow.folderId"
+            :editable="workflowEditable"
+            class="min-h-0 flex-1"
+            @close="taskId = null"
+            @add="openAdd"
+          />
+        </div>
+      </SlidePane>
     </div>
 
     <ItemMenu

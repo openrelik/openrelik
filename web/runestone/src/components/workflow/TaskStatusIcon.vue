@@ -18,6 +18,7 @@ import type { Component } from 'vue'
 
 import { AlertCircle, Ban, Circle, CircleCheck } from '@/components/icons'
 import TaskRunningIcon from '@/components/workflow/TaskRunningIcon.vue'
+import { TASK_STATUS_TONE, type TaskStatusTone } from '@/utils/workflow'
 import type { TaskStatus } from '@/types/workflow'
 
 /**
@@ -30,20 +31,22 @@ import type { TaskStatus } from '@/types/workflow'
  */
 defineProps<{ status: TaskStatus }>()
 
-const ICON: Record<TaskStatus, { icon: Component; size: number; tone: string }> = {
-  success: {
-    icon: CircleCheck,
-    size: 13,
-    tone: '-mx-px text-success-icon [&_circle]:fill-current [&_path]:stroke-surface [&_path]:stroke-3',
-  },
-  running: { icon: TaskRunningIcon, size: 13, tone: '-mx-px text-warning-icon' },
-  pending: { icon: Circle, size: 11, tone: 'text-idle' },
-  failed: {
-    icon: AlertCircle,
-    size: 13,
-    tone: '-mx-px text-danger-icon [&_circle]:fill-current [&_line]:stroke-surface [&_line]:stroke-3',
-  },
-  skipped: { icon: Ban, size: 11, tone: 'text-ink-muted' },
+const TONE_CLASS: Record<TaskStatusTone, string> = {
+  success:
+    '-mx-px text-success-icon [&_circle]:fill-current [&_path]:stroke-surface [&_path]:stroke-3',
+  brand: '-mx-px text-brand-icon',
+  idle: 'text-idle',
+  danger:
+    '-mx-px text-danger-icon [&_circle]:fill-current [&_line]:stroke-surface [&_line]:stroke-3',
+  muted: 'text-ink-muted',
+}
+
+const ICON: Record<TaskStatus, { icon: Component; size: number }> = {
+  success: { icon: CircleCheck, size: 13 },
+  running: { icon: TaskRunningIcon, size: 13 },
+  pending: { icon: Circle, size: 11 },
+  failed: { icon: AlertCircle, size: 13 },
+  skipped: { icon: Ban, size: 11 },
 }
 </script>
 
@@ -53,6 +56,6 @@ const ICON: Record<TaskStatus, { icon: Component; size: number; tone: string }> 
     :size="ICON[status].size"
     :stroke-width="2"
     class="shrink-0"
-    :class="ICON[status].tone"
+    :class="TONE_CLASS[TASK_STATUS_TONE[status]]"
   />
 </template>

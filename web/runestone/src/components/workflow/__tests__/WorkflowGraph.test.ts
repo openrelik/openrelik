@@ -179,7 +179,11 @@ describe('WorkflowGraph', () => {
     expect(wrapper.find('[aria-label="waits for 2 lines"]').exists()).toBe(true)
 
     // SVG edges: 1 into boxed group + 2 out to join + 1 from join to afterJoin = 4 paths.
-    expect(wrapper.findAll('svg path[marker-end]')).toHaveLength(4)
+    const edgePaths = wrapper.findAll('svg path[marker-end]')
+    expect(edgePaths).toHaveLength(4)
+    expect(wrapper.findAll('svg defs marker')).toHaveLength(3)
+    expect(edgePaths.some((p) => p.attributes('marker-end')?.includes('-brand)'))).toBe(true)
+    expect(edgePaths.some((p) => p.attributes('marker-end')?.includes('-muted)'))).toBe(true)
 
     // Selecting a node emits select(task), clicking empty canvas clears selection.
     await wrapper.get('button[data-task="t1"]').trigger('click')
@@ -472,13 +476,15 @@ describe('WorkflowGraph', () => {
     })
     const graphs = wrapper.findAllComponents(WorkflowGraph)
     expect(graphs).toHaveLength(2)
-    const idA = graphs[0]!.get('marker').attributes('id')
-    const idB = graphs[1]!.get('marker').attributes('id')
-    expect(idA).toBeTruthy()
-    expect(idB).toBeTruthy()
-    expect(idA).not.toBe(idB)
-    expect(graphs[0]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${idA})`)
-    expect(graphs[1]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${idB})`)
+    const idsA = graphs[0]!.findAll('marker').map((m) => m.attributes('id'))
+    const idsB = graphs[1]!.findAll('marker').map((m) => m.attributes('id'))
+    expect(idsA).toHaveLength(3)
+    expect(idsB).toHaveLength(3)
+    expect(new Set([...idsA, ...idsB]).size).toBe(6)
+    const mutedA = graphs[0]!.get('marker[id$="-muted"]').attributes('id')
+    const mutedB = graphs[1]!.get('marker[id$="-muted"]').attributes('id')
+    expect(graphs[0]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${mutedA})`)
+    expect(graphs[1]!.get('path[marker-end]').attributes('marker-end')).toBe(`url(#${mutedB})`)
   })
 
   it('respects active modals on Escape, prunes stale picks, skips broken input links, and finds non-CSS producer ids', async () => {

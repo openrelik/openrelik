@@ -265,11 +265,15 @@ describe('WorkflowTree', () => {
     await wrapper.trigger('click')
     expect(wrapper.emitted('select')?.[1]).toEqual([null])
 
-    // Add after t1 (chainable) and beside t2 (endsGroup).
-    await wrapper.get('button[aria-label="Add worker after Strings"]').trigger('click')
+    // Add after t1 (chainable) and beside t2 (endsGroup). Selected row keeps add buttons visible.
+    const addAfterT1 = wrapper.get('button[aria-label="Add worker after Strings"]')
+    expect(addAfterT1.classes()).toContain('opacity-100')
+    await addAfterT1.trigger('click')
     expect(wrapper.emitted('add')?.[0]?.[0]).toEqual({ after: 't1' })
 
-    await wrapper.get('button[aria-label="Add worker beside YARA"]').trigger('click')
+    const addBesideT2 = wrapper.get('button[aria-label="Add worker beside YARA"]')
+    expect(addBesideT2.classes()).toContain('opacity-0')
+    await addBesideT2.trigger('click')
     expect(wrapper.emitted('add')?.[1]?.[0]).toEqual({ beside: 't2' })
 
     // Chord header tasks have no "Add worker after" button.

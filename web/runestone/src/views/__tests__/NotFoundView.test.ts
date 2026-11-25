@@ -79,8 +79,8 @@ describe('NotFoundView', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('404: Not Found')
-    expect(wrapper.get('h1').text()).toBe('Page Not Found')
+    expect(wrapper.text()).toContain('404: Not found')
+    expect(wrapper.get('h1').text()).toBe('Page not found')
     expect(wrapper.text()).toContain('The requested path /missing/evidence?tab=hex does not exist.')
     expect(wrapper.text()).toContain('404 not found')
 
@@ -92,7 +92,7 @@ describe('NotFoundView', () => {
     expect(router.currentRoute.value.fullPath).toBe('/')
   })
 
-  it('renders the Case Not Found state when navigated to an inaccessible or missing case route', async () => {
+  it('renders the Case not found state when navigated to an inaccessible or missing case route', async () => {
     const router = buildRouter()
     await router.push('/case/ir-2026/042')
     await router.isReady()
@@ -103,7 +103,7 @@ describe('NotFoundView', () => {
       },
     })
 
-    expect(wrapper.get('h1').text()).toBe('Case Not Found')
+    expect(wrapper.get('h1').text()).toBe('Case not found')
     expect(wrapper.text()).toContain('No folder for case ir-2026/042 that you have access to.')
 
     const toolbarHomeLink = wrapper.get('a[href="/"]')
@@ -125,7 +125,7 @@ describe('NotFoundView', () => {
       },
     })
 
-    expect(wrapper.get('h1').text()).toBe('Case Lookup Failed')
+    expect(wrapper.get('h1').text()).toBe('Case lookup failed')
     expect(wrapper.text()).toContain('Backend database unavailable')
     expect(wrapper.text()).toContain('lookup failed')
 

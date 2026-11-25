@@ -71,7 +71,28 @@ describe('LineChart', () => {
     expect(disconnectSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('renders a lone point as a circle and multi-point series as line and area paths', async () => {
+  it('renders area fill only for single-series charts, and stroke-only lines for multi-series charts', async () => {
+    const single = mount(LineChart, {
+      props: {
+        series: [
+          {
+            name: 'total',
+            data: [
+              [10_000, 4],
+              [30_000, 12],
+            ],
+          },
+        ],
+        start: 1_000,
+        end: 61_000,
+      },
+      global: { plugins: [directives] },
+    })
+    await nextTick()
+    // Single-series chart draws both the area fill and the stroke line.
+    expect(single.findAll('svg path')).toHaveLength(2)
+    single.unmount()
+
     const series: ChartSeries[] = [
       {
         name: 'plaso',
@@ -95,8 +116,8 @@ describe('LineChart', () => {
     await nextTick()
 
     expect(wrapper.find('p').exists()).toBe(false)
-    // plaso has 2 paths (area + stroke line); yara has 1 circle dot.
-    expect(wrapper.findAll('svg path')).toHaveLength(2)
+    // Multi-series chart omits area fill: plaso has 1 stroke line; yara has 1 circle dot.
+    expect(wrapper.findAll('svg path')).toHaveLength(1)
     expect(wrapper.findAll('svg circle')).toHaveLength(1)
 
     // Trigger ResizeObserver update and verify SVG width updates.
@@ -115,7 +136,7 @@ describe('LineChart', () => {
 
     await legendButtons[0]!.trigger('click')
     expect(legendButtons[0]!.attributes('aria-pressed')).toBe('true')
-    expect(wrapper.findAll('svg path')).toHaveLength(2)
+    expect(wrapper.findAll('svg path')).toHaveLength(1)
 
     wrapper.unmount()
   })

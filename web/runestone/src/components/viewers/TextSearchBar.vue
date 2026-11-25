@@ -77,13 +77,13 @@ function onKey(event: KeyboardEvent) {
         autocomplete="off"
         placeholder="Find"
         aria-label="Find in the file"
-        class="field h-6 w-52 pr-14 font-mono text-[0.75rem]"
+        class="field h-6 w-52 pr-14 font-mono text-dense"
         :class="{ 'border-danger': error }"
         v-tooltip="error ?? 'Find in the lines read'"
         @keydown="onKey"
       />
       <span
-        class="tabular pointer-events-none absolute right-1.5 text-[0.6875rem]"
+        class="tabular pointer-events-none absolute right-1.5 text-badge"
         :class="error ? 'text-danger' : 'text-ink-muted'"
         aria-live="polite"
         >{{ countLabel }}</span
@@ -98,7 +98,7 @@ function onKey(event: KeyboardEvent) {
         v-for="toggle in TOGGLES"
         :key="toggle.label"
         type="button"
-        class="h-4.5 cursor-pointer rounded-(--radius-check) px-1 text-[0.6875rem] transition-colors duration-120"
+        class="h-4.5 cursor-pointer rounded-(--radius-check) px-1 text-badge transition-colors duration-120"
         :class="
           toggle.model.value
             ? 'bg-brand-tint text-brand'

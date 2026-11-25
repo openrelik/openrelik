@@ -27,6 +27,20 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   skipped: 'won’t run',
 }
 
+/**
+ * Single semantic tone map for task statuses across Flowchart, Tree, Inspector,
+ * badges, and folder rows. `running` always uses `brand` (never amber vs blue).
+ */
+export type TaskStatusTone = 'success' | 'brand' | 'idle' | 'danger' | 'muted'
+
+export const TASK_STATUS_TONE: Record<TaskStatus, TaskStatusTone> = {
+  success: 'success',
+  running: 'brand',
+  pending: 'idle',
+  failed: 'danger',
+  skipped: 'muted',
+}
+
 /** Every task in these groups and after them, depth first. */
 export function allTasks(groups: TaskGroup[]): Task[] {
   const after = (task: Task): Task[] => [task, ...allTasks(task.groups)]

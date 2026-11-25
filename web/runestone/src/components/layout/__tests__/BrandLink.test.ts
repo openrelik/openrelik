@@ -40,7 +40,7 @@ describe('BrandLink', () => {
 
     const link = wrapper.get('a')
     expect(link.attributes('aria-label')).toBe('All folders')
-    expect(link.get('img').attributes('src')).toBe('/logo-light-round.png')
+    expect(link.find('svg').exists()).toBe(true)
 
     await link.trigger('click')
     await flushPromises()

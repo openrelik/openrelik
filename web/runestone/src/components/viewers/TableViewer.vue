@@ -418,7 +418,7 @@ const partialNotice = computed(() => {
       <div
         :class="
           fullscreen
-            ? 'fixed inset-0 z-40 flex bg-surface text-[0.75rem]'
+            ? 'fixed inset-0 z-40 flex bg-surface text-dense'
             : 'flex min-h-0 min-w-0 flex-1'
         "
         :role="fullscreen ? 'dialog' : undefined"
@@ -471,7 +471,7 @@ const partialNotice = computed(() => {
               autocomplete="off"
               placeholder="Filter rows"
               aria-label="Filter rows: text, or column:value"
-              class="field h-6 w-52 shrink-0 text-[0.75rem]"
+              class="field h-6 w-52 shrink-0 text-dense"
               :class="{ 'ml-auto': !mark }"
               v-tooltip="'Text in any cell, or column:value'"
               @keydown.esc.stop="((filterText = ''), scroller?.focus())"
@@ -502,9 +502,7 @@ const partialNotice = computed(() => {
           >
             <div :style="{ width: `${totalWidth}px` }">
               <!-- header -->
-              <div
-                class="sticky top-0 z-10 flex h-6 border-b border-border bg-sunken text-[0.6875rem]"
-              >
+              <div class="sticky top-0 z-10 flex h-6 border-b border-border bg-sunken text-badge">
                 <span
                   class="sticky left-0 z-10 shrink-0 border-r border-border bg-sunken px-2 text-right text-ink-muted"
                   :style="{ width: `${NUMBER_W * ch + 16}px` }"
@@ -513,7 +511,7 @@ const partialNotice = computed(() => {
                 <span
                   v-for="(name, index) in columns"
                   :key="index"
-                  class="relative flex shrink-0 cursor-pointer items-center gap-1 border-r border-border/60 px-2 font-medium text-ink-secondary select-none hover:text-ink"
+                  class="relative flex shrink-0 cursor-pointer items-center gap-1 px-2 font-medium text-ink-secondary select-none hover:text-ink"
                   :class="{ 'justify-end': types[index] === 'number' }"
                   :style="{ width: `${widths[index]}px` }"
                   role="columnheader"
@@ -545,7 +543,7 @@ const partialNotice = computed(() => {
                 <div
                   v-for="line in visible"
                   :key="line.index"
-                  class="absolute inset-x-0 flex cursor-default border-b border-border/40"
+                  class="absolute inset-x-0 flex cursor-default border-b border-border"
                   :class="
                     line.position === cursor
                       ? 'bg-brand-selected'
@@ -579,7 +577,7 @@ const partialNotice = computed(() => {
                   <span
                     v-for="(name, index) in columns"
                     :key="index"
-                    class="shrink-0 truncate border-r border-border/40 px-2 leading-6"
+                    class="shrink-0 truncate px-2 leading-6"
                     :class="[
                       types[index] === 'number' || types[index] === 'date' ? 'text-right' : '',
                       rows[line.index]?.error && index === 0 ? 'text-danger' : 'text-ink',
@@ -599,7 +597,7 @@ const partialNotice = computed(() => {
           </div>
 
           <div
-            class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-[0.6875rem] text-ink-muted"
+            class="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-sunken px-3 text-badge text-ink-muted"
           >
             <span>click a column to sort</span>
           </div>

@@ -189,11 +189,11 @@ watch(
     if (row) revealIn(root.value, row)
   },
 )
-/** Shown on the row's hover or focus, so the tree stays quiet to read. */
+/** Shown on the row's hover, focus, or while selected, so the tree stays quiet to read. */
 const ADD_AFTER =
   'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-brand/50 bg-surface text-brand hover:bg-brand-tint focus-visible:opacity-100'
 
-/** Like the +, but also kept in sight while its row is selected. */
+/** Destructive counterpart to `+`, also kept in sight while its row is selected. */
 const REMOVE =
   'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-check) border border-danger/60 bg-surface text-danger hover:bg-danger-tint focus-visible:opacity-100'
 
@@ -301,7 +301,7 @@ const inputs = computed(() =>
                 <span class="flex min-w-0 items-center pl-1">
                   <button
                     type="button"
-                    class="flex h-5 min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-control) border border-dashed border-border-strong px-1.5 text-[0.6875rem] text-ink-muted hover:border-brand hover:text-brand"
+                    class="flex h-5 min-w-0 cursor-pointer items-center gap-1.5 rounded-(--radius-control) border border-dashed border-border-strong px-1.5 text-badge text-ink-muted hover:border-brand hover:text-brand"
                     :aria-label="`Add worker after all ${row.what}`"
                     v-tooltip="{
                       text: 'Add worker after all of them',
@@ -366,7 +366,7 @@ const inputs = computed(() =>
                   >
                   <span
                     v-if="row.parallel > 1"
-                    class="tabular shrink-0 text-[0.6875rem] text-ink-muted"
+                    class="tabular shrink-0 text-badge text-ink-muted"
                     v-tooltip="'Tasks running in parallel on its output'"
                     >⇉ {{ row.parallel }}</span
                   >
@@ -381,7 +381,12 @@ const inputs = computed(() =>
                   <button
                     v-if="editable && !blocked.has(row.task.id)"
                     type="button"
-                    :class="[ADD_AFTER, 'opacity-0 group-hover:opacity-100']"
+                    :class="[
+                      ADD_AFTER,
+                      row.task.id === selectedId
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover:opacity-100',
+                    ]"
                     :aria-label="`Add worker after ${row.task.name}`"
                     v-tooltip="
                       row.task.groups.length
@@ -395,7 +400,12 @@ const inputs = computed(() =>
                   <button
                     v-if="editable && row.endsGroup"
                     type="button"
-                    :class="[ADD_AFTER, 'opacity-0 group-hover:opacity-100']"
+                    :class="[
+                      ADD_AFTER,
+                      row.task.id === selectedId
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover:opacity-100',
+                    ]"
                     :aria-label="`Add worker beside ${row.task.name}`"
                     v-tooltip="{
                       text: 'Add worker beside',

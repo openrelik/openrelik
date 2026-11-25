@@ -55,7 +55,7 @@ const fields = computed(() =>
 </script>
 
 <template>
-  <div aria-label="Row details">
+  <div aria-label="Row details" class="text-body">
     <div
       class="sticky top-0 flex items-center border-b border-border bg-surface pl-3"
       :class="closable ? 'h-9 pr-2' : 'h-7 pr-1'"
@@ -85,7 +85,7 @@ const fields = computed(() =>
           <pre
             v-else-if="field.nested"
             v-copy-to-clipboard="field.text"
-            class="tabular well cursor-pointer overflow-x-auto px-2 py-1 text-[0.75rem] whitespace-pre text-ink hover:text-brand data-[copied=true]:text-success"
+            class="tabular well cursor-pointer overflow-x-auto px-2 py-1 text-dense whitespace-pre text-ink hover:text-brand data-[copied=true]:text-success"
             >{{ field.text }}</pre>
           <span
             v-else

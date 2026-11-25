@@ -112,7 +112,7 @@ const start = computed(() => end.value - props.range * 1000)
   <section class="card flex min-w-0 flex-col gap-2" :aria-label="title">
     <header class="flex items-baseline gap-2">
       <h2 class="card-title truncate">{{ title }}</h2>
-      <code class="truncate text-[0.6875rem] text-ink-muted"
+      <code class="truncate text-badge text-ink-muted"
         >{{ metric }}{{ aggregate ? ' · sum' : '' }}</code
       >
     </header>

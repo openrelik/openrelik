@@ -63,7 +63,14 @@ import {
   type GraphNode,
   type StackSummary,
 } from '@/components/workflow/graphLayout'
-import { everyGroup, groupOf, mergeProblem, STATUS_LABEL, unchainable } from '@/utils/workflow'
+import {
+  everyGroup,
+  groupOf,
+  mergeProblem,
+  STATUS_LABEL,
+  TASK_STATUS_TONE,
+  unchainable,
+} from '@/utils/workflow'
 import type { Task, TaskGroup, TaskStatus, Workflow, WorkflowInput } from '@/types/workflow'
 import { count, formatDuration, formatSize } from '@/utils/format'
 import { isTyping } from '@/utils/keyboard'
@@ -540,6 +547,20 @@ const inputsTip = computed((): TooltipOptions => {
   return { text: shown.join(', '), detail: 'Click to show them' }
 })
 
+const ARROW_MARKERS = [
+  { key: 'brand', fill: 'fill-brand' },
+  { key: 'danger', fill: 'fill-danger' },
+  { key: 'muted', fill: 'fill-ink-muted' },
+] as const
+
+function arrowFor(status: TaskStatus): string {
+  if (props.workflow.draft) return `${arrowId}-muted`
+  const tone = TASK_STATUS_TONE[status]
+  if (tone === 'brand') return `${arrowId}-brand`
+  if (tone === 'danger') return `${arrowId}-danger`
+  return `${arrowId}-muted`
+}
+
 const EDGE: Record<TaskStatus, string> = {
   success: 'stroke-ink-muted/60',
   running: 'edge-flow stroke-brand',
@@ -604,8 +625,8 @@ const FRAME: Record<TaskStatus, string> = {
               }"
             />
             <span
-              class="micro-label absolute bg-canvas px-[4px] text-[12px] leading-none"
-              :style="{ left: `${inputsBox.left + 8}px`, top: `${inputsBox.top - 6}px` }"
+              class="micro-label absolute text-[12px] leading-none"
+              :style="{ left: `${inputsBox.left + 2}px`, top: `${inputsBox.top - 15}px` }"
               >Input</span
             >
             <button
@@ -662,7 +683,9 @@ const FRAME: Record<TaskStatus, string> = {
           >
             <defs>
               <marker
-                :id="arrowId"
+                v-for="marker in ARROW_MARKERS"
+                :key="marker.key"
+                :id="`${arrowId}-${marker.key}`"
                 viewBox="0 0 6 6"
                 refX="5"
                 refY="3"
@@ -670,7 +693,7 @@ const FRAME: Record<TaskStatus, string> = {
                 markerHeight="6"
                 orient="auto"
               >
-                <path d="M0,0 L6,3 L0,6 Z" class="fill-ink-muted" />
+                <path d="M0,0 L6,3 L0,6 Z" :class="marker.fill" />
               </marker>
             </defs>
             <path
@@ -679,7 +702,7 @@ const FRAME: Record<TaskStatus, string> = {
               :d="edge.d"
               fill="none"
               stroke-width="1.25"
-              :marker-end="`url(#${arrowId})`"
+              :marker-end="`url(#${arrowFor(edge.status)})`"
               :class="workflow.draft ? DRAFT_EDGE : EDGE[edge.status]"
             />
             <path
@@ -1094,7 +1117,7 @@ const FRAME: Record<TaskStatus, string> = {
       </button>
       <button
         type="button"
-        class="tabular w-10 cursor-pointer text-center text-[0.6875rem] text-ink-secondary hover:text-ink"
+        class="tabular w-10 cursor-pointer text-center text-badge text-ink-secondary hover:text-ink"
         aria-label="Reset zoom to 100%"
         v-tooltip="'Reset to 100%'"
         @click="scale = 1"

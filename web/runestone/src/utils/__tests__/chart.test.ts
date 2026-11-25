@@ -72,19 +72,20 @@ describe('formatValue', () => {
 })
 
 describe('timeTicks', () => {
-  it('returns aligned ticks within [start, end] across short and multi-day spans', () => {
-    const start = new Date(2026, 2, 10, 12, 1, 0).getTime()
-    const end = new Date(2026, 2, 10, 13, 1, 0).getTime()
+  it('returns UTC-aligned ticks within [start, end] across short and multi-day spans', () => {
+    const start = Date.UTC(2026, 2, 10, 12, 1, 0)
+    const end = Date.UTC(2026, 2, 10, 13, 1, 0)
     const ticks = timeTicks(start, end, 5)
 
     expect(ticks.length).toBeGreaterThan(0)
     expect(ticks[0]).toBeGreaterThanOrEqual(start)
     expect(ticks.at(-1)).toBeLessThanOrEqual(end)
+    expect(ticks[0]! % (15 * 60e3)).toBe(0)
   })
 
   it('falls back to span / count for spans larger than the predefined step table', () => {
-    const start = new Date(2020, 0, 1).getTime()
-    const end = new Date(2026, 0, 1).getTime()
+    const start = Date.UTC(2020, 0, 1)
+    const end = Date.UTC(2026, 0, 1)
     const ticks = timeTicks(start, end, 4)
 
     expect(ticks.length).toBeGreaterThanOrEqual(3)
@@ -93,7 +94,7 @@ describe('timeTicks', () => {
   })
 
   it('handles zero-length spans cleanly', () => {
-    const instant = new Date(2026, 2, 10, 12, 0, 0).getTime()
+    const instant = Date.UTC(2026, 2, 10, 12, 0, 0)
     const ticks = timeTicks(instant, instant, 5)
     expect(Array.isArray(ticks)).toBe(true)
   })
@@ -106,23 +107,23 @@ describe('timeTicks', () => {
 })
 
 describe('formatTime and formatMoment', () => {
-  const sample = new Date(2026, 3, 5, 9, 7, 4).getTime()
+  const sample = Date.UTC(2026, 3, 5, 9, 7, 4)
 
-  it('shows HH:MM for spans up to 1 day', () => {
+  it('shows HH:MM in UTC for spans up to 1 day', () => {
     expect(formatTime(sample, 3600e3)).toBe('09:07')
     expect(formatTime(sample, 86400e3)).toBe('09:07')
   })
 
-  it('shows MM-DD HH:MM for spans between 1 and 3 days', () => {
+  it('shows MM-DD HH:MM in UTC for spans between 1 and 3 days', () => {
     expect(formatTime(sample, 2 * 86400e3)).toBe('04-05 09:07')
     expect(formatTime(sample, 3 * 86400e3)).toBe('04-05 09:07')
   })
 
-  it('shows YYYY-MM-DD for spans longer than 3 days', () => {
+  it('shows YYYY-MM-DD in UTC for spans longer than 3 days', () => {
     expect(formatTime(sample, 7 * 86400e3)).toBe('2026-04-05')
   })
 
-  it('formats full tooltip moments with seconds', () => {
-    expect(formatMoment(sample)).toBe('2026-04-05 09:07:04')
+  it('formats full tooltip moments in UTC with seconds', () => {
+    expect(formatMoment(sample)).toBe('2026-04-05 09:07:04 UTC')
   })
 })

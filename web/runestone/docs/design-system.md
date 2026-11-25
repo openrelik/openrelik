@@ -64,60 +64,62 @@ The technical console is governed by five non-negotiable principles:
 
 The color system is constructed using the **OKLCH** color space (Lightness, Chroma, Hue). In legacy RGB/HSL models, different hues with the same "lightness" value have wildly different perceived brightness (e.g., yellow looks significantly brighter than blue). OKLCH guarantees perceptual uniformity: colors sharing a lightness value have identical perceived contrast against a given background.
 
-### The Uniform Lightness Rule for Accents
+### Accent Salience & Perceptual Contrast
 
-To prevent any single status hue from shouting louder than its peers, **all semantic accents share an identical OKLCH lightness level**:
+All semantic accents are tuned in OKLCH to clear **WCAG AAA (~7:1)** against `--color-surface` and at least **5.5:1** against their own tint fills:
 
-- **Dark Theme (`data-theme="dark"`)**: All accents sit at **OKLCH L 0.82**. Hue alone distinguishes them. Each accent clears at least **10:1** contrast on `--color-surface`.
-- **Light Theme (`data-theme="light"`)**: All accents sit at **OKLCH L 0.449**. This is mathematically calculated as the lightest lightness level at which **every hue clears WCAG AAA (7:1)** against a pure white panel (`brand` 7.60:1, `success` 6.99:1, `warning` 7.56:1, `danger` 8.20:1).
+- **Dark Theme (`data-theme="dark"`)**: Rather than pinning every hue to `L=0.82` (where sRGB pinches blue and red into low-chroma pastels while green stays vivid), `brand` (`L=0.76`, `C=0.120`) and `danger` (`L=0.74`, `C=0.135`) sit slightly lower with higher chroma than `success` (`L=0.78`, `C=0.100`). Errors and primary CTAs out-salience healthy states while every accent still clears ≥ 7:1 on `--color-surface`.
+- **Light Theme (`data-theme="light"`)**: All accents sit at **OKLCH L 0.449** (`brand` 7.60:1, `success` 6.99:1, `warning` 7.56:1, `danger` 8.20:1).
 
 ```
-   Dark Mode (OKLCH L = 0.82)                Light Mode (OKLCH L = 0.449)
+   Dark Mode (AAA ≥ 7:1, Salience-Tuned)     Light Mode (OKLCH L = 0.449)
 ┌────────────────────────────────┐        ┌────────────────────────────────┐
-│ Brand:   #a9c7ee (> 10:1)      │        │ Brand:   #0052a7 (7.60:1, AAA) │
-│ Success: #6fdea2 (> 10:1)      │        │ Success: #00673c (6.99:1, AAA) │
-│ Warning: #edbb65 (> 10:1)      │        │ Warning: #724d00 (7.56:1, AAA) │
-│ Danger:  #efb3b0 (> 10:1)      │        │ Danger:  #9d1426 (8.20:1, AAA) │
+│ Brand:   #77b5fb (8.23:1, AAA) │        │ Brand:   #0052a7 (7.60:1, AAA) │
+│ Success: #7ecb9f (9.19:1, AAA) │        │ Success: #00673c (6.99:1, AAA) │
+│ Warning: #e8b45e (9.35:1, AAA) │        │ Warning: #724d00 (7.56:1, AAA) │
+│ Danger:  #f48684 (7.22:1, AAA) │        │ Danger:  #9d1426 (8.20:1, AAA) │
 └────────────────────────────────┘        └────────────────────────────────┘
-  Accents share equal visual weight         Accents share equal visual weight
+  Danger & brand out-salience success       Accents share equal visual weight
 ```
 
 ### Semantic Token Palette
 
-All tokens live in `src/assets/main.css`. A four-line script in `index.html` resolves `'system' | 'light' | 'dark'` onto `<html data-theme="...">` before first paint, so CSS only defines the dark `@theme` defaults and `:root[data-theme='light']`.
+All tokens live in `src/assets/main.css` (and are enforced in CI by `src/assets/__tests__/tokens.test.ts`). `@theme` locks Tailwind's default `--color-*`, `--radius-*`, `--shadow-*`, and `--text-*` namespaces with `initial` so off-system palettes and arbitrary scales cannot compile. A four-line script in `index.html` resolves `'system' | 'light' | 'dark'` onto `<html data-theme="...">` before first paint, so CSS only defines the dark `@theme` defaults and `:root[data-theme='light']`.
 
-| Token Name                 | Dark Value | Light Value | Semantic Purpose & Usage                                                                                 |
-| :------------------------- | :--------- | :---------- | :------------------------------------------------------------------------------------------------------- |
-| `--color-canvas`           | `#0e0e12`  | `#f2f2f5`   | Outer application viewport background.                                                                   |
-| `--color-surface`          | `#16161c`  | `#ffffff`   | Primary panel background (sheets, tables, dialog bodies).                                                |
-| `--color-sunken`           | `#1b1b22`  | `#f7f7fc`   | Recessed zones: table headers, code wells, status bars.                                                  |
-| `--color-border`           | `#26262f`  | `#e7e7ed`   | Structural borders between panels, rows, and splits.                                                     |
-| `--color-border-strong`    | `#33333f`  | `#d5d6dd`   | Control boundaries (input fields, button outlines).                                                      |
-| `--color-ink`              | `#e6e6ec`  | `#29292d`   | Primary body text, titles, prominent values (14.49:1).                                                   |
-| `--color-ink-secondary`    | `#a6a6b4`  | `#545460`   | Secondary descriptions, timestamps, table metadata (7.49:1 dark, 7.46:1 light).                          |
-| `--color-ink-muted`        | `#818293`  | `#707081`   | Micro-labels, column headers, shortcut badges (≥ 4.5:1 on sunken).                                       |
-| `--color-tooltip`          | `#2a2a34`  | `#29292d`   | Tooltip fill. Dark lifts it above the panels; light inverts it.                                          |
-| `--color-tooltip-ink`      | `#e6e6ec`  | `#f2f2f5`   | Tooltip text (11.42:1 dark, 12.97:1 light).                                                              |
-| `--color-tooltip-border`   | `#3b3b48`  | `#29292d`   | Tooltip rim; in light it is the chip itself.                                                             |
-| `--color-brand`            | `#a9c7ee`  | `#0052a7`   | Primary brand accent, keyboard focus rings, active links.                                                |
-| `--color-brand-strong`     | `#a9c7ee`  | `#1560bd`   | Primary solid button fill.                                                                               |
-| `--color-brand-stronger`   | `#c6dbf5`  | `#0d4d9c`   | Primary solid button hover fill.                                                                         |
-| `--color-brand-tint`       | `#0e2745`  | `#d7ebff`   | Brand badge backgrounds, switch active backgrounds.                                                      |
-| `--color-brand-tint-hover` | `#16375f`  | `#c3dfff`   | Hover fill for brand-tinted controls.                                                                    |
-| `--color-brand-selected`   | `#131e2c`  | `#e4f2ff`   | Row selection background in data grids.                                                                  |
-| `--color-selection`        | `#27466f`  | `#bcd9fb`   | Text or byte selection inside dense viewers.                                                             |
-| `--color-success`          | `#6fdea2`  | `#00673c`   | Completed tasks, passing health checks, ready state (`--color-success-ink` alias).                       |
-| `--color-success-tint`     | `#102d1e`  | `#d1f3de`   | Success badge fills.                                                                                     |
-| `--color-warning`          | `#edbb65`  | `#724d00`   | Degraded state, marks/highlights, cautionary notices.                                                    |
-| `--color-warning-tint`     | `#31240d`  | `#f9e6c8`   | Warning badge fills, viewer line/byte/row mark fills.                                                    |
-| `--color-danger`           | `#efb3b0`  | `#9d1426`   | Errors, failed executions, destructive actions (`--color-danger-ink` alias).                             |
-| `--color-danger-tint`      | `#451214`  | `#ffe0de`   | Danger badge fills, danger button hover fills.                                                           |
-| `--color-idle`             | `#878899`  | `#6a6a7a`   | Inactive, paused, or queued processes.                                                                   |
-| `--color-idle-tint`        | `#22222b`  | `#ececf1`   | Idle badge fills.                                                                                        |
-| `--color-brand-icon`       | `#a9c7ee`  | `#4186e0`   | Solid folder and running-workflow icons. Light lifts the accent to OKLCH 0.62 (3.68:1, a graphic's 3:1). |
-| `--color-success-icon`     | `#6fdea2`  | `#469a6b`   | Solid finished-workflow icons (3.45:1 light).                                                            |
-| `--color-warning-icon`     | `#edbb65`  | `#ac7c1c`   | Running-task spinner icons in the workflow flowchart (3.71:1 light).                                     |
-| `--color-danger-icon`      | `#efb3b0`  | `#d95356`   | Solid failed-workflow icons (3.95:1 light).                                                              |
+| Token Name                 | Dark Value          | Light Value           | Semantic Purpose & Usage                                                                                      |
+| :------------------------- | :------------------ | :-------------------- | :------------------------------------------------------------------------------------------------------------ |
+| `--color-canvas`           | `#0b0b0f`           | `#f2f2f5`             | Outer application viewport background (deepest plane).                                                        |
+| `--color-surface`          | `#18181f`           | `#ffffff`             | Primary panel background (sheets, tables, dialog bodies).                                                     |
+| `--color-sunken`           | `#111116`           | `#f7f7fc`             | Recessed zones below `surface`: table headers, code wells, status bars.                                       |
+| `--color-border`           | `#272732`           | `#e7e7ed`             | Structural borders between panels, rows, and splits.                                                          |
+| `--color-border-strong`    | `#373746`           | `#d5d6dd`             | Control boundaries (input fields, button outlines, popovers).                                                 |
+| `--color-ink`              | `#e8e8ee`           | `#29292d`             | Primary body text, titles, prominent values (14.47:1 dark, 14.49:1 light).                                    |
+| `--color-ink-secondary`    | `#a8a8b7`           | `#545460`             | Secondary descriptions, timestamps, table metadata (7.53:1 dark, 7.46:1 light).                               |
+| `--color-ink-muted`        | `#858698`           | `#707081`             | Micro-labels, column headers, shortcut badges (≥ 4.5:1 on both `surface` and `sunken`; never opacity-washed). |
+| `--color-tooltip`          | `#282834`           | `#29292d`             | Tooltip fill. Dark lifts it above the panels; light inverts it.                                               |
+| `--color-tooltip-ink`      | `#e8e8ee`           | `#f2f2f5`             | Tooltip text.                                                                                                 |
+| `--color-tooltip-border`   | `#3c3c4c`           | `#29292d`             | Tooltip rim; in light it is the chip itself.                                                                  |
+| `--color-scrim`            | `rgb(0 0 0 / 0.55)` | `rgb(20 20 30 / 0.2)` | Modal backdrop scrim (`ModalSheet`). Darkens in both themes (never `bg-ink/20`).                              |
+| `--color-on-avatar`        | `#ffffff`           | `#ffffff`             | Initial text on deterministic OKLCH `UserAvatar` discs.                                                       |
+| `--color-brand`            | `#77b5fb`           | `#0052a7`             | Primary brand accent, keyboard focus rings, active links, running tasks.                                      |
+| `--color-brand-strong`     | `#6baffa`           | `#1560bd`             | Primary solid button fill.                                                                                    |
+| `--color-brand-stronger`   | `#88bffc`           | `#0d4d9c`             | Primary solid button hover fill.                                                                              |
+| `--color-brand-tint`       | `#102845`           | `#d7ebff`             | Brand badge backgrounds, switch active backgrounds.                                                           |
+| `--color-brand-tint-hover` | `#17385f`           | `#c3dfff`             | Hover fill for brand-tinted controls.                                                                         |
+| `--color-brand-selected`   | `#162436`           | `#e4f2ff`             | Row selection background in data grids.                                                                       |
+| `--color-selection`        | `#274a75`           | `#bcd9fb`             | Text or byte selection inside dense viewers.                                                                  |
+| `--color-success`          | `#7ecb9f`           | `#00673c`             | Completed tasks, passing health checks, ready state (`--color-success-ink` alias).                            |
+| `--color-success-tint`     | `#102c1e`           | `#d1f3de`             | Success badge fills.                                                                                          |
+| `--color-warning`          | `#e8b45e`           | `#724d00`             | Degraded state, marks/highlights, cautionary notices.                                                         |
+| `--color-warning-tint`     | `#31230d`           | `#f9e6c8`             | Warning badge fills, viewer line/byte/row mark fills.                                                         |
+| `--color-danger`           | `#f48684`           | `#9d1426`             | Errors, failed executions, destructive actions (`--color-danger-ink` alias).                                  |
+| `--color-danger-tint`      | `#3f1417`           | `#ffe0de`             | Danger badge fills, danger button hover fills.                                                                |
+| `--color-idle`             | `#898a9c`           | `#6a6a7a`             | Inactive, paused, or queued processes.                                                                        |
+| `--color-idle-tint`        | `#21212b`           | `#ececf1`             | Idle badge fills.                                                                                             |
+| `--color-brand-icon`       | `#77b5fb`           | `#4186e0`             | Solid folder and running-workflow/running-task icons (light lifts to OKLCH 0.62).                             |
+| `--color-success-icon`     | `#7ecb9f`           | `#469a6b`             | Solid finished-workflow icons (3.45:1 light).                                                                 |
+| `--color-warning-icon`     | `#e8b45e`           | `#ac7c1c`             | Warning graphic icons (3.71:1 light).                                                                         |
+| `--color-danger-icon`      | `#f48684`           | `#d95356`             | Solid failed-workflow icons (3.95:1 light).                                                                   |
 
 ### Derived Tints Rule
 
@@ -165,25 +167,15 @@ Micro-Label    12px      500 (Med)   1.3           .micro-label (Headers, column
 Badge / Kbd    11px      500 (Med)   1.45          .badge, status bar, HelpDialog <kbd> (10px in KeyHint)
 ```
 
-1. **Card Title (`0.875rem` / `14px` at `compact`, weight 600, `line-height: 1.3`)**  
-   Used for sheet headers, modal titles, and section dividers. Sentence case is enforced via CSS:
-   ```css
-   .card-title {
-     font-size: 0.875rem;
-     font-weight: 600;
-     color: var(--color-ink);
-   }
-   .card-title::first-letter {
-     text-transform: uppercase;
-   }
-   ```
-2. **Body Text (`0.8125rem` / `13px` at `compact`, weight 400, `line-height: 1.5`)**  
-   The foundation of the console. Applied to `body` globally. Used in data rows, descriptions, and inputs.
-3. **Micro-Label (`0.75rem` / `12px` at `compact`, weight 500, normal tracking)**  
+1. **Card Title (`text-title` / `0.875rem` / `14px` at `compact`, weight 600, `line-height: 1.3`)**  
+   Used for sheet headers, modal titles, and section dividers. Write titles in sentence case directly in copy (no CSS `::first-letter` transform, which does not apply to flex headers). Only weights `400`, `500`, and `600` are loaded; never use `font-bold` (`700`).
+2. **Body Text (`text-body` / `0.8125rem` / `13px` at `compact`, weight 400, `line-height: 1.5`)**  
+   Applied to `body`, `ModalSheet` dialogs, and side inspectors (`FileSidePanel`, `FileDetails`, `TableDetail`, `HexInspector`, `TaskInspector`) so primary values and prose separate cleanly from `12px` `.micro-label` keys. Dense tables and viewers (`FolderTable`, `TableViewer`, `TextViewer`, `HexViewer`) step down to `text-dense` (`0.75rem` / `12px`).
+3. **Micro-Label (`text-dense` / `0.75rem` / `12px` at `compact`, weight 500, normal tracking)**  
    Used for table column headers, form field labels, and property keys.
    _Rule: Write micro-labels in sentence case with normal tracking._ All-caps shouts, and wide tracking breaks lowercase word shape; medium weight and muted tone (`--color-ink-muted`) distinguish labels cleanly while keeping acronyms (`UTC`, `ID`, `API`) natural.
-4. **Badge / Footnote (`0.6875rem` / `11px` at `compact`, weight 500, `line-height: 1.45`)**  
-   Used in status badges, status bar items, compact viewer column headers (`TableViewer`, `HexViewer`), and `HelpDialog` `<kbd>` shortcut hints. (`KeyHint.vue` `<kbd>` and `UserAvatar` fallback initials step down to `0.625rem` / `10px`; dense console views, dialogs, and popovers set `0.75rem` / `12px`; `LoginView`'s wordmark uses `1.75rem` / `28px`.)
+4. **Badge / Footnote (`text-badge` / `0.6875rem` / `11px` at `compact`, weight 500, `line-height: 1.45`)**  
+   Used in status badges, status bar items, compact viewer column headers (`TableViewer`, `HexViewer`), and `HelpDialog` `<kbd>` shortcut hints. (`KeyHint.vue` and `sm` `UserAvatar` use `text-micro` / `0.625rem`; `xs` `UserAvatar` uses `text-2xs` / `0.5625rem`; `LoginView`'s wordmark uses `text-display` / `1.75rem` at weight `600`.)
 
 ### Numerical Zero-Jitter (`.tabular`)
 
@@ -519,18 +511,15 @@ Data tables are the core workhorse of the technical console.
 
 ## §10. Floating Surfaces: Dialogs, Sheets, and Tooltips
 
-### 1. Modal Sheets
+### 1. Modal Sheets (`ModalSheet.vue`) & Anchored Popovers (`PopoverSurface.vue`)
 
-Modals represent high-focus workflows (e.g. running a pipeline, editing system settings, sharing assets).
+All modal dialogs and the command prompt compose `src/components/base/ModalSheet.vue` (enforced by ESLint banning raw `<Teleport>` inside `src/components/dialogs/`):
 
-- **Teleported & Centered**: Modal sheets render via `<Teleport to="body">` with a backdrop overlay (`bg-ink/20`; `ConfirmDialog` and `ShareDialog` add `backdrop-blur-[1px]`), `role="dialog"` (`role="alertdialog"` on `ConfirmDialog`), and `aria-modal="true"`. (`UploadQueuePanel` is modeless at bottom-right `z-40` with `aria-modal="false"` and no backdrop; `RunDialog` acts as an anchored popover using `--shadow-popover` without backdrop dim when opened from workflow `+` buttons.)
-- **Positioning**: Anchored above optical center (`top-[8vh]`–`top-[18vh]`, widths from `26rem` to `52rem` clamped by `calc(100vw-2rem)`) with `--shadow-float`.
-- **Focus Management**:
-  - Automatically traps focus (`v-trap-focus`) within the modal container.
-  - Automatically places cursor into the primary input on mount (`v-autofocus`).
-- **Dismissal**:
-  - Clicking the backdrop (`@pointerdown`) dismisses the modal.
-  - Pressing `Escape` pops the modal from the global `useModalStore` stack without triggering underlying view actions (`AccountDialog` blocks backdrop/`Escape` dismissal while a one-time API key is displayed).
+- **Teleported & Centered**: `<ModalSheet>` renders via `<Teleport to="body">` on `z-(--z-modal)` with a `bg-scrim` backdrop (no `backdrop-blur`, never `bg-ink/20`), `role="dialog"` (`role="alertdialog"` on `ConfirmDialog`), `aria-modal="true"`, `text-body` (`13px`) prose typography, and a `120ms`/`100ms` fade transition. (`UploadQueuePanel` is modeless at bottom-right `z-(--z-overlay)` with `aria-modal="false"` and no backdrop.)
+- **Positioning & Width Tiers**: Anchored at one optical top offset (`top-[10vh]`) across named width tiers (`sm` `26rem`, `md` `32rem`, `lg` `40rem`, `xl` `48rem`, `2xl` `52rem`, clamped by `calc(100vw-2rem)`) with `--shadow-float`.
+- **Anchored Popovers (`PopoverSurface.vue`)**: Menus and anchored popovers (`ItemMenu`, `CaseRefPopover`, `LinkMenu`, `PathBar` dropdowns, `ShareDialog` pickers, popover `RunDialog`) use `<PopoverSurface>` (`border-border-strong`, `--shadow-popover`, `z-(--z-popover)`) so they sit on a distinct elevation tier from top-level modals.
+- **Focus Management**: Automatically traps focus (`v-trap-focus`) and places cursor into the primary input on mount (`v-autofocus`).
+- **Dismissal**: Clicking the scrim (`@pointerdown`) dismisses unless `:dismissible="false"` (e.g. `AccountDialog` while a one-time API key is displayed). Pressing `Escape` pops the modal from `useModalStore`.
 
 ### 2. Singleton Tooltip Coordinator
 
@@ -642,7 +631,7 @@ This produces an immediate, responsive pickup with a gentle, smooth settling fin
 
 ### Opening & Closing Panes
 
-Every collapsible pane the operator shows and hides (such as `FileSidePanel` and `WorkflowPanel`) should go through `<SlidePane :open edge>` (`src/components/base/SlidePane.vue`), rather than a bare `v-if`/`v-show` or hand-rolled transition (`TaskInspector` in `FolderView` currently mounts conditionally with `v-if` when a task is selected):
+Every collapsible pane the operator shows and hides (`FileSidePanel`, `WorkflowPanel`, and `TaskInspector`) goes through `<SlidePane :open edge>` (`src/components/base/SlidePane.vue`) rather than a bare `v-if`/`v-show` or hand-rolled transition:
 
 - It **slides out past the edge it is attached to** (`edge="right"` for a side panel, `"top"` for a section under a bar), and back, in 200 ms on the standard curve.
 - The content **keeps its size**: nothing in it reflows, and its neighbours grow into the room as it goes. A rule that belongs to the pane (its bottom border) goes inside it, so it slides too.
@@ -715,15 +704,15 @@ The status bar (`StatusBar.vue`) always shows one network indicator, right-align
 
 `fetching` wins over `prefetch`. The indicator follows the same 200 ms / 300 ms timing, exposes `aria-label="Network: ${network}"` (not an ARIA live region, since announcing every transition would be noise), and explains itself in `v-tooltip`. It is fed by the API client's count of requests in flight, so views never wire it themselves.
 
-### The Pulsing Dot
+### The Pulsing Dot (`StatusDot.vue`)
 
-The one animated waiting mark in the system:
+The one animated waiting mark in the system is isolated in `src/components/base/StatusDot.vue`:
 
 ```html
-<span class="size-1.5 shrink-0 animate-pulse rounded-full bg-brand" aria-hidden="true" />
+<StatusDot tone="brand" pulse />
 ```
 
-`bg-brand` next to row text (`creating…`, `saving…`, `deleting…`); `bg-warning` in the network indicator (`fetching` / `prefetch`); `bg-success` and no pulse for `idle`. Reduced motion (§12) stills it.
+`tone="brand"` next to row text (`creating…`, `saving…`, `deleting…`) and running task badges; `tone="warning"` in the network indicator (`fetching` / `prefetch`); `tone="success"` without `pulse` for `idle`. Reduced motion (§12) stills it.
 
 ### Wording
 
