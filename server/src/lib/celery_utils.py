@@ -24,6 +24,7 @@ import time
 
 from celery.app import Celery
 import kombu.exceptions
+from openrelik_common.celery_utils import configure_celery_app
 import redis
 import redis.exceptions
 
@@ -104,7 +105,13 @@ def _discover_redis_queue_names(redis_client) -> set[str]:
     """Find OpenRelik queue names present in Redis, including offline queues with backlog."""
     discovered: set[str] = set()
     try:
-        for raw_key in redis_client.scan_iter(match="openrelik-*", count=200):
+        try:
+            keys_iter = redis_client.scan_iter(
+                match="openrelik-*", count=200, _type="list"
+            )
+        except TypeError:
+            keys_iter = redis_client.scan_iter(match="openrelik-*", count=200)
+        for raw_key in keys_iter:
             key = (
                 raw_key.decode("utf-8", errors="ignore")
                 if isinstance(raw_key, bytes)
@@ -137,13 +144,18 @@ def _scan_redis_queues(
     pipe = redis_client.pipeline(transaction=False)
     for _, key in key_pairs:
         pipe.llen(key)
-    lengths = pipe.execute()
+    lengths = pipe.execute(raise_on_error=False)
 
     queue_totals: dict[str, int] = {q: 0 for q in sorted_queues}
     keys_to_scan: list[tuple[str, str, int]] = []
     remaining_per_queue: dict[str, int] = {q: scan_limit for q in sorted_queues}
 
     for (queue_name, key), length in zip(key_pairs, lengths):
+        if isinstance(length, redis.exceptions.ResponseError):
+            # Ignore non-list keys sharing the openrelik-* prefix (e.g. lock strings).
+            continue
+        if isinstance(length, Exception):
+            raise length
         length = int(length or 0)
         queue_totals[queue_name] += length
         if length > 0 and remaining_per_queue[queue_name] > 0:
@@ -159,9 +171,13 @@ def _scan_redis_queues(
         scan_pipe = redis_client.pipeline(transaction=False)
         for _, key, take in keys_to_scan:
             scan_pipe.lrange(key, 0, take - 1)
-        scanned_batches = scan_pipe.execute()
+        scanned_batches = scan_pipe.execute(raise_on_error=False)
 
         for (queue_name, _, _), messages in zip(keys_to_scan, scanned_batches):
+            if isinstance(messages, redis.exceptions.ResponseError):
+                continue
+            if isinstance(messages, Exception):
+                raise messages
             for raw in messages or []:
                 task_name, task_id = _extract_task_info_from_message(raw)
                 task_counts[queue_name][task_name or "unknown"] += 1
@@ -187,12 +203,12 @@ def _collect_inspect_snapshots(
 
     def _run_cmd(method_name: str, *args, **kwargs):
         if broker_url:
-            app = Celery(broker=broker_url)
+            app = configure_celery_app(Celery(broker=broker_url))
             app.conf.broker_pool_limit = None
-            app.conf.broker_transport_options = {
-                "socket_timeout": timeout + 1.5,
-                "socket_connect_timeout": REDIS_SOCKET_TIMEOUT_SECONDS,
-            }
+            transport_options = dict(app.conf.broker_transport_options or {})
+            transport_options["socket_timeout"] = timeout + 1.5
+            transport_options["socket_connect_timeout"] = REDIS_SOCKET_TIMEOUT_SECONDS
+            app.conf.broker_transport_options = transport_options
             try:
                 inspector = app.control.inspect(timeout=timeout)
                 return getattr(inspector, method_name)(*args, **kwargs)
@@ -227,8 +243,8 @@ def _collect_inspect_snapshots(
     return results
 
 
-def _read_cached_status(redis_client) -> tuple[dict, dict] | None:
-    """Return cached ``(payload, live_snapshot)`` from Redis if present and valid.
+def _read_cached_status(redis_client) -> tuple[dict, dict, float | None] | None:
+    """Return cached ``(payload, live_snapshot, collected_ts)`` from Redis if valid.
 
     Propagates ``redis.exceptions.RedisError`` so unreachable brokers fail fast
     with HTTP 503 instead of silently returning empty counts.
@@ -246,11 +262,16 @@ def _read_cached_status(redis_client) -> tuple[dict, dict] | None:
     snap = envelope.get("live_snapshot")
     if not isinstance(payload, dict) or not isinstance(snap, dict):
         return None
-    return payload, {
-        "live_task_ids": set(snap.get("live_task_ids") or ()),
-        "online_queues": set(snap.get("online_queues") or ()),
-        "truncated_queues": set(snap.get("truncated_queues") or ()),
-    }
+    collected_ts = envelope.get("collected_ts")
+    return (
+        payload,
+        {
+            "live_task_ids": set(snap.get("live_task_ids") or ()),
+            "online_queues": set(snap.get("online_queues") or ()),
+            "truncated_queues": set(snap.get("truncated_queues") or ()),
+        },
+        float(collected_ts) if isinstance(collected_ts, (int, float)) else None,
+    )
 
 
 def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
@@ -311,10 +332,15 @@ def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
             if not can_bypass:
                 cached = _read_cached_status(redis_client)
                 if cached is not None:
-                    cached_payload, cached_snapshot = cached
+                    cached_payload, cached_snapshot, cached_ts = cached
+                    age_seconds = (
+                        max(0.0, time.time() - cached_ts)
+                        if cached_ts is not None
+                        else 0.0
+                    )
                     _last_payload_cache = cached_payload
                     _last_live_snapshot = cached_snapshot
-                    _last_collected_monotonic = time.monotonic()
+                    _last_collected_monotonic = time.monotonic() - age_seconds
                     return cached_payload
             else:
                 # Verify broker reachability before waiting on Celery inspect timeouts.
@@ -609,6 +635,7 @@ def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
             _last_live_snapshot = live_snapshot
             _last_collected_monotonic = time.monotonic()
             cache_envelope = {
+                "collected_ts": time.time(),
                 "payload": payload,
                 "live_snapshot": {
                     "live_task_ids": sorted(live_snapshot["live_task_ids"]),

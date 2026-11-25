@@ -126,15 +126,15 @@ function fetchLive(force: boolean, quietly: boolean): void {
 }
 
 function retryCluster(): void {
-  loadClusterStatus({ force: true, background: false })
+  loadClusterStatus({ force: true, background: false, signal: controller.signal })
 }
 
 function retryWorkflows(): void {
-  loadActiveWorkflows({ force: true, background: false })
+  loadActiveWorkflows({ force: true, background: false, signal: controller.signal })
 }
 
 function retryStorage(): void {
-  loadStorageStatus({ force: true, background: false })
+  loadStorageStatus({ force: true, background: false, signal: controller.signal })
 }
 
 function refreshNow(quietly = false): void {

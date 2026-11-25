@@ -217,7 +217,7 @@ def test_get_active_queues(mock_celery):
 
 
 class _FakePipeline:
-    def __init__(self, lists: dict[str, list[bytes]]):
+    def __init__(self, lists: dict[str, object]):
         self._lists = lists
         self._ops: list[tuple] = []
 
@@ -229,21 +229,25 @@ class _FakePipeline:
         self._ops.append(("lrange", key, start, end))
         return self
 
-    def execute(self):
+    def execute(self, raise_on_error: bool = True):
         out = []
         for op in self._ops:
-            if op[0] == "llen":
-                out.append(len(self._lists.get(op[1], [])))
+            val = self._lists.get(op[1], [])
+            if isinstance(val, Exception):
+                if raise_on_error:
+                    raise val
+                out.append(val)
+            elif op[0] == "llen":
+                out.append(len(val))
             elif op[0] == "lrange":
                 _, key, start, end = op
-                items = self._lists.get(key, [])
-                out.append(items[start : end + 1])
+                out.append(val[start : end + 1])
         self._ops.clear()
         return out
 
 
 class _FakeRedis:
-    def __init__(self, lists: dict[str, list[bytes]] | None = None):
+    def __init__(self, lists: dict[str, object] | None = None):
         self.lists = lists or {}
         self.kv: dict[str, str] = {}
         self.setex_calls: list[tuple] = []
@@ -258,7 +262,7 @@ class _FakeRedis:
         self.kv[key] = value
         self.setex_calls.append((key, ttl, value))
 
-    def scan_iter(self, match: str = "*", count: int = 200):
+    def scan_iter(self, match: str = "*", count: int = 200, _type: str | None = None):
         prefix = match.rstrip("*")
         for key in list(self.lists.keys()):
             if key.startswith(prefix):
@@ -613,11 +617,18 @@ def test_get_cluster_status_restores_live_snapshot_on_redis_cache_hit(mocker):
         },
     )
 
-    # Process A populates the shared Redis cache.
+    # Process A populates the shared Redis cache at t=1000.
+    fake_wall = [1000.0]
+    fake_mono = [500.0]
+    mocker.patch("lib.celery_utils.time.time", side_effect=lambda: fake_wall[0])
+    mocker.patch("lib.celery_utils.time.monotonic", side_effect=lambda: fake_mono[0])
+
     get_cluster_status(mocker.MagicMock())
     assert mock_collect.call_count == 1
 
-    # Simulate cold Process B (empty per-process memory, same shared Redis).
+    # Simulate cold Process B reading the shared Redis cache 3.5s later.
+    fake_wall[0] = 1003.5
+    fake_mono[0] = 900.0
     celery_utils._last_payload_cache = None
     celery_utils._last_live_snapshot = None
     celery_utils._last_collected_monotonic = 0.0
@@ -627,14 +638,58 @@ def test_get_cluster_status_restores_live_snapshot_on_redis_cache_hit(mocker):
     assert "aaaaaaaa111111111111111111111111" in snap["live_task_ids"]
     assert "openrelik-worker-strings" in snap["online_queues"]
 
+    # Local cache age reflects the 3.5s Redis age, so manual refresh is not throttled.
+    get_cluster_status(mocker.MagicMock(), refresh=True)
+    assert mock_collect.call_count == 2
+
+
+def test_get_cluster_status_ignores_wrongtype_redis_keys(mocker):
+    """Non-list Redis keys (e.g. NBD mount locks) matching openrelik-* do not break status."""
+    fake_redis = _FakeRedis(
+        lists={
+            "openrelik-worker-1-/dev/nbd0": redis.exceptions.ResponseError(
+                "WRONGTYPE Operation against a key holding the wrong kind of value"
+            ),
+            "openrelik-worker-offline": [
+                _msg(
+                    "openrelik-worker-offline.tasks.scan",
+                    "bbbbbbbb-2222-2222-2222-222222222222",
+                )
+            ],
+        }
+    )
+    mocker.patch("lib.celery_utils._get_status_redis_client", return_value=fake_redis)
+    mocker.patch(
+        "lib.celery_utils._collect_inspect_snapshots",
+        return_value={
+            "stats": {},
+            "active": {},
+            "reserved": {},
+            "active_queues": {},
+            "registered": {},
+        },
+    )
+
+    payload = get_cluster_status(mocker.MagicMock())
+    assert [q["name"] for q in payload["queues"]] == ["openrelik-worker-offline"]
+    assert payload["queues"][0]["queued"] == 1
+
 
 def test_collect_inspect_snapshots_uses_isolated_celery_apps(mocker):
-    """Each inspect call creates and closes an isolated Celery instance with socket timeouts."""
+    """Each inspect call creates and closes an isolated Celery app preserving visibility_timeout."""
+    from types import SimpleNamespace
+    from openrelik_common.celery_utils import DEFAULT_VISIBILITY_TIMEOUT
+
     created_apps = []
+
+    class _FakeConf(SimpleNamespace):
+        def update(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
 
     def _make_app(*, broker):
         app = mocker.MagicMock()
-        app.conf = mocker.MagicMock()
+        app.conf = _FakeConf(broker_transport_options={})
         inspector = app.control.inspect.return_value
         inspector.stats.return_value = {"w1": {"uptime": 10}}
         inspector.active.return_value = {"w1": []}
@@ -653,6 +708,10 @@ def test_collect_inspect_snapshots_uses_isolated_celery_apps(mocker):
     assert len(created_apps) == 5
     for app in created_apps:
         assert app.conf.broker_pool_limit is None
+        assert (
+            app.conf.broker_transport_options["visibility_timeout"]
+            == DEFAULT_VISIBILITY_TIMEOUT
+        )
         assert "socket_timeout" in app.conf.broker_transport_options
         assert "socket_connect_timeout" in app.conf.broker_transport_options
         app.close.assert_called_once()

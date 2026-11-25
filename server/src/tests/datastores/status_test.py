@@ -396,3 +396,108 @@ def test_get_candidate_active_workflows_and_partial_index(sqlite_db):
 
     candidates = get_candidate_active_workflows_from_db(sqlite_db)
     assert [w.id for w in candidates] == [wf_active.id]
+
+
+def test_get_system_storage_status_inherits_folder_storage_provider(
+    sqlite_db, mocker, tmp_path
+):
+    """Files with NULL storage_provider inherit their folder ancestor's storage provider."""
+    user = _seed_user(sqlite_db)
+    legacy_root = Folder(
+        display_name="Legacy Root",
+        uuid=uuid.uuid4(),
+        user_id=user.id,
+        parent_id=None,
+        storage_provider=None,
+        is_deleted=False,
+    )
+    extra_root = Folder(
+        display_name="Extra Root",
+        uuid=uuid.uuid4(),
+        user_id=user.id,
+        parent_id=None,
+        storage_provider="extra_storage",
+        is_deleted=False,
+    )
+    sqlite_db.add_all([legacy_root, extra_root])
+    sqlite_db.flush()
+
+    extra_sub = Folder(
+        display_name="Extra Subfolder",
+        uuid=uuid.uuid4(),
+        user_id=user.id,
+        parent_id=extra_root.id,
+        storage_provider=None,
+        is_deleted=False,
+    )
+    sqlite_db.add(extra_sub)
+    sqlite_db.flush()
+
+    sqlite_db.add_all(
+        [
+            # Legacy file with NULL provider under NULL root -> server_default even though default=extra_storage.
+            File(
+                display_name="legacy.bin",
+                filename="legacy.bin",
+                extension="bin",
+                uuid=uuid.uuid4(),
+                data_type="file:generic",
+                filesize=1000,
+                storage_provider=None,
+                is_deleted=False,
+                is_purged=False,
+                user_id=user.id,
+                folder_id=legacy_root.id,
+            ),
+            # Uploaded file with NULL provider inside nested subfolder of extra_storage root -> extra_storage.
+            File(
+                display_name="nested.bin",
+                filename="nested.bin",
+                extension="bin",
+                uuid=uuid.uuid4(),
+                data_type="file:generic",
+                filesize=2500,
+                storage_provider=None,
+                is_deleted=False,
+                is_purged=False,
+                user_id=user.id,
+                folder_id=extra_sub.id,
+            ),
+        ]
+    )
+    sqlite_db.commit()
+
+    d1 = tmp_path / "default_vol"
+    d2 = tmp_path / "extra_vol"
+    d1.mkdir()
+    d2.mkdir()
+    mocker.patch(
+        "datastores.sql.crud.status.get_config",
+        return_value={
+            "server": {
+                "storage": {
+                    "providers": {
+                        "default": "extra_storage",
+                        "server_default": {
+                            "display_name": "Default Storage",
+                            "mode": "rw",
+                            "path": str(d1),
+                        },
+                        "extra_storage": {
+                            "display_name": "Extra Storage",
+                            "mode": "rw",
+                            "path": str(d2),
+                        },
+                    }
+                }
+            }
+        },
+    )
+    mocker.patch("datastores.sql.crud.status._get_redis_client", return_value=None)
+
+    payload = get_system_storage_status_from_db(sqlite_db)
+    providers = {p["name"]: p for p in payload["storage_providers"]}
+    assert providers["server_default"]["file_count"] == 1
+    assert providers["server_default"]["file_bytes"] == 1000
+    assert providers["extra_storage"]["file_count"] == 1
+    assert providers["extra_storage"]["file_bytes"] == 2500

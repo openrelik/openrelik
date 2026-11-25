@@ -24,7 +24,7 @@ import time
 import redis
 import redis.exceptions
 from sqlalchemy import case, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from config import get_config
 from datastores.sql.models.file import File
@@ -147,18 +147,55 @@ def get_system_storage_status_from_db(db: Session, *, refresh: bool = False) -> 
                 return cached
 
         default_provider, provider_configs = _collect_storage_providers_config()
+        # Legacy root folders with NULL storage_provider resolve to "server_default"
+        # when configured (matching Folder.path), otherwise to default_provider.
+        legacy_provider = (
+            "server_default"
+            if any(p["name"] == "server_default" for p in provider_configs)
+            else default_provider
+        )
+
+        # Resolve each folder's effective storage provider down the folder tree
+        # (matching Folder.get_effective_storage_provider) so files with NULL
+        # File.storage_provider are attributed to their folder's actual volume.
+        folder_tree = (
+            select(
+                Folder.id.label("id"),
+                Folder.storage_provider.label("effective_provider"),
+            )
+            .where(Folder.parent_id.is_(None))
+            .cte(name="folder_storage_tree", recursive=True)
+        )
+        child_folder = aliased(Folder)
+        folder_tree = folder_tree.union_all(
+            select(
+                child_folder.id.label("id"),
+                func.coalesce(
+                    child_folder.storage_provider,
+                    folder_tree.c.effective_provider,
+                ).label("effective_provider"),
+            ).join(folder_tree, child_folder.parent_id == folder_tree.c.id)
+        )
+
+        effective_provider_col = func.coalesce(
+            File.storage_provider,
+            folder_tree.c.effective_provider,
+        )
 
         # Single grouped scan over File for active totals, unpurged soft-deleted totals,
         # and per-provider tracked file counts/bytes.
         file_rows = db.execute(
             select(
-                File.storage_provider,
+                effective_provider_col.label("provider"),
                 func.coalesce(File.is_deleted, False).label("deleted"),
                 func.coalesce(File.is_purged, False).label("purged"),
                 func.count(File.id).label("cnt"),
                 func.coalesce(func.sum(File.filesize), 0).label("total_bytes"),
-            ).group_by(
-                File.storage_provider,
+            )
+            .select_from(File)
+            .outerjoin(folder_tree, File.folder_id == folder_tree.c.id)
+            .group_by(
+                effective_provider_col,
                 func.coalesce(File.is_deleted, False),
                 func.coalesce(File.is_purged, False),
             )
@@ -174,7 +211,7 @@ def get_system_storage_status_from_db(db: Session, *, refresh: bool = False) -> 
         for provider_name, deleted, purged, cnt, total_bytes in file_rows:
             cnt = int(cnt or 0)
             total_bytes = int(total_bytes or 0)
-            effective_provider = provider_name or default_provider
+            effective_provider = provider_name or legacy_provider
             if not deleted:
                 files_count += cnt
                 files_total_bytes += total_bytes
