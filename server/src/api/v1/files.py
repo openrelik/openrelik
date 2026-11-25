@@ -391,11 +391,16 @@ def upload_files(
 
     # Save the chunk to disk. If the chunk fails to save return a 503 error to signal to the client
     # to retry the chunk.
+    wrote_chunk = False
     try:
         with open(chunk_file_path, "wb") as fh:
             while content := file.file.read(4096000):  # Read 4MB chunks
                 fh.write(content)
-                redis_client.sadd(redis_uploaded_chunks_key, resumableChunkNumber)
+                wrote_chunk = True
+        # Mark the chunk uploaded only after the file is fully written and closed so a
+        # concurrent thread cannot start reassembling a partially written chunk.
+        if wrote_chunk:
+            redis_client.sadd(redis_uploaded_chunks_key, resumableChunkNumber)
     except Exception:
         redis_client.incr(redis_upload_retries_key, 1)
         raise HTTPException(status_code=503, detail="Failed to write chunk to disk")
@@ -410,8 +415,10 @@ def upload_files(
     if not all_chunks_uploaded:
         return
 
-    # If all chunks have been successfully uploaded, remove the redis state keys.
-    redis_client.delete(redis_uploaded_chunks_key)
+    # Claim reassembly atomically: Redis DEL returns 1 only to the single thread that deletes
+    # the key, preventing duplicate reassembly when parallel chunks finish together.
+    if not redis_client.delete(redis_uploaded_chunks_key):
+        return
     redis_client.delete(redis_upload_retries_key)
 
     # If all chunks has been uploaded then assemble the complete file.
