@@ -95,3 +95,45 @@ def test_get_active_queues(fastapi_test_client, mocker):
     response = fastapi_test_client.get("/taskqueue/queues/active/")
     assert response.status_code == 200
     assert response.json() == [{"name": "queue1"}]
+
+
+def test_get_taskqueue_status_success(fastapi_test_client, mocker):
+    sample_payload = {
+        "collected_at": "2026-11-25T12:00:00+00:00",
+        "summary": {
+            "workers_online": 1,
+            "workers_busy": 0,
+            "workers_idle": 1,
+            "slots_busy": 0,
+            "slots_total": 4,
+            "tasks_running": 0,
+            "tasks_reserved": 0,
+            "tasks_queued": 0,
+            "tasks_waiting": 0,
+        },
+        "queues": [],
+        "workers": [],
+    }
+    mock_get_status = mocker.patch(
+        "lib.celery_utils.get_cluster_status", return_value=sample_payload
+    )
+
+    response = fastapi_test_client.get("/taskqueue/status?refresh=true")
+    assert response.status_code == 200
+    assert response.json() == sample_payload
+    assert mock_get_status.call_args.kwargs == {"refresh": True}
+
+
+def test_get_taskqueue_status_broker_unavailable_returns_503(
+    fastapi_test_client, mocker
+):
+    from lib.celery_utils import BrokerUnavailableError
+
+    mocker.patch(
+        "lib.celery_utils.get_cluster_status",
+        side_effect=BrokerUnavailableError("Unable to reach Celery broker (Redis)."),
+    )
+
+    response = fastapi_test_client.get("/taskqueue/status")
+    assert response.status_code == 503
+    assert "broker" in response.json()["detail"].lower()

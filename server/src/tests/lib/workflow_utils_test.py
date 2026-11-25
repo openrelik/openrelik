@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
+from datetime import datetime, timedelta, timezone
 import json
-
+import uuid
 from unittest import mock
 
+import pytest
 from celery import signature
 
 from lib.workflow_utils import (
@@ -24,6 +25,7 @@ from lib.workflow_utils import (
     create_workflow,
     replace_uuids,
     run_workflow,
+    summarize_workflow_tasks,
     update_task_config_values,
 )
 
@@ -313,3 +315,260 @@ def test_run_workflow_persists_uuids_of_parallel_tasks(mocker, tmp_path):
     assert sorted(uuids) == sorted(dispatched)
     assert len(dispatched) == 7
     assert not any(u.startswith("client-") for u in uuids)
+
+
+def _make_db_task(
+    task_uuid: uuid.UUID, status_short: str | None, age_seconds: float = 120.0
+):
+    now = datetime.now(timezone.utc)
+    ts = now - timedelta(seconds=age_seconds)
+    t = mock.Mock()
+    t.uuid = task_uuid
+    t.status_short = status_short
+    t.created_at = ts
+    t.updated_at = ts
+    return t
+
+
+def test_summarize_workflow_tasks_chain_failed_upstream_skips_downstream():
+    """A PENDING task chained after a FAILURE is counted as skipped, not active."""
+    u1, u2 = uuid.uuid4(), uuid.uuid4()
+    spec = json.dumps(
+        {
+            "workflow": {
+                "type": "chain",
+                "tasks": [
+                    {
+                        "type": "task",
+                        "uuid": str(u1),
+                        "queue_name": "openrelik-worker-a",
+                        "tasks": [
+                            {
+                                "type": "task",
+                                "uuid": str(u2),
+                                "queue_name": "openrelik-worker-b",
+                                "tasks": [],
+                            }
+                        ],
+                    }
+                ],
+            }
+        }
+    )
+    tasks = [_make_db_task(u1, "FAILURE"), _make_db_task(u2, "PENDING")]
+    summary = summarize_workflow_tasks(spec, tasks)
+    assert summary["is_active"] is False
+    assert summary["tasks_failed"] == 1
+    assert summary["tasks_skipped"] == 1
+    assert summary["tasks_queued"] == 0
+    assert summary["tasks_waiting"] == 0
+
+
+def test_summarize_workflow_tasks_parallel_sibling_stays_active_and_splits_queued_waiting():
+    """Running upstream marks child as waiting; failed sibling does not hide live sibling."""
+    u_fail, u_fail_child, u_run, u_wait = (
+        uuid.uuid4(),
+        uuid.uuid4(),
+        uuid.uuid4(),
+        uuid.uuid4(),
+    )
+    spec = json.dumps(
+        {
+            "workflow": {
+                "type": "chain",
+                "tasks": [
+                    {
+                        "type": "task",
+                        "uuid": str(u_fail),
+                        "queue_name": "q-a",
+                        "tasks": [
+                            {
+                                "type": "task",
+                                "uuid": str(u_fail_child),
+                                "queue_name": "q-a",
+                                "tasks": [],
+                            }
+                        ],
+                    },
+                    {
+                        "type": "task",
+                        "uuid": str(u_run),
+                        "queue_name": "q-b",
+                        "tasks": [
+                            {
+                                "type": "task",
+                                "uuid": str(u_wait),
+                                "queue_name": "q-b",
+                                "tasks": [],
+                            }
+                        ],
+                    },
+                ],
+            }
+        }
+    )
+    tasks = [
+        _make_db_task(u_fail, "FAILURE"),
+        _make_db_task(u_fail_child, "PENDING"),
+        _make_db_task(u_run, "STARTED"),
+        _make_db_task(u_wait, "PENDING"),
+    ]
+    summary = summarize_workflow_tasks(spec, tasks)
+    assert summary["is_active"] is True
+    assert summary["tasks_total"] == 4
+    assert summary["tasks_failed"] == 1
+    assert summary["tasks_skipped"] == 1
+    assert summary["tasks_running"] == 1
+    assert summary["tasks_waiting"] == 1
+    assert summary["tasks_queued"] == 0
+
+
+def test_summarize_workflow_tasks_chord_callback_states():
+    """Chord callback is waiting while header runs, queued on success, skipped on failure."""
+    h1, h2, cb = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    spec = json.dumps(
+        {
+            "workflow": {
+                "type": "chain",
+                "tasks": [
+                    {
+                        "type": "chord",
+                        "tasks": [
+                            {
+                                "type": "task",
+                                "uuid": str(h1),
+                                "queue_name": "q1",
+                                "tasks": [],
+                            },
+                            {
+                                "type": "task",
+                                "uuid": str(h2),
+                                "queue_name": "q1",
+                                "tasks": [],
+                            },
+                        ],
+                        "callback": {
+                            "type": "task",
+                            "uuid": str(cb),
+                            "queue_name": "q2",
+                            "tasks": [],
+                        },
+                    }
+                ],
+            }
+        }
+    )
+
+    # Header partially running -> callback waiting.
+    s_wait = summarize_workflow_tasks(
+        spec,
+        [
+            _make_db_task(h1, "SUCCESS"),
+            _make_db_task(h2, "STARTED"),
+            _make_db_task(cb, "PENDING"),
+        ],
+    )
+    assert s_wait["is_active"] is True
+    assert s_wait["tasks_done"] == 1
+    assert s_wait["tasks_running"] == 1
+    assert s_wait["tasks_waiting"] == 1
+    assert s_wait["tasks_queued"] == 0
+
+    # Header succeeded -> callback queued.
+    s_ready = summarize_workflow_tasks(
+        spec,
+        [
+            _make_db_task(h1, "SUCCESS"),
+            _make_db_task(h2, "SUCCESS"),
+            _make_db_task(cb, "PENDING"),
+        ],
+    )
+    assert s_ready["is_active"] is True
+    assert s_ready["tasks_done"] == 2
+    assert s_ready["tasks_queued"] == 1
+    assert s_ready["tasks_waiting"] == 0
+
+    # Header failed -> callback skipped, workflow inactive.
+    s_fail = summarize_workflow_tasks(
+        spec,
+        [
+            _make_db_task(h1, "SUCCESS"),
+            _make_db_task(h2, "FAILURE"),
+            _make_db_task(cb, "PENDING"),
+        ],
+    )
+    assert s_fail["is_active"] is False
+    assert s_fail["tasks_skipped"] == 1
+
+
+def test_summarize_workflow_tasks_stall_detection_and_guards():
+    """Tests no_worker, stalled, 60s grace period, and truncated-queue suppression."""
+    u1 = uuid.uuid4()
+    spec = json.dumps(
+        {
+            "workflow": {
+                "type": "chain",
+                "tasks": [
+                    {
+                        "type": "task",
+                        "uuid": str(u1),
+                        "queue_name": "openrelik-worker-plaso",
+                        "tasks": [],
+                    }
+                ],
+            }
+        }
+    )
+
+    # Queued in Redis, but queue has no online worker -> no_worker.
+    res_no_worker = summarize_workflow_tasks(
+        spec,
+        [_make_db_task(u1, "PENDING", age_seconds=120)],
+        live_task_ids={u1.hex},
+        online_queues={"openrelik-worker-strings"},
+        truncated_queues=set(),
+    )
+    assert res_no_worker["stall_reason"] == "no_worker"
+
+    # Missing from Celery/Redis and past 60s grace -> stalled.
+    res_stalled = summarize_workflow_tasks(
+        spec,
+        [_make_db_task(u1, "PENDING", age_seconds=120)],
+        live_task_ids=set(),
+        online_queues={"openrelik-worker-plaso"},
+        truncated_queues=set(),
+    )
+    assert res_stalled["stall_reason"] == "stalled"
+
+    # Missing from Celery/Redis but within 60s grace -> None.
+    res_grace = summarize_workflow_tasks(
+        spec,
+        [_make_db_task(u1, "PENDING", age_seconds=10)],
+        live_task_ids=set(),
+        online_queues={"openrelik-worker-plaso"},
+        truncated_queues=set(),
+    )
+    assert res_grace["stall_reason"] is None
+
+    # Missing from scanned UUIDs because queue scan was truncated -> None.
+    res_trunc = summarize_workflow_tasks(
+        spec,
+        [_make_db_task(u1, "PENDING", age_seconds=120)],
+        live_task_ids=set(),
+        online_queues={"openrelik-worker-plaso"},
+        truncated_queues={"openrelik-worker-plaso"},
+    )
+    assert res_trunc["stall_reason"] is None
+
+
+def test_summarize_workflow_tasks_fallback_without_spec():
+    """Invalid or missing spec_json falls back to flat DB task status counts."""
+    u1, u2 = uuid.uuid4(), uuid.uuid4()
+    summary = summarize_workflow_tasks(
+        None,
+        [_make_db_task(u1, "SUCCESS"), _make_db_task(u2, "PENDING")],
+    )
+    assert summary["is_active"] is True
+    assert summary["tasks_total"] == 2
+    assert summary["tasks_done"] == 1
+    assert summary["tasks_queued"] == 1

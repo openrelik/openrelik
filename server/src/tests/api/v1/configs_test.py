@@ -29,3 +29,40 @@ def test_get_system_config(fastapi_test_client, mocker):
         "openrelik:hayabusa:html_report"
     ]
     assert response.json()["artifacts_bucket"] == "EXAMPLE_BUCKET"
+
+
+def test_get_system_storage_status(fastapi_test_client, mocker):
+    """Test GET /configs/status delegates to status CRUD and returns schema payload."""
+    sample = {
+        "collected_at": "2026-11-25T12:00:00+00:00",
+        "files_count": 42,
+        "files_total_bytes": 102400,
+        "deleted_unpurged_files_count": 3,
+        "deleted_unpurged_bytes": 2048,
+        "folders_count": 10,
+        "root_folders_count": 4,
+        "workflows_count": 7,
+        "storage_providers": [
+            {
+                "name": "server_default",
+                "display_name": "Default Storage",
+                "mode": "rw",
+                "is_default": True,
+                "available": True,
+                "total_bytes": 1000000,
+                "used_bytes": 250000,
+                "free_bytes": 750000,
+                "used_percent": 25.0,
+                "file_count": 42,
+                "file_bytes": 102400,
+            }
+        ],
+    }
+    mock_fn = mocker.patch(
+        "api.v1.configs.get_system_storage_status_from_db", return_value=sample
+    )
+
+    response = fastapi_test_client.get("/configs/status?refresh=true")
+    assert response.status_code == 200
+    assert response.json() == sample
+    assert mock_fn.call_args.kwargs == {"refresh": True}
