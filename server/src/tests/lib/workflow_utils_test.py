@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import json
 import uuid
 from unittest import mock
 
 import pytest
-from celery import signature
+from celery import Celery, current_app, signature
 
 from lib.workflow_utils import (
     TemplateNotFoundError,
@@ -315,6 +316,125 @@ def test_run_workflow_persists_uuids_of_parallel_tasks(mocker, tmp_path):
     assert sorted(uuids) == sorted(dispatched)
     assert len(dispatched) == 7
     assert not any(u.startswith("client-") for u in uuids)
+
+
+@pytest.mark.parametrize(
+    ("spec_factory", "expected_send_calls"),
+    [
+        (
+            lambda task: {"workflow": {"type": "chain", "tasks": [task("t1")]}},
+            1,
+        ),
+        (
+            lambda task: {
+                "workflow": {"type": "chain", "tasks": [task("t1", [task("t2")])]}
+            },
+            1,
+        ),
+        (
+            lambda task: {
+                "workflow": {
+                    "type": "chain",
+                    "tasks": [task("t1", [task("t2"), task("t3")])],
+                }
+            },
+            1,
+        ),
+        (
+            lambda task: {
+                "workflow": {
+                    "type": "chain",
+                    "tasks": [
+                        {
+                            "type": "chord",
+                            "tasks": [task("t1"), task("t2")],
+                            "callback": task("t3"),
+                        }
+                    ],
+                }
+            },
+            2,
+        ),
+        (
+            lambda task: {
+                "workflow": {
+                    "type": "chain",
+                    "tasks": [
+                        task("t1", [task("t2"), task("t3")]),
+                        task("t4"),
+                        {
+                            "type": "chord",
+                            "tasks": [task("t1"), task("t2")],
+                            "callback": task("t3"),
+                        },
+                    ],
+                }
+            },
+            4,
+        ),
+    ],
+    ids=[
+        "single_task",
+        "chained_tasks",
+        "fanout_chain",
+        "chord",
+        "root_group_with_chord",
+    ],
+)
+def test_run_workflow_in_worker_thread_binds_canvas_to_celery_app(
+    mocker, tmp_path, spec_factory, expected_send_calls
+):
+    """run_workflow must dispatch through celery_app even from a threadpool worker.
+
+    FastAPI executes synchronous `def` handlers via AnyIO's threadpool, where
+    Celery's thread-local `current_app` is unset and falls back to the default
+    app (DisabledBackend). Unbound canvas primitives fail chords with
+    NotImplementedError and publish non-chord tasks to the wrong app.
+    """
+    test_app = Celery(
+        broker="memory://", backend="cache+memory://", set_as_current=False
+    )
+    mocker.patch("lib.workflow_utils.celery_app", test_app)
+    mocker.patch(
+        "lib.workflow_utils.get_registered_tasks",
+        return_value=[
+            {"task_name": name, "queue_name": "test-queue"}
+            for name in ("t1", "t2", "t3", "t4")
+        ],
+    )
+    mocker.patch("lib.workflow_utils.Task")
+    mocker.patch("lib.workflow_utils.create_task_in_db")
+    send_spy = mocker.spy(test_app, "send_task")
+
+    def task(name, children=()):
+        return {
+            "type": "task",
+            "task_name": name,
+            "display_name": name,
+            "description": "",
+            "task_config": [],
+            "uuid": f"client-{name}",
+            "tasks": list(children),
+        }
+
+    workflow = mock.Mock()
+    workflow.id = 2
+    workflow.files = []
+    workflow.folder.path = str(tmp_path / "output")
+
+    spec = spec_factory(task)
+    db = mock.Mock()
+    user = _make_user()
+
+    def invoke_in_worker():
+        assert current_app._get_current_object() is not test_app
+        return run_workflow(db, workflow=workflow, workflow_spec=spec, user=user)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        result = pool.submit(invoke_in_worker).result()
+
+    assert result is workflow
+    assert send_spy.call_count == expected_send_calls
 
 
 def _make_db_task(
