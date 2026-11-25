@@ -67,7 +67,9 @@ function loadTone(busy: number, total: number): string {
             </th>
             <th
               class="micro-label px-3 py-2 text-right font-medium"
-              v-tooltip="'Tasks claimed from Redis into this worker’s memory, waiting for a free slot'"
+              v-tooltip="
+                'Tasks claimed from Redis into this worker’s memory, waiting for a free slot'
+              "
             >
               Prefetched
             </th>
@@ -80,15 +82,13 @@ function loadTone(busy: number, total: number): string {
             <td class="px-3.5 py-2">
               <div class="flex items-baseline gap-2">
                 <code class="text-ink">{{ worker.hostname }}</code>
-                <span v-if="worker.is_internal" class="text-[0.75rem] text-ink-muted">internal</span>
+                <span v-if="worker.is_internal" class="text-[0.75rem] text-ink-muted"
+                  >internal</span
+                >
               </div>
             </td>
             <td class="px-3 py-2">
-              <span
-                :class="
-                  worker.slots_busy > 0 ? 'font-medium text-warning' : 'text-ink-muted'
-                "
-              >
+              <span :class="worker.slots_busy > 0 ? 'font-medium text-warning' : 'text-ink-muted'">
                 {{ worker.slots_busy > 0 ? 'busy' : 'idle' }}
               </span>
             </td>
@@ -127,7 +127,12 @@ function loadTone(busy: number, total: number): string {
       </table>
     </div>
 
-    <LoadState :state="state" noun="workers" :has-content="workers.length > 0" @retry="emit('retry')">
+    <LoadState
+      :state="state"
+      noun="workers"
+      :has-content="workers.length > 0"
+      @retry="emit('retry')"
+    >
       <template #empty>No Celery workers are currently online.</template>
     </LoadState>
   </section>

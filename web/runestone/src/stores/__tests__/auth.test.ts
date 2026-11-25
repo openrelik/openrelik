@@ -28,6 +28,7 @@ import {
   openShareDialog,
   useShareDialog,
 } from '@/composables/useShareDialog'
+import { loadStatus, useStatus } from '@/composables/useStatus'
 import { openTaskReport, useTaskReport } from '@/composables/useTaskReport'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
 import { addTask, loadWorkflow } from '@/composables/useWorkflow'
@@ -329,7 +330,62 @@ describe('stores/auth', () => {
       },
     ])
 
-    await Promise.all([loadApiKeys(), loadAccess(10), loadGroups(), loadWorkers(), loadTemplates()])
+    vi.spyOn(api.taskqueue, 'status').mockResolvedValueOnce({
+      collected_at: '2026-11-25T12:00:00Z',
+      summary: {
+        workers_online: 1,
+        workers_busy: 0,
+        workers_idle: 1,
+        slots_busy: 0,
+        slots_total: 2,
+        tasks_running: 0,
+        tasks_reserved: 0,
+        tasks_queued: 0,
+        tasks_waiting: 0,
+      },
+      queues: [],
+      workers: [],
+    })
+    vi.spyOn(api.workflows, 'active').mockResolvedValueOnce([
+      {
+        id: 77,
+        display_name: 'Alice Run',
+        folder_id: 10,
+        folder_display_name: 'Alice Case',
+        user: { id: 1, username: 'alice', display_name: 'Alice' },
+        created_at: '2026-11-25T12:00:00Z',
+        updated_at: '2026-11-25T12:00:00Z',
+        tasks_total: 1,
+        tasks_done: 0,
+        tasks_running: 1,
+        tasks_queued: 0,
+        tasks_waiting: 0,
+        tasks_failed: 0,
+        tasks_skipped: 0,
+        elapsed_seconds: 5,
+        stall_reason: null,
+      },
+    ])
+    vi.spyOn(api.configs, 'status').mockResolvedValueOnce({
+      collected_at: '2026-11-25T12:00:00Z',
+      files_count: 1,
+      files_total_bytes: 10,
+      deleted_unpurged_files_count: 0,
+      deleted_unpurged_bytes: 0,
+      folders_count: 1,
+      root_folders_count: 1,
+      workflows_count: 1,
+      storage_providers: [],
+    })
+
+    await Promise.all([
+      loadApiKeys(),
+      loadAccess(10),
+      loadGroups(),
+      loadStatus(),
+      loadWorkers(),
+      loadTemplates(),
+    ])
 
     // Simulate a failed 401 workflow draft save before signing out.
     useWorkflowsStore().upsertWorkflow({
@@ -372,6 +428,9 @@ describe('stores/auth', () => {
     expect(useWorkflowDialog().workflowTarget.value).toBeNull()
     expect(useRunStore().runTarget).toBeNull()
     expect(useApiKeys().keys.value).toEqual([])
+    expect(useStatus().clusterStatus.value).toBeNull()
+    expect(useStatus().activeWorkflows.value).toEqual([])
+    expect(useStatus().storageStatus.value).toBeNull()
     expect(useWorkers().workers.value).toEqual([])
     expect(useWorkflowTemplates().templates.value).toEqual([])
     expect(useGroupStacks().isStacked({ id: 'g1', tasks: [] })).toBe(false)

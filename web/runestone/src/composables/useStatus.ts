@@ -28,7 +28,7 @@ limitations under the License.
 
 import { computed, shallowRef, type ComputedRef, type ShallowRef } from 'vue'
 
-import api from '@/api'
+import { api } from '@/api'
 import type { ActiveWorkflowSummary, SystemStorageStatus, TaskqueueStatus } from '@/api/types'
 import { ensure, queryState, type QueryState } from '@/composables/useQueryCache'
 

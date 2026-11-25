@@ -57,7 +57,7 @@ function makeRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<div />' } },
-      { path: '/metrics', component: { template: '<div />' } },
+      { path: '/status', component: { template: '<div />' } },
     ],
   })
 }
@@ -97,6 +97,8 @@ describe('StatusBar', () => {
 
     const modalStore = useModalStore()
     expect(wrapper.get('[data-slot-info]').text()).toBe('12 items')
+    const statusLink = wrapper.get('a[href="/status"]')
+    expect(statusLink.text()).toBe('status')
     expect(wrapper.get('[aria-label="Network: idle"] span').classes()).toContain('bg-success')
     expect(wrapper.find('[aria-label="Upload queue"]').exists()).toBe(true)
 

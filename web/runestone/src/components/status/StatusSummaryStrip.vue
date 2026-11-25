@@ -51,9 +51,7 @@ const capacityTone = computed(() => {
     </div>
 
     <div class="card flex flex-col gap-1 py-2.5">
-      <span
-        class="micro-label"
-        v-tooltip="'Running tasks / max concurrent tasks (--concurrency)'"
+      <span class="micro-label" v-tooltip="'Running tasks / max concurrent tasks (--concurrency)'"
         >Capacity in use</span
       >
       <div class="tabular flex items-baseline gap-2">

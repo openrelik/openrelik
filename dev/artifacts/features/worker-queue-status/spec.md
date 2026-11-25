@@ -54,7 +54,7 @@ Implements `idea.md` (#152) and `design.md`. Incorporates validated backend and 
 - [x] T7: Add Runestone DTO types (`web/runestone/src/api/types.ts`), API methods (`endpoints/taskqueue.ts`, `endpoints/workflows.ts`, `endpoints/configs.ts`, `api/index.ts`), and `web/runestone/src/composables/useStatus.ts` (documented in `composables/README.md`, wired into `stores/auth.ts`) — ported from `prototype/worker-queue-status` (R10).
 - [x] T8: Add Runestone Status components (`StatusSummaryStrip.vue`, `QueueStatusTable.vue`, `ActiveWorkflowsTable.vue`, `WorkerStatusTable.vue`, `SystemStorageSection.vue`) and replace `MetricsView.vue` with `StatusView.vue` — ported from `prototype/worker-queue-status` (R11, R12).
 - [x] T9: Update `web/runestone/src/router/index.ts` (`/status` + `/metrics` redirect), `web/runestone/src/components/layout/StatusBar.vue`, and `web/runestone/AGENTS.md` route table (R9, R12).
-- [ ] T10: Add/update Runestone tests (`useStatus.test.ts`, `StatusView.test.ts`, `router/index.test.ts`, `StatusBar.test.ts`, `stores/auth.test.ts`) and verify `format:check`, `lint:check`, `type-check`, `test:coverage` (>=85% line coverage on every touched file), and `build` (R9–R12).
+- [x] T10: Add/update Runestone tests (`useStatus.test.ts`, `StatusView.test.ts`, `router/index.test.ts`, `StatusBar.test.ts`, `stores/auth.test.ts`) and verify `format:check`, `lint:check`, `type-check`, `test:coverage` (>=85% line coverage on every touched file), and `build` (R9–R12).
 
 ## Tests
 

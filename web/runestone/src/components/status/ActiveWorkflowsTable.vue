@@ -56,7 +56,9 @@ const emit = defineEmits<{ retry: [] }>()
                 class="flex items-center gap-2 text-ink hover:text-brand"
               >
                 <WorkflowIcon :size="13" :stroke-width="1.5" class="shrink-0 text-brand" />
-                <span class="truncate font-medium">{{ wf.folder_display_name || wf.display_name }}</span>
+                <span class="truncate font-medium">{{
+                  wf.folder_display_name || wf.display_name
+                }}</span>
               </RouterLink>
             </td>
             <td class="px-3 py-2 text-ink-secondary">
@@ -94,7 +96,9 @@ const emit = defineEmits<{ retry: [] }>()
                 ·
                 <span
                   class="font-medium text-danger"
-                  v-tooltip="'Active tasks were not found in Celery or Redis; a worker may have crashed'"
+                  v-tooltip="
+                    'Active tasks were not found in Celery or Redis; a worker may have crashed'
+                  "
                   >stalled</span
                 >
               </template>

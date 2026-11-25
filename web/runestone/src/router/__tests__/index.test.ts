@@ -78,7 +78,8 @@ describe('router', () => {
     vi.mocked(api.auth.getCurrentUser).mockResolvedValue(operator)
 
     await router.push('/metrics')
-    expect(router.currentRoute.value.name).toBe('metrics')
+    expect(router.currentRoute.value.name).toBe('status')
+    expect(router.currentRoute.value.path).toBe('/status')
     expect(useAuthStore().user).toEqual(operator)
 
     // Subsequent navigations while authenticated resolve every route without re-fetching user
@@ -106,9 +107,9 @@ describe('router', () => {
     authStore.setUser(operator)
 
     // 1. Explicit redirect query stays on /login so login view can handle it
-    await router.push({ path: '/login', query: { redirect: '/metrics' } })
+    await router.push({ path: '/login', query: { redirect: '/status' } })
     expect(router.currentRoute.value.name).toBe('login')
-    expect(router.currentRoute.value.query.redirect).toBe('/metrics')
+    expect(router.currentRoute.value.query.redirect).toBe('/status')
 
     // 2. Active session with no redirect query bounces to home ('/')
     vi.mocked(api.auth.getCurrentUser).mockResolvedValueOnce(operator)

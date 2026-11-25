@@ -256,12 +256,7 @@ onUnmounted(() => {
             :aria-expanded="showMetrics"
             @click="showMetrics = !showMetrics"
           >
-            <ChevronDown
-              v-if="showMetrics"
-              :size="13"
-              :stroke-width="1.5"
-              class="text-ink-muted"
-            />
+            <ChevronDown v-if="showMetrics" :size="13" :stroke-width="1.5" class="text-ink-muted" />
             <ChevronRight v-else :size="13" :stroke-width="1.5" class="text-ink-muted" />
             <h2 class="card-title">Historical metrics</h2>
           </button>

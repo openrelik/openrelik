@@ -64,10 +64,7 @@ function barTone(percent: number | null): string {
         </div>
 
         <div class="flex flex-col gap-0.5 px-3.5 py-2.5">
-          <span
-            class="micro-label"
-            v-tooltip="'Sum of active file sizes recorded in the database'"
-          >
+          <span class="micro-label" v-tooltip="'Sum of active file sizes recorded in the database'">
             Total size
           </span>
           <div class="tabular flex items-baseline gap-2">
@@ -78,10 +75,7 @@ function barTone(percent: number | null): string {
         </div>
 
         <div class="flex flex-col gap-0.5 px-3.5 py-2.5">
-          <span
-            class="micro-label"
-            v-tooltip="'Soft-deleted files not yet purged from disk'"
-          >
+          <span class="micro-label" v-tooltip="'Soft-deleted files not yet purged from disk'">
             Trash
           </span>
           <div class="tabular flex items-baseline gap-2">
@@ -187,7 +181,11 @@ function barTone(percent: number | null): string {
                 <span v-else class="text-danger">unavailable</span>
               </td>
               <td class="tabular px-3.5 py-2 text-right text-ink-secondary">
-                {{ provider.available && provider.free_bytes !== null ? formatSize(provider.free_bytes) : '—' }}
+                {{
+                  provider.available && provider.free_bytes !== null
+                    ? formatSize(provider.free_bytes)
+                    : '—'
+                }}
               </td>
             </tr>
           </tbody>

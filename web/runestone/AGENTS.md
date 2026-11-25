@@ -129,15 +129,15 @@ Composables (and `stores/auth.ts`) call the API; views and components never call
 
 ### Routes (`src/router/index.ts`)
 
-| Path                             | View            | Notes                                                                                               |
-| :------------------------------- | :-------------- | :-------------------------------------------------------------------------------------------------- |
-| `/login`                         | `LoginView`     | The only public route.                                                                              |
-| `/`                              | `FolderView`    | Top-level folders, server-paged (`?page=`).                                                         |
-| `/folder/:id`                    | `FolderView`    | Subfolder listing; owns a workflow panel when `workflowId` is set.                                  |
-| `/folder/:folderId/file/:fileId` | `FileView`      | Text, table, hex, and Markdown viewers; marks in URL hash (`#L12-L40`, `#R12-R40`, `#0x1f3-0x2a0`). |
-| `/case/:ref(.*)`                 | → `/folder/:id` | Resolves a case reference (`findCaseFolder` in `useCaseRef`), else `NotFoundView`.                  |
+| Path                             | View            | Notes                                                                                                |
+| :------------------------------- | :-------------- | :--------------------------------------------------------------------------------------------------- |
+| `/login`                         | `LoginView`     | The only public route.                                                                               |
+| `/`                              | `FolderView`    | Top-level folders, server-paged (`?page=`).                                                          |
+| `/folder/:id`                    | `FolderView`    | Subfolder listing; owns a workflow panel when `workflowId` is set.                                   |
+| `/folder/:folderId/file/:fileId` | `FileView`      | Text, table, hex, and Markdown viewers; marks in URL hash (`#L12-L40`, `#R12-R40`, `#0x1f3-0x2a0`).  |
+| `/case/:ref(.*)`                 | → `/folder/:id` | Resolves a case reference (`findCaseFolder` in `useCaseRef`), else `NotFoundView`.                   |
 | `/status`                        | `StatusView`    | Live workers, queues, storage, active workflows, and Prometheus metrics (`/metrics` redirects here). |
-| anything else                    | `NotFoundView`  |                                                                                                     |
+| anything else                    | `NotFoundView`  |                                                                                                      |
 
 Every route except `/login` requires an authenticated session; the guard hydrates the user and redirects to `/login?redirect=…`. An unrecoverable 401 invokes `onUnauthorized` (`src/main.ts`), wipes session state, and redirects to `/login`.
 
