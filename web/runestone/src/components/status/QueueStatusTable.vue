@@ -20,6 +20,7 @@ import LoadState from '@/components/base/LoadState.vue'
 import { ChevronDown, ChevronRight } from '@/components/icons'
 import type { QueueStatus } from '@/api/types'
 import type { QueryState } from '@/composables/useQueryCache'
+import { count } from '@/utils/format'
 import { workerShortName } from '@/utils/worker'
 
 defineProps<{
@@ -48,7 +49,7 @@ function loadTone(busy: number, total: number): string {
   <section class="sheet overflow-hidden" aria-label="Queues and tasks">
     <header class="flex items-center justify-between border-b border-border px-3.5 py-2.5">
       <h2 class="card-title">Queues and registered tasks</h2>
-      <span class="tabular text-[0.75rem] text-ink-muted">{{ queues.length }} queues</span>
+      <span class="tabular text-[0.75rem] text-ink-muted">{{ count(queues.length, 'queue') }}</span>
     </header>
 
     <div v-if="queues.length > 0" class="overflow-x-auto">
@@ -79,19 +80,26 @@ function loadTone(busy: number, total: number): string {
             >
               <td class="px-3.5 py-2">
                 <div class="flex items-center gap-2">
-                  <ChevronDown
-                    v-if="expanded.has(queue.name)"
-                    :size="12"
-                    :stroke-width="1.5"
-                    class="shrink-0 text-ink-muted"
-                  />
-                  <ChevronRight
-                    v-else
-                    :size="12"
-                    :stroke-width="1.5"
-                    class="shrink-0 text-ink-muted"
-                  />
-                  <span class="font-medium text-ink">{{ workerShortName(queue.name) }}</span>
+                  <button
+                    type="button"
+                    class="flex cursor-pointer items-center gap-2 text-left"
+                    :aria-expanded="expanded.has(queue.name)"
+                    @click.stop="toggleQueue(queue.name)"
+                  >
+                    <ChevronDown
+                      v-if="expanded.has(queue.name)"
+                      :size="12"
+                      :stroke-width="1.5"
+                      class="shrink-0 text-ink-muted"
+                    />
+                    <ChevronRight
+                      v-else
+                      :size="12"
+                      :stroke-width="1.5"
+                      class="shrink-0 text-ink-muted"
+                    />
+                    <span class="font-medium text-ink">{{ workerShortName(queue.name) }}</span>
+                  </button>
                   <code class="text-[0.75rem] text-ink-muted">{{ queue.name }}</code>
                   <span
                     v-if="queue.workers_online === 0"

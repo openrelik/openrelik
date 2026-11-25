@@ -59,7 +59,7 @@ export function loadClusterStatus(options: LoadStatusOptions = {}): Promise<void
       const data = await api.taskqueue.status({
         signal: reqSignal,
         background,
-        refresh: force,
+        refresh: force && !background,
       })
       if (epoch !== sessionEpoch) return
       clusterStatus.value = data

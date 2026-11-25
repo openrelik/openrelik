@@ -561,6 +561,58 @@ def test_summarize_workflow_tasks_stall_detection_and_guards():
     assert res_trunc["stall_reason"] is None
 
 
+def test_summarize_workflow_tasks_chain_handoff_respects_workflow_grace_window():
+    """A slow step finishing after >60s resets the grace window for its newly queued successor."""
+    u1, u2 = uuid.uuid4(), uuid.uuid4()
+    spec = json.dumps(
+        {
+            "workflow": {
+                "type": "chain",
+                "tasks": [
+                    {
+                        "type": "task",
+                        "uuid": str(u1),
+                        "queue_name": "openrelik-worker-plaso",
+                        "tasks": [
+                            {
+                                "type": "task",
+                                "uuid": str(u2),
+                                "queue_name": "openrelik-worker-strings",
+                                "tasks": [],
+                            }
+                        ],
+                    }
+                ],
+            }
+        }
+    )
+
+    # Step 1 finished 5s ago after a 10-minute run; Step 2's row was created at t=0 (600s ago).
+    step1_recent = _make_db_task(u1, "SUCCESS", age_seconds=5)
+    step2_old = _make_db_task(u2, "PENDING", age_seconds=600)
+    res_handoff = summarize_workflow_tasks(
+        spec,
+        [step1_recent, step2_old],
+        live_task_ids=set(),
+        online_queues={"openrelik-worker-plaso", "openrelik-worker-strings"},
+        truncated_queues=set(),
+    )
+    assert res_handoff["is_active"] is True
+    assert res_handoff["tasks_queued"] == 1
+    assert res_handoff["stall_reason"] is None
+
+    # Once >60s pass with no updates anywhere in the workflow, flag stalled.
+    step1_stale = _make_db_task(u1, "SUCCESS", age_seconds=120)
+    res_stalled = summarize_workflow_tasks(
+        spec,
+        [step1_stale, step2_old],
+        live_task_ids=set(),
+        online_queues={"openrelik-worker-plaso", "openrelik-worker-strings"},
+        truncated_queues=set(),
+    )
+    assert res_stalled["stall_reason"] == "stalled"
+
+
 def test_summarize_workflow_tasks_fallback_without_spec():
     """Invalid or missing spec_json falls back to flat DB task status counts."""
     u1, u2 = uuid.uuid4(), uuid.uuid4()

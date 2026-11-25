@@ -17,7 +17,7 @@ limitations under the License.
 import LoadState from '@/components/base/LoadState.vue'
 import type { SystemStorageStatus } from '@/api/types'
 import type { QueryState } from '@/composables/useQueryCache'
-import { formatSize } from '@/utils/format'
+import { count, formatSize } from '@/utils/format'
 
 defineProps<{
   storage: SystemStorageStatus | null
@@ -46,8 +46,7 @@ function barTone(percent: number | null): string {
     <header class="flex items-center justify-between border-b border-border px-3.5 py-2.5">
       <h2 class="card-title">Storage</h2>
       <span v-if="storage" class="tabular text-[0.75rem] text-ink-muted">
-        {{ storage.storage_providers.length }}
-        {{ storage.storage_providers.length === 1 ? 'volume' : 'volumes' }}
+        {{ count(storage.storage_providers.length, 'volume') }}
       </span>
     </header>
 

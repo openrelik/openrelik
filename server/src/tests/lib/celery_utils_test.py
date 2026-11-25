@@ -251,6 +251,9 @@ class _FakeRedis:
     def get(self, key: str):
         return self.kv.get(key)
 
+    def ping(self):
+        return True
+
     def setex(self, key: str, ttl: int, value: str):
         self.kv[key] = value
         self.setex_calls.append((key, ttl, value))
@@ -554,11 +557,11 @@ def test_get_cluster_status_lock_timeout_and_broker_error(mocker):
 
 
 def test_get_cluster_status_raises_on_redis_unreachable(mocker):
-    """RedisError during queue scan raises BrokerUnavailableError."""
+    """Unreachable Redis raises BrokerUnavailableError even when inspect returns empty."""
     bad_redis = mocker.MagicMock()
-    bad_redis.get.return_value = None
-    bad_redis.scan_iter.return_value = []
-    bad_redis.pipeline.side_effect = redis.exceptions.ConnectionError("down")
+    bad_redis.get.side_effect = redis.exceptions.ConnectionError("down")
+    bad_redis.ping.side_effect = redis.exceptions.ConnectionError("down")
+    bad_redis.scan_iter.side_effect = redis.exceptions.ConnectionError("down")
     mocker.patch("lib.celery_utils._get_status_redis_client", return_value=bad_redis)
     mocker.patch(
         "lib.celery_utils._collect_inspect_snapshots",
@@ -566,13 +569,63 @@ def test_get_cluster_status_raises_on_redis_unreachable(mocker):
             "stats": {},
             "active": {},
             "reserved": {},
-            "active_queues": {"w1": [{"name": "openrelik-worker-a"}]},
+            "active_queues": {},
             "registered": {},
         },
     )
 
     with pytest.raises(BrokerUnavailableError):
-        get_cluster_status(mocker.MagicMock())
+        get_cluster_status(mocker.MagicMock(), refresh=False)
+
+    # Also raises immediately when refresh=True bypasses the cache read.
+    celery_utils._last_collected_monotonic = 0.0
+    with pytest.raises(BrokerUnavailableError):
+        get_cluster_status(mocker.MagicMock(), refresh=True)
+
+
+def test_get_cluster_status_restores_live_snapshot_on_redis_cache_hit(mocker):
+    """A cold worker hitting the shared Redis cache restores live_snapshot for /workflows/active."""
+    fake_redis = _FakeRedis(
+        lists={
+            "openrelik-worker-strings": [
+                _msg(
+                    "openrelik-worker-strings.tasks.strings",
+                    "aaaaaaaa-1111-1111-1111-111111111111",
+                )
+            ]
+        }
+    )
+    mocker.patch("lib.celery_utils._get_status_redis_client", return_value=fake_redis)
+    mock_collect = mocker.patch(
+        "lib.celery_utils._collect_inspect_snapshots",
+        return_value={
+            "stats": {
+                "w1": {"pool": {"max-concurrency": 2}, "total": {}, "uptime": 60}
+            },
+            "active": {"w1": []},
+            "reserved": {"w1": []},
+            "active_queues": {"w1": [{"name": "openrelik-worker-strings"}]},
+            "registered": {
+                "w1": [
+                    "openrelik-worker-strings.tasks.strings {'display_name': 'Strings'}"
+                ]
+            },
+        },
+    )
+
+    # Process A populates the shared Redis cache.
+    get_cluster_status(mocker.MagicMock())
+    assert mock_collect.call_count == 1
+
+    # Simulate cold Process B (empty per-process memory, same shared Redis).
+    celery_utils._last_payload_cache = None
+    celery_utils._last_live_snapshot = None
+    celery_utils._last_collected_monotonic = 0.0
+
+    snap = get_live_task_snapshot(mocker.MagicMock())
+    assert mock_collect.call_count == 1
+    assert "aaaaaaaa111111111111111111111111" in snap["live_task_ids"]
+    assert "openrelik-worker-strings" in snap["online_queues"]
 
 
 def test_collect_inspect_snapshots_uses_isolated_celery_apps(mocker):

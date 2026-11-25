@@ -141,18 +141,21 @@ describe('useStatus', () => {
     vi.mocked(api.workflows.active).mockClear()
     vi.mocked(api.configs.status).mockClear()
 
-    // Background auto-refresh forces live feeds but respects 60s storage cache.
+    // Background auto-refresh respects the 5s server cluster cache and 60s storage cache.
     await loadStatus({ force: true, background: true })
     expect(api.taskqueue.status).toHaveBeenCalledWith(
-      expect.objectContaining({ refresh: true, background: true }),
+      expect.objectContaining({ refresh: false, background: true }),
     )
     expect(api.workflows.active).toHaveBeenCalledWith(expect.objectContaining({ background: true }))
     expect(api.configs.status).not.toHaveBeenCalled()
 
-    // Explicit foreground Refresh forces all three including storage.
+    // Explicit foreground Refresh bypasses caches for both cluster status and storage.
     vi.mocked(api.taskqueue.status).mockClear()
     vi.mocked(api.workflows.active).mockClear()
     await loadStatus({ force: true, background: false })
+    expect(api.taskqueue.status).toHaveBeenCalledWith(
+      expect.objectContaining({ refresh: true, background: false }),
+    )
     expect(api.configs.status).toHaveBeenCalledWith(
       expect.objectContaining({ refresh: true, background: false }),
     )

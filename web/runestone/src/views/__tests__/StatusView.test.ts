@@ -404,7 +404,7 @@ describe('StatusView', () => {
     expect(view.text()).toContain('25%')
     expect(view.text()).toContain('unavailable')
 
-    // Queues start collapsed; clicking expands and collapses per-task breakdown.
+    // Queues start collapsed; keyboard button and row click expand/collapse per-task breakdown.
     expect(view.text()).not.toContain('openrelik-worker-strings.tasks.strings')
     expect(view.text()).toContain('offline')
     expect(view.text()).toContain('sampled 2000')
@@ -412,10 +412,14 @@ describe('StatusView', () => {
     const stringsQueueRow = view
       .findAll('section[aria-label="Queues and tasks"] tbody tr')
       .find((row) => row.text().includes('openrelik-worker-strings'))!
-    await stringsQueueRow.trigger('click')
+    const expandBtn = stringsQueueRow.get('button[aria-expanded]')
+    expect(expandBtn.attributes('aria-expanded')).toBe('false')
+    await expandBtn.trigger('click')
+    expect(expandBtn.attributes('aria-expanded')).toBe('true')
     expect(view.text()).toContain('openrelik-worker-strings.tasks.strings')
     expect(view.text()).toContain('openrelik-worker-strings.tasks.regex')
     await stringsQueueRow.trigger('click')
+    expect(expandBtn.attributes('aria-expanded')).toBe('false')
     expect(view.text()).not.toContain('openrelik-worker-strings.tasks.strings')
 
     // Active workflows show links, progress parts, no_worker color, and stalled marker.

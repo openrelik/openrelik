@@ -119,11 +119,9 @@ const updatedAt = computed(() =>
 
 const refresh = ref(0)
 const background = ref(false)
-let controller: AbortController | undefined
+const controller = new AbortController()
 
 function fetchLive(force: boolean, quietly: boolean): void {
-  controller?.abort()
-  controller = new AbortController()
   loadStatus({ force, background: quietly, signal: controller.signal })
 }
 
@@ -170,7 +168,7 @@ watch(
 )
 onUnmounted(() => {
   clearInterval(timer)
-  controller?.abort()
+  controller.abort()
 })
 </script>
 

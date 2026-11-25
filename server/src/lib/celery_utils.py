@@ -115,7 +115,7 @@ def _discover_redis_queue_names(redis_client) -> set[str]:
             base = key.split(REDIS_PRIORITY_SEP, 1)[0]
             if base:
                 discovered.add(base)
-    except (redis.exceptions.RedisError, AttributeError):
+    except AttributeError:
         pass
     return discovered
 
@@ -227,18 +227,30 @@ def _collect_inspect_snapshots(
     return results
 
 
-def _read_cached_status(redis_client) -> dict | None:
-    """Return cached cluster status dict from Redis if present and valid."""
-    try:
-        raw = redis_client.get(STATUS_CACHE_KEY)
-    except redis.exceptions.RedisError:
-        return None
+def _read_cached_status(redis_client) -> tuple[dict, dict] | None:
+    """Return cached ``(payload, live_snapshot)`` from Redis if present and valid.
+
+    Propagates ``redis.exceptions.RedisError`` so unreachable brokers fail fast
+    with HTTP 503 instead of silently returning empty counts.
+    """
+    raw = redis_client.get(STATUS_CACHE_KEY)
     if not raw:
         return None
     try:
-        return json.loads(raw)
+        envelope = json.loads(raw)
     except (TypeError, ValueError):
         return None
+    if not isinstance(envelope, dict):
+        return None
+    payload = envelope.get("payload")
+    snap = envelope.get("live_snapshot")
+    if not isinstance(payload, dict) or not isinstance(snap, dict):
+        return None
+    return payload, {
+        "live_task_ids": set(snap.get("live_task_ids") or ()),
+        "online_queues": set(snap.get("online_queues") or ()),
+        "truncated_queues": set(snap.get("truncated_queues") or ()),
+    }
 
 
 def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
@@ -299,9 +311,14 @@ def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
             if not can_bypass:
                 cached = _read_cached_status(redis_client)
                 if cached is not None:
-                    _last_payload_cache = cached
+                    cached_payload, cached_snapshot = cached
+                    _last_payload_cache = cached_payload
+                    _last_live_snapshot = cached_snapshot
                     _last_collected_monotonic = time.monotonic()
-                    return cached
+                    return cached_payload
+            else:
+                # Verify broker reachability before waiting on Celery inspect timeouts.
+                redis_client.ping()
 
             snapshots = _collect_inspect_snapshots(celery_instance)
             stats_map = snapshots["stats"]
@@ -579,8 +596,7 @@ def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
                 "workers": workers_out,
             }
 
-            _last_payload_cache = payload
-            _last_live_snapshot = {
+            live_snapshot = {
                 "live_task_ids": live_task_ids,
                 "online_queues": {
                     q for q, cnt in queue_worker_counts.items() if cnt > 0
@@ -589,10 +605,22 @@ def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
                     q for q, is_trunc in truncated_map.items() if is_trunc
                 },
             }
+            _last_payload_cache = payload
+            _last_live_snapshot = live_snapshot
             _last_collected_monotonic = time.monotonic()
+            cache_envelope = {
+                "payload": payload,
+                "live_snapshot": {
+                    "live_task_ids": sorted(live_snapshot["live_task_ids"]),
+                    "online_queues": sorted(live_snapshot["online_queues"]),
+                    "truncated_queues": sorted(live_snapshot["truncated_queues"]),
+                },
+            }
             try:
                 redis_client.setex(
-                    STATUS_CACHE_KEY, STATUS_CACHE_TTL_SECONDS, json.dumps(payload)
+                    STATUS_CACHE_KEY,
+                    STATUS_CACHE_TTL_SECONDS,
+                    json.dumps(cache_envelope),
                 )
             except redis.exceptions.RedisError:
                 pass
@@ -618,7 +646,7 @@ def get_live_task_snapshot(celery_instance) -> dict:
         and (now - _last_collected_monotonic) < STATUS_CACHE_TTL_SECONDS
     ):
         return _last_live_snapshot
-    get_cluster_status(celery_instance, refresh=_last_live_snapshot is None)
+    get_cluster_status(celery_instance, refresh=False)
     return _last_live_snapshot or {
         "live_task_ids": set(),
         "online_queues": set(),

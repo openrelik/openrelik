@@ -504,15 +504,12 @@ def summarize_workflow_tasks(
         }
 
     status_by_uuid: dict[str, str] = {}
-    task_by_uuid: dict[str, Task] = {}
     for task in tasks:
         if task.uuid is None:
             continue
         state = _normalize_task_state(task.status_short)
         status_by_uuid[task.uuid.hex] = state
         status_by_uuid[str(task.uuid)] = state
-        task_by_uuid[task.uuid.hex] = task
-        task_by_uuid[str(task.uuid)] = task
 
     parsed_root = None
     if spec_json:
@@ -524,7 +521,7 @@ def summarize_workflow_tasks(
             parsed_root = None
 
     visited_any = False
-    dispatched_active: list[tuple[str, str, Optional[Task]]] = []
+    dispatched_active: list[tuple[str, str]] = []
 
     def _walk_nodes(
         nodes: list, upstream_ready: bool, upstream_failed: bool
@@ -553,8 +550,7 @@ def summarize_workflow_tasks(
                     q_name = str(node.get("queue_name") or "")
                     if not q_name and isinstance(node.get("task_name"), str):
                         q_name = node["task_name"].split(".")[0]
-                    db_task = task_by_uuid.get(raw_uuid) or task_by_uuid.get(hex_uuid)
-                    dispatched_active.append((hex_uuid, q_name, db_task))
+                    dispatched_active.append((hex_uuid, q_name))
                 node_failed = effective == "failed"
                 node_succeeded = effective == "success"
                 child_failed, child_all_succeeded = _walk_nodes(
@@ -606,7 +602,7 @@ def summarize_workflow_tasks(
             effective = "queued" if state == "pending" else state
             counts[effective] += 1
             if effective in ("running", "queued") and task.uuid is not None:
-                dispatched_active.append((task.uuid.hex, "", task))
+                dispatched_active.append((task.uuid.hex, ""))
 
     total = sum(counts.values())
     is_active = (counts["running"] + counts["queued"] + counts["waiting"]) > 0
@@ -626,23 +622,27 @@ def summarize_workflow_tasks(
         online_q = online_queues or set()
         trunc_q = truncated_queues or set()
 
-        def _task_age(db_task: Optional[Task]) -> float:
-            if db_task is None:
-                return grace_seconds + 1.0
+        def _task_ts(db_task: Task) -> Optional[datetime]:
             ts = db_task.updated_at or db_task.created_at
             if ts is None:
-                return grace_seconds + 1.0
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-            return max(0.0, (now - ts).total_seconds())
+                return None
+            return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+
+        # Measure grace against the most recent task update in the workflow so a slow
+        # upstream step finishing after >60s does not falsely flag its newly unlocked
+        # successor as stalled while a cached live_task_ids snapshot catches up.
+        activity_times = [ts for t in tasks if (ts := _task_ts(t)) is not None]
+        workflow_idle_seconds = (
+            max(0.0, (now - max(activity_times)).total_seconds())
+            if activity_times
+            else grace_seconds + 1.0
+        )
+        past_grace = workflow_idle_seconds >= grace_seconds
 
         has_healthy_live = False
         has_offline_queued = False
-        all_past_grace = True
 
-        for hex_uuid, q_name, db_task in dispatched_active:
-            if _task_age(db_task) < grace_seconds:
-                all_past_grace = False
+        for hex_uuid, q_name in dispatched_active:
             in_celery_or_truncated = (hex_uuid in live_task_ids) or (q_name in trunc_q)
             if in_celery_or_truncated:
                 if q_name and q_name not in online_q:
@@ -653,7 +653,7 @@ def summarize_workflow_tasks(
         if not has_healthy_live:
             if has_offline_queued:
                 stall_reason = "no_worker"
-            elif all_past_grace:
+            elif past_grace:
                 stall_reason = "stalled"
 
     return {
