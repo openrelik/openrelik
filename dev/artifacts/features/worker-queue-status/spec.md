@@ -45,8 +45,8 @@ Implements `idea.md` (#152) and `design.md`. Incorporates validated backend and 
 
 ## Tasks
 
-- [ ] T1: Add Pydantic response schemas (`TaskqueueStatusSummary`, `QueueTaskStatus`, `QueueStatus`, `WorkerStatus`, `TaskqueueStatusResponse`, `ActiveWorkflowResponse`, `StorageProviderStatus`, `SystemStorageStatusResponse`) in `server/src/api/v1/schemas.py` — ported from `prototype/worker-queue-status` (R2, R6, R7).
-- [ ] T2: Implement `get_cluster_status()`, `get_live_task_snapshot()`, and `BrokerUnavailableError` in `server/src/lib/celery_utils.py`, add `GET /status` in `server/src/api/v1/taskqueue.py`, and add `timeout=10` to `query_prometheus_range()` in `server/src/api/v1/metrics.py` — ported from `prototype/worker-queue-status` (R1–R5, R8).
+- [x] T1: Add Pydantic response schemas (`TaskqueueStatusSummary`, `QueueTaskStatus`, `QueueStatus`, `WorkerStatus`, `TaskqueueStatusResponse`, `ActiveWorkflowResponse`, `StorageProviderStatus`, `SystemStorageStatusResponse`) in `server/src/api/v1/schemas.py` — ported from `prototype/worker-queue-status` (R2, R6, R7).
+- [x] T2: Implement `get_cluster_status()`, `get_live_task_snapshot()`, and `BrokerUnavailableError` in `server/src/lib/celery_utils.py`, add `GET /status` in `server/src/api/v1/taskqueue.py`, and add `timeout=10` to `query_prometheus_range()` in `server/src/api/v1/metrics.py` — ported from `prototype/worker-queue-status` (R1–R5, R8).
 - [ ] T3: Add `ix_task_workflow_id_non_terminal` partial index on `Task` in `server/src/datastores/sql/models/workflow.py` and generate its Alembic revision in `server/src/datastores/sql/alembic/versions/` (R8).
 - [ ] T4: Implement `summarize_workflow_tasks()` in `server/src/lib/workflow_utils.py`, `get_candidate_active_workflows_from_db()` in `server/src/datastores/sql/crud/workflow.py`, and `GET /active` on `router_root` in `server/src/api/v1/workflows.py` — ported from `prototype/worker-queue-status` (R6).
 - [ ] T5: Implement `get_system_storage_status_from_db()` in `server/src/datastores/sql/crud/status.py` and add `GET /status` in `server/src/api/v1/configs.py` — ported from `prototype/worker-queue-status` (R7).

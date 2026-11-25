@@ -566,3 +566,105 @@ class SQLGenerateQueryResponse(BaseModel):
 
 class SQLSchemasResponse(BaseModel):
     schemas: dict
+
+
+class TaskqueueStatusSummary(BaseModel):
+    workers_online: int
+    workers_busy: int
+    workers_idle: int
+    slots_busy: int
+    slots_total: int
+    tasks_running: int
+    tasks_reserved: int
+    tasks_queued: int
+    tasks_waiting: int
+
+
+class QueueTaskStatus(BaseModel):
+    task_name: str
+    display_name: str
+    running: int
+    reserved: int
+    queued: int
+    waiting: int
+
+
+class QueueStatus(BaseModel):
+    name: str
+    is_internal: bool = False
+    workers_online: int
+    slots_busy: int
+    slots_total: int
+    running: int
+    reserved: int
+    queued: int
+    waiting: int
+    scan_truncated: bool = False
+    scan_limit: int
+    tasks: List[QueueTaskStatus] = []
+
+
+class WorkerStatus(BaseModel):
+    hostname: str
+    status: str
+    queues: List[str] = []
+    is_internal: bool = False
+    slots_busy: int
+    slots_total: int
+    reserved: int
+    processed: int
+    uptime: Optional[int] = None
+    prefetch_count: Optional[int] = None
+    registered_tasks: List[str] = []
+
+
+class TaskqueueStatusResponse(BaseModel):
+    collected_at: str
+    summary: TaskqueueStatusSummary
+    queues: List[QueueStatus] = []
+    workers: List[WorkerStatus] = []
+
+
+class ActiveWorkflowResponse(BaseModel):
+    id: int
+    display_name: str
+    folder_id: int
+    folder_display_name: str
+    user: UserResponseCompact
+    created_at: datetime
+    updated_at: datetime
+    tasks_total: int
+    tasks_done: int
+    tasks_running: int
+    tasks_queued: int
+    tasks_waiting: int
+    tasks_failed: int
+    tasks_skipped: int
+    elapsed_seconds: float
+    stall_reason: Optional[str] = None
+
+
+class StorageProviderStatus(BaseModel):
+    name: str
+    display_name: str
+    mode: str
+    is_default: bool = False
+    available: bool = True
+    total_bytes: Optional[int] = None
+    used_bytes: Optional[int] = None
+    free_bytes: Optional[int] = None
+    used_percent: Optional[float] = None
+    file_count: int = 0
+    file_bytes: int = 0
+
+
+class SystemStorageStatusResponse(BaseModel):
+    collected_at: str
+    files_count: int
+    files_total_bytes: int
+    deleted_unpurged_files_count: int
+    deleted_unpurged_bytes: int
+    folders_count: int
+    root_folders_count: int
+    workflows_count: int
+    storage_providers: List[StorageProviderStatus] = []
