@@ -263,3 +263,114 @@ export interface WorkflowRecord {
   /** The folder the workflow owns; outputs land here. */
   folder: { id: number }
 }
+
+/** Aggregate Celery worker, slot, and queue counts (GET /taskqueue/status). */
+export interface TaskqueueStatusSummary {
+  workers_online: number
+  workers_busy: number
+  workers_idle: number
+  slots_busy: number
+  slots_total: number
+  tasks_running: number
+  tasks_reserved: number
+  tasks_queued: number
+  tasks_waiting: number
+}
+
+/** Live task counts for one registered task inside a Celery queue. */
+export interface QueueTaskStatus {
+  task_name: string
+  display_name: string
+  running: number
+  reserved: number
+  queued: number
+  waiting: number
+}
+
+/** Live status for one Celery queue and its registered tasks. */
+export interface QueueStatus {
+  name: string
+  is_internal: boolean
+  workers_online: number
+  slots_busy: number
+  slots_total: number
+  running: number
+  reserved: number
+  queued: number
+  waiting: number
+  scan_truncated: boolean
+  scan_limit: number
+  tasks: QueueTaskStatus[]
+}
+
+/** Live status for one online Celery worker node. */
+export interface WorkerStatus {
+  hostname: string
+  status: string
+  queues: string[]
+  is_internal: boolean
+  slots_busy: number
+  slots_total: number
+  reserved: number
+  processed: number
+  uptime: number | null
+  prefetch_count: number | null
+  registered_tasks: string[]
+}
+
+/** Live cluster status snapshot (GET /taskqueue/status). */
+export interface TaskqueueStatus {
+  collected_at: string
+  summary: TaskqueueStatusSummary
+  queues: QueueStatus[]
+  workers: WorkerStatus[]
+}
+
+/** An active workflow accessible to the current user (GET /workflows/active). */
+export interface ActiveWorkflowSummary {
+  id: number
+  display_name: string
+  folder_id: number
+  folder_display_name: string
+  user: DirectoryUser
+  created_at: string
+  updated_at: string
+  tasks_total: number
+  tasks_done: number
+  tasks_running: number
+  tasks_queued: number
+  tasks_waiting: number
+  tasks_failed: number
+  tasks_skipped: number
+  elapsed_seconds: number
+  /** Set when active tasks are waiting on an offline queue or missing from Celery/Redis. */
+  stall_reason: 'no_worker' | 'stalled' | null
+}
+
+/** Disk usage and tracked file totals for one configured storage provider. */
+export interface StorageProviderStatus {
+  name: string
+  display_name: string
+  mode: string
+  is_default: boolean
+  available: boolean
+  total_bytes: number | null
+  used_bytes: number | null
+  free_bytes: number | null
+  used_percent: number | null
+  file_count: number
+  file_bytes: number
+}
+
+/** Aggregate datastore counts and disk usage across storage providers (GET /configs/status). */
+export interface SystemStorageStatus {
+  collected_at: string
+  files_count: number
+  files_total_bytes: number
+  deleted_unpurged_files_count: number
+  deleted_unpurged_bytes: number
+  folders_count: number
+  root_folders_count: number
+  workflows_count: number
+  storage_providers: StorageProviderStatus[]
+}

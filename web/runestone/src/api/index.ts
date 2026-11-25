@@ -21,6 +21,7 @@ limitations under the License.
  */
 
 import { authApi } from './endpoints/auth'
+import { configsApi } from './endpoints/configs'
 import { directoryApi } from './endpoints/directory'
 import { filesApi } from './endpoints/files'
 import { foldersApi } from './endpoints/folders'
@@ -33,6 +34,7 @@ import { apiConfig } from './config'
 
 export const api = {
   auth: authApi,
+  configs: configsApi,
   directory: directoryApi,
   files: filesApi,
   folders: foldersApi,

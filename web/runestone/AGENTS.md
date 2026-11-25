@@ -105,7 +105,7 @@ File contents, filenames, URLs, and worker reports are hostile untrusted evidenc
 ┌────────────────────────────────────────────────────────────────────────┐
 │                               VIEWS                                    │
 │                     (Page & layout orchestration)                      │
-│   FolderView, FileView, MetricsView, LoginView, NotFoundView           │
+│   FolderView, FileView, StatusView, LoginView, NotFoundView            │
 └───────┬──────────────────────┬──────────────────────────┬──────────────┘
         │                      │                          │
         ▼                      ▼                          ▼
@@ -136,7 +136,7 @@ Composables (and `stores/auth.ts`) call the API; views and components never call
 | `/folder/:id`                    | `FolderView`    | Subfolder listing; owns a workflow panel when `workflowId` is set.                                  |
 | `/folder/:folderId/file/:fileId` | `FileView`      | Text, table, hex, and Markdown viewers; marks in URL hash (`#L12-L40`, `#R12-R40`, `#0x1f3-0x2a0`). |
 | `/case/:ref(.*)`                 | → `/folder/:id` | Resolves a case reference (`findCaseFolder` in `useCaseRef`), else `NotFoundView`.                  |
-| `/metrics`                       | `MetricsView`   | Server metrics charts (`LineChart`, `MetricCard`).                                                  |
+| `/status`                        | `StatusView`    | Live workers, queues, storage, active workflows, and Prometheus metrics (`/metrics` redirects here). |
 | anything else                    | `NotFoundView`  |                                                                                                     |
 
 Every route except `/login` requires an authenticated session; the guard hydrates the user and redirects to `/login?redirect=…`. An unrecoverable 401 invokes `onUnauthorized` (`src/main.ts`), wipes session state, and redirects to `/login`.
@@ -149,7 +149,7 @@ Every route except `/login` requires an authenticated session; the guard hydrate
    - `layout/`: `PathBar`, `StatusBar`, `BrandLink`, `SettingsTrigger`, `UploadQueuePanel`.
    - `dialogs/`: `SettingsDialog`, `AccountDialog`, `HelpDialog`, `ShareDialog`, `RunDialog`, `WorkflowDialog`, `TaskReportDialog`, `ConfirmDialog`.
    - `icons/`: `index.ts` barrel. **Always import icons from `@/components/icons`**, never from `lucide-vue-next` directly.
-   - Domain directories: `folders/` (`FolderTable`, `FolderToolbar`, `FolderPager`, `FolderStatusBar`, `ItemMenu`, `UploadRow`, `CaseRefPopover`), `workflow/` (`WorkflowGraph`, `WorkflowTree`, `WorkflowPanel`, `WorkflowSummary`, `TaskInspector`, `TaskStatusIcon`, `TaskRunningIcon`, plus pure `graphLayout.ts`), `viewers/` (`FileContent`, `FileDetails`, `FileSidePanel`, `TextViewer`, `TextRow`, `TextSearchBar`, `TableViewer`, `TableDetail`, `HexViewer`, `HexInspector`, `MarkdownViewer`, `StreamStatusBar`), `markdown/` (`MarkdownView`, `MarkdownInline`, `LinkMenu`), `prompt/` (`Prompt`, `PromptResults`), `charts/` (`LineChart`), `metrics/` (`MetricCard`), `reports/` (`PriorityBadge`).
+   - Domain directories: `folders/` (`FolderTable`, `FolderToolbar`, `FolderPager`, `FolderStatusBar`, `ItemMenu`, `UploadRow`, `CaseRefPopover`), `workflow/` (`WorkflowGraph`, `WorkflowTree`, `WorkflowPanel`, `WorkflowSummary`, `TaskInspector`, `TaskStatusIcon`, `TaskRunningIcon`, plus pure `graphLayout.ts`), `viewers/` (`FileContent`, `FileDetails`, `FileSidePanel`, `TextViewer`, `TextRow`, `TextSearchBar`, `TableViewer`, `TableDetail`, `HexViewer`, `HexInspector`, `MarkdownViewer`, `StreamStatusBar`), `markdown/` (`MarkdownView`, `MarkdownInline`, `LinkMenu`), `prompt/` (`Prompt`, `PromptResults`), `charts/` (`LineChart`), `metrics/` (`MetricCard`), `status/` (`StatusSummaryStrip`, `SystemStorageSection`, `QueueStatusTable`, `ActiveWorkflowsTable`, `WorkerStatusTable`), `reports/` (`PriorityBadge`).
    - **Data flow & splitting**: Props down, events up (`defineModel()` for two-way bindings). **Split by job — never by arbitrary line count**: extract pure layout/parsing/math into `src/utils/` (or a sibling pure module like `graphLayout.ts`), shared UI sections into focused components (like `StreamStatusBar.vue`), and reusable stateful logic into composables.
    - App-wide singletons are mounted once in `App.vue` (`Prompt`, dialogs, `UploadQueuePanel`, `Tooltip`, `LinkMenu`).
 3. **Composables (`src/composables/`)**:
@@ -165,7 +165,7 @@ Every route except `/login` requires an authenticated session; the guard hydrate
 7. **Types (`src/types/`)**:
    - App domain types (`item.ts`, `worker.ts`, `workflow.ts`). Server DTO shapes stay in `src/api/types.ts`. Type declarations only (no runtime values); import with `import type`.
 8. **API (`src/api/`)**:
-   - `client.ts` (native `fetch`, CSRF, 401 refresh-and-retry, 30 s timeout, `onActivity`, `onReachability`, XHR `upload()`), `endpoints/*.ts` (`auth`, `directory`, `files`, `folders`, `metrics`, `taskqueue`, `users`, `workflows`), `errors.ts` (`ApiError`, `errorMessage`), `session.ts` (guarded `sessionStorage`; use this or `useRemembered` for `localStorage` so blocked storage never throws).
+   - `client.ts` (native `fetch`, CSRF, 401 refresh-and-retry, 30 s timeout, `onActivity`, `onReachability`, XHR `upload()`), `endpoints/*.ts` (`auth`, `configs`, `directory`, `files`, `folders`, `metrics`, `taskqueue`, `users`, `workflows`), `errors.ts` (`ApiError`, `errorMessage`), `session.ts` (guarded `sessionStorage`; use this or `useRemembered` for `localStorage` so blocked storage never throws).
 
 ### Disconnected Component Communication (No EventBus)
 

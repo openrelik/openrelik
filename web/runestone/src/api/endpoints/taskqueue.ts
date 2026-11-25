@@ -19,13 +19,25 @@ limitations under the License.
  */
 
 import { httpClient, type RequestOptions } from '../client'
-import type { RegisteredTask } from '../types'
+import type { RegisteredTask, TaskqueueStatus } from '../types'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
+
+export interface TaskqueueStatusOptions extends CallOptions {
+  /** Ask the server to bypass its short cache cooldown. */
+  refresh?: boolean
+}
 
 export const taskqueueApi = {
   /** The worker tasks online workers have registered; empty when none are online. */
   registeredTasks(options?: CallOptions): Promise<RegisteredTask[]> {
     return httpClient.get<RegisteredTask[]>('/taskqueue/tasks/registered', options)
+  },
+
+  /** Live aggregate Celery worker, slot, and per-queue/per-task status. */
+  status(options?: TaskqueueStatusOptions): Promise<TaskqueueStatus> {
+    const { refresh, ...requestOptions } = options ?? {}
+    const path = refresh ? '/taskqueue/status?refresh=true' : '/taskqueue/status'
+    return httpClient.get<TaskqueueStatus>(path, requestOptions)
   },
 }
