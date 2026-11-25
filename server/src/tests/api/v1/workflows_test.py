@@ -130,7 +130,9 @@ async def test_create_workflow_no_template_no_files(
 
 def test_get_workflow(fastapi_test_client, mocker, workflow_response):
     """Test get workflow route."""
-    mock_get_workflow_from_db = mocker.patch("api.v1.workflows.get_workflow_with_access")
+    mock_get_workflow_from_db = mocker.patch(
+        "api.v1.workflows.get_workflow_with_access"
+    )
     mock_get_workflow_from_db.return_value = workflow_response
 
     workflow_id = 1
@@ -155,7 +157,9 @@ async def test_update_workflow(
     fastapi_async_test_client, mocker, workflow_db_model, workflow_response
 ):
     """Test update workflow route."""
-    mock_get_workflow_from_db = mocker.patch("api.v1.workflows.get_workflow_with_access")
+    mock_get_workflow_from_db = mocker.patch(
+        "api.v1.workflows.get_workflow_with_access"
+    )
     mock_get_workflow_from_db.return_value = workflow_db_model
 
     mock_update_workflow_in_db = mocker.patch("api.v1.workflows.update_workflow_in_db")
@@ -192,7 +196,9 @@ async def test_copy_workflow(
     fastapi_async_test_client, mocker, workflow_db_model, workflow_response
 ):
     """Test copy workflow route."""
-    mock_get_workflow_from_db = mocker.patch("api.v1.workflows.get_workflow_with_access")
+    mock_get_workflow_from_db = mocker.patch(
+        "api.v1.workflows.get_workflow_with_access"
+    )
     mock_get_workflow_from_db.return_value = workflow_db_model
     parent_folder = Folder(id=10)
     workflow_db_model.folder.parent = parent_folder
@@ -247,7 +253,9 @@ async def test_run_workflow(
         "datastores.sql.models.folder.get_config",
         return_value={"server": {"storage_path": "/tmp/test"}},
     )
-    mock_get_workflow_from_db = mocker.patch("api.v1.workflows.get_workflow_with_access")
+    mock_get_workflow_from_db = mocker.patch(
+        "api.v1.workflows.get_workflow_with_access"
+    )
     mock_get_workflow_from_db.return_value = workflow_db_model
     mock_create_workflow = mocker.patch("lib.workflow_utils.create_workflow_signature")
     mock_create_workflow.return_value.apply_async.return_value = mocker.ANY
@@ -306,7 +314,9 @@ async def test_run_workflow_nested_tasks(
         "datastores.sql.models.folder.get_config",
         return_value={"server": {"storage_path": "/tmp/test"}},
     )
-    mock_get_workflow_from_db = mocker.patch("api.v1.workflows.get_workflow_with_access")
+    mock_get_workflow_from_db = mocker.patch(
+        "api.v1.workflows.get_workflow_with_access"
+    )
     mock_get_workflow_from_db.return_value = workflow_db_model
     mock_create_workflow = mocker.patch("lib.workflow_utils.create_workflow_signature")
     mock_create_workflow.return_value.apply_async.return_value = mocker.ANY
@@ -399,7 +409,9 @@ async def test_create_workflow_template(
     workflow_template_response,
 ):
     """Test create workflow template route."""
-    mock_get_workflow_from_db = mocker.patch("api.v1.workflows.get_workflow_with_access")
+    mock_get_workflow_from_db = mocker.patch(
+        "api.v1.workflows.get_workflow_with_access"
+    )
     mock_get_workflow_from_db.return_value = workflow_db_model
     mock_create_workflow_template_in_db = mocker.patch(
         "api.v1.workflows.create_workflow_template_in_db"
@@ -783,7 +795,6 @@ def test_get_task_signature(
     input_files = []
     output_path = "/tmp/output"
 
-
     task_signature = get_task_signature(
         db, user_db_model, task_data, input_files, output_path, workflow_db_model
     )
@@ -926,7 +937,9 @@ def test_get_workflow_status_running(fastapi_test_client, mocker):
     mock_task = _create_mock_task(mocker, "STARTED")
     mock_workflow.tasks = [mock_task]
 
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=mock_workflow)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=mock_workflow
+    )
 
     response = fastapi_test_client.get("/folders/1/workflows/1/status")
     assert response.status_code == 200
@@ -938,7 +951,9 @@ def test_get_workflow_status_pending(fastapi_test_client, mocker):
     mock_workflow = mocker.MagicMock()
     mock_workflow.tasks = []
 
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=mock_workflow)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=mock_workflow
+    )
 
     response = fastapi_test_client.get("/folders/1/workflows/1/status")
     assert response.status_code == 200
@@ -951,7 +966,9 @@ def test_get_workflow_status_none_task_status(fastapi_test_client, mocker):
     mock_task = _create_mock_task(mocker, None)
     mock_workflow.tasks = [mock_task]
 
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=mock_workflow)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=mock_workflow
+    )
 
     response = fastapi_test_client.get("/folders/1/workflows/1/status")
     assert response.status_code == 200
@@ -965,7 +982,9 @@ def test_get_workflow_status_mixed_success_and_none(fastapi_test_client, mocker)
     task2 = _create_mock_task(mocker, None)
     mock_workflow.tasks = [task1, task2]
 
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=mock_workflow)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=mock_workflow
+    )
 
     response = fastapi_test_client.get("/folders/1/workflows/1/status")
     assert response.status_code == 200
@@ -979,7 +998,9 @@ def test_get_workflow_status_complete(fastapi_test_client, mocker):
     task2 = _create_mock_task(mocker, "SUCCESS")
     mock_workflow.tasks = [task1, task2]
 
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=mock_workflow)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=mock_workflow
+    )
 
     response = fastapi_test_client.get("/folders/1/workflows/1/status")
     assert response.status_code == 200
@@ -993,7 +1014,9 @@ def test_get_workflow_status_complete_with_failures(fastapi_test_client, mocker)
     task2 = _create_mock_task(mocker, "FAILURE")
     mock_workflow.tasks = [task1, task2]
 
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=mock_workflow)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=mock_workflow
+    )
 
     response = fastapi_test_client.get("/folders/1/workflows/1/status")
     assert response.status_code == 200
@@ -1007,7 +1030,9 @@ def test_get_workflow_status_revoked(fastapi_test_client, mocker):
     task2 = _create_mock_task(mocker, "REVOKED")
     mock_workflow.tasks = [task1, task2]
 
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=mock_workflow)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=mock_workflow
+    )
 
     response = fastapi_test_client.get("/folders/1/workflows/1/status")
     assert response.status_code == 200
@@ -1027,7 +1052,8 @@ def other_users_workflow(mocker, db):
     db.get.side_effect = _get
     mocker.patch(
         "datastores.sql.crud.authz.check_user_access",
-        side_effect=lambda db, user, roles, folder=None, file=None: folder is own_folder,
+        side_effect=lambda db, user, roles, folder=None, file=None: folder
+        is own_folder,
     )
     return other_workflow
 
@@ -1056,7 +1082,9 @@ async def test_workflow_in_other_folder_denied(
     mock_update = mocker.patch("api.v1.workflows.update_workflow_in_db")
     mock_run = mocker.patch("api.v1.workflows.workflow_utils.run_workflow")
     mock_create = mocker.patch("api.v1.workflows.create_workflow_in_db")
-    mock_create_template = mocker.patch("api.v1.workflows.create_workflow_template_in_db")
+    mock_create_template = mocker.patch(
+        "api.v1.workflows.create_workflow_template_in_db"
+    )
 
     kwargs = {"json": body} if body is not None else {}
     response = await fastapi_async_test_client.request(method.upper(), path, **kwargs)
@@ -1067,7 +1095,9 @@ async def test_workflow_in_other_folder_denied(
 
 
 @pytest.mark.asyncio
-async def test_create_workflow_with_inaccessible_file(fastapi_async_test_client, mocker):
+async def test_create_workflow_with_inaccessible_file(
+    fastapi_async_test_client, mocker
+):
     """A workflow can't be created on files the user can't access."""
     _allow_file_access(mocker, has_access=False)
     mock_create = mocker.patch("lib.workflow_utils.create_workflow_in_db")
@@ -1098,14 +1128,21 @@ async def test_update_workflow_ignores_location_and_owner(
     fastapi_async_test_client, mocker, workflow_db_model, workflow_response
 ):
     """PATCH can't move a workflow to another folder or change who owns it."""
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model
+    )
     mock_update = mocker.patch(
         "api.v1.workflows.update_workflow_in_db", return_value=workflow_response
     )
 
     response = await fastapi_async_test_client.patch(
         "/folders/1/workflows/1",
-        json={"display_name": "renamed", "folder_id": 999, "user_id": 999, "file_ids": [999]},
+        json={
+            "display_name": "renamed",
+            "folder_id": 999,
+            "user_id": 999,
+            "file_ids": [999],
+        },
     )
 
     assert response.status_code == 200
@@ -1119,13 +1156,16 @@ async def test_update_workflow_ignores_location_and_owner(
 @pytest.fixture
 def workflow_with_inaccessible_file(mocker, workflow_db_model):
     """A workflow the user can edit, with an input file they can't access."""
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model
+    )
     other_file = mocker.MagicMock(id=7, is_deleted=False)
     workflow_db_model.files = [other_file]
     workflow_db_model.folder.parent = Folder(id=10)
     mocker.patch(
         "api.v1.workflows.check_user_access",
-        side_effect=lambda db, user, roles, folder=None, file=None: file is not other_file,
+        side_effect=lambda db, user, roles, folder=None, file=None: file
+        is not other_file,
     )
     return workflow_db_model
 
@@ -1164,12 +1204,15 @@ async def test_copy_workflow_without_access_to_parent_folder(
     fastapi_async_test_client, mocker, workflow_db_model
 ):
     """A copy can't be created in a parent folder the user can't edit."""
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model
+    )
     parent_folder = Folder(id=10)
     workflow_db_model.folder.parent = parent_folder
     mocker.patch(
         "api.v1.workflows.check_user_access",
-        side_effect=lambda db, user, roles, folder=None, file=None: folder is not parent_folder,
+        side_effect=lambda db, user, roles, folder=None, file=None: folder
+        is not parent_folder,
     )
     mock_create_subfolder = mocker.patch("api.v1.workflows.create_subfolder_in_db")
     mock_create = mocker.patch("api.v1.workflows.create_workflow_in_db")
@@ -1188,7 +1231,9 @@ async def test_generate_workflow_name_with_inaccessible_file(
     """Names and types of files the user can't access aren't sent to the LLM."""
     mock_get_llm = mocker.patch("api.v1.workflows.get_active_llm")
 
-    response = await fastapi_async_test_client.get("/folders/1/workflows/1/generate_name/")
+    response = await fastapi_async_test_client.get(
+        "/folders/1/workflows/1/generate_name/"
+    )
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     mock_get_llm.assert_not_called()
@@ -1207,7 +1252,9 @@ async def test_generate_workflow_name_success(
                     {
                         "type": "task",
                         "task_name": "openrelik-worker-strings.tasks.strings",
-                        "task_config": [{"name": "secret", "value": "should_be_stripped"}],
+                        "task_config": [
+                            {"name": "secret", "value": "should_be_stripped"}
+                        ],
                         "tasks": [],
                     }
                 ],
@@ -1215,7 +1262,9 @@ async def test_generate_workflow_name_success(
         }
     )
     workflow_db_model.files = [file_db_model]
-    mocker.patch("api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model)
+    mocker.patch(
+        "api.v1.workflows.get_workflow_with_access", return_value=workflow_db_model
+    )
     mocker.patch("api.v1.workflows._check_files_accessible")
     mocker.patch(
         "api.v1.workflows.get_active_llm",
@@ -1229,7 +1278,9 @@ async def test_generate_workflow_name_success(
     mock_manager.get_provider.return_value = mock_provider
     mocker.patch("api.v1.workflows.manager.LLMManager", return_value=mock_manager)
 
-    response = await fastapi_async_test_client.get("/folders/1/workflows/1/generate_name/")
+    response = await fastapi_async_test_client.get(
+        "/folders/1/workflows/1/generate_name/"
+    )
 
     assert response.status_code == 200
     assert response.json() == {"generated_name": "Evtx Timeline And Report Extra"}
@@ -1239,3 +1290,274 @@ async def test_generate_workflow_name_success(
     sent_prompt = mock_llm.generate.call_args.kwargs["prompt"]
     assert file_db_model.display_name in sent_prompt
     assert "should_be_stripped" not in sent_prompt
+
+
+def test_get_active_workflows_filters_acl_and_dead_workflows(
+    fastapi_test_client, mocker, user_db_model
+):
+    """GET /workflows/active returns only live workflows the user can view."""
+    from datetime import datetime, timezone
+    import uuid
+    from datastores.sql.models.workflow import Task
+
+    now = datetime.now(timezone.utc)
+    u_live = uuid.uuid4()
+    u_dead_fail = uuid.uuid4()
+    u_dead_child = uuid.uuid4()
+    u_denied = uuid.uuid4()
+
+    folder_ok = Folder(
+        id=10, display_name="Case A", is_deleted=False, uuid=uuid.uuid4(), user_id=1
+    )
+    folder_denied = Folder(
+        id=20,
+        display_name="Secret Case",
+        is_deleted=False,
+        uuid=uuid.uuid4(),
+        user_id=2,
+    )
+    folder_deleted = Folder(
+        id=30, display_name="Trash Case", is_deleted=True, uuid=uuid.uuid4(), user_id=1
+    )
+
+    wf_live = Workflow(
+        id=101,
+        display_name="Active Plaso",
+        uuid=uuid.uuid4(),
+        spec_json=json.dumps(
+            {
+                "workflow": {
+                    "type": "chain",
+                    "tasks": [
+                        {
+                            "type": "task",
+                            "uuid": str(u_live),
+                            "queue_name": "openrelik-worker-plaso",
+                            "tasks": [],
+                        }
+                    ],
+                }
+            }
+        ),
+        folder_id=10,
+        folder=folder_ok,
+        user_id=1,
+        user=user_db_model,
+        created_at=now,
+        updated_at=now,
+        tasks=[
+            Task(
+                id=1,
+                display_name="plaso",
+                uuid=u_live,
+                status_short="PENDING",
+                user_id=1,
+                workflow_id=101,
+                created_at=now,
+                updated_at=now,
+            )
+        ],
+    )
+
+    wf_dead = Workflow(
+        id=102,
+        display_name="Failed Chain",
+        uuid=uuid.uuid4(),
+        spec_json=json.dumps(
+            {
+                "workflow": {
+                    "type": "chain",
+                    "tasks": [
+                        {
+                            "type": "task",
+                            "uuid": str(u_dead_fail),
+                            "queue_name": "q1",
+                            "tasks": [
+                                {
+                                    "type": "task",
+                                    "uuid": str(u_dead_child),
+                                    "queue_name": "q1",
+                                    "tasks": [],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        ),
+        folder_id=10,
+        folder=folder_ok,
+        user_id=1,
+        user=user_db_model,
+        created_at=now,
+        updated_at=now,
+        tasks=[
+            Task(
+                id=2,
+                display_name="step1",
+                uuid=u_dead_fail,
+                status_short="FAILURE",
+                user_id=1,
+                workflow_id=102,
+                created_at=now,
+                updated_at=now,
+            ),
+            Task(
+                id=3,
+                display_name="step2",
+                uuid=u_dead_child,
+                status_short="PENDING",
+                user_id=1,
+                workflow_id=102,
+                created_at=now,
+                updated_at=now,
+            ),
+        ],
+    )
+
+    wf_denied = Workflow(
+        id=103,
+        display_name="Denied Workflow",
+        uuid=uuid.uuid4(),
+        spec_json=json.dumps(
+            {
+                "workflow": {
+                    "type": "chain",
+                    "tasks": [
+                        {
+                            "type": "task",
+                            "uuid": str(u_denied),
+                            "queue_name": "q1",
+                            "tasks": [],
+                        }
+                    ],
+                }
+            }
+        ),
+        folder_id=20,
+        folder=folder_denied,
+        user_id=2,
+        user=user_db_model,
+        created_at=now,
+        updated_at=now,
+        tasks=[
+            Task(
+                id=4,
+                display_name="secret",
+                uuid=u_denied,
+                status_short="STARTED",
+                user_id=2,
+                workflow_id=103,
+                created_at=now,
+                updated_at=now,
+            )
+        ],
+    )
+
+    wf_deleted_folder = Workflow(
+        id=104,
+        display_name="Deleted Folder WF",
+        uuid=uuid.uuid4(),
+        spec_json=None,
+        folder_id=30,
+        folder=folder_deleted,
+        user_id=1,
+        user=user_db_model,
+        created_at=now,
+        updated_at=now,
+        tasks=[],
+    )
+
+    mocker.patch(
+        "api.v1.workflows.get_candidate_active_workflows_from_db",
+        return_value=[wf_live, wf_dead, wf_denied, wf_deleted_folder],
+    )
+    mocker.patch(
+        "api.v1.workflows.celery_utils.get_live_task_snapshot",
+        return_value={
+            "live_task_ids": {u_live.hex},
+            "online_queues": set(),
+            "truncated_queues": set(),
+        },
+    )
+    mocker.patch(
+        "api.v1.workflows.check_user_access",
+        side_effect=lambda db, user, roles, folder=None: folder.id == 10,
+    )
+
+    response = fastapi_test_client.get("/workflows/active")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == 101
+    assert body[0]["folder_id"] == 10
+    assert body[0]["folder_display_name"] == "Case A"
+    assert body[0]["tasks_queued"] == 1
+    assert body[0]["stall_reason"] == "no_worker"
+
+
+def test_get_active_workflows_degrades_when_broker_unavailable(
+    fastapi_test_client, mocker, user_db_model
+):
+    """BrokerUnavailableError leaves stall_reason=None instead of failing the request."""
+    from datetime import datetime, timezone
+    import uuid
+    from datastores.sql.models.workflow import Task
+    from lib.celery_utils import BrokerUnavailableError
+
+    now = datetime.now(timezone.utc)
+    u1 = uuid.uuid4()
+    folder = Folder(
+        id=10, display_name="Case A", is_deleted=False, uuid=uuid.uuid4(), user_id=1
+    )
+    wf = Workflow(
+        id=201,
+        display_name="Running WF",
+        uuid=uuid.uuid4(),
+        spec_json=json.dumps(
+            {
+                "workflow": {
+                    "type": "chain",
+                    "tasks": [
+                        {
+                            "type": "task",
+                            "uuid": str(u1),
+                            "queue_name": "q1",
+                            "tasks": [],
+                        }
+                    ],
+                }
+            }
+        ),
+        folder_id=10,
+        folder=folder,
+        user_id=1,
+        user=user_db_model,
+        created_at=now,
+        updated_at=now,
+        tasks=[
+            Task(
+                id=1,
+                display_name="t1",
+                uuid=u1,
+                status_short="STARTED",
+                user_id=1,
+                workflow_id=201,
+                created_at=now,
+                updated_at=now,
+            )
+        ],
+    )
+    mocker.patch(
+        "api.v1.workflows.get_candidate_active_workflows_from_db", return_value=[wf]
+    )
+    mocker.patch(
+        "api.v1.workflows.celery_utils.get_live_task_snapshot",
+        side_effect=BrokerUnavailableError("redis down"),
+    )
+    mocker.patch("api.v1.workflows.check_user_access", return_value=True)
+
+    response = fastapi_test_client.get("/workflows/active")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["stall_reason"] is None

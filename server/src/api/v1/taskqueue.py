@@ -15,18 +15,18 @@
 import os
 
 from celery.app import Celery
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query, status
 
 from lib import celery_utils
- 
+from . import schemas
+
 from openrelik_common import telemetry
 from openrelik_common.celery_utils import configure_celery_app
-
 
 redis_url = os.getenv("REDIS_URL")
 celery = configure_celery_app(Celery(broker=redis_url, backend=redis_url))
 
-telemetry.setup_telemetry(service_name='openrelik-server')
+telemetry.setup_telemetry(service_name="openrelik-server")
 telemetry.instrument_celery_app(celery)
 
 router = APIRouter()
@@ -80,3 +80,19 @@ def get_revoked_tasks():
 @router.get("/queues/active/")
 def get_active_queues():
     return celery_utils.get_active_queues(celery)
+
+
+@router.get("/status", response_model=schemas.TaskqueueStatusResponse)
+def get_taskqueue_status(
+    refresh: bool = Query(
+        default=False, description="Bypass short cache cooldown when true."
+    ),
+):
+    """Return aggregate Celery worker, slot, and per-queue/per-task status."""
+    try:
+        return celery_utils.get_cluster_status(celery, refresh=refresh)
+    except celery_utils.BrokerUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc

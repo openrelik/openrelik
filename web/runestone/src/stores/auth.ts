@@ -43,6 +43,7 @@ import { closeLinkMenu } from '@/composables/useLinkMenu'
 import { clearPromptState } from '@/composables/usePrompt'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { clearShareDialog } from '@/composables/useShareDialog'
+import { clearStatus } from '@/composables/useStatus'
 import { clearTaskReport } from '@/composables/useTaskReport'
 import { forgetTextFiles } from '@/composables/useTextStream'
 import { clearUploads } from '@/composables/useUploadQueue'
@@ -95,6 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
       useRunStore().clearRun()
       clearApiKeys()
       clearShareDialog()
+      clearStatus()
       clearTaskReport()
       closeWorkflowDialog()
       clearWorkflowState()

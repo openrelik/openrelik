@@ -14,6 +14,7 @@
 
 """Workflow helpers to create, manipulate or run workflows."""
 
+from datetime import datetime, timezone
 import json
 import os
 from typing import Optional
@@ -432,3 +433,238 @@ def run_workflow(
     db.refresh(workflow)
 
     return workflow
+
+
+def _normalize_task_state(status_short: Optional[str]) -> str:
+    """Map Celery task status strings into the five workflow summary states."""
+    if not status_short:
+        return "pending"
+    upper = status_short.upper()
+    if upper == "SUCCESS":
+        return "success"
+    if upper in ("FAILURE", "REJECTED", "REVOKED"):
+        return "failed"
+    if upper in ("STARTED", "PROGRESS"):
+        return "running"
+    return "pending"
+
+
+def summarize_workflow_tasks(
+    spec_json: Optional[str],
+    tasks: list[Task],
+    *,
+    live_task_ids: Optional[set[str]] = None,
+    online_queues: Optional[set[str]] = None,
+    truncated_queues: Optional[set[str]] = None,
+    grace_seconds: float = 60.0,
+) -> dict:
+    """Summarize task progress, DAG-aware liveness, and stall status for a workflow.
+
+    Mirrors Runestone's ``isActive`` rule: tasks chained after a failed task, or a
+    chord callback whose header had a failure, never execute and are counted as
+    ``skipped`` rather than keeping the workflow active forever.
+
+    When ``live_task_ids`` and ``online_queues`` are provided from Celery/Redis,
+    active tasks older than ``grace_seconds`` are cross-checked to detect
+    ``no_worker`` (queued in Redis for an offline queue) or ``stalled`` (missing
+    from Celery and Redis altogether).
+
+    Args:
+        spec_json: JSON string describing the workflow tree, or None.
+        tasks: Database ``Task`` records belonging to the workflow.
+        live_task_ids: Normalized hex UUIDs currently active, reserved, or queued.
+        online_queues: Celery queue names that currently have >=1 online worker.
+        truncated_queues: Queues whose Redis ``LRANGE`` scan was truncated.
+        grace_seconds: Minimum age since last task update before flagging stalled.
+
+    Returns:
+        dict: Counts, ``elapsed_seconds``, ``is_active``, and ``stall_reason``.
+    """
+    counts = {
+        "success": 0,
+        "running": 0,
+        "queued": 0,
+        "waiting": 0,
+        "failed": 0,
+        "skipped": 0,
+    }
+
+    if not tasks:
+        return {
+            "tasks_total": 0,
+            "tasks_done": 0,
+            "tasks_running": 0,
+            "tasks_queued": 0,
+            "tasks_waiting": 0,
+            "tasks_failed": 0,
+            "tasks_skipped": 0,
+            "elapsed_seconds": 0.0,
+            "is_active": False,
+            "stall_reason": None,
+        }
+
+    status_by_uuid: dict[str, str] = {}
+    for task in tasks:
+        if task.uuid is None:
+            continue
+        state = _normalize_task_state(task.status_short)
+        status_by_uuid[task.uuid.hex] = state
+        status_by_uuid[str(task.uuid)] = state
+
+    parsed_root = None
+    if spec_json:
+        try:
+            spec = json.loads(spec_json)
+            if isinstance(spec, dict) and isinstance(spec.get("workflow"), dict):
+                parsed_root = spec["workflow"]
+        except (TypeError, ValueError):
+            parsed_root = None
+
+    visited_any = False
+    dispatched_active: list[tuple[str, str]] = []
+
+    def _walk_nodes(
+        nodes: list, upstream_ready: bool, upstream_failed: bool
+    ) -> tuple[bool, bool]:
+        """Walk spec nodes, returning ``(any_failed, all_succeeded)`` for this subtree."""
+        nonlocal visited_any
+        subtree_failed = False
+        subtree_all_succeeded = True
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            node_type = node.get("type")
+            if node_type == "task":
+                visited_any = True
+                raw_uuid = str(node.get("uuid") or "")
+                hex_uuid = raw_uuid.replace("-", "")
+                state = status_by_uuid.get(raw_uuid) or status_by_uuid.get(hex_uuid)
+                if upstream_failed:
+                    effective = "skipped"
+                elif state is None or state == "pending":
+                    effective = "queued" if upstream_ready else "waiting"
+                else:
+                    effective = state
+                counts[effective] += 1
+                if effective in ("running", "queued"):
+                    q_name = str(node.get("queue_name") or "")
+                    if not q_name and isinstance(node.get("task_name"), str):
+                        q_name = node["task_name"].split(".")[0]
+                    dispatched_active.append((hex_uuid, q_name))
+                node_failed = effective == "failed"
+                node_succeeded = effective == "success"
+                child_failed, child_all_succeeded = _walk_nodes(
+                    node.get("tasks") or [],
+                    upstream_ready=node_succeeded,
+                    upstream_failed=upstream_failed or node_failed,
+                )
+                if node_failed or child_failed:
+                    subtree_failed = True
+                if not node_succeeded or not child_all_succeeded:
+                    subtree_all_succeeded = False
+            elif node_type == "chord":
+                header_failed, header_all_succeeded = _walk_nodes(
+                    node.get("tasks") or [],
+                    upstream_ready=upstream_ready,
+                    upstream_failed=upstream_failed,
+                )
+                callback = node.get("callback")
+                cb_failed = False
+                cb_succeeded = True
+                if isinstance(callback, dict):
+                    cb_failed, cb_succeeded = _walk_nodes(
+                        [callback],
+                        upstream_ready=not header_failed and header_all_succeeded,
+                        upstream_failed=upstream_failed or header_failed,
+                    )
+                if header_failed or cb_failed:
+                    subtree_failed = True
+                if not header_all_succeeded or not cb_succeeded:
+                    subtree_all_succeeded = False
+            elif node_type == "chain":
+                ch_failed, ch_succeeded = _walk_nodes(
+                    node.get("tasks") or [],
+                    upstream_ready=upstream_ready,
+                    upstream_failed=upstream_failed,
+                )
+                if ch_failed:
+                    subtree_failed = True
+                if not ch_succeeded:
+                    subtree_all_succeeded = False
+        return subtree_failed, subtree_all_succeeded
+
+    if parsed_root and isinstance(parsed_root.get("tasks"), list):
+        _walk_nodes(parsed_root["tasks"], upstream_ready=True, upstream_failed=False)
+
+    if not visited_any:
+        for task in tasks:
+            state = _normalize_task_state(task.status_short)
+            effective = "queued" if state == "pending" else state
+            counts[effective] += 1
+            if effective in ("running", "queued") and task.uuid is not None:
+                dispatched_active.append((task.uuid.hex, ""))
+
+    total = sum(counts.values())
+    is_active = (counts["running"] + counts["queued"] + counts["waiting"]) > 0
+
+    now = datetime.now(timezone.utc)
+    created_times = [t.created_at for t in tasks if t.created_at is not None]
+    if created_times:
+        started_at = min(created_times)
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        elapsed_seconds = max(0.0, (now - started_at).total_seconds())
+    else:
+        elapsed_seconds = 0.0
+
+    stall_reason: Optional[str] = None
+    if is_active and live_task_ids is not None and dispatched_active:
+        online_q = online_queues or set()
+        trunc_q = truncated_queues or set()
+
+        def _task_ts(db_task: Task) -> Optional[datetime]:
+            ts = db_task.updated_at or db_task.created_at
+            if ts is None:
+                return None
+            return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+
+        # Measure grace against the most recent task update in the workflow so a slow
+        # upstream step finishing after >60s does not falsely flag its newly unlocked
+        # successor as stalled while a cached live_task_ids snapshot catches up.
+        activity_times = [ts for t in tasks if (ts := _task_ts(t)) is not None]
+        workflow_idle_seconds = (
+            max(0.0, (now - max(activity_times)).total_seconds())
+            if activity_times
+            else grace_seconds + 1.0
+        )
+        past_grace = workflow_idle_seconds >= grace_seconds
+
+        has_healthy_live = False
+        has_offline_queued = False
+
+        for hex_uuid, q_name in dispatched_active:
+            in_celery_or_truncated = (hex_uuid in live_task_ids) or (q_name in trunc_q)
+            if in_celery_or_truncated:
+                if q_name and q_name not in online_q:
+                    has_offline_queued = True
+                else:
+                    has_healthy_live = True
+
+        if not has_healthy_live:
+            if has_offline_queued:
+                stall_reason = "no_worker"
+            elif past_grace:
+                stall_reason = "stalled"
+
+    return {
+        "tasks_total": total,
+        "tasks_done": counts["success"],
+        "tasks_running": counts["running"],
+        "tasks_queued": counts["queued"],
+        "tasks_waiting": counts["waiting"],
+        "tasks_failed": counts["failed"],
+        "tasks_skipped": counts["skipped"],
+        "elapsed_seconds": round(elapsed_seconds, 1),
+        "is_active": is_active,
+        "stall_reason": stall_reason,
+    }

@@ -62,6 +62,7 @@ def query_prometheus_range(query: str, range: int = 3600, step: int = 60) -> dic
             "start": start_timestamp,
             "end": end_timestamp,
         },
+        timeout=10,
     )
     response.raise_for_status()
     return response.json()

@@ -15,7 +15,7 @@
 import uuid as uuid_module
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import UUID, ForeignKey, Integer, UnicodeText
+from sqlalchemy import UUID, ForeignKey, Index, Integer, UnicodeText, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import BaseModel
@@ -37,8 +37,12 @@ class Workflow(BaseModel):
     user: Mapped["User"] = relationship(back_populates="workflows")
     folder_id: Mapped[Optional[int]] = mapped_column(ForeignKey("folder.id"))
     folder: Mapped[Optional["Folder"]] = relationship(back_populates="workflows")
-    template_id: Mapped[Optional[int]] = mapped_column(ForeignKey("workflowtemplate.id"))
-    template: Mapped[Optional["WorkflowTemplate"]] = relationship(back_populates="workflows")
+    template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("workflowtemplate.id")
+    )
+    template: Mapped[Optional["WorkflowTemplate"]] = relationship(
+        back_populates="workflows"
+    )
     files: Mapped[List["File"]] = relationship(
         secondary=file_workflow_association_table, back_populates="workflows"
     )
@@ -60,6 +64,19 @@ class WorkflowTemplate(BaseModel):
 
 
 class Task(BaseModel):
+    __table_args__ = (
+        Index(
+            "ix_task_workflow_id_non_terminal",
+            "workflow_id",
+            postgresql_where=text(
+                "status_short IS NULL OR status_short NOT IN ('SUCCESS', 'FAILURE', 'REVOKED', 'REJECTED')"
+            ),
+            sqlite_where=text(
+                "status_short IS NULL OR status_short NOT IN ('SUCCESS', 'FAILURE', 'REVOKED', 'REJECTED')"
+            ),
+        ),
+    )
+
     display_name: Mapped[str] = mapped_column(UnicodeText, index=True)
     description: Mapped[Optional[str]] = mapped_column(UnicodeText, index=False)
     uuid: Mapped[uuid_module.UUID] = mapped_column(UUID(as_uuid=True))

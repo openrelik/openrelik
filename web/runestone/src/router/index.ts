@@ -53,9 +53,13 @@ const router = createRouter({
       component: () => import('@/views/NotFoundView.vue'),
     },
     {
+      path: '/status',
+      name: 'status',
+      component: () => import('@/views/StatusView.vue'),
+    },
+    {
       path: '/metrics',
-      name: 'metrics',
-      component: () => import('@/views/MetricsView.vue'),
+      redirect: '/status',
     },
     {
       path: '/:pathMatch(.*)*',

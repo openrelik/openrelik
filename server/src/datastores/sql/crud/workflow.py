@@ -15,12 +15,52 @@
 import json
 import uuid
 
-from sqlalchemy.orm import Session
+from sqlalchemy import exists, or_
+from sqlalchemy.orm import Session, selectinload
 
 from api.v1 import schemas
 from datastores.sql.crud.file import get_file_from_db
+from datastores.sql.models.folder import Folder
 from datastores.sql.models.workflow import Task, TaskReport, Workflow, WorkflowTemplate
 from lib.workflow_spec_utils import add_unique_parameter_names
+
+TERMINAL_TASK_STATES = ("SUCCESS", "FAILURE", "REVOKED", "REJECTED")
+
+
+def get_candidate_active_workflows_from_db(db: Session) -> list[Workflow]:
+    """Return non-deleted workflows that still have at least one non-terminal task.
+
+    Callers should still run DAG-aware liveness filtering (to exclude chains whose
+    upstream task failed) and folder ACL checks before exposing results to a user.
+
+    Args:
+        db (Session): SQLAlchemy session object.
+
+    Returns:
+        list[Workflow]: Candidate active workflows ordered newest updated first.
+    """
+    non_terminal_task = exists().where(
+        Task.workflow_id == Workflow.id,
+        or_(
+            Task.status_short.is_(None), Task.status_short.notin_(TERMINAL_TASK_STATES)
+        ),
+    )
+    return (
+        db.query(Workflow)
+        .join(Folder, Folder.id == Workflow.folder_id)
+        .filter(
+            non_terminal_task,
+            or_(Workflow.is_deleted.is_(False), Workflow.is_deleted.is_(None)),
+            or_(Folder.is_deleted.is_(False), Folder.is_deleted.is_(None)),
+        )
+        .options(
+            selectinload(Workflow.tasks),
+            selectinload(Workflow.user),
+            selectinload(Workflow.folder),
+        )
+        .order_by(Workflow.updated_at.desc(), Workflow.id.desc())
+        .all()
+    )
 
 
 def get_file_workflows_from_db(db: Session, file_id: int) -> list[Workflow]:
@@ -172,7 +212,9 @@ def get_workflow_templates_from_db(db: Session) -> list[WorkflowTemplate]:
             List of WorkflowTemplate objects
         """
         templates_to_return = []
-        all_templates = db.query(WorkflowTemplate).order_by(WorkflowTemplate.id.desc()).all()
+        all_templates = (
+            db.query(WorkflowTemplate).order_by(WorkflowTemplate.id.desc()).all()
+        )
 
         for template in all_templates:
             # If the template does not have task_config, skip processing early
@@ -227,7 +269,9 @@ def create_workflow_template_in_db(
     return db_template
 
 
-def update_workflow_template_in_db(db: Session, template: WorkflowTemplate) -> WorkflowTemplate:
+def update_workflow_template_in_db(
+    db: Session, template: WorkflowTemplate
+) -> WorkflowTemplate:
     """Update a workflow template.
 
     Only fields that were explicitly set on the update are written, so a field

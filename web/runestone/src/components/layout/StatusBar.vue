@@ -106,12 +106,12 @@ const { status: connection } = useConnection()
     </span>
 
     <RouterLink
-      to="/metrics"
+      to="/status"
       class="cursor-pointer rounded-(--radius-check) px-1 text-ink-muted hover:bg-surface hover:text-ink"
       active-class="text-ink"
-      v-tooltip="'Worker task counts over time'"
+      v-tooltip="'Workers, queues, active workflows, and metrics'"
     >
-      metrics
+      status
     </RouterLink>
     <SettingsTrigger />
 

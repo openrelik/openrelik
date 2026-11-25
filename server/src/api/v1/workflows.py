@@ -33,6 +33,7 @@ from datastores.sql.crud.workflow import (
     create_workflow_template_in_db,
     delete_workflow_template_from_db,
     delete_workflow_from_db,
+    get_candidate_active_workflows_from_db,
     get_folder_workflows_from_db,
     get_workflow_template_from_db,
     get_workflow_templates_from_db,
@@ -41,7 +42,7 @@ from datastores.sql.crud.workflow import (
 )
 from datastores.sql.database import get_db_connection
 from datastores.sql.models.role import Role
-from lib import workflow_utils
+from lib import celery_utils, workflow_utils
 from lib.reporting_utils import create_workflow_report
 from lib.workflow_utils import TemplateNotFoundError, replace_uuids
 
@@ -55,7 +56,9 @@ EDIT_ROLES = [Role.EDITOR, Role.OWNER]
 UPDATABLE_WORKFLOW_FIELDS = {"display_name", "description", "spec_json"}
 
 
-def _check_file_access(db: Session, current_user: schemas.User, file_ids: List[int]) -> None:
+def _check_file_access(
+    db: Session, current_user: schemas.User, file_ids: List[int]
+) -> None:
     """Check that the user can view every file in file_ids.
 
     Raises:
@@ -66,13 +69,16 @@ def _check_file_access(db: Session, current_user: schemas.User, file_ids: List[i
         file = get_file_from_db(db, file_id)
         if not file or file.is_deleted:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=f"File {file_id} not found."
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"File {file_id} not found.",
             )
         files.append(file)
     _check_files_accessible(db, current_user, files)
 
 
-def _check_files_accessible(db: Session, current_user: schemas.User, files: list) -> None:
+def _check_files_accessible(
+    db: Session, current_user: schemas.User, files: list
+) -> None:
     """Check that the user can view every file in files.
 
     Access to a workflow's folder doesn't imply access to its input files, which are usually in
@@ -84,7 +90,8 @@ def _check_files_accessible(db: Session, current_user: schemas.User, files: list
     for file in files:
         if not check_user_access(db, current_user, VIEW_ROLES, file=file):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail=f"No access to file {file.id}"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"No access to file {file.id}",
             )
 
 
@@ -241,7 +248,9 @@ def update_workflow(
     """
 
     # Fetch workflow to update from database
-    workflow_from_db = get_workflow_with_access(db, current_user, workflow_id, EDIT_ROLES)
+    workflow_from_db = get_workflow_with_access(
+        db, current_user, workflow_id, EDIT_ROLES
+    )
     workflow_model = schemas.Workflow(**workflow_from_db.__dict__)
 
     # Update workflow data with supplied values
@@ -281,7 +290,9 @@ def copy_workflow(
         schemas.WorkflowResponse: The copied workflow.
     """
 
-    workflow_to_copy = get_workflow_with_access(db, current_user, workflow_id, EDIT_ROLES)
+    workflow_to_copy = get_workflow_with_access(
+        db, current_user, workflow_id, EDIT_ROLES
+    )
     files_to_copy = [file for file in workflow_to_copy.files if not file.is_deleted]
     _check_files_accessible(db, current_user, files_to_copy)
 
@@ -671,6 +682,76 @@ def generate_workflow_name(
     return {"generated_name": generated_name.strip()}
 
 
+# Get active workflows accessible to the current user
+# /workflows/active
+@router_root.get("/active", response_model=List[schemas.ActiveWorkflowResponse])
+def get_active_workflows(
+    db: Session = Depends(get_db_connection),
+    current_user: schemas.User = Depends(get_current_active_user),
+) -> List[schemas.ActiveWorkflowResponse]:
+    """Return active workflows the current user has at least viewer access to."""
+    candidates = get_candidate_active_workflows_from_db(db)
+    live_snapshot = None
+    if candidates:
+        try:
+            live_snapshot = celery_utils.get_live_task_snapshot(
+                workflow_utils.celery_app
+            )
+        except celery_utils.BrokerUnavailableError:
+            live_snapshot = None
+
+    folder_access_cache: dict[int, bool] = {}
+    active_workflows: list[schemas.ActiveWorkflowResponse] = []
+
+    for workflow in candidates:
+        folder = workflow.folder
+        if not folder or folder.is_deleted:
+            continue
+
+        summary = workflow_utils.summarize_workflow_tasks(
+            workflow.spec_json,
+            workflow.tasks,
+            live_task_ids=live_snapshot["live_task_ids"] if live_snapshot else None,
+            online_queues=live_snapshot["online_queues"] if live_snapshot else None,
+            truncated_queues=(
+                live_snapshot["truncated_queues"] if live_snapshot else None
+            ),
+        )
+        if not summary["is_active"]:
+            continue
+
+        folder_id = folder.id
+        if folder_id not in folder_access_cache:
+            folder_access_cache[folder_id] = bool(
+                check_user_access(db, current_user, VIEW_ROLES, folder=folder)
+            )
+        if not folder_access_cache[folder_id]:
+            continue
+
+        active_workflows.append(
+            schemas.ActiveWorkflowResponse(
+                id=workflow.id,
+                display_name=workflow.display_name,
+                folder_id=folder_id,
+                folder_display_name=folder.display_name,
+                user=workflow.user,
+                created_at=workflow.created_at,
+                updated_at=workflow.updated_at,
+                tasks_total=summary["tasks_total"],
+                tasks_done=summary["tasks_done"],
+                tasks_running=summary["tasks_running"],
+                tasks_queued=summary["tasks_queued"],
+                tasks_waiting=summary["tasks_waiting"],
+                tasks_failed=summary["tasks_failed"],
+                tasks_skipped=summary["tasks_skipped"],
+                elapsed_seconds=summary["elapsed_seconds"],
+                stall_reason=summary["stall_reason"],
+            )
+        )
+
+    return active_workflows
+
+
 # Get workflow
 # /workflows/{workflow_id}
 @router_root.get("/{workflow_id}")
@@ -701,6 +782,7 @@ def get_workflow(
     """
     return get_workflow_with_access(db, current_user, workflow_id, VIEW_ROLES)
 
+
 # Generate workflow report
 # /workflows/{workflow_id}/report
 @router_root.get("/{workflow_id}/report/")
@@ -717,4 +799,3 @@ def generate_workflow_report(
         markdown=markdown,
     )
     return response
-

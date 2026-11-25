@@ -22,11 +22,20 @@ limitations under the License.
  */
 
 import { httpClient, type RequestOptions } from '../client'
-import type { WorkflowRecord, WorkflowSpec, WorkflowTemplateRecord } from '../types'
+import type {
+  ActiveWorkflowSummary,
+  WorkflowRecord,
+  WorkflowSpec,
+  WorkflowTemplateRecord,
+} from '../types'
 
 type CallOptions = Pick<RequestOptions, 'signal' | 'background'>
 
 export const workflowsApi = {
+  /** Active workflows in folders the current user can view. */
+  active(options?: CallOptions): Promise<ActiveWorkflowSummary[]> {
+    return httpClient.get<ActiveWorkflowSummary[]>('/workflows/active', options)
+  },
   /**
    * Creates a workflow over `fileIds`: empty, or from a template (its workers
    * and options, with new task uuids). The server makes a new folder inside

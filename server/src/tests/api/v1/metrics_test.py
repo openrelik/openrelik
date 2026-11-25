@@ -59,6 +59,7 @@ def test_query_prometheus_range(mocker):
             ),
             "end": pytest.approx(datetime.now().timestamp()),
         },
+        timeout=10,
     )
 
 
