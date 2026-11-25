@@ -27,7 +27,7 @@ import {
   Shrink,
   Trash2,
 } from '@/components/icons'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 
 import TaskInspector from '@/components/workflow/TaskInspector.vue'
 import WorkflowGraph from '@/components/workflow/WorkflowGraph.vue'
@@ -134,6 +134,18 @@ function toggleGroups() {
 }
 const selectedTask = computed(
   () => everyTask(props.workflow).find((task) => task.id === props.selectedId) ?? null,
+)
+// Keep the last selected task mounted while SlidePane collapses so the panel
+// slides out with its content instead of flashing an empty box.
+const shownTask = shallowRef<Task | null>(selectedTask.value)
+watch(selectedTask, (current) => {
+  if (current) shownTask.value = current
+})
+watch(
+  () => props.workflow.id,
+  () => {
+    shownTask.value = selectedTask.value
+  },
 )
 
 function enterFullscreen() {
@@ -466,7 +478,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
         tabindex="-1"
         v-autofocus
         v-trap-focus
-        class="fixed inset-0 z-50 flex flex-col bg-canvas text-dense outline-none"
+        class="fixed inset-0 z-(--z-overlay) flex flex-col bg-canvas text-dense outline-none"
         role="dialog"
         aria-modal="true"
         :aria-label="`${folderName} — flowchart`"
@@ -547,8 +559,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, { capture: true }
           <SlidePane :open="Boolean(selectedTask)" edge="right" class="shrink-0">
             <div class="flex min-h-0 w-72 flex-col border-l border-border bg-surface">
               <TaskInspector
-                v-if="selectedTask"
-                :task="selectedTask"
+                v-if="shownTask"
+                :task="shownTask"
                 :folder-id="workflow.folderId"
                 :editable="editable"
                 class="min-h-0 flex-1"

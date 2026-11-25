@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import FolderPager from '@/components/folders/FolderPager.vue'
@@ -466,6 +466,21 @@ const litProducerId = computed(() =>
 )
 
 /** A task picked in the chart, or none: a click on empty space also puts out the lit producer. */
+const shownTask = shallowRef<Task | null>(null)
+watch(
+  task,
+  (current) => {
+    if (current) shownTask.value = current
+  },
+  { immediate: true },
+)
+watch(
+  () => workflow.value?.id,
+  () => {
+    shownTask.value = task.value ?? null
+  },
+)
+
 function selectTask(picked: Task | null) {
   taskId.value = picked?.id ?? null
   if (!picked) producerDismissed.value = true
@@ -955,8 +970,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         >
           <PanelResizeHandle :panel="inspectorPanel" label="Resize the task panel" />
           <TaskInspector
-            v-if="task"
-            :task="task"
+            v-if="shownTask"
+            :task="shownTask"
             :folder-id="workflow.folderId"
             :editable="workflowEditable"
             class="min-h-0 flex-1"

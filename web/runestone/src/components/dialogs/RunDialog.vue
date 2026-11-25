@@ -14,25 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { Settings2 } from '@/components/icons'
-import {
-  computed,
-  createVNode,
-  defineComponent,
-  h,
-  reactive,
-  ref,
-  Teleport,
-  watch,
-  withDirectives,
-} from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import LoadState from '@/components/base/LoadState.vue'
 import ModalSheet from '@/components/base/ModalSheet.vue'
-import PopoverSurface from '@/components/base/PopoverSurface.vue'
+import { Settings2 } from '@/components/icons'
 import { runTarget, startRun } from '@/composables/useRun'
 import { loadWorkers, useWorkers } from '@/composables/useWorkers'
-import { vTrapFocus } from '@/directives/trapFocus'
 import { missingOptions } from '@/utils/worker'
 import type { Worker } from '@/types/worker'
 
@@ -181,65 +169,16 @@ function onOptionsKey(event: KeyboardEvent) {
   } else return
   event.preventDefault()
 }
-
-const AnchoredPopover = defineComponent({
-  props: {
-    open: { type: Boolean, required: true },
-    ariaLabel: { type: String, default: undefined },
-    popoverStyle: { type: Object as () => Record<string, string>, default: undefined },
-  },
-  emits: ['close'],
-  setup(props, { slots, emit }) {
-    return () =>
-      createVNode(
-        Teleport,
-        { to: 'body' },
-        props.open
-          ? [
-              h('div', { class: 'fixed inset-0 z-(--z-popover)' }, [
-                h('div', {
-                  class: 'absolute inset-0',
-                  'aria-hidden': 'true',
-                  onPointerdown: () => emit('close'),
-                }),
-                withDirectives(
-                  h(
-                    PopoverSurface,
-                    {
-                      class: 'absolute flex flex-col overflow-hidden text-body outline-none',
-                      style: props.popoverStyle,
-                      role: 'dialog',
-                      'aria-modal': 'true',
-                      'aria-label': props.ariaLabel,
-                    },
-                    slots,
-                  ),
-                  [[vTrapFocus]],
-                ),
-              ]),
-            ]
-          : null,
-      )
-  },
-})
-
-const shellProps = computed(() =>
-  popover.value
-    ? {
-        open: !!runTarget.value,
-        ariaLabel: adding.value ? 'Add a worker' : 'Run a worker',
-        popoverStyle: popover.value,
-      }
-    : {
-        open: !!runTarget.value,
-        size: 'lg' as const,
-        ariaLabel: adding.value ? 'Add a worker' : 'Run a worker',
-      },
-)
 </script>
 
 <template>
-  <component :is="popover ? AnchoredPopover : ModalSheet" v-bind="shellProps" @close="close">
+  <ModalSheet
+    :open="!!runTarget"
+    size="lg"
+    :anchor-style="popover"
+    :aria-label="adding ? 'Add a worker' : 'Run a worker'"
+    @close="close"
+  >
     <template v-if="runTarget">
       <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken px-3">
         <!-- beside its +, where it goes needs no saying: the filter gets the room -->
@@ -370,5 +309,5 @@ const shellProps = computed(() =>
         }}</span>
       </div>
     </template>
-  </component>
+  </ModalSheet>
 </template>

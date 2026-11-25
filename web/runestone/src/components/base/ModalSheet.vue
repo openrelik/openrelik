@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type CSSProperties } from 'vue'
 
 /**
  * ModalSheet — the single modal shell for every dialog and command prompt.
@@ -22,10 +22,14 @@ import { computed } from 'vue'
  * Centralises teleportation, the theme-correct scrim (`bg-scrim`, never
  * `bg-ink/20` or `backdrop-blur`), optical vertical placement (`top-[10vh]`),
  * named width tiers, focus trapping (`v-trap-focus`), `text-body` (13px) prose
- * hierarchy, and the crisp 120ms/100ms enter/leave fade.
+ * hierarchy, and a crisp 120ms enter fade (unmounting synchronously on close so
+ * dialogs that clear their payload ref never flash an empty bar or delay focus
+ * restoration).
  *
- * Extra attributes and listeners (such as `@keydown`, `aria-describedby`, or
- * extra panel classes) fall through onto the `[role="dialog"]` panel itself.
+ * When `anchorStyle` is provided (used by `RunDialog`'s `+` popover mode), the
+ * sheet renders on the popover elevation tier (`z-(--z-popover)`, transparent
+ * click-catcher, `border-border-strong`, `--shadow-popover`) at the given
+ * coordinates instead of as a centered modal.
  */
 defineOptions({ inheritAttrs: false })
 
@@ -47,41 +51,50 @@ const props = withDefaults(
     ariaLabel?: string
     ariaLabelledby?: string
     ariaDescribedby?: string
-    /** When false, clicking the scrim does not dismiss (e.g. one-time API key reveal). */
-    dismissible?: boolean
-    /** Optional max-height clamp (e.g. `max-h-[80vh]`, `max-h-[84vh]`, `max-h-[70vh]`). */
+    /** Optional max-height clamp for centered modals (e.g. `max-h-[84vh]`). */
     maxHeightClass?: string
+    /** When set, positions the sheet as an anchored popover instead of a centered modal. */
+    anchorStyle?: CSSProperties | null
   }>(),
   {
     size: 'md',
     role: 'dialog',
-    dismissible: true,
     maxHeightClass: 'max-h-[80vh]',
+    anchorStyle: null,
   },
 )
 
 const emit = defineEmits<{ close: [] }>()
 
-const panelClasses = computed(() => [WIDTH_CLASS[props.size], props.maxHeightClass])
+const isAnchored = computed(() => Boolean(props.anchorStyle))
 
-function handleBackdropPointerDown() {
-  if (props.dismissible) emit('close')
-}
+const panelClasses = computed(() =>
+  isAnchored.value
+    ? 'absolute rounded-(--radius-sheet) border border-border-strong bg-surface shadow-(--shadow-popover)'
+    : [
+        'sheet fixed top-[10vh] left-1/2 z-(--z-modal) -translate-x-1/2 shadow-(--shadow-float)',
+        WIDTH_CLASS[props.size],
+        props.maxHeightClass,
+      ],
+)
 </script>
 
 <template>
   <Teleport to="body">
     <Transition
       enter-active-class="transition-opacity duration-120 ease-(--ease-standard)"
-      leave-active-class="transition-opacity duration-100 ease-(--ease-standard)"
       enter-from-class="opacity-0"
-      leave-to-class="opacity-0"
     >
-      <div v-if="open" class="fixed inset-0 z-(--z-modal)">
+      <div
+        v-if="open"
+        class="fixed inset-0"
+        :class="isAnchored ? 'z-(--z-popover)' : 'z-(--z-modal)'"
+      >
         <div
-          class="absolute inset-0 bg-scrim"
+          class="absolute inset-0"
+          :class="isAnchored ? undefined : 'bg-scrim'"
           aria-hidden="true"
-          @pointerdown="handleBackdropPointerDown"
+          @pointerdown="emit('close')"
         />
         <div
           v-trap-focus
@@ -91,8 +104,9 @@ function handleBackdropPointerDown() {
           :aria-label="ariaLabel"
           :aria-labelledby="ariaLabelledby"
           :aria-describedby="ariaDescribedby"
-          class="sheet fixed top-[10vh] left-1/2 z-(--z-modal) flex -translate-x-1/2 flex-col overflow-hidden text-body shadow-(--shadow-float) outline-none"
+          class="flex flex-col overflow-hidden text-body outline-none"
           :class="panelClasses"
+          :style="anchorStyle ?? undefined"
         >
           <slot />
         </div>

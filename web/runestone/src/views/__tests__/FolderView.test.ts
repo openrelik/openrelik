@@ -792,7 +792,8 @@ describe('FolderView', () => {
     const closeInspectorBtn = wrapper.get('button[aria-label="Close task"]')
     await closeInspectorBtn.trigger('click')
     await nextTick()
-    expect(wrapper.find('button[aria-label="Close task"]').exists()).toBe(false)
+    // SlidePane keeps TaskInspector mounted while sliding out, marked inert & invisible.
+    expect(wrapper.get('button[aria-label="Close task"]').element.closest('[inert]')).not.toBeNull()
     await taskNode!.trigger('click')
     await nextTick()
 
@@ -1037,6 +1038,6 @@ describe('FolderView', () => {
     const closeTaskBtn = wrapper.get('button[aria-label="Close task"]')
     await closeTaskBtn.trigger('click')
     await nextTick()
-    expect(wrapper.find('button[aria-label="Close task"]').exists()).toBe(false)
+    expect(wrapper.get('button[aria-label="Close task"]').element.closest('[inert]')).not.toBeNull()
   })
 })

@@ -197,6 +197,11 @@ function expiry(key: ApiKeyRecord): { text: string; tone: string } {
   return { text, tone: days < 2 ? 'text-warning' : 'text-ink-muted' }
 }
 
+function onBackdrop() {
+  if (newKey.value) warned.value = true
+  else close()
+}
+
 const user = computed(() => auth.user)
 </script>
 
@@ -205,9 +210,8 @@ const user = computed(() => auth.user)
     :open="accountOpen"
     size="lg"
     aria-labelledby="account-title"
-    :dismissible="!newKey"
     tabindex="-1"
-    @close="close"
+    @close="onBackdrop"
   >
     <div class="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sunken pr-2 pl-4">
       <h2 id="account-title" class="card-title">Account</h2>

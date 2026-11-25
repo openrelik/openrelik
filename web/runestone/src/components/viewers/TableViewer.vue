@@ -418,7 +418,7 @@ const partialNotice = computed(() => {
       <div
         :class="
           fullscreen
-            ? 'fixed inset-0 z-40 flex bg-surface text-dense'
+            ? 'fixed inset-0 z-(--z-overlay) flex bg-surface text-dense'
             : 'flex min-h-0 min-w-0 flex-1'
         "
         :role="fullscreen ? 'dialog' : undefined"

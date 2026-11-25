@@ -164,8 +164,6 @@ limitations under the License.
   /* A popover beside the control it came from: lifted slightly, not floating. */
   --shadow-popover: 0 2px 8px rgb(0 0 0 / 0.35);
 
-  --z-sticky: 10;
-  --z-panel: 30;
   --z-overlay: 40;
   --z-modal: 50;
   --z-popover: 60;

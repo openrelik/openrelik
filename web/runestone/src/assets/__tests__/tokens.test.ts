@@ -206,9 +206,7 @@ describe('Design system CSS tokens (src/assets/main.css)', () => {
   })
 
   it('loads only 400, 500, and 600 weights for self-hosted IBM Plex Sans and Mono', () => {
-    const weights = [...css.matchAll(/font-weight:\s*(\d+);/g)]
-      .map((m) => Number(m[1]))
-      .filter((w) => w !== 600 || true)
+    const weights = [...css.matchAll(/font-weight:\s*(\d+);/g)].map((m) => Number(m[1]))
     // Every @font-face weight must be in {400, 500, 600} so no faux-bold 700 is needed.
     const faceWeights = [...css.matchAll(/@font-face\s*\{[\s\S]*?font-weight:\s*(\d+);/g)].map(
       (m) => Number(m[1]),

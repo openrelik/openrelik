@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 describe('ModalSheet', () => {
-  it('renders into body when open, forwards dialog attributes, and dismisses on scrim pointerdown', async () => {
+  it('renders into body when open, forwards dialog attributes, and emits close on scrim pointerdown', async () => {
     const wrapper = mount(ModalSheet, {
       attachTo: document.body,
       props: {
@@ -49,26 +49,32 @@ describe('ModalSheet', () => {
     await body.get('[aria-hidden="true"]').trigger('pointerdown')
     expect(wrapper.emitted('close')).toHaveLength(1)
 
+    await wrapper.setProps({ open: false })
+    expect(body.find('[role="alertdialog"]').exists()).toBe(false)
+
     wrapper.unmount()
   })
 
-  it('blocks scrim dismissal when dismissible is false and hides content when closed', async () => {
+  it('supports anchored popover positioning without a scrim', async () => {
     const wrapper = mount(ModalSheet, {
       attachTo: document.body,
       props: {
         open: true,
-        dismissible: false,
+        anchorStyle: { left: '120px', top: '80px', width: '416px' },
       },
-      slots: { default: '<p>Locked</p>' },
+      slots: { default: '<p>Anchored</p>' },
       global: { plugins: [directives] },
     })
 
     const body = new DOMWrapper(document.body)
-    await body.get('[aria-hidden="true"]').trigger('pointerdown')
-    expect(wrapper.emitted('close')).toBeUndefined()
+    const dialog = body.get('[role="dialog"]')
+    expect(dialog.classes()).toContain('border-border-strong')
+    expect(dialog.classes()).toContain('shadow-(--shadow-popover)')
+    expect(dialog.attributes('style')).toContain('left: 120px')
+    expect(body.get('[aria-hidden="true"]').classes()).not.toContain('bg-scrim')
 
-    await wrapper.setProps({ open: false })
-    expect(body.find('[role="dialog"]').exists()).toBe(false)
+    await body.get('[aria-hidden="true"]').trigger('pointerdown')
+    expect(wrapper.emitted('close')).toHaveLength(1)
 
     wrapper.unmount()
   })
