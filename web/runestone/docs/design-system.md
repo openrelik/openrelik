@@ -121,14 +121,14 @@ All tokens live in `src/assets/main.css`. A four-line script in `index.html` res
 
 ### Derived Tints Rule
 
-Status accents are **never displayed as solid, saturated blocks of color**. Solid alert banners trigger visual exhaustion and induce false urgency. Instead, status indicators always use **tint fills** (lightness ~0.27 in dark mode, light pastels in light mode) paired with crisp accent borders and text:
+Semantic accents are **never displayed as solid, saturated blocks of color**. Solid alert banners trigger visual exhaustion and induce false urgency. Instead, tinted callouts, notices, and standalone badges use **tint fills** (lightness ~0.27 in dark mode, light pastels in light mode) paired with crisp accent borders and text (see §7.4 for when to use plain text or icons instead of `.badge`):
 
 ```html
 <!-- Correct: Quiet, clear, readable -->
-<span class="badge border border-success/40 bg-success-tint text-success"> Completed </span>
+<span class="badge border border-warning/40 bg-warning-tint text-warning">high</span>
 
 <!-- Forbidden: Solid shouting block -->
-<span class="bg-success text-canvas font-bold">Completed</span>
+<span class="bg-warning text-canvas font-bold">high</span>
 ```
 
 ### Chart Series Separation
