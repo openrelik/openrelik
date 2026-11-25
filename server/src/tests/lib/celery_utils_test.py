@@ -512,6 +512,7 @@ def test_get_cluster_status_empty_workers_and_caching_and_cooldown(mocker):
 
     fake_now = [100.0]
     mocker.patch("lib.celery_utils.time.monotonic", side_effect=lambda: fake_now[0])
+    mocker.patch("lib.celery_utils.time.time", side_effect=lambda: fake_now[0])
 
     first = get_cluster_status(mocker.MagicMock())
     assert first["summary"]["workers_online"] == 0
@@ -625,6 +626,17 @@ def test_get_cluster_status_restores_live_snapshot_on_redis_cache_hit(mocker):
 
     get_cluster_status(mocker.MagicMock())
     assert mock_collect.call_count == 1
+
+    # Cold Process B receiving refresh=True within 1s cooldown still serves Redis cache.
+    fake_wall[0] = 1000.2
+    fake_mono[0] = 800.0
+    celery_utils._last_payload_cache = None
+    celery_utils._last_live_snapshot = None
+    celery_utils._last_collected_monotonic = 0.0
+
+    cached_resp = get_cluster_status(mocker.MagicMock(), refresh=True)
+    assert mock_collect.call_count == 1
+    assert cached_resp["summary"]["workers_online"] == 1
 
     # Simulate cold Process B reading the shared Redis cache 3.5s later.
     fake_wall[0] = 1003.5

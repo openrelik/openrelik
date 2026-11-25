@@ -329,22 +329,24 @@ def get_cluster_status(celery_instance, *, refresh: bool = False) -> dict:
             redis_client = connection.default_channel.client
 
         try:
-            if not can_bypass:
-                cached = _read_cached_status(redis_client)
-                if cached is not None:
-                    cached_payload, cached_snapshot, cached_ts = cached
-                    age_seconds = (
-                        max(0.0, time.time() - cached_ts)
-                        if cached_ts is not None
-                        else 0.0
+            # Always read Redis inside the lock: GET verifies broker reachability
+            # and enforces the 1s ?refresh=true cooldown across all API workers.
+            cached = _read_cached_status(redis_client)
+            if cached is not None:
+                cached_payload, cached_snapshot, cached_ts = cached
+                if cached_ts is not None:
+                    age_seconds = max(0.0, time.time() - cached_ts)
+                    redis_within_cooldown = (
+                        age_seconds < STATUS_REFRESH_COOLDOWN_SECONDS
                     )
+                else:
+                    age_seconds = 0.0
+                    redis_within_cooldown = False
+                if not refresh or redis_within_cooldown:
                     _last_payload_cache = cached_payload
                     _last_live_snapshot = cached_snapshot
                     _last_collected_monotonic = time.monotonic() - age_seconds
                     return cached_payload
-            else:
-                # Verify broker reachability before waiting on Celery inspect timeouts.
-                redis_client.ping()
 
             snapshots = _collect_inspect_snapshots(celery_instance)
             stats_map = snapshots["stats"]
