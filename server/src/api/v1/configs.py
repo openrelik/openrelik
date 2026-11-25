@@ -12,11 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
 from config import config, get_active_llms
+from datastores.sql.crud.status import get_system_storage_status_from_db
+from datastores.sql.database import get_db_connection
+
+from . import schemas
 
 router = APIRouter()
+
+
+@router.get("/status", response_model=schemas.SystemStorageStatusResponse)
+def get_system_storage_status(
+    refresh: bool = Query(
+        default=False, description="Bypass short cache cooldown when true."
+    ),
+    db: Session = Depends(get_db_connection),
+):
+    """Return aggregate datastore counts and storage volume disk usage."""
+    return get_system_storage_status_from_db(db, refresh=refresh)
 
 
 @router.get("/system/")
@@ -25,7 +41,9 @@ def get_system_config():
 
     # Data types that will be allowed to be returned as unescaped HTML for use in
     # sandboxed iframe preview.
-    allowed_data_types_preview = config.get("ui", {}).get("allowed_data_types_preview", [])
+    allowed_data_types_preview = config.get("ui", {}).get(
+        "allowed_data_types_preview", []
+    )
 
     return {
         "active_llms": active_llms,
