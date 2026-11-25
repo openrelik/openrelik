@@ -241,4 +241,44 @@ describe('vTrapFocus', () => {
     dialog.dispatchEvent(tabFromDialog)
     expect(tabFromDialog.defaultPrevented).toBe(false)
   })
+
+  it('ignores controls inside an inert subtree (such as a closed SlidePane)', () => {
+    const Comp = defineComponent({
+      directives: { trapFocus: vTrapFocus },
+      template: `
+        <div role="dialog" v-trap-focus data-testid="dialog">
+          <button data-testid="first">First</button>
+          <button data-testid="last">Last visible</button>
+          <div inert>
+            <button data-testid="hidden-inert">Inert hidden</button>
+          </div>
+        </div>
+      `,
+    })
+
+    const wrapper = track(mount(Comp, { attachTo: document.body }))
+    const first = wrapper.get('[data-testid="first"]').element as HTMLElement
+    const last = wrapper.get('[data-testid="last"]').element as HTMLElement
+    const hiddenInert = wrapper.get('[data-testid="hidden-inert"]').element as HTMLElement
+    markVisible([first, last, hiddenInert])
+
+    // Forward Tab from the last visible button wraps to first instead of targeting the inert button.
+    last.focus()
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    last.dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    // Backward Shift+Tab from first wraps to last visible instead of stalling on the inert button.
+    first.focus()
+    const shiftTab = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    first.dispatchEvent(shiftTab)
+    expect(shiftTab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+  })
 })

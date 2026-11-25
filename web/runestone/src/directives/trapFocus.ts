@@ -41,7 +41,9 @@ export const vTrapFocus: Directive<TrapFocusElement> = {
       if (e.key !== 'Tab') return
 
       const focusable = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-        (node) => node.offsetParent !== null || node === document.activeElement,
+        (node) =>
+          !node.closest('[inert]') &&
+          (node.offsetParent !== null || node === document.activeElement),
       )
 
       if (focusable.length === 0) {

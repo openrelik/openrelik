@@ -162,7 +162,7 @@ To prevent visual clutter, the typography scale is restricted to **exactly four 
 Scale Step     Size      Weight      Line Height   Class / Purpose
 ────────────────────────────────────────────────────────────────────────────────
 Card Title     14px      600 (Bold)  1.3           .card-title (Panel headers, modal titles)
-Body           13px      400 (Norm)  1.5           Base body text (12px in dense views, dialogs, inputs)
+Body           13px      400 (Norm)  1.5           Base body, dialogs & inspectors (12px in dense tables/viewers)
 Micro-Label    12px      500 (Med)   1.3           .micro-label (Headers, column tags, normal tracking)
 Badge / Kbd    11px      500 (Med)   1.45          .badge, status bar, HelpDialog <kbd> (10px in KeyHint)
 ```
@@ -325,7 +325,7 @@ Buttons exist in **exactly two sizes, and only two**:
 1. **Default (`size="default"`, `px-3 py-1.5`, `ghost` `px-2 py-1.5`, height ~32px)**: Used in toolbars, dialog footers, and standalone panels.
 2. **Row (`size="row"`, `px-2 py-0.5`, `ghost` `px-1.5 py-0.5`, height ~24px)**: Used _inside_ data table rows or compact toolbars. Because table rows have a `28px` (`h-7`) height floor, a standard 32px button would overflow the row line.
 
-_Rule: Padding is the whole of the size._ Font size (inherited from its container: `13px` root default or `12px` in dense views/dialogs), weight (`500`), and icon gap (`gap-2`) remain identical between sizes.
+_Rule: Padding is the whole of the size._ Font size (inherited from its container: `13px` root/dialog/inspector default or `12px` in dense tables/toolbars), weight (`500`), and icon gap (`gap-2`) remain identical between sizes.
 
 ### Grouping Buttons: Space, Not Lines
 
@@ -435,12 +435,12 @@ Native inputs, selects, and textareas use `.field`:
 
 Focus styling uses the global `:focus-visible` ring (or explicit `focus:border-brand outline-none` where components supply it). Compact bar inputs override height (`h-7` or `h-5`).
 
-### Stacked Labels (`.labelled`)
+### Stacked Labels
 
-To avoid fragile horizontal column alignments in forms, labels stack vertically over their input:
+To avoid fragile horizontal column alignments in forms, stack labels vertically over their input (`flex flex-col gap-1`):
 
 ```html
-<label class="labelled">
+<label class="flex flex-col gap-1">
   <span class="micro-label">Target hostname</span>
   <input class="field" type="text" placeholder="api.internal.net" />
 </label>
@@ -583,7 +583,7 @@ Renaming entities in folder listings (`FolderTable.vue`) and the current folder 
    - In tables: pressing `F2` or `e`, or choosing **Rename** from the row's action menu (`ItemMenu`). There is no press-and-hold trigger.
    - In the path bar: clicking the active folder name (`F2`/`e` renames rows in `FolderTable` only).
 2. **Active State**:
-   - The row label transforms into an inline input (`h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-[12px] font-medium text-ink shadow-sm` in `FolderTable`; `h-6 ... px-1.5 font-medium` inside `PathBar`).
+   - The row label transforms into an inline input (`h-6 w-full min-w-0 flex-1 rounded-(--radius-check) border border-brand bg-surface px-2 font-mono text-dense font-medium text-ink` in `FolderTable`; `h-6 ... px-1.5 font-medium` inside `PathBar`).
    - The input focuses automatically; for files with an extension, it selects only the base name (`setSelectionRange(0, lastDot)`), and for folders it selects the whole name.
 3. **Commit & Cancel**:
    - Pressing `Enter` or clicking outside the input commits the new name.
@@ -671,7 +671,7 @@ A console is used on hotel Wi-Fi, over VPNs and on congested links, not only on 
 1. **Never wait for data already seen.** Cached data renders at once; a refresh happens behind it and never blanks the screen.
 2. **One place per kind of waiting.** Data that is not there yet waits _where it will appear_; work on data already on screen is shown _in the status bar_; a pending change is shown _on its row_.
 3. **No flashing.** Every indicator appears only after the work has taken **200 ms**, and once visible stays at least **300 ms**. On a fast connection nothing flickers; on a slow one the operator sees at once that something is happening. Use `useDelayedFlag` — never hand-rolled timers.
-4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows. **One exception:** a running task's status mark in the workflow flowchart (`TaskRunningIcon.vue`) is a `warning-icon` dot with a circling ring, because it shows work in progress that may last minutes, not a network wait. Reduced motion stills it.
+4. **No spinners, no skeleton shimmer.** Waiting is a muted line of text or a small pulsing dot. Nothing spins, slides or glows. **One exception:** a running task's status mark in the workflow flowchart (`TaskRunningIcon.vue`) is a `brand-icon` dot with a circling ring (matching `TASK_STATUS_TONE`), because it shows work in progress that may last minutes, not a network wait. Reduced motion stills it.
 5. **No layout shift.** Space for a loading line is reserved before its text appears; indicators have fixed widths; placeholders have the height of the row they stand in for.
 
 ### The Situations
