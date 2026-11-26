@@ -1,6 +1,6 @@
 ---
 name: research
-description: Research an OpenRelik idea as an experienced software developer with deep digital forensics knowledge, and write the findings to .private/<slug>/research.md. Use for "research this idea", "explore the idea", "what's out there for ...", or /research <slug>.
+description: Research an OpenRelik idea as an experienced software developer with deep digital forensics knowledge, and write the findings to .private/features/<slug>/research.md. Use for "research this idea", "explore the idea", "what's out there for ...", or /research <slug>.
 ---
 
 # Research
@@ -28,12 +28,12 @@ say how sure you are.
 
 ## How
 
-1. **Inputs**: the idea: `.private/<slug>/idea.md` in the main checkout (from a
+1. **Inputs**: the idea: `.private/features/<slug>/idea.md` in the main checkout (from a
    worktree, the first path in `git worktree list`) while it's a draft, the issue
    (`gh issue view <issue>`) once it's filed, or
    `dev/artifacts/features/<slug>/idea.md` on main once the work has started. Ask
    the user what they most want to know, and write that down first.
-2. **Research file**: `.private/<slug>/research.md`, from `dev/templates/research.md`
+2. **Research file**: `.private/features/<slug>/research.md`, from `dev/templates/research.md`
    if it doesn't exist (fill in `$slug`, `$title`, `$created`). It's free form; add to
    it, don't rewrite what's there.
 3. **The code**: how OpenRelik does it today, and where the idea would land. Read the
@@ -72,7 +72,7 @@ say how sure you are.
 
 ## Rules
 
-- Research is local: it stays in `.private/<slug>/` and isn't published or posted
+- Research is local: it stays in `.private/features/<slug>/` and isn't published or posted
   anywhere. It reaches the repository with the first PR of the work (see "Starting"
   in `dev/README.md`), so write it to be published: no case details, customer
   names, or internal links, and evidence described, not included or pointed to.

@@ -42,10 +42,10 @@ The whole process at a glance. The sections below have the details.
 ```text
   PRIVATE (your machine, gitignored)
   ┌──────────────────────────────────────────────────────────────────┐
-  │  .private/<slug>/idea.md       draft             [idea]          │
-  │  .private/<slug>/research.md   research          [research]      │
-  │  .private/<slug>/spec.md       draft spec        [spec]          │
-  │  prototype/<slug> worktree     try it            (unpushed)      │
+  │  .private/features/<slug>/idea.md     draft       [idea]         │
+  │  .private/features/<slug>/research.md research    [research]     │
+  │  .private/features/<slug>/spec.md     draft spec  [spec]         │
+  │  prototype/<slug> worktree            try it      (unpushed)     │
   └────────────────────────────────┬─────────────────────────────────┘
                                    │ file it  [idea]
                                    │ (idea.md updated with issue URL; stays local until first PR)
@@ -94,7 +94,7 @@ The whole process at a glance. The sections below have the details.
                        a lasting decision needs its ADR first
                                         │
                            ▼
-              [review]        private, in .private/<slug>/, in rounds
+              [review]        private, in .private/features/<slug>/, in rounds
                               until no Must fix and no Should fix findings
                            │
                            ▼
@@ -159,11 +159,11 @@ and a prototype are optional in every row.
 
 ## Workflow
 
-1. **Draft**. Write the idea down privately in `.private/<slug>/idea.md`,
+1. **Draft**. Write the idea down privately in `.private/features/<slug>/idea.md`,
    from the `idea.md` template, and refine it with agents. It's gitignored, so nobody
    sees it until you file it.
 2. **Research and prototype** (optional, before filing or after). Explore it with
-   agents in `.private/<slug>/research.md`, and try it in throwaway code in a worktree
+   agents in `.private/features/<slug>/research.md`, and try it in throwaway code in a worktree
    of its own (see "Research" and "Prototypes").
 3. **File it**. Open an issue labeled `idea` whose body is the idea. There's no
    branch, no PR and no review, and it's in the backlog. Assign yourself to claim it,
@@ -242,18 +242,18 @@ or a subscription.
 Claims go stale. If an assigned idea hasn't moved in six months (not started, or its
 checklist unchanged), anyone can ask on the issue, and unassign it if nobody answers.
 Before you give up a claim, publish what only you have, such as research in
-`.private/`, in a comment on the issue.
+`.private/features/`, in a comment on the issue.
 
 ## Ideas
 
 An idea says what and why in a few sentences, for a teammate without context. Write it
-down privately in `.private/<slug>/idea.md` first, to refine it, research it, or try it.
+down privately in `.private/features/<slug>/idea.md` first, to refine it, research it, or try it.
 
 `.private/` lives in the main checkout and is gitignored, so every worktree you start
 from there can read it and nobody else can. Filing publishes the idea. The issue's
 title is its title, and its body is the idea's sections without the frontmatter. Then
-update `$issue` in `.private/<slug>/idea.md` with the new issue URL. The draft and research
-stay in `.private/<slug>/` until the first PR (design or spec) commits them into the repository.
+update `$issue` in `.private/features/<slug>/idea.md` with the new issue URL. The draft and research
+stay in `.private/features/<slug>/` until the first PR (design or spec) commits them into the repository.
 Say on the issue that research exists ("Research and a prototype exist locally. Ask @you.")
 so whoever picks up the idea knows to ask. Once a prototype has answered its question, put
 what it taught in the research and remove it. One worth showing gets pushed (see
@@ -262,17 +262,17 @@ what it taught in the research and remove it. One worth showing gets pushed (see
 **By hand**, from the main checkout:
 
 ```bash
-mkdir -p .private/bulk-tags                    # always draft locally first
-cp dev/templates/idea.md .private/bulk-tags/
+mkdir -p .private/features/bulk-tags           # always draft locally first
+cp dev/templates/idea.md .private/features/bulk-tags/
 #   fill in $slug, $title and $created; write Problem, Proposal, Users, Open questions
 gh issue list --label idea --search "tags"     # filed already?
 gh issue create --label idea --assignee @me --title "Bulk tags" --body-file body.md
 #   body.md: the idea's sections, without the frontmatter and the title
-#   update $issue in .private/bulk-tags/idea.md; keep locally until the first PR
+#   update $issue in .private/features/bulk-tags/idea.md; keep locally until the first PR
 ```
 
 **With the skill** (`idea`): `/idea Bulk tags`, or "write down an idea: ...". It always
-drafts the idea privately first in `.private/<slug>/idea.md` without asking, then writes
+drafts the idea privately first in `.private/features/<slug>/idea.md` without asking, then writes
 the idea with you. Before filing, it reads the idea the way a teammate without context
 would and checks the backlog for duplicates. It files only after your go-ahead, and
 never adds the `accepted` label.
@@ -288,13 +288,13 @@ work has started, write the `## Outcome` section first ("Dropped: <why>", with a
 to the discussion), and close the issue after its PR is merged.
 
 **With the skill** (`idea`): "drop the idea #123". It also asks what to do with the
-research in `.private/<slug>/`, whether to post it on the issue, keep it, or delete
+research in `.private/features/<slug>/`, whether to post it on the issue, keep it, or delete
 it.
 
 ## Research
 
 `research.md` is everything you found along the way, in whatever shape, starting from
-the `research.md` template. It sits in `.private/<slug>/` while you work, before
+the `research.md` template. It sits in `.private/features/<slug>/` while you work, before
 filing or after. The first PR of the work commits it beside `idea.md` so that PR's
 reviewers can read it (see "Starting"), and later PRs add to it. Nobody reviews it. It
 isn't a step on the issue's checklist either.
@@ -306,7 +306,7 @@ Don't include it or point to it.
 **By hand**, from the main checkout:
 
 ```bash
-cp dev/templates/research.md .private/bulk-tags/
+cp dev/templates/research.md .private/features/bulk-tags/
 #   fill in $slug, $title and $created; write what you wanted to know, what you
 #   found (files, links, versions), how sure you are, and the open questions
 ```
@@ -316,7 +316,7 @@ asks what you most want to know, then works the way a developer who has done for
 casework would. It looks at how OpenRelik handles the problem today, down to files and
 functions, and at how other tools do it, from their docs and code. Then it goes
 through the forensic questions that apply, from evidence integrity and provenance to
-timestamps, scale and sensitive data. Findings go into `.private/<slug>/research.md`
+timestamps, scale and sensitive data. Findings go into `.private/features/<slug>/research.md`
 as it works, and it reports back the few that change the idea. It won't edit the idea
 unless you ask, and it writes no code and publishes nothing.
 
@@ -375,7 +375,7 @@ gh issue edit 123 --add-assignee @me                  # claim it, if it's unassi
 ./devctl worktree create spec/bulk-tags --no-stack    # or design/...
 mkdir -p .worktrees/spec-bulk-tags/dev/artifacts/features/bulk-tags
 #   write idea.md there from the issue's text (gh issue view 123)
-#   and move .private/bulk-tags/research.md beside it, if it exists
+#   and move .private/features/bulk-tags/research.md beside it, if it exists
 #   commit with "Refs #123", push, gh pr create
 gh issue edit 123 --body-file issue.md
 ```
@@ -472,7 +472,7 @@ gh pr create --title "Spec: Bulk tags" --body "Refs #123"
 
 **With the skill** (`spec`): `/spec bulk-tags`, or `/spec 123`. Before writing, it
 checks that the idea is accepted and not someone else's, and that the design and the
-ADRs the spec depends on are merged. It always drafts the spec in `.private/<slug>/spec.md`
+ADRs the spec depends on are merged. It always drafts the spec in `.private/features/<slug>/spec.md`
 and pauses for human review before creating a branch. When creating the spec PR, it
 includes `idea.md`, `research.md` (if research exists), and `spec.md` in
 `dev/artifacts/features/<slug>/`. It reads the code each task will change, so the tasks
@@ -541,12 +541,14 @@ for human review. It's private. Nothing gets posted, and nothing of it is commit
    rebased on main (`./devctl worktree sync`). The commits say what and why with `Refs
    #<issue>`, and a bugfix has its regression test and its commit message. Nothing is
    left over, such as debug output, commented-out code, or TODOs without an issue.
-6. **Save review artifact**. For a feature, copy `.private/<slug>/review.md` into
+6. **Save review artifact**. For a feature, copy `.private/features/<slug>/review.md` into
    `dev/artifacts/features/<slug>/review.md` on the implementation branch and commit it
    with `Refs #<issue>`, so it lands in the repository alongside `idea.md` and `spec.md`.
 
-The rounds go in `.private/<slug>/review.md` in the main checkout, which is gitignored
-and outlives the worktree. Then open the PR with its description from the `pr.md` template
+The rounds go in `.private/features/<slug>/review.md` for a feature (or
+`.private/scratch/<slug>/review.md` for a bugfix, refactor, or other non-feature change)
+in the main checkout, which is gitignored and outlives the worktree. Then open the PR with
+its description from the `pr.md` template
 (kept clean: what the change does and why, and `Closes #<issue>`). The PR is labeled
 `reviewed`, and the review report is posted as the first comment on the PR (stating in a
 short and concise way what was found across rounds and how it was fixed, requirement
@@ -556,31 +558,32 @@ statuses, and the final verification) to keep the PR description clean.
 
 ```bash
 #   run the checks of each component the change touches
-git diff main > ../../.private/bulk-tags/diff.patch
+git diff main > ../../.private/features/bulk-tags/diff.patch
 #   run the review following .agents/skills/review/SKILL.md against the spec or issue;
 #   give it to a fresh agent session, ideally another model, with dismissed findings
-#   record the round in .private/bulk-tags/review.md; fix or dismiss each finding
+#   record the round in .private/features/bulk-tags/review.md; fix or dismiss each finding
 #   again, until a round has no Must fix and no Should fix findings
 ./devctl worktree sync                         # rebase on main, then the checks again
 #   for a feature, copy review to dev/artifacts/features/bulk-tags/review.md and commit it
-cp ../../.private/bulk-tags/review.md dev/artifacts/features/bulk-tags/review.md
+cp ../../.private/features/bulk-tags/review.md dev/artifacts/features/bulk-tags/review.md
 git add dev/artifacts/features/bulk-tags/review.md
 git commit -m "artifacts: add review record for bulk-tags"
-#   write clean .private/bulk-tags/pr.md from dev/templates/pr.md
-#   write review comment to .private/bulk-tags/review-comment.md
+#   write clean .private/features/bulk-tags/pr.md from dev/templates/pr.md
+#   write review comment to .private/features/bulk-tags/review-comment.md
 git push -u origin code/bulk-tags
 gh label create reviewed --description "Passed clean-context review; critical findings addressed" --color "0e8a16" 2>/dev/null
-gh pr create --title "Bulk tags" --body-file ../../.private/bulk-tags/pr.md --label reviewed
-gh pr comment <number> --body-file ../../.private/bulk-tags/review-comment.md
+gh pr create --title "Bulk tags" --body-file ../../.private/features/bulk-tags/pr.md --label reviewed
+gh pr comment <number> --body-file ../../.private/features/bulk-tags/review-comment.md
 ```
 
 **With the skill** (`review`): `/review` in the change's worktree. The skill always
 launches a subagent with a clean context to perform the review (or tells you to run in
 a fresh session if subagents are unsupported). It records every round, coordinates fixes
 with you, and ensures the change isn't called ready while a Must fix or Should fix
-finding is open. Last comes a draft of `.private/<slug>/pr.md` (clean description) and
-`.private/<slug>/review-comment.md`. Pushing, opening the PR with the `reviewed` label,
-and posting the review comment wait for your go-ahead.
+finding is open. Last comes a draft of `pr.md` (clean description) and `review-comment.md`
+in `.private/features/<slug>/` (or `.private/scratch/<slug>/` for non-feature changes).
+Pushing, opening the PR with the `reviewed` label, and posting the review comment wait for
+your go-ahead.
 
 ## Approval and merge
 
@@ -611,10 +614,13 @@ The implementer merges once the PR is approved. Agents never approve or merge.
 - Issues labeled `idea`: the backlog, one per idea, also labeled `accepted` once the
   team agrees to build it. Each is the idea itself until the work starts, then the
   plan and its checklist.
-- `.private/<slug>/`: local and private, in the main checkout, kept until you delete
-  it. It holds the idea's draft before it's filed (`idea.md`), research before the
-  work starts (`research.md`), the review rounds (`review.md`), the PR description's
-  draft (`pr.md`), and the review comment draft (`review-comment.md`).
+- `.private/features/<slug>/`: local and private, in the main checkout, kept until you
+  delete it. It holds a feature's draft before it's filed (`idea.md`), research before
+  the work starts (`research.md`), draft specs (`spec.md`), review rounds (`review.md`),
+  PR description draft (`pr.md`), and review comment draft (`review-comment.md`).
+- `.private/scratch/<slug>/`: local disposable working files in the main checkout for
+  non-feature changes (bugfixes, refactors, `/review <PR>` audits, diffs, release note
+  drafts), safe to delete once merged.
 - Label `reviewed`: marks a PR that passed clean-context review with critical findings
   addressed.
 - `.dev-local/`: per checkout, `./devctl`'s config and data for its stack. It holds no
