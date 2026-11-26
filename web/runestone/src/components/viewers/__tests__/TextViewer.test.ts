@@ -20,7 +20,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/api'
+import { api, type FileAnnotationRecord } from '@/api'
 import TextViewer from '@/components/viewers/TextViewer.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { forgetTextFiles } from '@/composables/useTextStream'
@@ -89,6 +89,9 @@ function mountTextViewer(props: {
   size: number
   active?: boolean
   mark?: Span | null
+  annotations?: FileAnnotationRecord[]
+  activeAnnotationIds?: Set<number>
+  annotationPulse?: number
 }) {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -101,6 +104,9 @@ function mountTextViewer(props: {
       size: props.size,
       active: props.active ?? true,
       mark: props.mark ?? null,
+      annotations: props.annotations ?? [],
+      activeAnnotationIds: props.activeAnnotationIds ?? new Set<number>(),
+      annotationPulse: props.annotationPulse ?? 0,
     },
     global: {
       plugins: [createPinia(), router, directives],
@@ -563,5 +569,102 @@ describe('TextViewer', () => {
     expect(gutters.some((g) => g.text().includes(','))).toBe(false)
     expect(gutters[0]?.attributes('style')).toContain('calc(4ch + 1.5rem)')
     expect(wrapper.text()).toContain('line 2458')
+  })
+
+  it('stacks whole-line and inline annotation highlights, handles blank-row clicks, deselection, and c shortcut', async () => {
+    const mkAnnotation = (overrides: Partial<FileAnnotationRecord>): FileAnnotationRecord => ({
+      id: 1,
+      file_id: 270,
+      user_id: 1,
+      user: { id: 1, username: 'analyst', display_name: 'Analyst', profile_picture_url: null },
+      anchor_kind: 'line',
+      range_start: 1,
+      range_end: 2,
+      range_start_col: null,
+      range_end_col: null,
+      body: 'Whole line note',
+      created_at: '2026-11-25T10:00:00Z',
+      updated_at: '2026-11-25T10:00:00Z',
+      edited_at: null,
+      replies: [],
+      ...overrides,
+    })
+
+    const wholeLine = mkAnnotation({ id: 10, range_start: 1, range_end: 2 })
+    const inlineSpan = mkAnnotation({
+      id: 11,
+      range_start: 1,
+      range_end: 1,
+      range_start_col: 1,
+      range_end_col: 6,
+      body: 'Inline note',
+    })
+    const size = mockLines(['alpha beta gamma', '', 'third plain line'])
+
+    const wrapper = mountTextViewer({
+      fileId: 270,
+      size,
+      annotations: [wholeLine, inlineSpan],
+      activeAnnotationIds: new Set(),
+    })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+
+    const highlightsMap = (CSS as unknown as { highlights: Map<string, MockHighlight> }).highlights
+    // Whole-line resting row gets bg-annotation-tint; inline span on the same line promotes from single -> overlap
+    expect(wrapper.get('[data-line="1"]').classes()).toContain('bg-annotation-tint')
+    expect(wrapper.get('[data-line="2"]').classes()).toContain('bg-annotation-tint')
+    expect(highlightsMap.get('annotation')?.ranges).toHaveLength(0)
+    expect(highlightsMap.get('annotation-overlap')?.ranges).toHaveLength(1)
+
+    // Activating the whole-line annotation skips non-active inline highlight so no dim patch covers the active row
+    await wrapper.setProps({ activeAnnotationIds: new Set([10]) })
+    await flushPromises()
+    expect(wrapper.get('[data-line="1"]').classes()).toContain('bg-annotation-active')
+    expect(highlightsMap.get('annotation')?.ranges).toHaveLength(0)
+    expect(highlightsMap.get('annotation-overlap')?.ranges).toHaveLength(0)
+
+    // Activating the inline annotation paints it in the active layer above the resting whole-line row
+    await wrapper.setProps({ activeAnnotationIds: new Set([11]) })
+    await flushPromises()
+    expect(wrapper.get('[data-line="1"]').classes()).toContain('bg-annotation-tint')
+    expect(highlightsMap.get('annotation-active')?.ranges).toHaveLength(1)
+
+    // Clicking empty space on blank line 2 (caretRangeFromPoint returns null) still hits whole-line annotation 10
+    ;(
+      document as Document & {
+        caretPositionFromPoint?: (x: number, y: number) => null
+        caretRangeFromPoint?: (x: number, y: number) => Range | null
+      }
+    ).caretPositionFromPoint = () => null
+    ;(
+      document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }
+    ).caretRangeFromPoint = () => null
+
+    const blankRow = wrapper.get('[data-line="2"]')
+    await blankRow.trigger('pointerdown', { button: 0 })
+    document.dispatchEvent(new PointerEvent('pointerup'))
+    await blankRow.trigger('click')
+    expect(wrapper.emitted('selectAnnotations')?.at(-1)).toEqual([[10], 'line 2'])
+
+    // Clicking an unannotated row clears active annotation
+    const plainRow = wrapper.get('[data-line="3"]')
+    await plainRow.trigger('pointerdown', { button: 0 })
+    document.dispatchEvent(new PointerEvent('pointerup'))
+    await plainRow.trigger('click')
+    expect(wrapper.emitted('selectAnnotations')?.at(-1)).toEqual([[], ''])
+
+    // Gutter click + pointerup emits selectionPopover; pressing 'c' emits annotate
+    const gutter = wrapper.findAll('[data-gutter]')[2]!
+    await gutter.trigger('pointerdown', { button: 0, clientX: 20, clientY: 40 })
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 20, clientY: 40 }))
+    await flushPromises()
+    expect(wrapper.emitted('selectionPopover')?.at(-1)?.[0]).toEqual({ from: 3, to: 3 })
+
+    await wrapper.setProps({ mark: { from: 3, to: 3 } })
+    const body = wrapper.get('[aria-label="File text"]')
+    await body.trigger('keydown', { key: 'c' })
+    expect(wrapper.emitted('annotate')?.at(-1)).toEqual([{ from: 3, to: 3 }])
   })
 })

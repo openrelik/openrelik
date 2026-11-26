@@ -443,7 +443,11 @@ function toggleFullscreen() {
 function onFullscreenKey(event: KeyboardEvent) {
   if (!fullscreen.value || event.key !== 'Escape' || modalStore.hasActiveModal) return
   if (event.target === filterInput.value) return
-  if (cursor.value !== null) cursor.value = null
+  if (props.activeAnnotationIds.size) {
+    cursor.value = null
+    marks.set(null)
+    emit('selectAnnotations', [], '')
+  } else if (cursor.value !== null) cursor.value = null
   else if (mark.value) marks.set(null)
   else fullscreen.value = false
   event.preventDefault()
@@ -477,7 +481,11 @@ function onKey(event: KeyboardEvent) {
   else if (!mod && event.key === 'c' && (mark.value || selectedIndex.value !== undefined))
     addComment()
   else if (!mod && event.key === 'f') toggleFullscreen()
-  else if (event.key === 'Escape' && cursor.value !== null) cursor.value = null
+  else if (event.key === 'Escape' && props.activeAnnotationIds.size) {
+    cursor.value = null
+    marks.set(null)
+    emit('selectAnnotations', [], '')
+  } else if (event.key === 'Escape' && cursor.value !== null) cursor.value = null
   else if (event.key === 'Escape' && mark.value) marks.set(null)
   else return
   event.preventDefault()

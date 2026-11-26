@@ -22,9 +22,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import FileView from '@/views/FileView.vue'
 import directives from '@/directives'
+import { useConfirm } from '@/composables/useConfirm'
 import { clearFileAnnotations } from '@/composables/useFileAnnotations'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { closeWorkflowDialog, useWorkflowDialog } from '@/composables/useWorkflowDialog'
+import { useAuthStore } from '@/stores/auth'
 import { useModalStore } from '@/stores/modals'
 import { api, ApiError, type FileDetail, type FolderDetail, type FolderFile } from '@/api'
 
@@ -48,6 +50,8 @@ vi.mock('@/api', async (importOriginal) => {
       annotations: {
         ...actual.api.annotations,
         list: vi.fn().mockResolvedValue([]),
+        create: vi.fn(),
+        remove: vi.fn().mockResolvedValue(undefined),
       },
     },
   }
@@ -495,10 +499,42 @@ describe('FileView', () => {
         created_at: '2026-11-25T19:00:00Z',
         replies: [],
       },
+      {
+        id: 43,
+        file_id: 101,
+        user_id: 1,
+        user: { id: 1, display_name: 'Dev', username: 'dev' },
+        anchor_kind: 'line',
+        range_start: 3,
+        range_end: 3,
+        body: 'Second note',
+        created_at: '2026-11-25T19:05:00Z',
+        replies: [],
+      },
     ])
+    vi.mocked(api.annotations.create).mockResolvedValue({
+      id: 44,
+      file_id: 101,
+      user_id: 1,
+      user: { id: 1, display_name: 'Dev', username: 'dev' },
+      anchor_kind: 'line',
+      range_start: 1,
+      range_end: 2,
+      body: 'Created from composer',
+      created_at: '2026-11-25T19:10:00Z',
+      replies: [],
+    })
 
     const pinia = createPinia()
     setActivePinia(pinia)
+    useAuthStore().setUser({
+      id: 1,
+      display_name: 'Dev',
+      username: 'dev',
+      email: 'dev@example.com',
+      is_admin: false,
+      uuid: 'u-1',
+    })
     const router = buildRouter()
     await router.push('/folder/10/file/101?comment=42#L1')
     await router.isReady()
@@ -522,11 +558,50 @@ describe('FileView', () => {
     expect(router.currentRoute.value.query.comment).toBeUndefined()
     expect(router.currentRoute.value.hash).toBe('')
 
-    // Pressing 'c' with an active URL mark opens the new comment composer.
+    // Clicking a comment card updates ?comment= and hash; clicking it again keeps the same hash.
+    const secondCard = wrapper.findAll('article').find((a) => a.text().includes('Second note'))!
+    await secondCard.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.comment).toBe('43')
+    expect(router.currentRoute.value.hash).toBe('#L3')
+    await secondCard.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.hash).toBe('#L3')
+
+    // Deleting the active comment clears both ?comment= and its URL hash.
+    await wrapper.get('button[aria-label="Comment actions"]').trigger('click')
+    const delPromise = wrapper
+      .findAll('[role="menuitem"]')
+      .find((b) => b.text() === 'Delete')!
+      .trigger('click')
+    await flushPromises()
+    useConfirm().accept()
+    await delPromise
+    await flushPromises()
+    expect(router.currentRoute.value.query.comment).toBeUndefined()
+    expect(router.currentRoute.value.hash).toBe('')
+
+    // Clicking an annotated Markdown block selects it; clicking outside clears it.
+    await wrapper.get('[data-line="1"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.comment).toBe('42')
+
+    // Pressing 'c' with an active URL mark opens the composer and submits via createAnnotationFromMark.
     await router.replace({ hash: '#L1-L2' })
     await flushPromises()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
     await flushPromises()
-    expect(wrapper.find('textarea[aria-label="New comment body"]').exists()).toBe(true)
+    const draftBox = wrapper.get('textarea[aria-label="New comment body"]')
+    await draftBox.setValue('Created from composer')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Comment')!
+      .trigger('click')
+    await flushPromises()
+    expect(api.annotations.create).toHaveBeenCalledWith(
+      101,
+      expect.objectContaining({ anchor_kind: 'line', range_start: 1, range_end: 2 }),
+    )
+    expect(router.currentRoute.value.query.comment).toBe('44')
   })
 })

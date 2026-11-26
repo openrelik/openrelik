@@ -303,18 +303,17 @@ function startAnnotation(targetMark: Mark) {
 function selectAnnotation(annotation: FileAnnotationRecord) {
   popover.value = null
   activeAnnotationId.value = annotation.id
-  annotationPulse.value++
-  mark.value = annotationMark(annotation)
+  const nextMark = annotationMark(annotation)
+  const sameHash = formatMark(nextMark) === route.hash
+  mark.value = nextMark
   writeUrl({ comment: String(annotation.id) })
+  if (sameHash) annotationPulse.value++
 }
 
 function onViewerAnnotationsClicked(ids: number[], label: string) {
   popover.value = null
   if (!ids.length) {
-    activeAnnotationId.value = null
-    filterIds.value = null
-    filterLabel.value = null
-    writeUrl({ comment: undefined })
+    deselectAnnotation()
     return
   }
   showDetails.value = true
@@ -346,6 +345,7 @@ async function deleteAnnotationAndClear(annotationId: number) {
   await fileAnnotations.deleteAnnotation(annotationId)
   if (activeAnnotationId.value === annotationId) {
     activeAnnotationId.value = null
+    mark.value = null
     writeUrl({ comment: undefined })
   }
   if (filterIds.value) {

@@ -359,6 +359,7 @@ function paintAnnotations() {
   for (const el of body.value.querySelectorAll<HTMLElement>('[data-row]')) {
     const row = Number(el.dataset.row)
     const lineNum = index.lineOf(row) + 1
+    const wholeLayer = wholeLineRowLayer(lineNum - 1)
     const rowText = index.rowText(row)
     const start = index.startOf(row)
     const segments = computeTextRowSegments(
@@ -369,10 +370,12 @@ function paintAnnotations() {
       rowText.length,
     )
     for (const seg of segments) {
+      if (wholeLayer === 'active' && seg.layer !== 'active') continue
+      const layer = wholeLayer !== 'none' && seg.layer === 'single' ? 'overlap' : seg.layer
       const stretch = document.createRange()
       stretch.setStart(...nodeAt(el, shownOffset(rowText, seg.start)))
       stretch.setEnd(...nodeAt(el, shownOffset(rowText, seg.end)))
-      annotationHighlights[seg.layer]?.add(stretch)
+      annotationHighlights[layer]?.add(stretch)
     }
   }
 }
@@ -574,6 +577,21 @@ function onTextClick(event: MouseEvent) {
           `line ${point.line}`,
         )
         return
+      }
+    } else if (wholeLineAnnotations.value.length) {
+      const lineEl = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-line]')
+      const lineNum = lineEl ? Number(lineEl.dataset.line) : NaN
+      if (Number.isFinite(lineNum)) {
+        const hits = annotationsAtPoint(wholeLineAnnotations.value, 'line', lineNum)
+        if (hits.length) {
+          marks.set(annotationSpan(hits[0]!))
+          emit(
+            'selectAnnotations',
+            hits.map((a) => a.id),
+            `line ${lineNum}`,
+          )
+          return
+        }
       }
     }
   }
@@ -810,6 +828,7 @@ const linesLabel = computed(() => {
           <div
             v-for="row in rows"
             :key="row.row"
+            :data-line="row.line + 1"
             class="flex h-5 items-center"
             :class="rowBgClass(row.line)"
           >

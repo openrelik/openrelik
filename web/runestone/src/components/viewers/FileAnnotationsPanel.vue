@@ -110,6 +110,8 @@ watch(
 const draftChip = computed(() => (props.draftMark ? formatMark(props.draftMark).slice(1) : ''))
 const draftLabel = computed(() => (props.draftMark ? markLabel(props.draftMark) : ''))
 
+let unmounted = false
+
 async function submitDraft() {
   const mark = props.draftMark
   const body = draftBody.value.trim()
@@ -118,13 +120,14 @@ async function submitDraft() {
   draftError.value = null
   try {
     const created = await props.onCreate(mark, body)
+    if (unmounted) return
     draftBody.value = ''
     emit('cancelDraft')
     emit('select', created)
   } catch (err: unknown) {
-    draftError.value = errorMessage(err, 'Could not save comment')
+    if (!unmounted) draftError.value = errorMessage(err, 'Could not save comment')
   } finally {
-    draftSaving.value = false
+    if (!unmounted) draftSaving.value = false
   }
 }
 
@@ -151,7 +154,7 @@ async function copyCommentLink(annotation: FileAnnotationRecord) {
   url.searchParams.set('comment', String(annotation.id))
   url.hash = formatMark(annotationMark(annotation))
   const ok = await copyToClipboard(url.toString())
-  if (!ok) return
+  if (!ok || unmounted) return
   copiedCommentId.value = annotation.id
   clearTimeout(copyTimer)
   copyTimer = setTimeout(() => {
@@ -197,11 +200,12 @@ async function saveEditAnnotation(annotationId: number) {
   editError.value = null
   try {
     await props.onUpdate(annotationId, body)
+    if (unmounted) return
     cancelEdit()
   } catch (err: unknown) {
-    editError.value = errorMessage(err, 'Could not update comment')
+    if (!unmounted) editError.value = errorMessage(err, 'Could not update comment')
   } finally {
-    editSaving.value = false
+    if (!unmounted) editSaving.value = false
   }
 }
 
@@ -212,11 +216,12 @@ async function saveEditReply(annotationId: number, replyId: number) {
   editError.value = null
   try {
     await props.onUpdateReply(annotationId, replyId, body)
+    if (unmounted) return
     cancelEdit()
   } catch (err: unknown) {
-    editError.value = errorMessage(err, 'Could not update reply')
+    if (!unmounted) editError.value = errorMessage(err, 'Could not update reply')
   } finally {
-    editSaving.value = false
+    if (!unmounted) editSaving.value = false
   }
 }
 
@@ -236,12 +241,12 @@ async function removeAnnotation(annotation: FileAnnotationRecord) {
     confirmLabel: 'Delete',
     danger: true,
   })
-  if (!ok) return
+  if (!ok || unmounted) return
   actionError.value = null
   try {
     await props.onDelete(annotation.id)
   } catch (err: unknown) {
-    actionError.value = errorMessage(err, 'Could not delete comment')
+    if (!unmounted) actionError.value = errorMessage(err, 'Could not delete comment')
   }
 }
 
@@ -253,12 +258,12 @@ async function removeReply(annotationId: number, reply: FileAnnotationReplyRecor
     confirmLabel: 'Delete',
     danger: true,
   })
-  if (!ok) return
+  if (!ok || unmounted) return
   actionError.value = null
   try {
     await props.onDeleteReply(annotationId, reply.id)
   } catch (err: unknown) {
-    actionError.value = errorMessage(err, 'Could not delete reply')
+    if (!unmounted) actionError.value = errorMessage(err, 'Could not delete reply')
   }
 }
 
@@ -295,11 +300,12 @@ async function submitReply(annotationId: number) {
   replyError.value = null
   try {
     await props.onCreateReply(annotationId, body)
+    if (unmounted) return
     cancelReply(annotationId)
   } catch (err: unknown) {
-    replyError.value = errorMessage(err, 'Could not save reply')
+    if (!unmounted) replyError.value = errorMessage(err, 'Could not save reply')
   } finally {
-    replySaving.value = false
+    if (!unmounted) replySaving.value = false
   }
 }
 
@@ -361,6 +367,7 @@ onMounted(() => {
   }
 })
 onUnmounted(() => {
+  unmounted = true
   clearTimeout(copyTimer)
   resizeObserver?.disconnect()
 })

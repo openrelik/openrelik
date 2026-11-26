@@ -278,4 +278,59 @@ describe('FileContent', () => {
     expect(mimeWrapper.find('[aria-label="File text"]').exists()).toBe(false)
     expect(mimeWrapper.emitted('view')?.at(-1)).toEqual(['hex'])
   })
+
+  it('forwards annotate, selectAnnotations, and selectionPopover with viewer mark kinds', async () => {
+    const csvSize = mockBytes('a,b\n1,2\n3,4\n')
+    const csvWrapper = mountContent({
+      file: makeFile({ id: 20, name: 'rows.csv', mime: 'text/csv', size: csvSize }),
+      mark: { kind: 'row', from: 1, to: 1 },
+    })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+
+    // TableViewer -> kind: 'row'
+    await csvWrapper.get('[role="grid"]').trigger('keydown', { key: 'c' })
+    expect(csvWrapper.emitted('annotate')?.at(-1)).toEqual([{ kind: 'row', from: 1, to: 1 }])
+
+    const rowGutter = csvWrapper.findAll('[data-gutter]')[1]!
+    await rowGutter.trigger('pointerdown', { button: 0, clientX: 10, clientY: 20 })
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 10, clientY: 20 }))
+    await flushPromises()
+    expect(csvWrapper.emitted('selectionPopover')?.at(-1)?.[0]).toEqual({
+      kind: 'row',
+      from: 2,
+      to: 2,
+    })
+
+    // Switch to Text -> kind: 'line'
+    const textTab = csvWrapper.findAll('[role="tab"]').find((t) => t.text() === 'Text')!
+    await textTab.trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+    await csvWrapper.setProps({ mark: { kind: 'line', from: 1, to: 1 } })
+    await csvWrapper.get('[aria-label="File text"]').trigger('keydown', { key: 'c' })
+    expect(csvWrapper.emitted('annotate')?.at(-1)).toEqual([{ kind: 'line', from: 1, to: 1 }])
+
+    // Switch to Hex -> kind: 'offset'
+    const hexTab = csvWrapper.findAll('[role="tab"]').find((t) => t.text() === 'Hex')!
+    await hexTab.trigger('click')
+    await flushPromises()
+    await csvWrapper.findAll('[role="grid"]').at(-1)!.trigger('keydown', { key: 'c' })
+    expect(csvWrapper.emitted('annotate')?.at(-1)).toEqual([{ kind: 'offset', from: 0, to: 0 }])
+
+    // MarkdownViewer -> kind: 'line'
+    const mdSize = mockBytes('# Heading\n\nBody\n')
+    const mdWrapper = mountContent({
+      file: makeFile({ id: 21, name: 'doc.md', mime: 'text/markdown', size: mdSize }),
+      prefer: 'rendered',
+      mark: { kind: 'line', from: 1, to: 1 },
+    })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+    await mdWrapper.get('[role="document"]').trigger('keydown', { key: 'c' })
+    expect(mdWrapper.emitted('annotate')?.at(-1)).toEqual([{ kind: 'line', from: 1, to: 1 }])
+  })
 })

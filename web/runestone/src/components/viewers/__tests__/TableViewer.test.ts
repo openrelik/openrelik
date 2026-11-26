@@ -28,7 +28,7 @@ import { clearQueryCache } from '@/composables/useQueryCache'
 import { hideTooltip } from '@/composables/useTooltip'
 import { useModalStore } from '@/stores/modals'
 import { useSettingsStore } from '@/stores/settings'
-import { api } from '@/api'
+import { api, type FileAnnotationRecord } from '@/api'
 import type { Span } from '@/utils/marks'
 import type { TableKind } from '@/utils/preview'
 
@@ -709,5 +709,124 @@ describe('TableViewer', () => {
 
     expect(widthOf(0)).toBe(resizedCol0Width)
     expect(widthOf(1)).toBeGreaterThan(initialAutoWidth)
+  })
+
+  it('highlights annotated rows, selects on row click, deselects in one Escape press, and triggers annotate/selectionPopover', async () => {
+    const csvBytes = encode('host,port\nweb-01,80\nweb-02,443\ndb-01,5432\n')
+    vi.mocked(api.files.readRange).mockResolvedValue(csvBytes)
+
+    const rowAnn1: FileAnnotationRecord = {
+      id: 21,
+      file_id: 70,
+      user_id: 1,
+      user: { id: 1, username: 'analyst', display_name: 'Analyst', profile_picture_url: null },
+      anchor_kind: 'row',
+      range_start: 1,
+      range_end: 2,
+      range_start_col: null,
+      range_end_col: null,
+      body: 'First row note',
+      created_at: '2026-11-25T10:00:00Z',
+      updated_at: '2026-11-25T10:00:00Z',
+      edited_at: null,
+      replies: [],
+    }
+    const rowAnn2: FileAnnotationRecord = {
+      ...rowAnn1,
+      id: 22,
+      range_start: 2,
+      range_end: 2,
+      body: 'Overlap on row 2',
+    }
+
+    const mark = ref<Span | null>(null)
+    const activeIds = ref<Set<number>>(new Set())
+    const selectedCalls: Array<[number[], string]> = []
+    const annotateCalls: Span[] = []
+    const popoverCalls: Span[] = []
+
+    const Host = defineComponent({
+      components: { TableViewer },
+      setup() {
+        return {
+          mark,
+          activeIds,
+          annotations: [rowAnn1, rowAnn2],
+          onSelect: (ids: number[], label: string) => {
+            selectedCalls.push([ids, label])
+            activeIds.value = new Set(ids.slice(0, 1))
+          },
+          onAnnotate: (span: Span) => annotateCalls.push(span),
+          onPopover: (span: Span) => popoverCalls.push(span),
+        }
+      },
+      template: `<TableViewer :file-id="70" :size="${csvBytes.length}" kind="csv" v-model:mark="mark" :annotations="annotations" :active-annotation-ids="activeIds" @select-annotations="onSelect" @annotate="onAnnotate" @selection-popover="onPopover" />`,
+    })
+
+    const wrapper = mount(Host, {
+      attachTo: document.body,
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(wrapper)
+    await vi.advanceTimersByTimeAsync(10)
+    await nextTick()
+
+    const grid = wrapper.get('[role="grid"]')
+    const rowEls = () => grid.findAll('[data-table-row]')
+    expect(rowEls()[0]!.classes()).toContain('bg-annotation-tint')
+    expect(rowEls()[1]!.classes()).toContain('bg-annotation-overlap')
+
+    // Click row 2 -> emits both overlapping IDs and sets mark
+    await rowEls()[1]!.trigger('pointerdown', { button: 0 })
+    await rowEls()[1]!.trigger('click')
+    await nextTick()
+    expect(selectedCalls.at(-1)).toEqual([[21, 22], 'row 2'])
+    expect(mark.value).toEqual({ from: 1, to: 2 })
+    expect(rowEls()[0]!.classes()).toContain('bg-annotation-active')
+
+    // Single Escape clears cursor, mark, and active annotation immediately
+    await grid.trigger('keydown', { key: 'Escape' })
+    await nextTick()
+    expect(mark.value).toBeNull()
+    expect(selectedCalls.at(-1)).toEqual([[], ''])
+    expect(sideRowTarget?.textContent).toContain('Select a row to see it in full.')
+
+    // Same single-Escape behavior inside fullscreen mode
+    await rowEls()[0]!.trigger('pointerdown', { button: 0 })
+    await rowEls()[0]!.trigger('click')
+    await grid.trigger('keydown', { key: 'f' })
+    await nextTick()
+    expect(activeIds.value.has(21)).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(mark.value).toBeNull()
+    expect(selectedCalls.at(-1)).toEqual([[], ''])
+    // Fullscreen stays open on first Escape; second Escape exits fullscreen
+    expect(
+      document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]'),
+    ).not.toBeNull()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(
+      document.body.querySelector('[role="dialog"][aria-label="Table, full screen"]'),
+    ).toBeNull()
+
+    // Gutter click outside fullscreen emits selectionPopover; pressing 'c' emits annotate
+    const gutter = wrapper.get('[data-gutter]')
+    await gutter.trigger('pointerdown', { button: 0, clientX: 10, clientY: 20 })
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 10, clientY: 20 }))
+    await nextTick()
+    expect(popoverCalls.at(-1)).toEqual({ from: 1, to: 1 })
+
+    await grid.trigger('keydown', { key: 'c' })
+    expect(annotateCalls.at(-1)).toEqual({ from: 1, to: 1 })
+
+    // Clicking an unannotated row clears any active annotation
+    activeIds.value = new Set([21])
+    await nextTick()
+    await rowEls()[2]!.trigger('pointerdown', { button: 0 })
+    await rowEls()[2]!.trigger('click')
+    expect(selectedCalls.at(-1)).toEqual([[], ''])
   })
 })

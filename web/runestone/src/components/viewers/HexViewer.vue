@@ -514,8 +514,7 @@ const selectionDecodings = computed(() => decodings(decoded.value))
 // --- a byte's look: selected, cursor, or marked from the other column ---
 
 function tone(offset: number) {
-  if (selected(offset)) return 'bg-selection'
-  if (hovered.value === offset) return 'bg-sunken'
+  if (hasSelection.value && selected(offset)) return 'bg-selection'
   const layer = annotationLayerForRange(
     props.annotations,
     'offset',
@@ -528,6 +527,8 @@ function tone(offset: number) {
       ? 'bg-annotation-active annotation-pulse shadow-[inset_0_-2px_0_var(--color-annotation)]'
       : 'bg-annotation-active shadow-[inset_0_-2px_0_var(--color-annotation)]'
   }
+  if (selected(offset)) return 'bg-selection'
+  if (hovered.value === offset) return 'bg-sunken'
   if (marks.marked(offset)) return 'bg-warning-tint'
   if (layer === 'overlap')
     return 'bg-annotation-overlap shadow-[inset_0_-1px_0_var(--color-annotation)]'

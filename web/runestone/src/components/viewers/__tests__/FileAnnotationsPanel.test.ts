@@ -305,4 +305,53 @@ describe('FileAnnotationsPanel', () => {
       'Delete',
     ])
   })
+
+  it('ignores resolved create callback after unmount so switching files does not leak select events', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    let resolveCreate!: (value: FileAnnotationRecord) => void
+    const onCreate = vi.fn().mockImplementation(
+      () =>
+        new Promise<FileAnnotationRecord>((resolve) => {
+          resolveCreate = resolve
+        }),
+    )
+
+    const wrapper = mount(FileAnnotationsPanel, {
+      props: {
+        annotations: [],
+        state: {
+          status: 'success',
+          isFetching: false,
+          error: null,
+          errorStatus: null,
+          fetchedAt: Date.now(),
+        },
+        draftMark: { kind: 'line', from: 2, to: 2 },
+        activeId: null,
+        filterIds: null,
+        filterLabel: null,
+        onCreate,
+        onUpdate: vi.fn(),
+        onDelete: vi.fn(),
+        onCreateReply: vi.fn(),
+        onUpdateReply: vi.fn(),
+        onDeleteReply: vi.fn(),
+      },
+      global: { plugins: [pinia, directives] },
+    })
+
+    await wrapper.get('textarea[aria-label="New comment body"]').setValue('In-flight note')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Comment')!
+      .trigger('click')
+
+    wrapper.unmount()
+    resolveCreate({ ...sampleAnnotation, id: 77, body: 'In-flight note' })
+    await flushPromises()
+
+    expect(wrapper.emitted('select')).toBeUndefined()
+    expect(wrapper.emitted('cancelDraft')).toBeUndefined()
+  })
 })
