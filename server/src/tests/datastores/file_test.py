@@ -43,19 +43,36 @@ from datastores.sql.models.user import UserRole
 
 
 def test_get_files_from_db(db):
-    """Test get_files_from_db."""
+    """Test get_files_from_db attaches batched annotation counts."""
     folder_id = 1
     mock_query = db.query.return_value
     mock_filter = mock_query.filter_by.return_value
     mock_order = mock_filter.order_by.return_value
-    mock_order.all.return_value = [File(id=1, folder_id=folder_id)]
+    mock_order.all.return_value = [
+        File(id=1, folder_id=folder_id),
+        File(id=2, folder_id=folder_id),
+    ]
+    db.execute.return_value.all.return_value = [(1, 3)]
 
     result = get_files_from_db(db, folder_id)
 
     db.query.assert_called_once_with(File)
     mock_query.filter_by.assert_called_once_with(folder_id=folder_id)
-    assert len(result) == 1
-    assert result[0].id == 1
+    db.execute.assert_called_once()
+    assert len(result) == 2
+    assert result[0].annotation_count == 3
+    assert result[1].annotation_count == 0
+
+
+def test_get_files_from_db_empty_skips_annotation_count_query(db):
+    """Test get_files_from_db skips batched count query when folder is empty."""
+    mock_order = db.query.return_value.filter_by.return_value.order_by.return_value
+    mock_order.all.return_value = []
+
+    result = get_files_from_db(db, 1)
+
+    assert result == []
+    db.execute.assert_not_called()
 
 
 def test_get_file_from_db(db):
