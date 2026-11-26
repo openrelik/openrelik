@@ -140,6 +140,14 @@ limitations under the License.
   --color-idle: #898a9c;
   --color-idle-tint: #21212b;
 
+  /* Selection annotations: stepped warm-amber highlighter tones in the design
+     system's marker-pen family (`--color-warning`), clearly visible against
+     dark and light surfaces while keeping primary ink readable (≥ 6.5:1). */
+  --color-annotation: #e8b45e;
+  --color-annotation-tint: #3d2c10;
+  --color-annotation-overlap: #523b12;
+  --color-annotation-active: #664915;
+
   /* Solid icons (folders, workflow states): filled glyphs use the semantic
      accents directly in dark mode; the light theme lifts them to L=0.62. */
   --color-brand-icon: #77b5fb;
@@ -234,6 +242,11 @@ limitations under the License.
   --color-idle: #6a6a7a;
   --color-idle-tint: #ececf1;
 
+  --color-annotation: #724d00;
+  --color-annotation-tint: #fef6dc;
+  --color-annotation-overlap: #fcedbe;
+  --color-annotation-active: #f8df9b;
+
   /* Solid icons lifted to OKLCH L=0.62 so filled glyphs stay distinct without
      reading near-black (all clear ≥ 3.4:1 on white). */
   --color-brand-icon: #4186e0;
@@ -290,6 +303,50 @@ limitations under the License.
      Highlight API so selecting text never splits rows underneath. */
   ::highlight(text-mark) {
     background-color: var(--color-warning-tint);
+  }
+
+  /* Saved selection annotations in TextViewer, layered by priority:
+     single tint + subtle dotted underline (1) < overlap tint (2) < text-mark (3) < active thread (4). */
+  ::highlight(annotation) {
+    background-color: var(--color-annotation-tint);
+    text-decoration: underline;
+    text-decoration-color: var(--color-warning-icon);
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+  }
+  ::highlight(annotation-overlap) {
+    background-color: var(--color-annotation-overlap);
+  }
+  ::highlight(annotation-active) {
+    background-color: var(--color-annotation-active);
+  }
+
+  /* Brief arrival pulse when jumping to a comment from the sidebar or deep link. */
+  @keyframes annotation-pulse {
+    0% {
+      background-color: color-mix(
+        in oklab,
+        var(--color-warning-icon) 45%,
+        var(--color-annotation-active)
+      );
+    }
+    100% {
+      background-color: var(--color-annotation-active);
+    }
+  }
+  @keyframes annotation-line-flash {
+    0% {
+      background-color: var(--color-annotation-active);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+  .annotation-pulse {
+    animation: annotation-pulse 750ms var(--ease-standard);
+  }
+  .annotation-line-flash {
+    animation: annotation-line-flash 750ms var(--ease-standard);
   }
 
   @media (prefers-reduced-motion: reduce) {
