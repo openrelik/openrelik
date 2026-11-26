@@ -35,12 +35,18 @@ import { ensure, markFresh, queryState, type QueryState } from '@/composables/us
 import { useItemsStore } from '@/stores/items'
 
 const byFile = reactive<Record<number, FileAnnotationRecord[]>>({})
+let sessionEpoch = 0
 
 const annotationsKey = (fileId: number) => `file:${fileId}:annotations`
 
 function syncFileAnnotationCount(fileId: number, total: number): void {
   const file = useItemsStore().findFile(fileId)
   if (file) file.annotationCount = total
+}
+
+function markFreshIfLoaded(fileId: number): void {
+  const key = annotationsKey(fileId)
+  if (queryState(key).status === 'success') markFresh(key)
 }
 
 function sortAnnotations(list: FileAnnotationRecord[]): FileAnnotationRecord[] {
@@ -54,6 +60,7 @@ function sortAnnotations(list: FileAnnotationRecord[]): FileAnnotationRecord[] {
 
 /** Clears cached annotations across all files on sign-out. */
 export function clearFileAnnotations(): void {
+  sessionEpoch++
   for (const key of Object.keys(byFile)) {
     delete byFile[Number(key)]
   }
@@ -86,10 +93,12 @@ export function useFileAnnotations(fileId: () => number | undefined): UseFileAnn
     if (disposed || id === undefined) return
     const mine = new AbortController()
     controller = mine
+    const epoch = sessionEpoch
     await ensure(
       annotationsKey(id),
       async (signal) => {
         const list = await api.annotations.list(id, { signal })
+        if (epoch !== sessionEpoch) return
         byFile[id] = sortAnnotations(list)
         syncFileAnnotationCount(id, list.length)
       },
@@ -126,11 +135,13 @@ export function useFileAnnotations(fileId: () => number | undefined): UseFileAnn
     payload: CreateFileAnnotationInput,
   ): Promise<FileAnnotationRecord> {
     const id = requireFileId()
+    const epoch = sessionEpoch
     const created = await api.annotations.create(id, payload)
+    if (epoch !== sessionEpoch) return created
     const current = byFile[id] ?? []
     byFile[id] = sortAnnotations([...current.filter((a) => a.id !== created.id), created])
     syncFileAnnotationCount(id, byFile[id]!.length)
-    markFresh(annotationsKey(id))
+    markFreshIfLoaded(id)
     return created
   }
 
@@ -139,20 +150,24 @@ export function useFileAnnotations(fileId: () => number | undefined): UseFileAnn
     body: string,
   ): Promise<FileAnnotationRecord> {
     const id = requireFileId()
+    const epoch = sessionEpoch
     const updated = await api.annotations.update(id, annotationId, body)
+    if (epoch !== sessionEpoch) return updated
     const current = byFile[id] ?? []
     byFile[id] = current.map((a) => (a.id === updated.id ? updated : a))
-    markFresh(annotationsKey(id))
+    markFreshIfLoaded(id)
     return updated
   }
 
   async function deleteAnnotation(annotationId: number): Promise<void> {
     const id = requireFileId()
+    const epoch = sessionEpoch
     await api.annotations.remove(id, annotationId)
+    if (epoch !== sessionEpoch) return
     const current = byFile[id] ?? []
     byFile[id] = current.filter((a) => a.id !== annotationId)
     syncFileAnnotationCount(id, byFile[id]!.length)
-    markFresh(annotationsKey(id))
+    markFreshIfLoaded(id)
   }
 
   async function createReply(
@@ -160,12 +175,14 @@ export function useFileAnnotations(fileId: () => number | undefined): UseFileAnn
     body: string,
   ): Promise<FileAnnotationReplyRecord> {
     const id = requireFileId()
+    const epoch = sessionEpoch
     const created = await api.annotations.createReply(id, annotationId, body)
+    if (epoch !== sessionEpoch) return created
     const current = byFile[id] ?? []
     byFile[id] = current.map((a) =>
       a.id === annotationId ? { ...a, replies: [...a.replies, created] } : a,
     )
-    markFresh(annotationsKey(id))
+    markFreshIfLoaded(id)
     return created
   }
 
@@ -175,25 +192,29 @@ export function useFileAnnotations(fileId: () => number | undefined): UseFileAnn
     body: string,
   ): Promise<FileAnnotationReplyRecord> {
     const id = requireFileId()
+    const epoch = sessionEpoch
     const updated = await api.annotations.updateReply(id, annotationId, replyId, body)
+    if (epoch !== sessionEpoch) return updated
     const current = byFile[id] ?? []
     byFile[id] = current.map((a) =>
       a.id === annotationId
         ? { ...a, replies: a.replies.map((r) => (r.id === updated.id ? updated : r)) }
         : a,
     )
-    markFresh(annotationsKey(id))
+    markFreshIfLoaded(id)
     return updated
   }
 
   async function deleteReply(annotationId: number, replyId: number): Promise<void> {
     const id = requireFileId()
+    const epoch = sessionEpoch
     await api.annotations.removeReply(id, annotationId, replyId)
+    if (epoch !== sessionEpoch) return
     const current = byFile[id] ?? []
     byFile[id] = current.map((a) =>
       a.id === annotationId ? { ...a, replies: a.replies.filter((r) => r.id !== replyId) } : a,
     )
-    markFresh(annotationsKey(id))
+    markFreshIfLoaded(id)
   }
 
   return {

@@ -222,11 +222,3 @@ export function escapeAnnotationText(text: string): string {
     (ch) => `‹U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}›`,
   )
 }
-
-/** Formats an ISO timestamp in compact UTC (`2026-11-25 19:05 UTC`). */
-export function formatAnnotationTime(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return iso
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`
-}

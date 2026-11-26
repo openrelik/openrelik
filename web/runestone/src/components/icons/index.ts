@@ -84,7 +84,6 @@ export {
   Plus,
   RotateCcw,
   Save,
-  Send,
   Settings,
   Settings2,
   Shrink,

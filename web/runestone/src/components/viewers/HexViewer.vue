@@ -311,14 +311,32 @@ function goTo() {
 
 // --- marked bytes: from the offsets, go-to, or a link ---
 
+const { pulsing, trigger: triggerPulse } = useAnnotationPulse(() => props.annotationPulse)
+
 const marks = useMarkedRange(mark, 'offset', {
   // Once mounted and measured, so the landing has rows of context above it.
-  land: (span) => void nextTick(() => land(Math.min(span.from, last.value))),
+  land: (span) =>
+    void nextTick(() => {
+      land(Math.min(span.from, last.value))
+      if (props.activeAnnotationIds.size) triggerPulse()
+    }),
   focus: () => grid.value?.focus({ preventScroll: true }),
   deselect: () => (anchor.value = cursor.value),
   onGutterDone: (span, event) =>
     emit('selectionPopover', span, pointAnchor(event.clientX, event.clientY)),
 })
+watch(
+  () => props.annotationPulse,
+  (next, prev) => {
+    if (!next || next === prev) return
+    void nextTick(() => {
+      if (mark.value) {
+        land(Math.min(mark.value.from, last.value))
+        if (props.activeAnnotationIds.size) triggerPulse()
+      }
+    })
+  },
+)
 /** The bytes of the row at `offset`. */
 const rowSpan = (offset: number) => ({ from: offset, to: Math.min(offset + ROW - 1, last.value) })
 /** The mark is whole rows: only then do the offsets show it, as marked bytes show themselves. */
@@ -494,8 +512,6 @@ watch(
 const selectionDecodings = computed(() => decodings(decoded.value))
 
 // --- a byte's look: selected, cursor, or marked from the other column ---
-
-const { pulsing } = useAnnotationPulse(() => props.annotationPulse)
 
 function tone(offset: number) {
   if (selected(offset)) return 'bg-selection'

@@ -280,6 +280,15 @@ function land(span: Span) {
   tryLand()
 }
 const { pulsing, trigger: triggerPulse } = useAnnotationPulse(() => props.annotationPulse)
+watch(
+  () => props.annotationPulse,
+  (next, prev) => {
+    if (!next || next === prev) return
+    void nextTick(() => {
+      if (mark.value) land(mark.value)
+    })
+  },
+)
 
 function tryLand() {
   const index = landing.value

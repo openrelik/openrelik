@@ -138,6 +138,7 @@ function onComment() {
 async function onCopyLink() {
   if (!props.mark) return
   const url = new URL(window.location.href)
+  url.searchParams.delete('comment')
   url.hash = formatMark(props.mark)
   const ok = await copyToClipboard(url.toString())
   if (!ok) return

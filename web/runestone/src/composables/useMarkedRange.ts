@@ -161,6 +161,7 @@ export function useMarkedRange(
   async function copyLink(span: Span | null = model.value): Promise<string> {
     if (!span) return ''
     const url = new URL(window.location.href)
+    url.searchParams.delete('comment')
     url.hash = formatMark({ kind, ...span })
     try {
       await navigator.clipboard.writeText(url.toString())

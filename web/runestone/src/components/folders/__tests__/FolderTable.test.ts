@@ -730,4 +730,27 @@ describe('FolderTable', () => {
 
     wrapper.unmount()
   })
+
+  it('displays comment icon and count only on files with active annotations', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = makeRouter()
+    await router.push('/folder/10')
+    await router.isReady()
+
+    const annotated = makeFile({ id: 1, name: 'suspicious.log', annotationCount: 3 })
+    const plain = makeFile({ id: 2, name: 'clean.log', annotationCount: 0 })
+
+    const wrapper = mount(FolderTable, {
+      props: { ...defaultProps(), rows: [annotated, plain] },
+      global: { plugins: [pinia, router, directives] },
+    })
+
+    const indicator = wrapper.find('[aria-label="3 comments"]')
+    expect(indicator.exists()).toBe(true)
+    expect(indicator.text()).toBe('3')
+    expect(wrapper.find('tr[data-row="1"] [aria-label*="comment"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
 })

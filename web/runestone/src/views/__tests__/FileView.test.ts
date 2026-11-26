@@ -474,4 +474,59 @@ describe('FileView', () => {
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/metrics')
   })
+
+  it('auto-opens Comments tab, restores ?comment= deep links, clears hash on Escape, and opens composer on c', async () => {
+    const encodedMd = new TextEncoder().encode('# Summary\n\nSuspicious binary\n')
+    vi.mocked(api.folders.getFolder).mockResolvedValue(childEvidenceFolder)
+    vi.mocked(api.folders.getSubfolders).mockResolvedValue([])
+    vi.mocked(api.folders.getFolderFiles).mockResolvedValue([markdownListingFile])
+    vi.mocked(api.files.getFile).mockResolvedValue(markdownFileDetail)
+    vi.mocked(api.files.readRange).mockResolvedValue(encodedMd)
+    vi.mocked(api.annotations.list).mockResolvedValue([
+      {
+        id: 42,
+        file_id: 101,
+        user_id: 1,
+        user: { id: 1, display_name: 'Dev', username: 'dev' },
+        anchor_kind: 'line',
+        range_start: 1,
+        range_end: 1,
+        body: 'Deep-linked note',
+        created_at: '2026-11-25T19:00:00Z',
+        replies: [],
+      },
+    ])
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = buildRouter()
+    await router.push('/folder/10/file/101?comment=42#L1')
+    await router.isReady()
+
+    wrapper = mount(FileView, {
+      props: { folderId: '10', fileId: '101' },
+      attachTo: document.body,
+      global: { plugins: [pinia, router, directives] },
+    })
+    await flushPromises()
+
+    // Comments tab is active and deep-linked comment #42 is rendered and selected.
+    const sideTabs = wrapper.get('aside[aria-label="Side panel"]').findAll('[role="tab"]')
+    const commentsTab = sideTabs.find((t) => t.text().startsWith('Comments'))!
+    expect(commentsTab.attributes('aria-selected')).toBe('true')
+    expect(wrapper.text()).toContain('Deep-linked note')
+
+    // Single Escape clears active comment, ?comment= query, and #L1 hash together.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(router.currentRoute.value.query.comment).toBeUndefined()
+    expect(router.currentRoute.value.hash).toBe('')
+
+    // Pressing 'c' with an active URL mark opens the new comment composer.
+    await router.replace({ hash: '#L1-L2' })
+    await flushPromises()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
+    await flushPromises()
+    expect(wrapper.find('textarea[aria-label="New comment body"]').exists()).toBe(true)
+  })
 })

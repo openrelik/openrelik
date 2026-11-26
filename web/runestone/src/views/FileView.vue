@@ -225,6 +225,8 @@ watch(mark, (next, prev) => {
     popover.value = null
     if (prev) {
       activeAnnotationId.value = null
+      filterIds.value = null
+      filterLabel.value = null
       writeUrl({ comment: undefined })
     }
   }
@@ -387,10 +389,8 @@ const KEYS: Record<string, () => void> = {
   // Draft composer, then active annotation, then mark, then back.
   Escape: () => {
     if (draftMark.value) draftMark.value = null
-    else if (activeAnnotationId.value !== null) {
-      activeAnnotationId.value = null
-      writeUrl({ comment: undefined })
-    } else if (mark.value) mark.value = null
+    else if (activeAnnotationId.value !== null) deselectAnnotation()
+    else if (mark.value) mark.value = null
     else back()
   },
 }
@@ -476,6 +476,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       >
         <template #comments>
           <FileAnnotationsPanel
+            :key="file.id"
             :annotations="fileAnnotations.annotations.value"
             :state="fileAnnotations.state.value"
             :draft-mark="draftMark"

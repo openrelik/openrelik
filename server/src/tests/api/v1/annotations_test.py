@@ -260,3 +260,130 @@ def test_reply_crud_and_idor(fastapi_test_client, mocker, user_db_model):
         "/files/2/annotations/10/replies", json={"body": "Cross-file IDOR attempt"}
     )
     assert missing_resp.status_code == 404
+
+
+def test_update_and_delete_reply_permissions(
+    fastapi_test_client, mocker, user_db_model, user_response
+):
+    """Reply PATCH is author-only (even admins get 403); DELETE allows author or admin."""
+    annotation = _make_annotation(
+        user_db_model, annotation_id=10, file_id=1, user_id=100
+    )
+    own_reply = _make_reply(user_db_model, reply_id=20, annotation_id=10, user_id=100)
+    updated_reply = _make_reply(
+        user_db_model,
+        reply_id=20,
+        annotation_id=10,
+        user_id=100,
+        body="Edited reply",
+    )
+    updated_reply.edited_at = datetime(2026, 11, 25, 19, 10, tzinfo=timezone.utc)
+    mocker.patch(
+        "api.v1.annotations.get_file_annotation_from_db", return_value=annotation
+    )
+    mocker.patch(
+        "api.v1.annotations.get_file_annotation_reply_from_db", return_value=own_reply
+    )
+    mocker.patch(
+        "api.v1.annotations.update_file_annotation_reply_in_db",
+        return_value=updated_reply,
+    )
+    delete_reply_mock = mocker.patch(
+        "api.v1.annotations.delete_file_annotation_reply_in_db"
+    )
+
+    # Author edits own reply -> 200
+    resp_ok = fastapi_test_client.patch(
+        "/files/1/annotations/10/replies/20", json={"body": "Edited reply"}
+    )
+    assert resp_ok.status_code == 200
+    assert resp_ok.json()["body"] == "Edited reply"
+
+    # Non-author cannot edit or delete -> 403
+    other_annotation = _make_annotation(
+        user_db_model, annotation_id=10, file_id=1, user_id=999
+    )
+    other_reply = _make_reply(user_db_model, reply_id=20, annotation_id=10, user_id=999)
+    mocker.patch(
+        "api.v1.annotations.get_file_annotation_from_db", return_value=other_annotation
+    )
+    mocker.patch(
+        "api.v1.annotations.get_file_annotation_reply_from_db", return_value=other_reply
+    )
+    user_response.is_admin = False
+    assert (
+        fastapi_test_client.patch(
+            "/files/1/annotations/10/replies/20", json={"body": "Hijack"}
+        ).status_code
+        == 403
+    )
+    assert (
+        fastapi_test_client.delete("/files/1/annotations/10/replies/20").status_code
+        == 403
+    )
+
+    # Admin cannot edit another user's annotation or reply -> 403, but can delete reply -> 204
+    user_response.is_admin = True
+    assert (
+        fastapi_test_client.patch(
+            "/files/1/annotations/10", json={"body": "Admin edit"}
+        ).status_code
+        == 403
+    )
+    assert (
+        fastapi_test_client.patch(
+            "/files/1/annotations/10/replies/20", json={"body": "Admin edit"}
+        ).status_code
+        == 403
+    )
+    assert (
+        fastapi_test_client.delete("/files/1/annotations/10/replies/20").status_code
+        == 204
+    )
+    delete_reply_mock.assert_called_once_with(mocker.ANY, other_reply)
+
+    # Missing reply -> 404
+    mocker.patch(
+        "api.v1.annotations.get_file_annotation_reply_from_db", return_value=None
+    )
+    assert (
+        fastapi_test_client.patch(
+            "/files/1/annotations/10/replies/999", json={"body": "Missing"}
+        ).status_code
+        == 404
+    )
+    assert (
+        fastapi_test_client.delete("/files/1/annotations/10/replies/999").status_code
+        == 404
+    )
+
+
+def test_create_annotation_rejects_empty_file_offset_and_oversized_body(
+    fastapi_test_client, mocker
+):
+    """Offset annotations on 0-byte files return 400; bodies > 10,000 chars return 422."""
+    mocker.patch(
+        "api.v1.annotations.get_file_from_db",
+        return_value=mocker.MagicMock(id=1, filesize=0),
+    )
+    zero_resp = fastapi_test_client.post(
+        "/files/1/annotations",
+        json={
+            "anchor_kind": "offset",
+            "range_start": 0,
+            "range_end": 0,
+            "body": "Byte on empty file",
+        },
+    )
+    assert zero_resp.status_code == 400
+
+    oversized_resp = fastapi_test_client.post(
+        "/files/1/annotations",
+        json={
+            "anchor_kind": "line",
+            "range_start": 1,
+            "range_end": 1,
+            "body": "x" * 10001,
+        },
+    )
+    assert oversized_resp.status_code == 422

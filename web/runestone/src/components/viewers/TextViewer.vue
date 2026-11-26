@@ -221,6 +221,17 @@ function land(line: number, offset = 0) {
   tryLand()
 }
 const { pulsing, trigger: triggerPulse } = useAnnotationPulse(() => props.annotationPulse)
+watch(
+  () => props.annotationPulse,
+  (next, prev) => {
+    if (!next || next === prev) return
+    void nextTick(() => {
+      if (range.value) {
+        land(range.value.from, hasColumns(range.value) ? range.value.fromCol - 1 : 0)
+      }
+    })
+  },
+)
 
 function tryLand() {
   const at = landing.value
