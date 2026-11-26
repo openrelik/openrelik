@@ -28,6 +28,34 @@ export interface AnchorRect extends Box {
   bottom: number
 }
 
+/** Builds a small AnchorRect around a pointer coordinate (e.g. pointerup). */
+export function pointAnchor(x: number, y: number): AnchorRect {
+  return { left: x, top: y - 10, right: x, bottom: y + 10, width: 0, height: 20 }
+}
+
+/**
+ * AnchorRect for the end of the active browser text selection, falling back
+ * to a pointer coordinate when client rects are unavailable.
+ */
+export function selectionAnchor(fallbackX: number, fallbackY: number): AnchorRect {
+  const selection = window.getSelection()
+  if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+    const rects = selection.getRangeAt(0).getClientRects()
+    const last = rects[rects.length - 1]
+    if (last && (last.width > 0 || last.height > 0)) {
+      return {
+        left: last.left,
+        top: last.top,
+        right: last.right,
+        bottom: last.bottom,
+        width: last.width,
+        height: last.height,
+      }
+    }
+  }
+  return pointAnchor(fallbackX, fallbackY)
+}
+
 export interface Placed {
   left: number
   top: number

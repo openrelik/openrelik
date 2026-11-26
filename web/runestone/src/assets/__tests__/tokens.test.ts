@@ -188,6 +188,19 @@ describe('Design system CSS tokens (src/assets/main.css)', () => {
         contrastRatio(primaryFill, canvas),
         `${label} primary button text-canvas`,
       ).toBeGreaterThanOrEqual(label === 'dark' ? 7 : 5.4)
+
+      // Annotation highlight tokens clear AAA for accent ink and AA+ for body ink over all 3 highlight depths.
+      const ink = colorToken(tokens, '--color-ink')
+      expect(
+        contrastRatio(colorToken(tokens, '--color-annotation'), surface),
+        `${label} annotation accent on surface`,
+      ).toBeGreaterThanOrEqual(7)
+      for (const layer of ['annotation-tint', 'annotation-overlap', 'annotation-active'] as const) {
+        expect(
+          contrastRatio(ink, colorToken(tokens, `--color-${layer}`)),
+          `${label} ink on ${layer}`,
+        ).toBeGreaterThanOrEqual(6.5)
+      }
     }
   })
 

@@ -33,6 +33,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.orm import Session
 
 from api.v1 import schemas
+from api.v1.annotations import router as annotations_router
 from api.v1.configs import router as configs_router
 from api.v1.files import router as files_router
 from api.v1.folders import router as folders_router
@@ -688,6 +689,7 @@ def setup_test_app(user_response, db) -> FastAPI:
     app.include_router(taskqueue_router, prefix="/taskqueue", tags=["taskqueue"], dependencies=[])
     app.include_router(configs_router, prefix="/configs", tags=["configs"], dependencies=[])
     app.include_router(files_router, prefix="/files", tags=["files"], dependencies=[])
+    app.include_router(annotations_router, prefix="/files", tags=["annotations"], dependencies=[])
     app.include_router(folders_router, prefix="/folders", tags=["folders"], dependencies=[])
     app.include_router(groups_router, prefix="/groups", tags=["groups"], dependencies=[])
     app.include_router(metrics_router, prefix="/metrics", tags=["metrics"], dependencies=[])

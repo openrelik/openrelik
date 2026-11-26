@@ -54,6 +54,7 @@ This directory houses reusable, stateful Vue composables. They encapsulate keybo
 | [`useApiKeys`](#useapikeys)                     | Query-cached personal API key list and one-shot creation/revocation for `AccountDialog`.                          |
 | [`useShareDialog`](#usesharedialog)             | Query-cached folder collaborator ACLs, group/user search, and diffed role updates for `ShareDialog`.              |
 | [`useStatus`](#usestatus)                       | Parallel query-cached loaders for live cluster status, active workflows, and system storage on `StatusView`.      |
+| [`useFileAnnotations`](#usefileannotations)     | Query-cached selection annotations and replies per file, folder count sync, and viewer jump pulse helper.         |
 
 ---
 
@@ -295,3 +296,11 @@ Singleton coordinator (`openShareDialog`, `useShareDialog`) for `ShareDialog.vue
 ### `useStatus`
 
 Loads live Celery worker/queue status (`GET /taskqueue/status`, `5s` stale), accessible active workflows (`GET /workflows/active`, `5s` stale), and system storage totals (`GET /configs/status`, `60s` stale) in parallel through `useQueryCache`. Each feed keeps its own `QueryState` so panels fail and retry independently, background auto-refresh respects the `60s` storage cache while manual Refresh forces all three, and `clearStatus()` wipes module state and bumps the session epoch on sign-out.
+
+### `useFileAnnotations`
+
+Loads and caches selection annotations and replies for the file on screen (`GET /files/{id}/annotations`) through `useQueryCache` (`file:${fileId}:annotations`) and refreshes via `useAutoRefresh`.
+
+- Exposes `createAnnotation`, `updateAnnotation`, `deleteAnnotation`, `createReply`, `updateReply`, and `deleteReply`, keeping `useItemsStore`'s `annotationCount` in sync after create/delete.
+- Cleared on sign-out and 401 via `clearFileAnnotations()` from `stores/auth.ts`.
+- Also exports `useAnnotationPulse(pulseKey)` to restart a transient arrival pulse across viewers when jumping to a comment.

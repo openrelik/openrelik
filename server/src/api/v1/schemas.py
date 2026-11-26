@@ -13,10 +13,10 @@
 # limitations under the License.
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, field_serializer, field_validator, model_validator
 
 
 def custom_uuid_encoder(uuid_object):
@@ -280,6 +280,7 @@ class FileResponseCompactList(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     is_deleted: Optional[bool] = False
+    annotation_count: int = 0
 
 
 class FileSummaryCreate(BaseModel):
@@ -668,3 +669,103 @@ class SystemStorageStatusResponse(BaseModel):
     root_folders_count: int
     workflows_count: int
     storage_providers: List[StorageProviderStatus] = []
+
+
+# File annotation schemas
+ANNOTATION_BODY_MAX_LENGTH = 10_000
+
+
+def _validate_annotation_body(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("Comment body cannot be empty.")
+    if len(stripped) > ANNOTATION_BODY_MAX_LENGTH:
+        raise ValueError(
+            f"Comment body cannot exceed {ANNOTATION_BODY_MAX_LENGTH} characters."
+        )
+    return stripped
+
+
+class FileAnnotationReplyCreateRequest(BaseModel):
+    body: str
+
+    @field_validator("body")
+    @classmethod
+    def validate_body(cls, value: str) -> str:
+        return _validate_annotation_body(value)
+
+
+class FileAnnotationReplyUpdateRequest(BaseModel):
+    body: str
+
+    @field_validator("body")
+    @classmethod
+    def validate_body(cls, value: str) -> str:
+        return _validate_annotation_body(value)
+
+
+class FileAnnotationReplyResponse(BaseSchema):
+    annotation_id: int
+    user_id: int
+    user: UserResponseCompact
+    body: str
+    edited_at: Optional[datetime] = None
+
+
+class FileAnnotationCreateRequest(BaseModel):
+    anchor_kind: Literal["line", "row", "offset"]
+    range_start: int
+    range_end: int
+    range_start_col: Optional[int] = None
+    range_end_col: Optional[int] = None
+    body: str
+
+    @field_validator("body")
+    @classmethod
+    def validate_body(cls, value: str) -> str:
+        return _validate_annotation_body(value)
+
+    @model_validator(mode="after")
+    def validate_anchor(self) -> "FileAnnotationCreateRequest":
+        min_start = 0 if self.anchor_kind == "offset" else 1
+        if self.range_start < min_start:
+            raise ValueError(f"range_start must be >= {min_start} for {self.anchor_kind}.")
+        if self.range_end < self.range_start:
+            raise ValueError("range_end must be >= range_start.")
+        has_start_col = self.range_start_col is not None
+        has_end_col = self.range_end_col is not None
+        if has_start_col != has_end_col:
+            raise ValueError("range_start_col and range_end_col must both be set or both omitted.")
+        if has_start_col:
+            if self.anchor_kind != "line":
+                raise ValueError("Column ranges are only valid for line annotations.")
+            if self.range_start_col < 1 or self.range_end_col < 1:
+                raise ValueError("Column positions must be >= 1.")
+            if self.range_start == self.range_end and self.range_end_col <= self.range_start_col:
+                raise ValueError(
+                    "range_end_col must be > range_start_col on a single-line text selection."
+                )
+        return self
+
+
+class FileAnnotationUpdateRequest(BaseModel):
+    body: str
+
+    @field_validator("body")
+    @classmethod
+    def validate_body(cls, value: str) -> str:
+        return _validate_annotation_body(value)
+
+
+class FileAnnotationResponse(BaseSchema):
+    file_id: int
+    user_id: int
+    user: UserResponseCompact
+    anchor_kind: Literal["line", "row", "offset"]
+    range_start: int
+    range_end: int
+    range_start_col: Optional[int] = None
+    range_end_col: Optional[int] = None
+    body: str
+    edited_at: Optional[datetime] = None
+    replies: List[FileAnnotationReplyResponse] = []

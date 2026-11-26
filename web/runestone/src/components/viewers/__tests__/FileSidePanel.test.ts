@@ -86,8 +86,7 @@ describe('FileSidePanel', () => {
 
     expect(wrapper.classes()).not.toContain('invisible')
     expect(wrapper.attributes('style')).toContain('1fr')
-    expect(wrapper.find('h2').text()).toBe('Details')
-    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual(['Details', 'Comments'])
     expect(wrapper.find('#file-side-bytes').exists()).toBe(true)
     expect(wrapper.find('#file-side-row').exists()).toBe(true)
 
@@ -102,7 +101,7 @@ describe('FileSidePanel', () => {
     const wrapper = mountPanel({ open: true, inspector: 'bytes', modelValue: 'details' })
 
     const tabs = wrapper.findAll('[role="tab"]')
-    expect(tabs.map((t) => t.text())).toEqual(['Details', 'Inspector'])
+    expect(tabs.map((t) => t.text())).toEqual(['Details', 'Inspector', 'Comments'])
     expect(tabs[0]?.attributes('aria-selected')).toBe('true')
     expect(tabs[1]?.attributes('aria-selected')).toBe('false')
 

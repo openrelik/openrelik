@@ -72,6 +72,8 @@ export interface FolderFile {
   updated_at?: string
   /** The listing does not filter these out; the client must. */
   is_deleted?: boolean
+  /** Active selection comments on this file. */
+  annotation_count?: number
 }
 
 /** One file in full (GET /files/{id}): its hashes and what the server made of its content. */
@@ -373,4 +375,44 @@ export interface SystemStorageStatus {
   root_folders_count: number
   workflows_count: number
   storage_providers: StorageProviderStatus[]
+}
+
+/** A threaded reply on a file selection annotation. */
+export interface FileAnnotationReplyRecord {
+  id: number
+  annotation_id: number
+  user_id: number
+  user: DirectoryUser
+  body: string
+  created_at: string
+  updated_at?: string | null
+  edited_at?: string | null
+}
+
+/** A comment annotation anchored to a selection in a file. */
+export interface FileAnnotationRecord {
+  id: number
+  file_id: number
+  user_id: number
+  user: DirectoryUser
+  anchor_kind: 'line' | 'row' | 'offset'
+  range_start: number
+  range_end: number
+  range_start_col?: number | null
+  range_end_col?: number | null
+  body: string
+  created_at: string
+  updated_at?: string | null
+  edited_at?: string | null
+  replies: FileAnnotationReplyRecord[]
+}
+
+/** Payload for creating a new file selection annotation. */
+export interface CreateFileAnnotationInput {
+  anchor_kind: 'line' | 'row' | 'offset'
+  range_start: number
+  range_end: number
+  range_start_col?: number | null
+  range_end_col?: number | null
+  body: string
 }

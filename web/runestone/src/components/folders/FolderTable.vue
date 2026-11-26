@@ -22,6 +22,7 @@ import {
   File,
   Folder,
   FolderPlus,
+  MessageSquare,
   Upload as UploadIcon,
   Workflow as WorkflowIcon,
 } from '@/components/icons'
@@ -884,6 +885,20 @@ const columns = computed(() => (props.atRoot ? ROOT_COLUMNS : COLUMNS))
               >
                 {{ row.name }}{{ row.kind === 'folder' ? '/' : '' }}
               </RouterLink>
+              <span
+                v-if="row.kind === 'file' && row.annotationCount"
+                class="tabular inline-flex shrink-0 items-center gap-1 text-badge text-ink-muted"
+                :aria-label="count(row.annotationCount, 'comment')"
+                v-tooltip="count(row.annotationCount, 'comment')"
+              >
+                <MessageSquare
+                  :size="12"
+                  :stroke-width="1.5"
+                  class="fill-annotation-active text-warning-icon"
+                  aria-hidden="true"
+                />
+                <span>{{ row.annotationCount }}</span>
+              </span>
             </div>
           </td>
           <template v-if="atRoot">

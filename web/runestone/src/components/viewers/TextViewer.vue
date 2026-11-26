@@ -15,20 +15,30 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Copy } from '@/components/icons'
+import { Copy, MessageSquarePlus } from '@/components/icons'
 
 import StreamStatusBar from '@/components/viewers/StreamStatusBar.vue'
 import TextRow from '@/components/viewers/TextRow.vue'
 import TextSearchBar from '@/components/viewers/TextSearchBar.vue'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
+import { useAnnotationPulse } from '@/composables/useFileAnnotations'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
 import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import { useTextSearch } from '@/composables/useTextSearch'
 import { useTextStream } from '@/composables/useTextStream'
 import { useModalStore } from '@/stores/modals'
+import type { FileAnnotationRecord } from '@/api'
+import {
+  annotationHasColumns,
+  annotationLayerForRange,
+  annotationsAtPoint,
+  annotationSpan,
+  computeTextRowSegments,
+} from '@/utils/annotations'
 import { parseLineRange, ROW_CHARS, shownOffset, sourceOffset } from '@/utils/lines'
 import { hasColumns, sameSpan, type Span } from '@/utils/marks'
+import { pointAnchor, selectionAnchor, type AnchorRect } from '@/utils/placement'
 
 /**
  * A text file, line by line: read in the browser as it arrives (see
@@ -44,11 +54,22 @@ import { hasColumns, sameSpan, type Span } from '@/utils/marks'
  *
  * The text is only ever text: nothing in the file becomes markup.
  */
-const props = defineProps<{
-  fileId: number
-  size: number
-  /** On screen: ⌘F belongs to this viewer rather than the browser. */
-  active: boolean
+const props = withDefaults(
+  defineProps<{
+    fileId: number
+    size: number
+    /** On screen: ⌘F belongs to this viewer rather than the browser. */
+    active: boolean
+    annotations?: FileAnnotationRecord[]
+    activeAnnotationIds?: Set<number>
+    annotationPulse?: number
+  }>(),
+  { annotations: () => [], activeAnnotationIds: () => new Set<number>(), annotationPulse: 0 },
+)
+const emit = defineEmits<{
+  annotate: [span: Span]
+  selectAnnotations: [ids: number[], label: string]
+  selectionPopover: [span: Span, anchor: AnchorRect]
 }>()
 const range = defineModel<Span | null>('mark', { default: null })
 
@@ -140,6 +161,21 @@ const hitMarks = computed(() => {
   return [...at]
 })
 
+/** Ticks on the scrollbar where saved line annotations start. */
+const annotationMarks = computed(() => {
+  const total = text.rowCount.value
+  const room = bodyHeight.value
+  if (!thumbHeight.value || !total) return []
+  const at = new Set<number>()
+  for (const annotation of props.annotations) {
+    if (annotation.anchor_kind !== 'line') continue
+    const lineIdx = Math.max(0, annotation.range_start - 1)
+    if (lineIdx >= text.lineCount.value) continue
+    at.add(Math.floor((rowOf(lineIdx) / total) * room))
+  }
+  return [...at]
+})
+
 // --- the rows on screen ---
 
 const rows = computed(() => {
@@ -184,6 +220,19 @@ function land(line: number, offset = 0) {
   text.readUntil(line)
   tryLand()
 }
+const { pulsing, trigger: triggerPulse } = useAnnotationPulse(() => props.annotationPulse)
+watch(
+  () => props.annotationPulse,
+  (next, prev) => {
+    if (!next || next === prev) return
+    void nextTick(() => {
+      if (range.value) {
+        land(range.value.from, hasColumns(range.value) ? range.value.fromCol - 1 : 0)
+      }
+    })
+  },
+)
+
 function tryLand() {
   const at = landing.value
   // Not until measured: the landing leaves a third of the screen above it.
@@ -195,6 +244,7 @@ function tryLand() {
   if (to < 0) return
   scrollTo(rowOf(to, at.offset) - Math.floor(visibleRows.value / 3))
   if (at.offset) revealSideways(() => painted.ranges[0])
+  if (props.activeAnnotationIds.size) triggerPulse()
 }
 watch([text.version, text.done, bodyHeight], tryLand)
 
@@ -203,6 +253,8 @@ const marks = useMarkedRange(range, 'line', {
   focus: () => body.value?.focus({ preventScroll: true }),
   // The gutter press keeps the browser from clearing the selection itself.
   deselect: () => window.getSelection()?.removeAllRanges(),
+  onGutterDone: (span, event) =>
+    emit('selectionPopover', span, pointAnchor(event.clientX, event.clientY)),
 })
 const inRange = (line: number) => marks.marked(line + 1)
 /** Whole lines are marked (not exact text): their rows take the tint. */
@@ -213,14 +265,56 @@ const wholeLines = computed(() => !!range.value && !hasColumns(range.value))
  * not cut into elements of its own: a selection made across it keeps the
  * nodes it lies in. Without the Highlight API only the line numbers show it.
  */
+const supportsHighlight =
+  typeof Highlight !== 'undefined' && typeof CSS !== 'undefined' && 'highlights' in CSS
+
+function makeHighlight(priority: number): Highlight | null {
+  if (!supportsHighlight) return null
+  const h = new Highlight()
+  h.priority = priority
+  return h
+}
+
 const painted: { ranges: Range[]; highlight: Highlight | null } = {
   ranges: [],
-  highlight:
-    typeof Highlight !== 'undefined' && typeof CSS !== 'undefined' && 'highlights' in CSS
-      ? new Highlight()
-      : null,
+  highlight: makeHighlight(3),
 }
-/** The text node and offset at a position in a row's shown text. */
+
+const annotationHighlights = {
+  single: makeHighlight(1),
+  overlap: makeHighlight(2),
+  active: makeHighlight(4),
+}
+
+const wholeLineAnnotations = computed(() =>
+  props.annotations.filter((a) => a.anchor_kind === 'line' && !annotationHasColumns(a)),
+)
+const inlineAnnotations = computed(() => props.annotations.filter(annotationHasColumns))
+
+const lineAnnotationLayer = (line: number) =>
+  annotationLayerForRange(props.annotations, 'line', line + 1, line + 1, props.activeAnnotationIds)
+
+const wholeLineRowLayer = (line: number) =>
+  annotationLayerForRange(
+    wholeLineAnnotations.value,
+    'line',
+    line + 1,
+    line + 1,
+    props.activeAnnotationIds,
+  )
+
+function rowBgClass(line: number): string {
+  const wholeLayer = wholeLineRowLayer(line)
+  if (wholeLayer === 'active') {
+    return pulsing.value ? 'bg-annotation-active annotation-pulse' : 'bg-annotation-active'
+  }
+  if (wholeLines.value && inRange(line)) return 'bg-warning-tint'
+  if (wholeLayer === 'overlap') return 'bg-annotation-overlap'
+  if (wholeLayer === 'single') return 'bg-annotation-tint'
+  if (pulsing.value && lineAnnotationLayer(line) === 'active') return 'annotation-line-flash'
+  return ''
+}
+
 /** Line numbers show the mark only for whole lines: exact text is shown by its own tint. */
 const gutterMarked = computed(() => wholeLines.value || !painted.highlight)
 function nodeAt(row: HTMLElement, shown: number): [Node, number] {
@@ -256,13 +350,74 @@ function paintMark() {
     highlight?.add(stretch)
   }
 }
+function paintAnnotations() {
+  annotationHighlights.single?.clear()
+  annotationHighlights.overlap?.clear()
+  annotationHighlights.active?.clear()
+  if (!supportsHighlight || !body.value || !inlineAnnotations.value.length) return
+  const index = text.index()
+  for (const el of body.value.querySelectorAll<HTMLElement>('[data-row]')) {
+    const row = Number(el.dataset.row)
+    const lineNum = index.lineOf(row) + 1
+    const wholeLayer = wholeLineRowLayer(lineNum - 1)
+    const rowText = index.rowText(row)
+    const start = index.startOf(row)
+    const segments = computeTextRowSegments(
+      inlineAnnotations.value,
+      props.activeAnnotationIds,
+      lineNum,
+      start,
+      rowText.length,
+    )
+    for (const seg of segments) {
+      if (wholeLayer === 'active' && seg.layer !== 'active') continue
+      const layer = wholeLayer !== 'none' && seg.layer === 'single' ? 'overlap' : seg.layer
+      const stretch = document.createRange()
+      stretch.setStart(...nodeAt(el, shownOffset(rowText, seg.start)))
+      stretch.setEnd(...nodeAt(el, shownOffset(rowText, seg.end)))
+      annotationHighlights[layer]?.add(stretch)
+    }
+  }
+}
 watch([rows, range], paintMark, { immediate: true, flush: 'post' })
-onMounted(() => painted.highlight && CSS.highlights.set('text-mark', painted.highlight))
+watch([rows, () => props.annotations, () => props.activeAnnotationIds], paintAnnotations, {
+  immediate: true,
+  flush: 'post',
+})
+onMounted(() => {
+  if (painted.highlight) CSS.highlights.set('text-mark', painted.highlight)
+  if (annotationHighlights.single) CSS.highlights.set('annotation', annotationHighlights.single)
+  if (annotationHighlights.overlap)
+    CSS.highlights.set('annotation-overlap', annotationHighlights.overlap)
+  if (annotationHighlights.active)
+    CSS.highlights.set('annotation-active', annotationHighlights.active)
+})
 onUnmounted(() => {
   painted.highlight?.clear()
   painted.ranges = []
+  annotationHighlights.single?.clear()
+  annotationHighlights.overlap?.clear()
+  annotationHighlights.active?.clear()
   if (painted.highlight && CSS.highlights?.get('text-mark') === painted.highlight) {
     CSS.highlights.delete('text-mark')
+  }
+  if (
+    annotationHighlights.single &&
+    CSS.highlights?.get('annotation') === annotationHighlights.single
+  ) {
+    CSS.highlights.delete('annotation')
+  }
+  if (
+    annotationHighlights.overlap &&
+    CSS.highlights?.get('annotation-overlap') === annotationHighlights.overlap
+  ) {
+    CSS.highlights.delete('annotation-overlap')
+  }
+  if (
+    annotationHighlights.active &&
+    CSS.highlights?.get('annotation-active') === annotationHighlights.active
+  ) {
+    CSS.highlights.delete('annotation-active')
   }
 })
 
@@ -309,22 +464,33 @@ onUnmounted(() => document.removeEventListener('selectionchange', readSelection)
 
 /** A press in the text, not yet let go of: the selection it makes is still moving. */
 let pressing = false
+let shiftedSpan: Span | null = null
 /**
  * Selected text becomes the mark when the press ends, as clicked line
  * numbers do: the URL always links to what is selected.
  */
-function onTextRelease() {
+function onTextRelease(event: PointerEvent) {
   if (!pressing) return
   pressing = false
+  if (shiftedSpan) {
+    const span = shiftedSpan
+    shiftedSpan = null
+    emit('selectionPopover', span, pointAnchor(event.clientX, event.clientY))
+    return
+  }
   // Read now: `selectionchange` comes late.
   readSelection()
   const span = selected.value
-  if (!span || sameSpan(span, range.value)) return
-  marks.set(span)
-  marks.anchor.value = span
+  if (!span) return
+  if (!sameSpan(span, range.value)) {
+    marks.set(span)
+    marks.anchor.value = span
+  }
+  emit('selectionPopover', span, selectionAnchor(event.clientX, event.clientY))
 }
 function cancelPress() {
   pressing = false
+  shiftedSpan = null
 }
 onMounted(() => {
   document.addEventListener('pointerup', onTextRelease)
@@ -377,7 +543,9 @@ function onTextShiftDown(event: PointerEvent) {
       ? [point, start]
       : [start, point]
   if (a.line === b.line && a.col === b.col) return
-  marks.set({ from: a.line, fromCol: a.col, to: b.line, toCol: b.col })
+  const next = { from: a.line, fromCol: a.col, to: b.line, toCol: b.col }
+  marks.set(next)
+  shiftedSpan = next
 }
 const lineSpan = (line: number) => ({ from: line + 1, to: line + 1 })
 
@@ -395,9 +563,40 @@ function onTextPress(event: PointerEvent) {
 function onTextClick(event: MouseEvent) {
   // Where the press began, not where the click lands: a drag across line
   // numbers ends with a click on the row they share.
-  if (!range.value || pressedInGutter || event.shiftKey || event.detail > 1) return
+  if (pressedInGutter || event.shiftKey || event.detail > 1) return
   if (!(window.getSelection()?.isCollapsed ?? true)) return
-  marks.set(null)
+  if (props.annotations.length) {
+    const point = pointAt(event.clientX, event.clientY)
+    if (point) {
+      const hits = annotationsAtPoint(props.annotations, 'line', point.line, point.col)
+      if (hits.length) {
+        marks.set(annotationSpan(hits[0]!))
+        emit(
+          'selectAnnotations',
+          hits.map((a) => a.id),
+          `line ${point.line}`,
+        )
+        return
+      }
+    } else if (wholeLineAnnotations.value.length) {
+      const lineEl = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-line]')
+      const lineNum = lineEl ? Number(lineEl.dataset.line) : NaN
+      if (Number.isFinite(lineNum)) {
+        const hits = annotationsAtPoint(wholeLineAnnotations.value, 'line', lineNum)
+        if (hits.length) {
+          marks.set(annotationSpan(hits[0]!))
+          emit(
+            'selectAnnotations',
+            hits.map((a) => a.id),
+            `line ${lineNum}`,
+          )
+          return
+        }
+      }
+    }
+  }
+  if (range.value) marks.set(null)
+  if (props.activeAnnotationIds.size) emit('selectAnnotations', [], '')
 }
 
 watch(
@@ -409,6 +608,7 @@ watch(
     landing.value = null
     selected.value = null
     pressing = false
+    shiftedSpan = null
     gotoText.value = ''
     gotoError.value = false
   },
@@ -453,6 +653,20 @@ const linkLabel = computed(() =>
   selected.value ? 'Copy a link to the selected text' : `Copy a link to ${marks.label()}`,
 )
 
+function addComment() {
+  readSelection()
+  const span = selected.value ?? range.value
+  if (!span) return
+  marks.set(span)
+  marks.anchor.value = span
+  window.getSelection()?.removeAllRanges()
+  selected.value = null
+  emit('annotate', span)
+}
+const commentLabel = computed(() =>
+  selected.value ? 'Comment on the selected text' : `Comment on ${marks.label()}`,
+)
+
 // --- keys ---
 
 function onKey(event: KeyboardEvent) {
@@ -472,6 +686,7 @@ function onKey(event: KeyboardEvent) {
   else if (!mod && event.key === ':') gotoInput.value?.focus()
   else if (!mod && event.key === '/') searchBar.value?.focus()
   else if (!mod && event.key === 'm' && !window.getSelection()?.isCollapsed) void markSelection()
+  else if (!mod && event.key === 'c' && (selected.value || range.value)) addComment()
   else if (event.key === 'Escape' && selected.value) {
     // The selection goes first: what stays is its mark.
     window.getSelection()?.removeAllRanges()
@@ -535,8 +750,19 @@ const linesLabel = computed(() => {
         @load-all="text.loadAll()"
       />
 
-      <div class="ml-auto flex shrink-0 items-center gap-3">
-        <!-- mousedown kept from the page: pressing it must not clear the selection it links to -->
+      <div class="ml-auto flex shrink-0 items-center gap-1.5">
+        <!-- mousedown kept from the page: pressing it must not clear the selection it acts on -->
+        <button
+          v-if="range || selected"
+          type="button"
+          class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+          :aria-label="commentLabel"
+          v-tooltip="commentLabel"
+          @mousedown.prevent
+          @click="addComment"
+        >
+          <MessageSquarePlus :size="13" :stroke-width="1.5" />
+        </button>
         <button
           v-if="range || selected"
           type="button"
@@ -602,8 +828,9 @@ const linesLabel = computed(() => {
           <div
             v-for="row in rows"
             :key="row.row"
+            :data-line="row.line + 1"
             class="flex h-5 items-center"
-            :class="{ 'bg-warning-tint': wholeLines && inRange(row.line) }"
+            :class="rowBgClass(row.line)"
           >
             <span
               data-gutter
@@ -611,7 +838,9 @@ const linesLabel = computed(() => {
               :class="
                 gutterMarked && inRange(row.line)
                   ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
-                  : 'bg-surface text-ink-muted hover:text-ink-secondary'
+                  : lineAnnotationLayer(row.line) !== 'none'
+                    ? 'bg-surface text-annotation shadow-[inset_2px_0_0_var(--color-annotation)]'
+                    : 'bg-surface text-ink-muted hover:text-ink-secondary'
               "
               :style="{ width: `calc(${gutterChars}ch + 1.5rem)` }"
               @pointerdown="marks.onGutterDown($event, lineSpan(row.line))"
@@ -641,6 +870,13 @@ const linesLabel = computed(() => {
         class="relative w-2.5 shrink-0 border-l border-border bg-sunken"
         @pointerdown="onTrackDown"
       >
+        <div
+          v-for="y in annotationMarks"
+          :key="`ann-${y}`"
+          class="pointer-events-none absolute inset-x-0 h-0.5 bg-annotation/80"
+          :style="{ top: `${y}px` }"
+          aria-hidden="true"
+        />
         <div
           v-for="y in hitMarks"
           :key="y"

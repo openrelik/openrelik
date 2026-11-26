@@ -25,7 +25,7 @@ import HexViewer from '@/components/viewers/HexViewer.vue'
 import directives from '@/directives'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { hideTooltip } from '@/composables/useTooltip'
-import { api } from '@/api'
+import { api, type FileAnnotationRecord } from '@/api'
 import type { Span } from '@/utils/marks'
 
 vi.mock('@/api', () => ({
@@ -598,5 +598,107 @@ describe('HexViewer', () => {
     await gotoInput.setValue('0')
     await partialWrapper.get('form').trigger('submit')
     expect(partialWrapper.text()).toContain('0x00000000')
+  })
+
+  it('highlights byte annotations, pulses on landing, selects/deselects on click, and emits selectionPopover and annotate', async () => {
+    mockReadRangeFrom(makeSampleBytes(64))
+
+    const ann1: FileAnnotationRecord = {
+      id: 31,
+      file_id: 19,
+      user_id: 1,
+      user: { id: 1, username: 'analyst', display_name: 'Analyst', profile_picture_url: null },
+      anchor_kind: 'offset',
+      range_start: 2,
+      range_end: 4,
+      range_start_col: null,
+      range_end_col: null,
+      body: 'Magic bytes',
+      created_at: '2026-11-25T10:00:00Z',
+      updated_at: '2026-11-25T10:00:00Z',
+      edited_at: null,
+      replies: [],
+    }
+    const ann2: FileAnnotationRecord = {
+      ...ann1,
+      id: 32,
+      range_start: 4,
+      range_end: 5,
+      body: 'Overlapping offset',
+    }
+
+    const mark = ref<Span | null>(null)
+    const activeIds = ref<Set<number>>(new Set())
+    const selectedCalls: Array<[number[], string]> = []
+    const annotateCalls: Span[] = []
+    const popoverCalls: Span[] = []
+
+    const Host = defineComponent({
+      components: { HexViewer },
+      setup() {
+        return {
+          mark,
+          activeIds,
+          annotations: [ann1, ann2],
+          onSelect: (ids: number[], label: string) => {
+            selectedCalls.push([ids, label])
+            activeIds.value = new Set(ids.slice(0, 1))
+          },
+          onAnnotate: (span: Span) => annotateCalls.push(span),
+          onPopover: (span: Span) => popoverCalls.push(span),
+        }
+      },
+      template: `<HexViewer :file-id="19" :size="64" v-model:mark="mark" :annotations="annotations" :active-annotation-ids="activeIds" @select-annotations="onSelect" @annotate="onAnnotate" @selection-popover="onPopover" />`,
+    })
+
+    const wrapper = mount(Host, {
+      global: { plugins: [createPinia(), directives, makeRouter()] },
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+    await nextTick()
+
+    const firstRow = wrapper.get('[role="grid"]').findAll('.flex.h-5.items-center')[0]!
+    const hexSpans = firstRow.findAll('span.cursor-default.w-\\[2\\.5ch\\]')
+
+    expect(hexSpans[2]!.classes()).toContain('bg-annotation-tint')
+    expect(hexSpans[4]!.classes()).toContain('bg-annotation-overlap')
+
+    // Click byte 4 (overlap) -> emits both annotation IDs and updates mark
+    await hexSpans[4]!.trigger('pointerdown', { button: 0 })
+    window.dispatchEvent(new PointerEvent('pointerup'))
+    await hexSpans[4]!.trigger('click')
+    await nextTick()
+    expect(selectedCalls.at(-1)).toEqual([[31, 32], '0x00000004'])
+    expect(mark.value).toEqual({ from: 2, to: 4 })
+    expect(hexSpans[2]!.classes()).toContain('bg-annotation-active')
+
+    // Click unannotated byte 10 -> deselects active annotation and clears mark
+    await hexSpans[10]!.trigger('pointerdown', { button: 0 })
+    window.dispatchEvent(new PointerEvent('pointerup'))
+    await hexSpans[10]!.trigger('click')
+    await nextTick()
+    expect(selectedCalls.at(-1)).toEqual([[], ''])
+    expect(mark.value).toBeNull()
+
+    // External mark landing with active annotation triggers arrival pulse
+    activeIds.value = new Set([31])
+    mark.value = { from: 2, to: 4 }
+    await nextTick()
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(20)
+    await nextTick()
+    expect(hexSpans[2]!.classes()).toContain('annotation-pulse')
+
+    // Drag across bytes 6..8 emits selectionPopover; pressing 'c' emits annotate
+    await hexSpans[6]!.trigger('pointerdown', { button: 0 })
+    await hexSpans[8]!.trigger('pointerenter')
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 50, clientY: 60 }))
+    await nextTick()
+    expect(popoverCalls.at(-1)).toEqual({ from: 6, to: 8 })
+
+    const grid = wrapper.get('[role="grid"]')
+    await grid.trigger('keydown', { key: 'c' })
+    expect(annotateCalls.at(-1)).toEqual({ from: 6, to: 8 })
   })
 })

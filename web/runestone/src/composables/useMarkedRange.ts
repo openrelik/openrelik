@@ -65,6 +65,8 @@ export function useMarkedRange(
     focus: () => void
     /** A gutter press replaces what was selected in the content, if it can be. */
     deselect?: () => void
+    /** Called on pointerup when a gutter click or drag finishes with an active mark. */
+    onGutterDone?: (span: Span, event: PointerEvent) => void
   },
 ): UseMarkedRangeReturn {
   const anchor = ref<Span | null>(null)
@@ -102,6 +104,7 @@ export function useMarkedRange(
    * into the content, and the item at its height is still the one meant.
    */
   let dragX: number | null = null
+  let dragSpan: Span | null = null
   function onGutterDown(event: PointerEvent, span: Span) {
     if (event.button !== 0) return
     event.preventDefault()
@@ -117,7 +120,9 @@ export function useMarkedRange(
     dragX = box.left + box.width / 2
     const from = event.shiftKey && now ? (anchor.value ?? now) : span
     anchor.value = from
-    set(spanOf(from, span))
+    const next = spanOf(from, span)
+    dragSpan = next
+    set(next)
   }
   function onDragMove(event: PointerEvent) {
     if (dragX === null || !anchor.value) return
@@ -129,9 +134,17 @@ export function useMarkedRange(
     const to = Number(item.dataset.markTo)
     if (!Number.isFinite(from) || !Number.isFinite(to)) return
     const next = spanOf(anchor.value, { from, to })
+    dragSpan = next
     if (!sameSpan(next, model.value)) set(next)
   }
-  const endDrag = () => (dragX = null)
+  function endDrag(event: PointerEvent) {
+    const span = dragSpan
+    dragX = null
+    dragSpan = null
+    if (span && event.type === 'pointerup') {
+      options.onGutterDone?.(span, event)
+    }
+  }
   onMounted(() => {
     window.addEventListener('pointermove', onDragMove)
     window.addEventListener('pointerup', endDrag)
@@ -148,6 +161,7 @@ export function useMarkedRange(
   async function copyLink(span: Span | null = model.value): Promise<string> {
     if (!span) return ''
     const url = new URL(window.location.href)
+    url.searchParams.delete('comment')
     url.hash = formatMark({ kind, ...span })
     try {
       await navigator.clipboard.writeText(url.toString())

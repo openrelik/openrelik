@@ -20,7 +20,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/api'
+import { api, type FileAnnotationRecord } from '@/api'
 import MarkdownViewer from '@/components/viewers/MarkdownViewer.vue'
 import { forgetTextFiles } from '@/composables/useTextStream'
 import directives from '@/directives'
@@ -51,7 +51,17 @@ function mockFileContent(content: string) {
   return bytes.length
 }
 
-function mountViewer(props: { fileId: number; size: number; mark?: Span | null }, attach = false) {
+function mountViewer(
+  props: {
+    fileId: number
+    size: number
+    mark?: Span | null
+    annotations?: FileAnnotationRecord[]
+    activeAnnotationIds?: Set<number>
+    annotationPulse?: number
+  },
+  attach = false,
+) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: { template: '<div />' } }],
@@ -322,5 +332,80 @@ describe('MarkdownViewer', () => {
 
     expect(docEl.scrollTop).toBeGreaterThan(0)
     blockSpy.mockRestore()
+  })
+
+  it('marks annotated Markdown blocks, selects and deselects on click, and emits selectionPopover and annotate', async () => {
+    const content = ['# Heading line 1', '', 'Annotated paragraph.', '', 'Plain paragraph.'].join(
+      '\n',
+    )
+    const size = mockFileContent(content)
+    const ann1: FileAnnotationRecord = {
+      id: 41,
+      file_id: 111,
+      user_id: 1,
+      user: { id: 1, username: 'analyst', display_name: 'Analyst', profile_picture_url: null },
+      anchor_kind: 'line',
+      range_start: 3,
+      range_end: 3,
+      range_start_col: null,
+      range_end_col: null,
+      body: 'Note on paragraph',
+      created_at: '2026-11-25T10:00:00Z',
+      updated_at: '2026-11-25T10:00:00Z',
+      edited_at: null,
+      replies: [],
+    }
+    const ann2: FileAnnotationRecord = {
+      ...ann1,
+      id: 42,
+      body: 'Second note on same paragraph',
+    }
+
+    const wrapper = mountViewer(
+      {
+        fileId: 111,
+        size,
+        mark: null,
+        annotations: [ann1, ann2],
+        activeAnnotationIds: new Set(),
+      },
+      true,
+    )
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(20)
+    await flushPromises()
+
+    const annotatedBlock = wrapper.get('[data-line="3"]')
+    expect(annotatedBlock.attributes('data-annotated')).toBe('overlap')
+
+    // Click annotated block -> emits both IDs and sets mark
+    await annotatedBlock.trigger('click')
+    expect(wrapper.emitted('selectAnnotations')?.at(-1)).toEqual([[41, 42], 'line 3'])
+    expect(wrapper.emitted('update:mark')?.at(-1)).toEqual([{ from: 3, to: 3 }])
+
+    // Active annotation sets data-annotated="active"; clicking plain block deselects
+    await wrapper.setProps({ activeAnnotationIds: new Set([41]), mark: { from: 3, to: 3 } })
+    expect(annotatedBlock.attributes('data-annotated')).toBe('active')
+
+    await wrapper.get('[data-line="5"]').trigger('click')
+    expect(wrapper.emitted('selectAnnotations')?.at(-1)).toEqual([[], ''])
+    expect(wrapper.emitted('update:mark')?.at(-1)).toEqual([null])
+
+    // Drag across block 1 emits selectionPopover; pressing 'c' emits annotate
+    const doc = wrapper.get('[role="document"]')
+    const block1 = wrapper.get('[data-line="1"]').element
+    await doc.trigger('pointerdown', { button: 0 })
+    const sel = window.getSelection()!
+    const domRange = document.createRange()
+    domRange.selectNodeContents(block1)
+    sel.removeAllRanges()
+    sel.addRange(domRange)
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 30, clientY: 40 }))
+    await flushPromises()
+    expect(wrapper.emitted('selectionPopover')?.at(-1)?.[0]).toEqual({ from: 1, to: 1 })
+
+    await wrapper.setProps({ mark: { from: 1, to: 1 } })
+    await doc.trigger('keydown', { key: 'c' })
+    expect(wrapper.emitted('annotate')?.at(-1)).toEqual([{ from: 1, to: 1 }])
   })
 })

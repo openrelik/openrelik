@@ -117,7 +117,8 @@ const GROUPS: { title: string; note?: string; shortcuts: Shortcut[] }[] = [
     title: 'File',
     shortcuts: [
       { keys: ['d'], does: 'Download the file' },
-      { keys: ['i'], does: 'Show or hide the side panel (Details, Inspector)' },
+      { keys: ['i'], does: 'Show or hide the side panel (Details, Inspector, Comments)' },
+      { keys: ['c'], does: 'Add a comment on the current selection or mark' },
       { keys: ['w'], does: 'Create a workflow on the file' },
       { keys: ['esc', 'cd .'], does: 'Back to the folder' },
     ],

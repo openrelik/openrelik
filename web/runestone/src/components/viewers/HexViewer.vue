@@ -15,15 +15,18 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, Copy } from '@/components/icons'
+import { ChevronLeft, ChevronRight, Copy, MessageSquarePlus } from '@/components/icons'
 
 import HexInspector from '@/components/viewers/HexInspector.vue'
 import { useByteChunks } from '@/composables/useByteChunks'
 import { useDelayedFlag } from '@/composables/useDelayedFlag'
+import { useAnnotationPulse } from '@/composables/useFileAnnotations'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useRowScroller } from '@/composables/useRowScroller'
 import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import { copyToClipboard } from '@/directives/copyToClipboard'
+import type { FileAnnotationRecord } from '@/api'
+import { annotationLayerForRange, annotationsAtPoint, annotationSpan } from '@/utils/annotations'
 import {
   decodings,
   hex2,
@@ -35,6 +38,7 @@ import {
   toHex,
 } from '@/utils/bytes'
 import { sameSpan, type Span } from '@/utils/marks'
+import { pointAnchor, type AnchorRect } from '@/utils/placement'
 
 /**
  * A file's bytes, sixteen to a row: offset, hex and text, for any file and
@@ -53,7 +57,21 @@ import { sameSpan, type Span } from '@/utils/marks'
  * as a structure is walked pointer by pointer. Bytes are only ever shown as text (printable ASCII, or a dot):
  * nothing in a file is interpreted.
  */
-const props = defineProps<{ fileId: number; size: number }>()
+const props = withDefaults(
+  defineProps<{
+    fileId: number
+    size: number
+    annotations?: FileAnnotationRecord[]
+    activeAnnotationIds?: Set<number>
+    annotationPulse?: number
+  }>(),
+  { annotations: () => [], activeAnnotationIds: () => new Set<number>(), annotationPulse: 0 },
+)
+const emit = defineEmits<{
+  annotate: [span: Span]
+  selectAnnotations: [ids: number[], label: string]
+  selectionPopover: [span: Span, anchor: AnchorRect]
+}>()
 /** Marked bytes (offsets, inclusive): the page keeps them in its URL as `#0x1f3-0x2a0`. */
 const mark = defineModel<Span | null>('mark', { default: null })
 
@@ -83,6 +101,7 @@ const track = ref<HTMLElement | null>(null)
 const {
   topRow,
   visibleRows,
+  bodyHeight,
   scrollTo,
   reveal: revealRow,
   onWheel,
@@ -93,6 +112,20 @@ const {
   onThumbUp,
   onTrackDown,
 } = useRowScroller(body, track, () => totalRows.value, rowHeight)
+
+/** Ticks on the scrollbar where saved byte-offset annotations start. */
+const annotationMarks = computed(() => {
+  const rowsCount = totalRows.value
+  const room = bodyHeight.value
+  if (!thumbHeight.value || !rowsCount || !room) return []
+  const at = new Set<number>()
+  for (const annotation of props.annotations) {
+    if (annotation.anchor_kind !== 'offset') continue
+    const rowIdx = Math.min(rowsCount - 1, Math.floor(annotation.range_start / ROW))
+    at.add(Math.floor((rowIdx / rowsCount) * room))
+  }
+  return [...at]
+})
 
 const rows = computed(() => {
   const out: { row: number; offset: number; cells: (number | undefined)[] }[] = []
@@ -166,8 +199,32 @@ function onByteDown(event: PointerEvent, offset: number) {
  * unmarks lines. A drag that selected bytes leaves them: the bytes can be
  * selected and copied from inside a mark.
  */
-function onGridClick() {
-  if (pressedOnByte && anchor.value === cursor.value && mark.value) marks.set(null)
+function onGridClick(event: MouseEvent) {
+  if (pressedOnByte && anchor.value === cursor.value) {
+    if (props.annotations.length) {
+      const hits = annotationsAtPoint(props.annotations, 'offset', cursor.value)
+      if (hits.length) {
+        marks.set(annotationSpan(hits[0]!))
+        emit(
+          'selectAnnotations',
+          hits.map((a) => a.id),
+          `0x${offsetLabel(cursor.value, width.value)}`,
+        )
+        pressedOnByte = false
+        return
+      }
+    }
+    if (mark.value) marks.set(null)
+    if (props.activeAnnotationIds.size) emit('selectAnnotations', [], '')
+  } else if (
+    !pressedOnByte &&
+    props.activeAnnotationIds.size &&
+    !(event.target as Element | null)?.closest('[data-mark-from]') &&
+    !track.value?.contains(event.target as Node)
+  ) {
+    if (mark.value) marks.set(null)
+    emit('selectAnnotations', [], '')
+  }
   pressedOnByte = false
 }
 function onByteEnter(offset: number) {
@@ -175,10 +232,17 @@ function onByteEnter(offset: number) {
   hovered.value = offset
   if (dragging) cursor.value = offset
 }
-function endDrag() {
+function endDrag(event: PointerEvent) {
   if (!dragging) return
   dragging = false
   markSelected()
+  if (hasSelection.value) {
+    emit(
+      'selectionPopover',
+      { from: selectionStart.value, to: selectionEnd.value },
+      pointAnchor(event.clientX, event.clientY),
+    )
+  }
 }
 onMounted(() => window.addEventListener('pointerup', endDrag))
 onUnmounted(() => window.removeEventListener('pointerup', endDrag))
@@ -247,12 +311,32 @@ function goTo() {
 
 // --- marked bytes: from the offsets, go-to, or a link ---
 
+const { pulsing, trigger: triggerPulse } = useAnnotationPulse(() => props.annotationPulse)
+
 const marks = useMarkedRange(mark, 'offset', {
   // Once mounted and measured, so the landing has rows of context above it.
-  land: (span) => void nextTick(() => land(Math.min(span.from, last.value))),
+  land: (span) =>
+    void nextTick(() => {
+      land(Math.min(span.from, last.value))
+      if (props.activeAnnotationIds.size) triggerPulse()
+    }),
   focus: () => grid.value?.focus({ preventScroll: true }),
   deselect: () => (anchor.value = cursor.value),
+  onGutterDone: (span, event) =>
+    emit('selectionPopover', span, pointAnchor(event.clientX, event.clientY)),
 })
+watch(
+  () => props.annotationPulse,
+  (next, prev) => {
+    if (!next || next === prev) return
+    void nextTick(() => {
+      if (mark.value) {
+        land(Math.min(mark.value.from, last.value))
+        if (props.activeAnnotationIds.size) triggerPulse()
+      }
+    })
+  },
+)
 /** The bytes of the row at `offset`. */
 const rowSpan = (offset: number) => ({ from: offset, to: Math.min(offset + ROW - 1, last.value) })
 /** The mark is whole rows: only then do the offsets show it, as marked bytes show themselves. */
@@ -294,6 +378,24 @@ async function copyLink() {
 }
 const linkLabel = computed(() =>
   hasSelection.value ? 'Copy a link to the selected bytes' : `Copy a link to ${marks.label()}`,
+)
+
+function addComment() {
+  if (props.size <= 0) return
+  const span: Span = hasSelection.value
+    ? { from: selectionStart.value, to: selectionEnd.value }
+    : (mark.value ?? { from: cursor.value, to: cursor.value })
+  marks.set(span)
+  marks.anchor.value = span
+  anchor.value = cursor.value
+  emit('annotate', span)
+}
+const commentLabel = computed(() =>
+  hasSelection.value
+    ? 'Comment on the selected bytes'
+    : mark.value
+      ? `Comment on ${marks.label()}`
+      : `Comment on byte 0x${offsetLabel(cursor.value, width.value)}`,
 )
 
 // --- copy ---
@@ -352,6 +454,8 @@ function onKey(event: KeyboardEvent) {
     void copy(extend)
   } else if (!mod && event.key === 'm' && (hasSelection.value || mark.value)) {
     void copyLink()
+  } else if (!mod && event.key === 'c' && props.size > 0) {
+    addComment()
   } else if (!mod && event.key === 'o') {
     // `o` for offset: `g` is the app's prompt, everywhere.
     gotoInput.value?.focus()
@@ -410,11 +514,36 @@ const selectionDecodings = computed(() => decodings(decoded.value))
 // --- a byte's look: selected, cursor, or marked from the other column ---
 
 function tone(offset: number) {
+  if (hasSelection.value && selected(offset)) return 'bg-selection'
+  const layer = annotationLayerForRange(
+    props.annotations,
+    'offset',
+    offset,
+    offset,
+    props.activeAnnotationIds,
+  )
+  if (layer === 'active') {
+    return pulsing.value
+      ? 'bg-annotation-active annotation-pulse shadow-[inset_0_-2px_0_var(--color-annotation)]'
+      : 'bg-annotation-active shadow-[inset_0_-2px_0_var(--color-annotation)]'
+  }
   if (selected(offset)) return 'bg-selection'
   if (hovered.value === offset) return 'bg-sunken'
   if (marks.marked(offset)) return 'bg-warning-tint'
+  if (layer === 'overlap')
+    return 'bg-annotation-overlap shadow-[inset_0_-1px_0_var(--color-annotation)]'
+  if (layer === 'single')
+    return 'bg-annotation-tint shadow-[inset_0_-1px_0_var(--color-annotation)]'
   return ''
 }
+const rowHasAnnotation = (offset: number) =>
+  annotationLayerForRange(
+    props.annotations,
+    'offset',
+    offset,
+    Math.min(offset + ROW - 1, last.value),
+    props.activeAnnotationIds,
+  ) !== 'none'
 const isCursor = (offset: number) => offset === cursor.value
 const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
 </script>
@@ -441,6 +570,16 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
         }}</span>
         <span v-else-if="showLoading" class="text-ink-muted">reading bytes…</span>
         <div class="ml-auto flex items-center">
+          <button
+            v-if="size > 0"
+            type="button"
+            class="mr-1 flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+            :aria-label="commentLabel"
+            v-tooltip="commentLabel"
+            @click="addComment"
+          >
+            <MessageSquarePlus :size="13" :stroke-width="1.5" />
+          </button>
           <button
             v-if="mark || hasSelection"
             type="button"
@@ -549,7 +688,9 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
                 :class="
                   wholeRows && marks.marked(line.offset, line.offset + ROW - 1)
                     ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
-                    : 'text-ink-muted hover:text-ink-secondary'
+                    : rowHasAnnotation(line.offset)
+                      ? 'text-annotation shadow-[inset_2px_0_0_var(--color-annotation)]'
+                      : 'text-ink-muted hover:text-ink-secondary'
                 "
                 :style="{ width: `${width + 3}ch` }"
                 @pointerdown="marks.onGutterDown($event, rowSpan(line.offset))"
@@ -609,6 +750,13 @@ const COLUMN_OFFSETS = Array.from({ length: ROW }, (_, i) => i)
           class="relative mt-6 w-2.5 shrink-0 border-l border-border bg-sunken"
           @pointerdown="onTrackDown"
         >
+          <div
+            v-for="y in annotationMarks"
+            :key="`ann-${y}`"
+            class="pointer-events-none absolute inset-x-0 h-0.5 bg-annotation/80"
+            :style="{ top: `${y}px` }"
+            aria-hidden="true"
+          />
           <div
             class="absolute inset-x-0.5 cursor-grab rounded-(--radius-check) bg-ink-muted/40 hover:bg-ink-muted/60 active:cursor-grabbing"
             :style="{ top: `${thumbTop}px`, height: `${thumbHeight}px` }"

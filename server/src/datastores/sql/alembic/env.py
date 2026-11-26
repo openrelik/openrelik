@@ -8,6 +8,8 @@ from sqlalchemy import create_engine
 from datastores.sql.database import BaseModel
 from datastores.sql.models.file import (
     File,
+    FileAnnotation,
+    FileAnnotationReply,
     FileAttribute,
     FileSummary,
     FileSummaryFeedback,
