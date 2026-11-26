@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
 import os
 import uuid as uuid_module
 from typing import TYPE_CHECKING, List, Optional
@@ -19,13 +20,16 @@ from typing import TYPE_CHECKING, List, Optional
 from sqlalchemy import (
     UUID,
     BigInteger,
+    CheckConstraint,
     Column,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
     Table,
     Unicode,
     UnicodeText,
+    and_,
     event,
     text,
 )
@@ -161,6 +165,10 @@ class File(BaseModel):
     )
 
     chats: Mapped[List["FileChat"]] = relationship(
+        back_populates="file", cascade="all, delete-orphan"
+    )
+
+    annotations: Mapped[List["FileAnnotation"]] = relationship(
         back_populates="file", cascade="all, delete-orphan"
     )
 
@@ -498,6 +506,120 @@ class FileChatMessageFeedback(BaseModel, FeedbackMixin):
     # Relationships
     file_chat_message_id: Mapped[int] = mapped_column(ForeignKey("filechatmessage.id"))
     file_chat_message: Mapped["FileChatMessage"] = relationship(back_populates="feedbacks")
+
+
+class FileAnnotation(BaseModel):
+    """Represents a comment annotation anchored to a selection in a file.
+
+    Attributes:
+        file_id (int): The ID of the annotated file.
+        user_id (int): The ID of the user who created the annotation.
+        anchor_kind (str): Selection coordinate kind ("line", "row", or "offset").
+        range_start (int): Inclusive start (1-based line/row, 0-based byte offset).
+        range_end (int): Inclusive end (>= range_start).
+        range_start_col (Optional[int]): Optional 1-based start caret column (line only).
+        range_end_col (Optional[int]): Optional 1-based end caret column (line only).
+        body (str): Plain-text comment body.
+        edited_at (Optional[datetime]): Set when the comment body is edited.
+    """
+
+    __table_args__ = (
+        Index(
+            "ix_fileannotation_file_id_active",
+            "file_id",
+            "anchor_kind",
+            "range_start",
+            postgresql_where=text("NOT is_deleted"),
+            sqlite_where=text("NOT is_deleted"),
+        ),
+        CheckConstraint(
+            "anchor_kind IN ('line', 'row', 'offset')",
+            name="ck_fileannotation_anchor_kind",
+        ),
+        CheckConstraint(
+            "range_end >= range_start",
+            name="ck_fileannotation_range_order",
+        ),
+        CheckConstraint(
+            "(anchor_kind = 'offset' AND range_start >= 0) "
+            "OR (anchor_kind IN ('line', 'row') AND range_start >= 1)",
+            name="ck_fileannotation_range_lower_bound",
+        ),
+        CheckConstraint(
+            "(range_start_col IS NULL) = (range_end_col IS NULL)",
+            name="ck_fileannotation_cols_paired",
+        ),
+        CheckConstraint(
+            "anchor_kind = 'line' OR range_start_col IS NULL",
+            name="ck_fileannotation_cols_line_only",
+        ),
+        CheckConstraint(
+            "range_start_col IS NULL OR (range_start_col >= 1 AND range_end_col >= 1)",
+            name="ck_fileannotation_cols_positive",
+        ),
+    )
+
+    file_id: Mapped[int] = mapped_column(ForeignKey("file.id"), index=True)
+    file: Mapped["File"] = relationship(back_populates="annotations")
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    user: Mapped["User"] = relationship("User")
+
+    anchor_kind: Mapped[str] = mapped_column(Unicode(16), index=True)
+    range_start: Mapped[int] = mapped_column(BigInteger)
+    range_end: Mapped[int] = mapped_column(BigInteger)
+    range_start_col: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    range_end_col: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    body: Mapped[str] = mapped_column(UnicodeText)
+    edited_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    replies: Mapped[List["FileAnnotationReply"]] = relationship(
+        back_populates="annotation",
+        cascade="all, delete-orphan",
+        primaryjoin=lambda: and_(
+            FileAnnotation.id == FileAnnotationReply.annotation_id,
+            FileAnnotationReply.is_deleted == False,  # noqa: E712
+        ),
+        order_by=lambda: (
+            FileAnnotationReply.created_at.asc(),
+            FileAnnotationReply.id.asc(),
+        ),
+    )
+
+
+class FileAnnotationReply(BaseModel):
+    """Represents a threaded reply on a FileAnnotation.
+
+    Attributes:
+        annotation_id (int): The parent FileAnnotation ID.
+        user_id (int): The ID of the user who created the reply.
+        body (str): Plain-text reply body.
+        edited_at (Optional[datetime]): Set when the reply body is edited.
+    """
+
+    __table_args__ = (
+        Index(
+            "ix_fileannotationreply_annotation_id_active",
+            "annotation_id",
+            "created_at",
+            postgresql_where=text("NOT is_deleted"),
+            sqlite_where=text("NOT is_deleted"),
+        ),
+    )
+
+    annotation_id: Mapped[int] = mapped_column(ForeignKey("fileannotation.id"), index=True)
+    annotation: Mapped["FileAnnotation"] = relationship(back_populates="replies")
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    user: Mapped["User"] = relationship("User")
+
+    body: Mapped[str] = mapped_column(UnicodeText)
+    edited_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 # Delete file from the filesystem when the database row is deleted.
