@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import FileView from '@/views/FileView.vue'
 import directives from '@/directives'
+import { clearFileAnnotations } from '@/composables/useFileAnnotations'
 import { clearQueryCache } from '@/composables/useQueryCache'
 import { closeWorkflowDialog, useWorkflowDialog } from '@/composables/useWorkflowDialog'
 import { useModalStore } from '@/stores/modals'
@@ -43,6 +44,10 @@ vi.mock('@/api', async (importOriginal) => {
         ...actual.api.files,
         getFile: vi.fn(),
         readRange: vi.fn(),
+      },
+      annotations: {
+        ...actual.api.annotations,
+        list: vi.fn().mockResolvedValue([]),
       },
     },
   }
@@ -147,7 +152,9 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
   vi.stubGlobal('IntersectionObserver', IntersectionObserverStub)
   localStorage.clear()
+  clearFileAnnotations()
   clearQueryCache()
+  vi.mocked(api.annotations.list).mockResolvedValue([])
   setActivePinia(createPinia())
   closeWorkflowDialog()
 })
@@ -310,7 +317,7 @@ describe('FileView', () => {
     await hexTab!.trigger('click')
     await flushPromises()
     const sideTabs = wrapper.get('aside[aria-label="Side panel"]').findAll('[role="tab"]')
-    expect(sideTabs.map((t) => t.text())).toEqual(['Details', 'Inspector'])
+    expect(sideTabs.map((t) => t.text())).toEqual(['Details', 'Inspector', 'Comments'])
     expect(sideTabs[1]!.attributes('aria-selected')).toBe('true')
 
     await sideTabs[0]!.trigger('click')

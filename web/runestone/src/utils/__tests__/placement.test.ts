@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { place, type AnchorRect, type Box } from '@/utils/placement'
+import { place, pointAnchor, selectionAnchor, type AnchorRect, type Box } from '@/utils/placement'
 
 function makeAnchor(left: number, top: number, width: number, height: number): AnchorRect {
   return {
@@ -80,5 +81,42 @@ describe('place', () => {
 
     const nearRight = place(makeAnchor(780, 200, 20, 20), box, 'bottom', viewport, 6, 8)
     expect(nearRight.left).toBe(800 - 8 - 120)
+  })
+})
+
+describe('pointAnchor and selectionAnchor', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('builds a zero-width AnchorRect centered vertically around pointer coordinates', () => {
+    expect(pointAnchor(120, 240)).toEqual({
+      left: 120,
+      top: 230,
+      right: 120,
+      bottom: 250,
+      width: 0,
+      height: 20,
+    })
+  })
+
+  it('uses the last non-empty selection client rect when available', () => {
+    const rect = { left: 10, top: 20, right: 90, bottom: 38, width: 80, height: 18 }
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      rangeCount: 1,
+      isCollapsed: false,
+      getRangeAt: () => ({ getClientRects: () => [rect] }),
+    } as unknown as Selection)
+
+    expect(selectionAnchor(500, 500)).toEqual(rect)
+  })
+
+  it('falls back to pointAnchor when there is no active selection rect', () => {
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      rangeCount: 0,
+      isCollapsed: true,
+    } as unknown as Selection)
+
+    expect(selectionAnchor(150, 300)).toEqual(pointAnchor(150, 300))
   })
 })
