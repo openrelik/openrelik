@@ -151,6 +151,7 @@ function closeMenu() {
 
 async function copyCommentLink(annotation: FileAnnotationRecord) {
   const url = new URL(window.location.href)
+  if (annotation.anchor_kind !== 'line') url.searchParams.delete('view')
   url.searchParams.set('comment', String(annotation.id))
   url.hash = formatMark(annotationMark(annotation))
   const ok = await copyToClipboard(url.toString())
