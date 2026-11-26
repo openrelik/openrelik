@@ -1,0 +1,12 @@
+# Showcase this worker on https://openrelik.org/marketplace
+publish: true
+
+# Worker Metadata. This section is required.
+display_name: UAC
+description: Report on, extract artifacts from, and timeline UAC (Unix-like Artifacts Collector) collections.
+
+# Optional: Third-Party Tools Used by the Worker.
+tools:
+  - display_name: UAC (Unix-like Artifacts Collector)
+    description: Live response collection tool for incident response on Unix-like systems.
+    url: https://github.com/tclahr/uac

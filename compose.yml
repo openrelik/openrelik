@@ -400,6 +400,27 @@ services:
       - *dev-reload
     command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-strings"
 
+  worker-uac:
+    <<: *worker
+    profiles: [workers, uac]
+    build:
+      context: ./workers/uac
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./workers/uac/pyproject.toml
+        - action: rebuild
+          path: ./workers/uac/uv.lock
+    volumes:
+      - ./.dev-local/data:/usr/share/openrelik/data
+      - ./workers/uac/src:/openrelik/src:ro
+      - *lib-common
+      - *lib-ai-common
+      - *lib-worker-common
+      - *dev-reload
+    command: "python /opt/openrelik-dev/reload.py /openrelik/src /opt/openrelik-libs -- celery --app=src.app worker --task-events --concurrency=4 --loglevel=INFO -Q openrelik-worker-uac"
+
   worker-grep:
     <<: *worker
     profiles: [workers, grep]
