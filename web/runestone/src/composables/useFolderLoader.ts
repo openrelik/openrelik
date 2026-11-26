@@ -95,6 +95,7 @@ export function mapFileToItem(file: FolderFile, parent: number): Item {
     size: file.filesize ?? 0,
     mime: file.magic_mime ?? undefined,
     dataType: file.data_type,
+    annotationCount: file.annotation_count ?? 0,
   }
 }
 

@@ -20,6 +20,7 @@ limitations under the License.
  * Core HTTP client, authentication, and root folders endpoint.
  */
 
+import { annotationsApi } from './endpoints/annotations'
 import { authApi } from './endpoints/auth'
 import { configsApi } from './endpoints/configs'
 import { directoryApi } from './endpoints/directory'
@@ -33,6 +34,7 @@ import { httpClient } from './client'
 import { apiConfig } from './config'
 
 export const api = {
+  annotations: annotationsApi,
   auth: authApi,
   configs: configsApi,
   directory: directoryApi,

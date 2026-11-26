@@ -49,6 +49,8 @@ export interface Item {
   hashes?: Hashes
   /** Files only, once their details are loaded: libmagic's description of the content. */
   magicText?: string
+  /** Files only: number of active selection comments on this file. */
+  annotationCount?: number
 }
 
 export interface Hashes {

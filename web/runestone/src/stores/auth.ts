@@ -35,6 +35,7 @@ import { clearApiKeys } from '@/composables/useApiKeys'
 import { clearCaseLookups } from '@/composables/useCaseRef'
 import { clearConfirm } from '@/composables/useConfirm'
 import { clearDownloads } from '@/composables/useDownload'
+import { clearFileAnnotations } from '@/composables/useFileAnnotations'
 import { clearFolderActions } from '@/composables/useFolderActions'
 import { forgetRoles } from '@/composables/useFolderPermissions'
 import { clearFolderSearch } from '@/composables/useFolderSearch'
@@ -102,6 +103,7 @@ export const useAuthStore = defineStore('auth', () => {
       clearWorkflowState()
       clearWorkflowTemplates()
       clearWorkers()
+      clearFileAnnotations()
       clearFolderActions()
       clearFolderSearch()
       clearGroupStacks()
