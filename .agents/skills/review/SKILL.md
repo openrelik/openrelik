@@ -156,10 +156,12 @@ you checked.
 2. **Subagent review**: Launch a fresh subagent with clean context, giving it only this skill's
    rubric, the spec or issue, the diff (`git diff main`), and dismissed findings from earlier
    rounds.
-3. **Record round**: Write the subagent's review in `.private/<slug>/review.md` in the main checkout
-   from `dev/templates/review.md` with its YAML frontmatter (`slug`, `issue` as full GitHub URL,
-   `created` as `YYYY-MM-DD`, and `by` as `<github username> (<github fullname>)` from
-   `gh api user --jq '"\(.login) (\(.name))"'`), recording the date, checks run, and findings.
+3. **Record round**: Write the subagent's review in `.private/features/<slug>/review.md`
+   for a feature (or `.private/scratch/<slug>/review.md` for a bugfix, refactor, or other
+   non-feature change) in the main checkout, using `dev/templates/review.md` with its YAML
+   frontmatter (`slug`, `issue` as full GitHub URL, `created` as `YYYY-MM-DD`, and `by` as
+   `<github username> (<github fullname>)` from `gh api user --jq '"\(.login) (\(.name))"'`),
+   recording the date, checks run, and findings.
 4. **Brief and pause**: Present a concise briefing of the findings, checks run, and verdict to the user.
    Pause and ask how the user wants to proceed before making any code changes, dismissing findings, or
    running further passes. Do not start fixing findings autonomously.
@@ -173,15 +175,18 @@ you checked.
    - Branch is rebased on main (`./devctl worktree sync`) and checks pass;
    - Clean tree: no debug output, no commented-out code, no untracked files.
 8. **Save review artifact**:
-   - For a feature, copy `.private/<slug>/review.md` into `dev/artifacts/features/<slug>/review.md`
+   - For a feature, copy `.private/features/<slug>/review.md` into `dev/artifacts/features/<slug>/review.md`
      on the implementation branch (`code/<slug>`), and commit it (`Refs #<issue>`) so the review
      record lands in the repository alongside `idea.md` and `spec.md`.
 9. **Draft PR and review comment**:
-   - Write a clean PR description from `dev/templates/pr.md` into `.private/<slug>/pr.md`
-     (what the change does and why, `Closes #<issue>`). Keep the PR description clean.
-   - Format the final review report into `.private/<slug>/review-comment.md` to be posted as
-     the first comment on the PR so the PR description stays uncluttered. It must state in a
-     short and concise way what was found across the review rounds and how each was fixed:
+   - Write a clean PR description from `dev/templates/pr.md` into `pr.md` in the same
+     private directory (`.private/features/<slug>/pr.md` for a feature,
+     `.private/scratch/<slug>/pr.md` otherwise) stating what the change does and why, with
+     `Closes #<issue>`. Keep the PR description clean.
+   - Format the final review report into `review-comment.md` in the same private directory
+     to be posted as the first comment on the PR so the PR description stays uncluttered.
+     It must state in a short and concise way what was found across the review rounds and
+     how each was fixed:
      - **Summary**: what the change does.
      - **Findings and fixes**: short, numbered summary of what was found and how it was fixed
        across review rounds (or noting that none were found).
@@ -191,22 +196,23 @@ you checked.
    - Run both `pr.md` and `review-comment.md` through the `humanize` standard
      (`.agents/skills/humanize/SKILL.md`) to remove any AI boilerplate, buzzwords, or throat-clearing.
 10. **Open PR and post review**: Push and open the PR with the `reviewed` label, then post the
-   review comment, only after the user's explicit go-ahead:
+   review comment, only after the user's explicit go-ahead (using `.private/features/<slug>/`
+   for a feature or `.private/scratch/<slug>/` otherwise):
    ```bash
    gh label create reviewed --description "Passed clean-context review; critical findings addressed" --color "0e8a16" 2>/dev/null
-   gh pr create --title "$title" --body-file .private/<slug>/pr.md --label reviewed
-   gh pr comment <number> --body-file .private/<slug>/review-comment.md
+   gh pr create --title "$title" --body-file .private/<features|scratch>/<slug>/pr.md --label reviewed
+   gh pr comment <number> --body-file .private/<features|scratch>/<slug>/review-comment.md
    ```
 
 ### When reviewing an open PR
 1. **Subagent review**: Gather PR info (`gh pr view <number> --comments`, `gh pr diff <number>`).
    Launch a subagent with clean context containing only the review rubric, spec/issue, and PR diff.
-2. **Record review and brief**: Write the review to `.private/<slug>/review-<number>.md` in the main
+2. **Record review and brief**: Write the review to `.private/scratch/<slug>/review-<number>.md` in the main
    checkout. Brief the user with a concise summary of the findings and verdict, then pause and ask
    how to proceed before posting comments or making changes.
 3. **Post comment to GitHub**: Only after the user's explicit go-ahead:
    ```bash
-   gh pr comment <number> --body-file .private/<slug>/review-<number>.md
+   gh pr comment <number> --body-file .private/scratch/<slug>/review-<number>.md
    ```
    - If `Verdict: LGTM`: add the `reviewed` label with `gh pr edit <number> --add-label reviewed`.
    - If `Must fix` or `Should fix` findings remain: ensure the `reviewed` label is absent

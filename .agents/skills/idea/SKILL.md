@@ -1,7 +1,7 @@
 ---
 name: idea
 description: >-
-  Write down a new OpenRelik idea, privately in .private/<slug>/; start the work on a
+  Write down a new OpenRelik idea, privately in .private/features/<slug>/; start the work on a
   filed idea (its idea.md in the first PR); or drop it. Use for "new idea", "write
   down an idea", "file the idea", "start on the idea", "drop the idea", or /idea
   <title, slug, or issue number>.
@@ -30,24 +30,24 @@ main checkout (from a worktree, the first path in `git worktree list`) and on Gi
    - If it lacks `accepted`, tell the user a core developer adds `accepted` when the
      team agrees to build it, and help refine the issue or research/prototype it in the
      meantime.
-3. **Local draft** (`.private/<slug>/idea.md` exists): refine it with the user, or go
+3. **Local draft** (`.private/features/<slug>/idea.md` exists): refine it with the user, or go
    to **File it** when they're ready to publish it to the backlog.
 4. **New**: go to **Write it down**.
 
 ## Write it down
 
-When filing a new idea, always draft it first in `.private/<slug>/idea.md`. Never ask
+When filing a new idea, always draft it first in `.private/features/<slug>/idea.md`. Never ask
 the user whether to file it straight away or draft it privately.
 
 1. **Draft in .private**: pick the slug from the title, lowercase `a-z`, `0-9` and
-   `-`, at most 50 characters; check that neither `.private/<slug>/` nor
+   `-`, at most 50 characters; check that neither `.private/features/<slug>/` nor
    `dev/artifacts/features/<slug>/` exists on main, and confirm the slug with the user.
    Then, in the main checkout, not a worktree (from a worktree, it's the first path
    in `git worktree list`):
 
    ```bash
-   mkdir -p .private/<slug>
-   cp dev/templates/idea.md .private/<slug>/
+   mkdir -p .private/features/<slug>
+   cp dev/templates/idea.md .private/features/<slug>/
    ```
 
    Fill in the YAML frontmatter: `$slug`, `$title`, `$created` (today, `YYYY-MM-DD`),
@@ -68,7 +68,7 @@ and body before it's published, and after their go-ahead:
    `## Proposal`, `## Users`, `## Open questions`), without the YAML frontmatter and
    without the `# <title>` heading. Follow the `humanize` standard
    (`.agents/skills/humanize/SKILL.md`): plain, direct prose without promotional fluff or
-   AI buzzwords. If `.private/<slug>/research.md` or a prototype
+   AI buzzwords. If `.private/features/<slug>/research.md` or a prototype
    exists, end with a line saying so: "Research (and a prototype) exist locally. Ask
    @<user>."
 2. **Issue**: ask whether the user claims it, for now or for later
@@ -82,9 +82,9 @@ and body before it's published, and after their go-ahead:
 3. **Acceptance**: filing doesn't need it. Tell the user a core developer accepts the
    idea (the `accepted` label) when the team agrees to build it, and that they ask
    on the issue when they want that. Never add the label.
-4. **Local copy**: once the issue exists, update `$issue` in `.private/<slug>/idea.md`
+4. **Local copy**: once the issue exists, update `$issue` in `.private/features/<slug>/idea.md`
    with the full GitHub issue URL (`https://github.com/openrelik/openrelik/issues/<number>`).
-   Keep `.private/<slug>/idea.md` and `.private/<slug>/research.md` locally until the
+   Keep `.private/features/<slug>/idea.md` and `.private/features/<slug>/research.md` locally until the
    first PR (design or spec) commits them into `dev/artifacts/features/<slug>/`. For a prototype that has
    answered its question, suggest putting what it taught in the research and removing
    it (`./devctl worktree remove -f prototype/<slug>`).
@@ -110,16 +110,16 @@ its PR is the first.
    the issue first. If it's unassigned, assign the user (`gh issue edit <issue>
    --add-assignee @me`) after their go-ahead. Suggest they say on the issue that
    they're starting.
-4. **Slug**: if a matching `.private/<slug>/` folder exists in the main checkout, use
+4. **Slug**: if a matching `.private/features/<slug>/` folder exists in the main checkout, use
    that `<slug>`; otherwise pick it as in "Write it down" and confirm with the user.
 5. **idea.md**: on the first PR's branch, include
-   `dev/artifacts/features/<slug>/idea.md` from `.private/<slug>/idea.md` (or write it
+   `dev/artifacts/features/<slug>/idea.md` from `.private/features/<slug>/idea.md` (or write it
    from `dev/templates/idea.md` with the issue's body if the local draft was removed),
    with `$slug`, `$issue` (full GitHub URL, e.g. `https://github.com/openrelik/openrelik/issues/<number>`),
    `$created` (`createdAt` as `YYYY-MM-DD`), `$by` (`<github username> (<github fullname>)`),
    `$title`, and the issue's current body. Leave out the "exist locally" line if present.
-   Delete `.private/<slug>/idea.md` once committed on the branch.
-6. **Research**: if `.private/<slug>/research.md` exists in the main checkout, read it
+   Delete `.private/features/<slug>/idea.md` once committed on the branch.
+6. **Research**: if `.private/features/<slug>/research.md` exists in the main checkout, read it
    for what shouldn't be public (case details, customer names, internal links,
    evidence) and suggest fixes; then move it beside `idea.md`.
 7. **Commit** with `Refs #<issue>`, with the rest of the first PR.
@@ -135,7 +135,7 @@ a PR is folded into it before it's merged.
 
 Not started: close the issue as not planned, saying why, after the user's go-ahead
 (`gh issue close <issue> --reason "not planned" --comment "<why>"`). Ask what to do
-with research in `.private/<slug>/`: post it on the issue, keep it, or delete it.
+with research in `.private/features/<slug>/`: post it on the issue, keep it, or delete it.
 
 Started: the record says what we didn't do and why. Add an `## Outcome` section at
 the end of `idea.md`: "Dropped: <why>", with a link to the discussion. On the open

@@ -11,7 +11,7 @@ developer approves it, and it's merged before the spec is written.
 
 1. **Inputs**: the idea, the issue (`gh issue view <issue>`), or
    `dev/artifacts/features/<slug>/idea.md` on main if the work has started;
-   `.private/<slug>/research.md` in the main checkout if it's there; the prototype's
+   `.private/features/<slug>/research.md` in the main checkout if it's there; the prototype's
    draft PR, if there is one (`gh pr list --label prototype --search "<issue>"`); and
    the ADRs in `dev/artifacts/decisions/` that it touches.
 2. **Gate**: the idea must be accepted, labeled `accepted` (if it isn't, the user asks
