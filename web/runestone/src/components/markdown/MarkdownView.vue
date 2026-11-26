@@ -17,6 +17,8 @@ limitations under the License.
 import { computed } from 'vue'
 
 import MarkdownInline from '@/components/markdown/MarkdownInline.vue'
+import type { FileAnnotationRecord } from '@/api'
+import { annotationLayerForRange } from '@/utils/annotations'
 import { parseMarkdown, type Align, type Block } from '@/utils/markdown'
 
 /**
@@ -45,8 +47,19 @@ const props = withDefaults(
     variant?: 'report' | 'document'
     /** Source lines marked (a document only): the blocks over them are tinted. */
     marked?: { from: number; to: number } | null
+    /** Saved line annotations (document only): tint enclosing blocks. */
+    annotations?: FileAnnotationRecord[]
+    activeAnnotationIds?: Set<number>
+    /** Brief arrival pulse when jumping to an active annotation. */
+    pulsing?: boolean
   }>(),
-  { variant: 'report', marked: null },
+  {
+    variant: 'report',
+    marked: null,
+    annotations: () => [],
+    activeAnnotationIds: () => new Set<number>(),
+    pulsing: false,
+  },
 )
 
 const blocks = computed(() =>
@@ -69,10 +82,19 @@ const alignOf = (align: Align) => (align ? ALIGN[align] : 'text-left')
 function attrs(block: Block) {
   if (!doc.value) return {}
   const m = props.marked
+  const layer = annotationLayerForRange(
+    props.annotations,
+    'line',
+    block.line,
+    block.end,
+    props.activeAnnotationIds,
+  )
   return {
     'data-line': block.line,
     'data-end': block.end,
     'data-marked': (m && block.line <= m.to && block.end >= m.from) || undefined,
+    'data-annotated': layer !== 'none' ? layer : undefined,
+    'data-pulsing': (layer === 'active' && props.pulsing) || undefined,
   }
 }
 
@@ -195,11 +217,33 @@ function headingClass(level: number): string {
   padding-inline: 0.5rem;
 }
 
+/* Saved annotations: stepped warm-amber highlighter tint + 2px left bar. */
+[data-annotated='single'] {
+  background-color: var(--color-annotation-tint);
+  box-shadow: inset 2px 0 0 var(--color-annotation);
+  border-radius: 2px;
+}
+[data-annotated='overlap'] {
+  background-color: var(--color-annotation-overlap);
+  box-shadow: inset 2px 0 0 var(--color-annotation);
+  border-radius: 2px;
+}
+
 /* Marked, as marked lines are in the source: the marker-pen tint, a bar on the left. */
 [data-marked] {
   background-color: var(--color-warning-tint);
   box-shadow: inset 2px 0 0 var(--color-warning);
   border-radius: 2px;
+}
+
+/* Active (hovered or clicked) annotation stays brightest even when jumped to via URL mark. */
+[data-annotated='active'] {
+  background-color: var(--color-annotation-active);
+  box-shadow: inset 2px 0 0 var(--color-annotation);
+  border-radius: 2px;
+}
+[data-annotated='active'][data-pulsing] {
+  animation: annotation-pulse 750ms var(--ease-standard);
 }
 
 /* A long document lays out only what is near the screen. */

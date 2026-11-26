@@ -18,22 +18,28 @@ import { Download, Workflow } from '@/components/icons'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import FileAnnotationsPanel from '@/components/viewers/FileAnnotationsPanel.vue'
 import FileSidePanel, { type SideTab } from '@/components/viewers/FileSidePanel.vue'
+import SelectionPopover from '@/components/viewers/SelectionPopover.vue'
 import PathBar from '@/components/layout/PathBar.vue'
 import FileContent from '@/components/viewers/FileContent.vue'
 import Button from '@/components/base/Button.vue'
 import PanelToggle from '@/components/base/PanelToggle.vue'
 import { downloadFile } from '@/composables/useDownload'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
+import { useFileAnnotations } from '@/composables/useFileAnnotations'
 import { useFileDetails } from '@/composables/useFileDetails'
 import { useFolderLoader } from '@/composables/useFolderLoader'
 import { useRemembered } from '@/composables/useRemembered'
 import { openWorkflowDialog } from '@/composables/useWorkflowDialog'
 import StatusBar from '@/components/layout/StatusBar.vue'
+import type { FileAnnotationRecord } from '@/api'
 import { exactSize } from '@/utils/item'
 import { useItemsStore } from '@/stores/items'
+import { annotationMark } from '@/utils/annotations'
 import { formatSize } from '@/utils/format'
 import { formatMark, parseMark, type Mark } from '@/utils/marks'
+import type { AnchorRect } from '@/utils/placement'
 import { isTyping } from '@/utils/keyboard'
 import { useModalStore } from '@/stores/modals'
 
@@ -57,24 +63,43 @@ const route = useRoute()
 let alive = true
 onUnmounted(() => (alive = false))
 
-let pendingUrl: { path: string; hash: string; view: string | undefined } | null = null
-function writeUrl(change: Partial<{ hash: string; view: string | undefined }>) {
+let pendingUrl: {
+  path: string
+  hash: string
+  view: string | undefined
+  comment: string | undefined
+} | null = null
+function writeUrl(
+  change: Partial<{ hash: string; view: string | undefined; comment: string | undefined }>,
+) {
   if (!pendingUrl) {
     const view = route.query.view
+    const comment = route.query.comment
     pendingUrl = {
       path: route.path,
       hash: route.hash,
       view: typeof view === 'string' ? view : undefined,
+      comment: typeof comment === 'string' ? comment : undefined,
     }
     void Promise.resolve().then(() => {
       const next = pendingUrl
       pendingUrl = null
       if (!next || !alive || route.path !== next.path) return
       const currentView = typeof route.query.view === 'string' ? route.query.view : undefined
-      if (next.hash === route.hash && next.view === currentView) return
+      const currentComment =
+        typeof route.query.comment === 'string' ? route.query.comment : undefined
+      if (
+        next.hash === route.hash &&
+        next.view === currentView &&
+        next.comment === currentComment
+      ) {
+        return
+      }
       const query = { ...route.query }
       if (next.view) query.view = next.view
       else delete query.view
+      if (next.comment) query.comment = next.comment
+      else delete query.comment
       router.replace({ query, hash: next.hash })
     })
   }
@@ -142,7 +167,10 @@ const pinned = ref(false)
 /** Whether the table has a row selected: coming back to it shows that row. */
 const rowSelected = ref(false)
 const sideTab = computed<SideTab>({
-  get: () => (inspector.value ? chosenTab.value : 'details'),
+  get: () => {
+    if (chosenTab.value === 'inspector' && !inspector.value) return 'details'
+    return chosenTab.value
+  },
   set: (tab) => {
     chosenTab.value = tab
     pinned.value = true
@@ -150,8 +178,10 @@ const sideTab = computed<SideTab>({
 })
 function onView(view: typeof contentView.value) {
   contentView.value = view
+  popover.value = null
   // A link copied here opens here: in the rendered view, or the one its mark is in.
   writeUrl({ view: view === 'rendered' ? 'rendered' : undefined })
+  if (chosenTab.value === 'comments') return
   pinned.value = false
   chosenTab.value =
     view === 'hex' || (view === 'table' && rowSelected.value) ? 'inspector' : 'details'
@@ -162,17 +192,166 @@ watch(
   () => {
     rowSelected.value = false
     pinned.value = false
+    autoOpenedCommentsFor = null
+    popover.value = null
+    draftMark.value = null
+    activeAnnotationId.value = null
+    filterIds.value = null
+    filterLabel.value = null
     chosenTab.value = contentView.value === 'hex' ? 'inspector' : 'details'
   },
 )
 function onRowSelected(selected: boolean) {
   rowSelected.value = selected
-  if (pinned.value) return
+  if (pinned.value || chosenTab.value === 'comments') return
   chosenTab.value = selected ? 'inspector' : 'details'
 }
 
 // Hashes and magic are not in the listing: loaded for the file on screen.
 useFileDetails(() => file.value?.id)
+
+// Selection annotations for this file: loaded in parallel with file details.
+const fileAnnotations = useFileAnnotations(() => file.value?.id)
+let autoOpenedCommentsFor: number | null = null
+const draftMark = ref<Mark | null>(null)
+const popover = ref<{ mark: Mark; anchor: AnchorRect } | null>(null)
+const activeAnnotationId = ref<number | null>(null)
+const annotationPulse = ref(0)
+const filterIds = ref<number[] | null>(null)
+const filterLabel = ref<string | null>(null)
+
+watch(mark, (next, prev) => {
+  if (!next) {
+    popover.value = null
+    if (prev) {
+      activeAnnotationId.value = null
+      writeUrl({ comment: undefined })
+    }
+  }
+})
+
+// Deep-linking to a specific comment (`?comment=<id>#L...`): select it once annotations load.
+const linkedCommentId = computed(() => {
+  const raw = route.query.comment
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw)) return null
+  return Number(raw)
+})
+watch(
+  [() => file.value?.id, () => fileAnnotations.annotations.value, linkedCommentId],
+  ([id, list, commentId]) => {
+    if (id === undefined || commentId === null || activeAnnotationId.value === commentId) return
+    const target = list.find((a) => a.id === commentId)
+    if (!target) return
+    activeAnnotationId.value = target.id
+    annotationPulse.value++
+    showDetails.value = true
+    chosenTab.value = 'comments'
+    if (!mark.value) mark.value = annotationMark(target)
+  },
+  { immediate: true },
+)
+
+function showSelectionPopover(targetMark: Mark, anchor: AnchorRect) {
+  activeAnnotationId.value = null
+  writeUrl({ comment: undefined })
+  popover.value = { mark: targetMark, anchor }
+}
+
+function clearPopover() {
+  popover.value = null
+}
+
+function deselectAnnotation() {
+  activeAnnotationId.value = null
+  filterIds.value = null
+  filterLabel.value = null
+  mark.value = null
+  writeUrl({ comment: undefined })
+}
+
+// When a file has comments, open the Comments tab by default unless the operator picked another tab.
+watch(
+  [() => file.value?.id, () => fileAnnotations.annotations.value.length],
+  ([id, count]) => {
+    if (id === undefined || count === 0) return
+    if (pinned.value || autoOpenedCommentsFor === id) return
+    autoOpenedCommentsFor = id
+    chosenTab.value = 'comments'
+  },
+  { immediate: true },
+)
+
+const highlightedAnnotationIds = computed<Set<number>>(() =>
+  activeAnnotationId.value !== null ? new Set([activeAnnotationId.value]) : new Set(),
+)
+
+function startAnnotation(targetMark: Mark) {
+  popover.value = null
+  activeAnnotationId.value = null
+  writeUrl({ comment: undefined })
+  mark.value = targetMark
+  draftMark.value = targetMark
+  filterIds.value = null
+  filterLabel.value = null
+  showDetails.value = true
+  chosenTab.value = 'comments'
+  pinned.value = true
+}
+
+function selectAnnotation(annotation: FileAnnotationRecord) {
+  popover.value = null
+  activeAnnotationId.value = annotation.id
+  annotationPulse.value++
+  mark.value = annotationMark(annotation)
+  writeUrl({ comment: String(annotation.id) })
+}
+
+function onViewerAnnotationsClicked(ids: number[], label: string) {
+  popover.value = null
+  if (!ids.length) {
+    activeAnnotationId.value = null
+    filterIds.value = null
+    filterLabel.value = null
+    writeUrl({ comment: undefined })
+    return
+  }
+  showDetails.value = true
+  chosenTab.value = 'comments'
+  pinned.value = true
+  activeAnnotationId.value = ids[0] ?? null
+  writeUrl({ comment: ids[0] !== undefined ? String(ids[0]) : undefined })
+  if (ids.length > 1) {
+    filterIds.value = ids
+    filterLabel.value = label
+  } else {
+    filterIds.value = null
+    filterLabel.value = null
+  }
+}
+
+async function createAnnotationFromMark(targetMark: Mark, body: string) {
+  return fileAnnotations.createAnnotation({
+    anchor_kind: targetMark.kind,
+    range_start: targetMark.from,
+    range_end: targetMark.to,
+    range_start_col: targetMark.fromCol ?? null,
+    range_end_col: targetMark.toCol ?? null,
+    body,
+  })
+}
+
+async function deleteAnnotationAndClear(annotationId: number) {
+  await fileAnnotations.deleteAnnotation(annotationId)
+  if (activeAnnotationId.value === annotationId) {
+    activeAnnotationId.value = null
+    writeUrl({ comment: undefined })
+  }
+  if (filterIds.value) {
+    const next = filterIds.value.filter((id) => id !== annotationId)
+    filterIds.value = next.length ? next : null
+    if (!next.length) filterLabel.value = null
+  }
+}
 
 /** The file's real parent, whatever the URL claims. */
 const folderId = computed(() => file.value?.parent ?? Number(props.folderId))
@@ -202,8 +381,18 @@ const KEYS: Record<string, () => void> = {
   w: openWorkflow,
   d: () => file.value && downloadFile(file.value.id, file.value.name),
   i: () => (showDetails.value = !showDetails.value),
-  // The mark first (a link opened on it, nothing focused yet), then back.
-  Escape: () => (mark.value ? (mark.value = null) : back()),
+  c: () => {
+    if (mark.value) startAnnotation(mark.value)
+  },
+  // Draft composer, then active annotation, then mark, then back.
+  Escape: () => {
+    if (draftMark.value) draftMark.value = null
+    else if (activeAnnotationId.value !== null) {
+      activeAnnotationId.value = null
+      writeUrl({ comment: undefined })
+    } else if (mark.value) mark.value = null
+    else back()
+  },
 }
 
 function onKey(event: KeyboardEvent) {
@@ -261,17 +450,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         v-model:mark="mark"
         :file="file"
         :prefer="preferView"
+        :annotations="fileAnnotations.annotations.value"
+        :active-annotation-ids="highlightedAnnotationIds"
+        :annotation-pulse="annotationPulse"
         @view="onView"
         @row-selected="onRowSelected"
+        @annotate="startAnnotation"
+        @select-annotations="onViewerAnnotationsClicked"
+        @selection-popover="showSelectionPopover"
       >
         <!-- the details closed: opened again from the spot the panel's own button had -->
         <template v-if="!showDetails" #end>
-          <PanelToggle
-            :open="false"
-            name="details"
-            class="max-xl:hidden"
-            @toggle="showDetails = true"
-          />
+          <PanelToggle :open="false" name="details" @toggle="showDetails = true" />
         </template>
       </FileContent>
 
@@ -281,8 +471,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         v-model="sideTab"
         :file="file"
         :inspector="inspector"
+        :comment-count="fileAnnotations.annotations.value.length"
         @close="showDetails = false"
-      />
+      >
+        <template #comments>
+          <FileAnnotationsPanel
+            :annotations="fileAnnotations.annotations.value"
+            :state="fileAnnotations.state.value"
+            :draft-mark="draftMark"
+            :active-id="activeAnnotationId"
+            :filter-ids="filterIds"
+            :filter-label="filterLabel"
+            :on-create="createAnnotationFromMark"
+            :on-update="fileAnnotations.updateAnnotation"
+            :on-delete="deleteAnnotationAndClear"
+            :on-create-reply="fileAnnotations.createReply"
+            :on-update-reply="fileAnnotations.updateReply"
+            :on-delete-reply="fileAnnotations.deleteReply"
+            @retry="fileAnnotations.reload(true)"
+            @cancel-draft="draftMark = null"
+            @select="selectAnnotation"
+            @deselect="deselectAnnotation"
+            @clear-filter="((filterIds = null), (filterLabel = null))"
+          />
+        </template>
+      </FileSidePanel>
     </div>
 
     <!-- status bar -->
@@ -291,5 +504,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         ><template v-if="file.mime">{{ file.mime }} · </template>{{ formatSize(bytes) }}</span
       >
     </StatusBar>
+
+    <SelectionPopover
+      :anchor="popover?.anchor ?? null"
+      :mark="popover?.mark ?? null"
+      @comment="startAnnotation"
+      @close="clearPopover"
+    />
   </section>
 </template>

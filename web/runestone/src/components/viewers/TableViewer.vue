@@ -15,16 +15,20 @@ limitations under the License.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Copy, Maximize, Minimize } from '@/components/icons'
+import { Copy, Maximize, MessageSquarePlus, Minimize } from '@/components/icons'
 
 import StreamStatusBar from '@/components/viewers/StreamStatusBar.vue'
 import TableDetail from '@/components/viewers/TableDetail.vue'
+import { useAnnotationPulse } from '@/composables/useFileAnnotations'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { FONT_SCALE, useSettings } from '@/composables/useSettings'
 import { useTableStream } from '@/composables/useTableStream'
 import { useModalStore } from '@/stores/modals'
+import type { FileAnnotationRecord } from '@/api'
+import { annotationLayerForRange, annotationsAtPoint, annotationSpan } from '@/utils/annotations'
 import { escapeControls } from '@/utils/bytes'
 import type { Span } from '@/utils/marks'
+import { pointAnchor, type AnchorRect } from '@/utils/placement'
 import type { TableKind } from '@/utils/preview'
 import { compareKeys, sortKey } from '@/utils/table'
 
@@ -42,12 +46,25 @@ import { compareKeys, sortKey } from '@/utils/table'
  * Full screen (the button, or `f` in the table) moves the same table over
  * the whole window — nothing is read again or reset; Esc brings it back.
  */
-const props = defineProps<{ fileId: number; size: number; kind: TableKind }>()
+const props = withDefaults(
+  defineProps<{
+    fileId: number
+    size: number
+    kind: TableKind
+    annotations?: FileAnnotationRecord[]
+    activeAnnotationIds?: Set<number>
+    annotationPulse?: number
+  }>(),
+  { annotations: () => [], activeAnnotationIds: () => new Set<number>(), annotationPulse: 0 },
+)
 /** Marked rows (1-based, the row numbers): the page keeps them in its URL as `#R12-R40`. */
 const mark = defineModel<Span | null>('mark', { default: null })
 const emit = defineEmits<{
   /** A row was selected, or the selection cleared: the side panel follows. */
   rowSelected: [selected: boolean]
+  annotate: [span: Span]
+  selectAnnotations: [ids: number[], label: string]
+  selectionPopover: [span: Span, anchor: AnchorRect]
 }>()
 
 const ROW_H = 24
@@ -262,6 +279,8 @@ function land(span: Span) {
   table.readUntil(span.from)
   tryLand()
 }
+const { pulsing, trigger: triggerPulse } = useAnnotationPulse(() => props.annotationPulse)
+
 function tryLand() {
   const index = landing.value
   if (index === null || !viewHeight.value) return
@@ -279,6 +298,7 @@ function tryLand() {
     if (position < 0) return
     cursor.value = position
     scroller.value?.scrollTo({ top: position * rowH.value - Math.floor(viewHeight.value / 3) })
+    if (props.activeAnnotationIds.size) triggerPulse()
   })
 }
 watch([rows, table.done, viewHeight], tryLand)
@@ -286,8 +306,25 @@ watch([rows, table.done, viewHeight], tryLand)
 const marks = useMarkedRange(mark, 'row', {
   land,
   focus: () => scroller.value?.focus({ preventScroll: true }),
+  onGutterDone: (span, event) => {
+    if (!fullscreen.value) emit('selectionPopover', span, pointAnchor(event.clientX, event.clientY))
+  },
 })
 const rowSpan = (index: number) => ({ from: index + 1, to: index + 1 })
+const rowAnnotationLayer = (index: number) =>
+  annotationLayerForRange(props.annotations, 'row', index + 1, index + 1, props.activeAnnotationIds)
+
+function rowBgClass(line: { position: number; index: number }): string {
+  const layer = rowAnnotationLayer(line.index)
+  if (layer === 'active') {
+    return pulsing.value ? 'bg-annotation-active annotation-pulse' : 'bg-annotation-active'
+  }
+  if (line.position === cursor.value) return 'bg-brand-selected'
+  if (marks.marked(line.index + 1)) return 'bg-warning-tint'
+  if (layer === 'overlap') return 'bg-annotation-overlap'
+  if (layer === 'single') return 'bg-annotation-tint'
+  return rows.value[line.index]?.error ? 'bg-danger-tint/40 hover:bg-sunken' : 'hover:bg-sunken'
+}
 
 /** The press began on a row number: a drag that ends on a cell must not unmark. */
 let pressedInGutter = false
@@ -297,11 +334,51 @@ function onPress(event: PointerEvent) {
 /** A click on a row moves the cursor there, and unmarks the rows, as a click in the text view does. */
 function onRowClick(position: number) {
   cursor.value = position
-  if (mark.value && !pressedInGutter && (window.getSelection()?.isCollapsed ?? true)) {
-    marks.set(null)
+  const index = view.value[position]
+  const canInspectClick = !pressedInGutter && (window.getSelection()?.isCollapsed ?? true)
+  let hitAnnotation = false
+  if (index !== undefined && canInspectClick && props.annotations.length) {
+    const hits = annotationsAtPoint(props.annotations, 'row', index + 1)
+    if (hits.length) {
+      hitAnnotation = true
+      marks.set(annotationSpan(hits[0]!))
+      emit(
+        'selectAnnotations',
+        hits.map((a) => a.id),
+        `row ${index + 1}`,
+      )
+    }
+  }
+  if (!hitAnnotation && canInspectClick) {
+    if (mark.value) marks.set(null)
+    if (props.activeAnnotationIds.size) emit('selectAnnotations', [], '')
   }
   scroller.value?.focus({ preventScroll: true })
 }
+
+function onScrollerClick(event: MouseEvent) {
+  if (pressedInGutter || !(window.getSelection()?.isCollapsed ?? true)) return
+  if ((event.target as Element | null)?.closest('[data-table-row], [role="columnheader"]')) return
+  if (mark.value) marks.set(null)
+  if (props.activeAnnotationIds.size) emit('selectAnnotations', [], '')
+}
+
+function addComment() {
+  const span =
+    mark.value ?? (selectedIndex.value !== undefined ? rowSpan(selectedIndex.value) : null)
+  if (!span) return
+  if (fullscreen.value) fullscreen.value = false
+  marks.set(span)
+  marks.anchor.value = span
+  emit('annotate', span)
+}
+const commentLabel = computed(() =>
+  mark.value
+    ? `Comment on ${marks.label()}`
+    : selectedIndex.value !== undefined
+      ? `Comment on row ${selectedIndex.value + 1}`
+      : 'Comment',
+)
 
 const notice = ref<string | null>(null)
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
@@ -388,6 +465,8 @@ function onKey(event: KeyboardEvent) {
   ) {
     copyRow()
   } else if (!mod && event.key === '/') filterInput.value?.focus()
+  else if (!mod && event.key === 'c' && (mark.value || selectedIndex.value !== undefined))
+    addComment()
   else if (!mod && event.key === 'f') toggleFullscreen()
   else if (event.key === 'Escape' && cursor.value !== null) cursor.value = null
   else if (event.key === 'Escape' && mark.value) marks.set(null)
@@ -454,9 +533,19 @@ const partialNotice = computed(() => {
             />
             <span v-if="partialNotice" class="shrink-0 text-warning">{{ partialNotice }}</span>
             <button
-              v-if="mark"
+              v-if="mark || selectedIndex !== undefined"
               type="button"
               class="ml-auto flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+              :aria-label="commentLabel"
+              v-tooltip="commentLabel"
+              @click="addComment"
+            >
+              <MessageSquarePlus :size="13" :stroke-width="1.5" />
+            </button>
+            <button
+              v-if="mark"
+              type="button"
+              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
               :aria-label="`Copy a link to ${marks.label()}`"
               v-tooltip="`Copy a link to ${marks.label()}`"
               @click="copyLink"
@@ -472,7 +561,7 @@ const partialNotice = computed(() => {
               placeholder="Filter rows"
               aria-label="Filter rows: text, or column:value"
               class="field h-6 w-52 shrink-0 text-dense"
-              :class="{ 'ml-auto': !mark }"
+              :class="{ 'ml-auto': !mark && selectedIndex === undefined }"
               v-tooltip="'Text in any cell, or column:value'"
               @keydown.esc.stop="((filterText = ''), scroller?.focus())"
               @keydown.enter.prevent="scroller?.focus()"
@@ -498,6 +587,7 @@ const partialNotice = computed(() => {
             aria-label="File rows"
             @scroll="onScroll"
             @pointerdown.capture="onPress"
+            @click="onScrollerClick"
             @keydown="onKey"
           >
             <div :style="{ width: `${totalWidth}px` }">
@@ -543,16 +633,9 @@ const partialNotice = computed(() => {
                 <div
                   v-for="line in visible"
                   :key="line.index"
+                  data-table-row
                   class="absolute inset-x-0 flex cursor-default border-b border-border"
-                  :class="
-                    line.position === cursor
-                      ? 'bg-brand-selected'
-                      : marks.marked(line.index + 1)
-                        ? 'bg-warning-tint'
-                        : rows[line.index]?.error
-                          ? 'bg-danger-tint/40 hover:bg-sunken'
-                          : 'hover:bg-sunken'
-                  "
+                  :class="rowBgClass(line)"
                   :style="{ top: `${line.position * rowH}px`, height: `${rowH}px` }"
                   @click="onRowClick(line.position)"
                 >
@@ -562,9 +645,11 @@ const partialNotice = computed(() => {
                     :class="
                       marks.marked(line.index + 1)
                         ? 'bg-warning-tint text-warning shadow-[inset_2px_0_0_var(--color-warning)]'
-                        : line.position === cursor
-                          ? 'bg-brand-selected text-ink-muted hover:text-ink-secondary'
-                          : 'bg-surface text-ink-muted hover:text-ink-secondary'
+                        : rowAnnotationLayer(line.index) !== 'none'
+                          ? 'bg-surface text-annotation shadow-[inset_2px_0_0_var(--color-annotation)]'
+                          : line.position === cursor
+                            ? 'bg-brand-selected text-ink-muted hover:text-ink-secondary'
+                            : 'bg-surface text-ink-muted hover:text-ink-secondary'
                     "
                     :style="{ width: `${NUMBER_W * ch + 16}px` }"
                     data-gutter

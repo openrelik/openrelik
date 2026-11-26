@@ -20,8 +20,10 @@ import HexViewer from '@/components/viewers/HexViewer.vue'
 import MarkdownViewer from '@/components/viewers/MarkdownViewer.vue'
 import TableViewer from '@/components/viewers/TableViewer.vue'
 import TextViewer from '@/components/viewers/TextViewer.vue'
+import type { FileAnnotationRecord } from '@/api'
 import type { Item } from '@/types/item'
 import type { Mark, MarkKind, Span } from '@/utils/marks'
+import type { AnchorRect } from '@/utils/placement'
 import { isMarkdown, previewOf, tableKindOf } from '@/utils/preview'
 
 /**
@@ -42,16 +44,35 @@ import { isMarkdown, previewOf, tableKindOf } from '@/utils/preview'
  * is in: lines text, rows table, bytes hex — or rendered Markdown, which
  * marks the same lines, when the link says so (`prefer`).
  */
-const props = defineProps<{
-  file: Item
-  /** The view a link asked for (`?view=rendered`), over the one its mark is in. */
-  prefer?: 'rendered'
-}>()
+const props = withDefaults(
+  defineProps<{
+    file: Item
+    /** The view a link asked for (`?view=rendered`), over the one its mark is in. */
+    prefer?: 'rendered'
+    /** Saved selection annotations for this file. */
+    annotations?: FileAnnotationRecord[]
+    /** Focused or hovered annotation IDs, highlighted strongest in viewers. */
+    activeAnnotationIds?: Set<number>
+    /** Increments whenever the user jumps to a comment, pulsing the target highlight. */
+    annotationPulse?: number
+  }>(),
+  {
+    annotations: () => [],
+    activeAnnotationIds: () => new Set<number>(),
+    annotationPulse: 0,
+  },
+)
 const emit = defineEmits<{
   /** The view on screen, for the page's side panel to offer its tab. */
   view: [view: View | undefined]
   /** The table's row selection, for the side panel to follow. */
   rowSelected: [selected: boolean]
+  /** Operator asked to add a comment on a selection mark. */
+  annotate: [mark: Mark]
+  /** Operator clicked an annotated range in the viewer. */
+  selectAnnotations: [ids: number[], label: string]
+  /** Operator finished selecting a range with the pointer; show contextual actions. */
+  selectionPopover: [mark: Mark, anchor: AnchorRect]
 }>()
 /** What the file's link points at: the page keeps it in its URL. */
 const mark = defineModel<Mark | null>('mark', { default: null })
@@ -201,8 +222,16 @@ function showSource(line: number) {
       :file-id="file.id"
       :size="file.size ?? 0"
       :kind="tableKind"
+      :annotations="annotations"
+      :active-annotation-ids="activeAnnotationIds"
+      :annotation-pulse="annotationPulse"
       v-model:mark="rowMark"
       @row-selected="emit('rowSelected', $event)"
+      @annotate="emit('annotate', { kind: 'row', ...$event })"
+      @select-annotations="(ids, label) => emit('selectAnnotations', ids, label)"
+      @selection-popover="
+        (span, anchor) => emit('selectionPopover', { kind: 'row', ...span }, anchor)
+      "
     />
     <TextViewer
       v-if="views.includes('text') && textFor === file.id"
@@ -211,12 +240,28 @@ function showSource(line: number) {
       :file-id="file.id"
       :size="file.size ?? 0"
       :active="view === 'text'"
+      :annotations="annotations"
+      :active-annotation-ids="activeAnnotationIds"
+      :annotation-pulse="annotationPulse"
+      @annotate="emit('annotate', { kind: 'line', ...$event })"
+      @select-annotations="(ids, label) => emit('selectAnnotations', ids, label)"
+      @selection-popover="
+        (span, anchor) => emit('selectionPopover', { kind: 'line', ...span }, anchor)
+      "
     />
     <HexViewer
       v-if="view === 'hex'"
       v-model:mark="offsetMark"
       :file-id="file.id"
       :size="file.size ?? 0"
+      :annotations="annotations"
+      :active-annotation-ids="activeAnnotationIds"
+      :annotation-pulse="annotationPulse"
+      @annotate="emit('annotate', { kind: 'offset', ...$event })"
+      @select-annotations="(ids, label) => emit('selectAnnotations', ids, label)"
+      @selection-popover="
+        (span, anchor) => emit('selectionPopover', { kind: 'offset', ...span }, anchor)
+      "
     />
 
     <MarkdownViewer
@@ -224,7 +269,15 @@ function showSource(line: number) {
       v-model:mark="lineMark"
       :file-id="file.id"
       :size="file.size ?? 0"
+      :annotations="annotations"
+      :active-annotation-ids="activeAnnotationIds"
+      :annotation-pulse="annotationPulse"
       @source="showSource"
+      @annotate="emit('annotate', { kind: 'line', ...$event })"
+      @select-annotations="(ids, label) => emit('selectAnnotations', ids, label)"
+      @selection-popover="
+        (span, anchor) => emit('selectionPopover', { kind: 'line', ...span }, anchor)
+      "
     />
 
     <p v-else-if="!view" class="px-4 py-3 text-ink-muted">Waiting for the file's type…</p>

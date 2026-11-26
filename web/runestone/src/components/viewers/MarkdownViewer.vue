@@ -19,14 +19,18 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import Button from '@/components/base/Button.vue'
 import LoadState from '@/components/base/LoadState.vue'
 import MarkdownView from '@/components/markdown/MarkdownView.vue'
-import { Copy } from '@/components/icons'
+import { Copy, MessageSquarePlus } from '@/components/icons'
+import { useAnnotationPulse } from '@/composables/useFileAnnotations'
 import { useMarkedRange } from '@/composables/useMarkedRange'
 import { useTextStream } from '@/composables/useTextStream'
 import type { QueryState } from '@/composables/useQueryCache'
+import type { FileAnnotationRecord } from '@/api'
+import { annotationCoversRange, annotationSpan } from '@/utils/annotations'
 import { formatSize } from '@/utils/format'
 import type { LineIndex } from '@/utils/lines'
 import { parseMarkdown, type Block } from '@/utils/markdown'
 import type { Span } from '@/utils/marks'
+import { selectionAnchor, type AnchorRect } from '@/utils/placement'
 
 /**
  * A Markdown file, rendered in the app (`MarkdownView`): headings, lists,
@@ -47,10 +51,22 @@ import type { Span } from '@/utils/marks'
  * Hovering a block offers its line in the source: one button, moved to the
  * block under the pointer.
  */
-const props = defineProps<{ fileId: number; size: number }>()
+const props = withDefaults(
+  defineProps<{
+    fileId: number
+    size: number
+    annotations?: FileAnnotationRecord[]
+    activeAnnotationIds?: Set<number>
+    annotationPulse?: number
+  }>(),
+  { annotations: () => [], activeAnnotationIds: () => new Set<number>(), annotationPulse: 0 },
+)
 const emit = defineEmits<{
   /** Show the source at a line (1-based). */
   source: [line: number]
+  annotate: [span: Span]
+  selectAnnotations: [ids: number[], label: string]
+  selectionPopover: [span: Span, anchor: AnchorRect]
 }>()
 /** Source lines marked: the page keeps them in its URL. */
 const mark = defineModel<Span | null>('mark', { default: null })
@@ -110,6 +126,8 @@ const marks = useMarkedRange(mark, 'line', {
   focus: () => page.value?.focus({ preventScroll: true }),
 })
 
+const { pulsing, trigger: triggerPulse } = useAnnotationPulse(() => props.annotationPulse)
+
 function land(line: number) {
   landing.value = line
   void tryLand()
@@ -135,6 +153,7 @@ async function tryLand() {
     await new Promise((done) => requestAnimationFrame(done))
     if (unmounted || run !== landRun) return
   }
+  if (props.activeAnnotationIds.size) triggerPulse()
 }
 watch([() => rendered.value.lines, () => text.reading.value], tryLand)
 
@@ -181,22 +200,43 @@ const onControl = (target: EventTarget | null) =>
 function onPress(event: PointerEvent) {
   pressing = event.button === 0 && !onControl(event.target)
 }
-function onRelease() {
+function onRelease(event: PointerEvent) {
   if (!pressing) return
   pressing = false
   const span = selectedLines()
-  if (!span || (mark.value?.from === span.from && mark.value?.to === span.to)) return
-  marks.set(span)
-  marks.anchor.value = span
+  if (!span) return
+  if (mark.value?.from !== span.from || mark.value?.to !== span.to) {
+    marks.set(span)
+    marks.anchor.value = span
+  }
+  emit('selectionPopover', span, selectionAnchor(event.clientX, event.clientY))
 }
 onMounted(() => document.addEventListener('pointerup', onRelease))
 onUnmounted(() => document.removeEventListener('pointerup', onRelease))
 
-/** A plain click in the page clears the mark, as in every viewer; a selection keeps it. */
+/** A plain click in the page clears the mark, as in every viewer; clicking an annotated block opens its comments. */
 function onClick(event: MouseEvent) {
-  if (!mark.value || event.detail > 1 || onControl(event.target)) return
+  if (event.detail > 1 || onControl(event.target)) return
   if (!(window.getSelection()?.isCollapsed ?? true)) return
-  marks.set(null)
+  if (props.annotations.length) {
+    const block = (event.target as Element | null)?.closest?.<HTMLElement>('[data-line]')
+    if (block) {
+      const from = Number(block.dataset.line)
+      const to = Number(block.dataset.end ?? block.dataset.line)
+      const hits = props.annotations.filter((a) => annotationCoversRange(a, 'line', from, to))
+      if (hits.length) {
+        marks.set(annotationSpan(hits[0]!))
+        emit(
+          'selectAnnotations',
+          hits.map((a) => a.id),
+          from === to ? `line ${from}` : `lines ${from}–${to}`,
+        )
+        return
+      }
+    }
+  }
+  if (mark.value) marks.set(null)
+  if (props.activeAnnotationIds.size) emit('selectAnnotations', [], '')
 }
 
 const notice = ref<string | null>(null)
@@ -215,10 +255,17 @@ async function copyLink() {
   say(await marks.copyLink())
 }
 const linkLabel = computed(() => `Copy a link to ${marks.label()}`)
+const commentLabel = computed(() => `Comment on ${marks.label()}`)
+function addComment() {
+  if (!mark.value) return
+  window.getSelection()?.removeAllRanges()
+  emit('annotate', mark.value)
+}
 
 function onKey(event: KeyboardEvent) {
   if (event.metaKey || event.ctrlKey || event.altKey) return
   if (event.key === 'm' && mark.value) void copyLink()
+  else if (event.key === 'c' && mark.value) addComment()
   else if (event.key === 'Escape' && !(window.getSelection()?.isCollapsed ?? true)) {
     // The selection goes first: what stays is its mark.
     window.getSelection()?.removeAllRanges()
@@ -290,8 +337,19 @@ function onHover(event: PointerEvent) {
         </Button>
       </span>
 
-      <div class="ml-auto flex shrink-0 items-center">
-        <!-- mousedown kept from the page: pressing it must not clear the selection it links to -->
+      <div class="ml-auto flex shrink-0 items-center gap-1.5">
+        <!-- mousedown kept from the page: pressing it must not clear the selection it acts on -->
+        <button
+          v-if="mark"
+          type="button"
+          class="flex size-6 cursor-pointer items-center justify-center rounded-(--radius-control) hover:bg-sunken hover:text-ink"
+          :aria-label="commentLabel"
+          v-tooltip="commentLabel"
+          @mousedown.prevent
+          @click="addComment"
+        >
+          <MessageSquarePlus :size="13" :stroke-width="1.5" />
+        </button>
         <button
           v-if="mark"
           type="button"
@@ -332,6 +390,9 @@ function onHover(event: PointerEvent) {
         :source="rendered.blocks"
         variant="document"
         :marked="mark"
+        :annotations="annotations"
+        :active-annotation-ids="activeAnnotationIds"
+        :pulsing="pulsing"
       />
 
       <Button
