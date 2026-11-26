@@ -16,14 +16,39 @@ import os
 import uuid
 
 import magic
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.v1 import schemas
-from datastores.sql.models.file import File, FileChat, FileChatMessage, FileReport, FileSummary
+from datastores.sql.models.file import (
+    File,
+    FileAnnotation,
+    FileChat,
+    FileChatMessage,
+    FileReport,
+    FileSummary,
+)
 from datastores.sql.models.role import Role
 from datastores.sql.models.user import User, UserRole
 
 from .folder import get_folder_from_db
+
+
+def _attach_annotation_counts(db: Session, files: list[File]) -> list[File]:
+    """Attach active annotation_count to listed files in a single batched query."""
+    if not files:
+        return files
+
+    file_ids = [file.id for file in files]
+    rows = db.execute(
+        select(FileAnnotation.file_id, func.count())
+        .where(FileAnnotation.file_id.in_(file_ids), ~FileAnnotation.is_deleted)
+        .group_by(FileAnnotation.file_id)
+    ).all()
+    counts = {file_id: cnt for file_id, cnt in rows}
+    for file in files:
+        file.annotation_count = counts.get(file.id, 0)
+    return files
 
 
 def get_files_from_db(db: Session, folder_id: int):
@@ -36,7 +61,8 @@ def get_files_from_db(db: Session, folder_id: int):
     Returns:
         List[File]: A list of File objects representing the files in the folder.
     """
-    return db.query(File).filter_by(folder_id=folder_id).order_by(File.id.desc()).all()
+    files = db.query(File).filter_by(folder_id=folder_id).order_by(File.id.desc()).all()
+    return _attach_annotation_counts(db, files)
 
 
 def get_file_from_db(db: Session, file_id: int):
