@@ -25,7 +25,7 @@ shows both ways:
   hint text).
 - **With the skill**: the step's agent skill, in `.agents/skills/<name>/SKILL.md`, for
   any agent that reads skills (`idea`, `research`, `design`, `adr`, `spec`,
-  `implement`, `review`, `humanize`, `release`). Ask for it by name (`/spec bulk-tags`)
+  `implement`, `review`, `triage`, `humanize`, `release`). Ask for it by name (`/spec bulk-tags`)
   or in your own words ("write the spec for #123"). It runs the same steps you would by
   hand. It stops at a gate that hasn't been passed, and it asks before it publishes
   anything, whether that's a push, a PR, an issue or a comment.
