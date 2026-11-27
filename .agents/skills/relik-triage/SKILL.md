@@ -6,7 +6,7 @@ description: >-
   post actionable triage comments, flag resolved or stale issues, and keep the label
   taxonomy and UX color palette consistent. Use for "triage issues", "triage #123",
   "clean up the issue list", "assess effort", "audit labels", or /relik-triage
-  [issue|bugs|ideas|labels].
+  [issue|bugs|ideas|refresh|labels].
 ---
 
 # Triage
@@ -34,7 +34,7 @@ changes, and every GitHub edit waits for the user's explicit go-ahead.
 
 ## Modes
 
-### 1. Triage issues (`/relik-triage`, `/relik-triage bugs`, `/relik-triage ideas`, `/relik-triage <number>`)
+### 1. Triage issues (`/relik-triage`, `/relik-triage bugs`, `/relik-triage ideas`, `/relik-triage <number>`, `/relik-triage refresh`)
 
 1. **Fetch current state**:
 
@@ -43,21 +43,28 @@ changes, and every GitHub edit waits for the user's explicit go-ahead.
    gh pr list --state open --limit 100 --json number,title,headRefName,body,url
    ```
 
-2. **Verify each issue against the codebase**:
+2. **Skip already-triaged issues** (unless targeting a specific `<number>` or running `refresh`, e.g., `/relik-triage refresh` or `/relik-triage bugs refresh`):
+   - Treat an issue as already triaged when it has a comment containing `**Triage:`,
+     has at least one `area:*` label plus either an `effort:*` label or `needs-info`,
+     and has no comments posted after the latest `**Triage:` comment.
+   - Skip those issues and report the count (for example, `Skipped 11 already-triaged issues`).
+   - Re-include any issue with newer comments since its latest `**Triage:` comment
+     (such as a reply on a `needs-info` issue).
+3. **Verify each remaining issue against the codebase**:
    - Locate the affected files in `server/`, `web/runestone/`, `web/sunstone/`,
      `workers/`, `libs/`, `mcp/`, or `deploy/`.
    - Check `dev/artifacts/features/` for an existing `idea.md`, `design.md`, or
      `spec.md`, and check open PRs for work already in flight.
    - Determine whether the issue is still valid, partially fixed, already resolved on
      `main`, duplicate, or missing reproduction/clarification details.
-3. **Propose updates** in a table grouped by effort (`effort: small`, `effort: medium`,
+4. **Propose updates** in a table grouped by effort (`effort: small`, `effort: medium`,
    `effort: large`, plus `needs-info` or close candidates):
    - Standardized title (if the current title does not match the convention below).
    - Labels to add or remove (Type, Area, Effort, and State where applicable).
    - Concise triage comment with codebase findings and concrete next steps.
    - Any issues recommended to close as resolved, obsolete, or duplicate (citing the
      commit, file, or PR).
-4. **Apply after go-ahead**: update titles, labels, comments, and closures via `gh`.
+5. **Apply after go-ahead**: update titles, labels, comments, and closures via `gh`.
    For bulk updates across many issues, run a temporary script rather than dozens of
    manual calls.
 
