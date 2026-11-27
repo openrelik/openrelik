@@ -1,11 +1,11 @@
 ---
-name: review
+name: relik-review
 description: >
   Quality review of an OpenRelik change or pull request: is the logic right, is
   it safe, does it preserve forensic evidence, does it hold under load, is risky
   code tested, is it fast enough, and is every line needed. Reads the connected
   code, not only the diff. Each finding is explained in plain English. Use for
-  "review this", "review my change", "code review", "review PR 123", or /review.
+  "review this", "review my change", "code review", "review PR 123", or /relik-review.
 ---
 
 Review an OpenRelik change like the senior developer who will be paged when it breaks.
@@ -29,7 +29,7 @@ actually written. **Reviews must always run in a subagent with a completely clea
   4. Paths to touched files and repository root.
   **Never pass** the implementation chat history, prior agent thinking, or developer rationale.
 - **No subagent capability?** If the environment cannot spawn a subagent, stop immediately and
-  tell the user to run `/review` in a fresh, clean session. Never bypass this requirement by
+  tell the user to run `/relik-review` in a fresh, clean session. Never bypass this requirement by
   reviewing inline.
 
 ---
@@ -37,7 +37,7 @@ actually written. **Reviews must always run in a subagent with a completely clea
 ## 1. Understand first
 
 - **What to review**:
-  - A PR number or URL (`/review 123`):
+  - A PR number or URL (`/relik-review 123`):
     ```bash
     gh pr view <number> --comments    # description, branches, "Closes #...", discussion
     gh pr diff <number>
@@ -108,8 +108,8 @@ actually written. **Reviews must always run in a subagent with a completely clea
 ## 4. Output
 
 Very simple English: short sentences, everyday words. Explain a technical term the first
-time you use it. The reader may never have seen this code. Follow the `humanize` standard
-(`.agents/skills/humanize/SKILL.md`): direct engineering prose, no AI stock filler, no
+time you use it. The reader may never have seen this code. Follow the `relik-humanize` standard
+(`.agents/skills/relik-humanize/SKILL.md`): direct engineering prose, no AI stock filler, no
 staged contrasts, no conversational pleasantries, and no wrap-up summaries.
 
 Start with `What this change does:` in two or three sentences.
@@ -193,8 +193,8 @@ you checked.
      - **Requirements**: status of each requirement if reviewing against a spec.
      - **Final verification**: checks and tests run on the final tree.
      - **Verdict**: `LGTM`
-   - Run both `pr.md` and `review-comment.md` through the `humanize` standard
-     (`.agents/skills/humanize/SKILL.md`) to remove any AI boilerplate, buzzwords, or throat-clearing.
+   - Run both `pr.md` and `review-comment.md` through the `relik-humanize` standard
+     (`.agents/skills/relik-humanize/SKILL.md`) to remove any AI boilerplate, buzzwords, or throat-clearing.
 10. **Open PR and post review**: Push and open the PR with the `reviewed` label, then post the
    review comment, only after the user's explicit go-ahead (using `.private/features/<slug>/`
    for a feature or `.private/scratch/<slug>/` otherwise):

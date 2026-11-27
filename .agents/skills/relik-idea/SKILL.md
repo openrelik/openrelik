@@ -1,9 +1,9 @@
 ---
-name: idea
+name: relik-idea
 description: >-
   Write down a new OpenRelik idea, privately in .private/features/<slug>/; start the work on a
   filed idea (its idea.md in the first PR); or drop it. Use for "new idea", "write
-  down an idea", "file the idea", "start on the idea", "drop the idea", or /idea
+  down an idea", "file the idea", "start on the idea", "drop the idea", or /relik-idea
   <title, slug, or issue number>.
 ---
 
@@ -24,7 +24,7 @@ main checkout (from a worktree, the first path in `git worktree list`) and on Gi
 
 1. **Started** (`dev/artifacts/features/<slug>/idea.md` exists on main or an open PR):
    tell the user where it stands (`gh issue view <issue>`) and which skill comes next
-   (`design`, `spec`, `implement`), or help edit `idea.md` / drop the idea if asked.
+   (`relik-design`, `relik-spec`, `relik-implement`), or help edit `idea.md` / drop the idea if asked.
 2. **Filed in the backlog** (an open issue labeled `idea` matches):
    - If it has the `accepted` label and the user wants to start, go to **Start it**.
    - If it lacks `accepted`, tell the user a core developer adds `accepted` when the
@@ -66,8 +66,8 @@ and body before it's published, and after their go-ahead:
 
 1. **Body**: the four sections from `dev/templates/idea.md` (`## Problem`,
    `## Proposal`, `## Users`, `## Open questions`), without the YAML frontmatter and
-   without the `# <title>` heading. Follow the `humanize` standard
-   (`.agents/skills/humanize/SKILL.md`): plain, direct prose without promotional fluff or
+   without the `# <title>` heading. Follow the `relik-humanize` standard
+   (`.agents/skills/relik-humanize/SKILL.md`): plain, direct prose without promotional fluff or
    AI buzzwords. If `.private/features/<slug>/research.md` or a prototype
    exists, end with a line saying so: "Research (and a prototype) exist locally. Ask
    @<user>."
@@ -95,7 +95,7 @@ Changes to a filed idea are edits to the issue's body (`gh issue edit <issue>
 ## Start it
 
 When the user decides to build an accepted idea. The first PR of the work commits the
-idea, on that PR's branch: the `design` or `spec` skill does this when
+idea, on that PR's branch: the `relik-design` or `relik-spec` skill does this when
 its PR is the first.
 
 1. **Inspect the issue**:

@@ -5,8 +5,8 @@ The same steps work for the server, the UI, the other libraries and the MCP serv
 Workers are different, see [Workers](#workers) at the end. For a new minor, see
 [RELEASING.md](RELEASING.md).
 
-You can run this workflow with an agent using `/release patch <component> <version>`
-(`.agents/skills/release/SKILL.md`), which coordinates cherry-picking, release
+You can run this workflow with an agent using `/relik-release patch <component> <version>`
+(`.agents/skills/relik-release/SKILL.md`), which coordinates cherry-picking, release
 commits, and tagging, or follow the steps below by hand.
 
 ## How the branches work

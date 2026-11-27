@@ -1,6 +1,6 @@
 ---
-name: design
-description: Write the design for a big or user-facing OpenRelik change, or a data model or API change, in dev/artifacts/features/<slug>/design.md (or dev/artifacts/designs/<slug>/ when several features build on it), with its ADRs and screenshots, in a design PR a core developer approves. Use for "write the design", "design this idea", or /design <slug or issue number>.
+name: relik-design
+description: Write the design for a big or user-facing OpenRelik change, or a data model or API change, in dev/artifacts/features/<slug>/design.md (or dev/artifacts/designs/<slug>/ when several features build on it), with its ADRs and screenshots, in a design PR a core developer approves. Use for "write the design", "design this idea", or /relik-design <slug or issue number>.
 ---
 
 # Design
@@ -24,7 +24,7 @@ developer approves it, and it's merged before the spec is written.
 4. **Branch**: from the main checkout, `./devctl worktree create design/<slug>
    --no-stack` (unless `.worktrees/design-<slug>/` already exists), and work there.
 5. **The idea**: if `idea.md` isn't on main, the work starts with this design: do
-   "Start it" from the `idea` skill on this branch, which commits `idea.md`, moves
+   "Start it" from the `relik-idea` skill on this branch, which commits `idea.md`, moves
    the research, and turns the issue into the plan.
 6. **Write** `design.md` from `dev/templates/design.md`, filling in `$title` and the
    YAML frontmatter: `$slug`, `$issue` (full GitHub URL), `$created` (today, `YYYY-MM-DD`),
@@ -43,7 +43,7 @@ developer approves it, and it's merged before the spec is written.
    - Risks and open questions: what could go wrong at forensic scale (multi-terabyte
      images, millions of files), and what the reviewers should decide.
 7. **ADRs**: for each decision that outlasts the feature and constrains other work,
-   write an ADR with the `adr` skill, on this branch; the design links to it. Most
+   write an ADR with the `relik-adr` skill, on this branch; the design links to it. Most
    designs have none: a decision only this feature cares about stays in the design.
 8. **Commit** with `Refs #<issue>` in the message, and show the design to the user.
 9. **Publish** only after the user's go-ahead:
@@ -54,11 +54,11 @@ developer approves it, and it's merged before the spec is written.
    ```
 
    If the work started with this design, replace the issue's body now (step 8 of
-   "Start it" in the `idea` skill); then add the PR number to the issue's "Design"
+   "Start it" in the `relik-idea` skill); then add the PR number to the issue's "Design"
    step, and "ADR" if it has any. A core developer approves it.
 
 After it's merged, `./devctl worktree remove design/<slug>`, and the spec follows
-(the `spec` skill).
+(the `relik-spec` skill).
 
 ## Rules
 

@@ -1,6 +1,6 @@
 ---
-name: adr
-description: Write an OpenRelik architecture decision record in dev/artifacts/decisions/<number>-<slug>.md, for a decision that outlasts a feature and constrains other work, either in the design PR it comes from or in a PR of its own on adr/<slug>; or supersede an earlier one. Use for "write an ADR", "record this decision", "supersede ADR 3", or /adr <title>.
+name: relik-adr
+description: Write an OpenRelik architecture decision record in dev/artifacts/decisions/<number>-<slug>.md, for a decision that outlasts a feature and constrains other work, either in the design PR it comes from or in a PR of its own on adr/<slug>; or supersede an earlier one. Use for "write an ADR", "record this decision", "supersede ADR 3", or /relik-adr <title>.
 ---
 
 # ADR

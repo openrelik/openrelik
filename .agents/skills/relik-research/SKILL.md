@@ -1,6 +1,6 @@
 ---
-name: research
-description: Research an OpenRelik idea as an experienced software developer with deep digital forensics knowledge, and write the findings to .private/features/<slug>/research.md. Use for "research this idea", "explore the idea", "what's out there for ...", or /research <slug>.
+name: relik-research
+description: Research an OpenRelik idea as an experienced software developer with deep digital forensics knowledge, and write the findings to .private/features/<slug>/research.md. Use for "research this idea", "explore the idea", "what's out there for ...", or /relik-research <slug>.
 ---
 
 # Research

@@ -1,11 +1,11 @@
 ---
-name: triage
+name: relik-triage
 description: >-
   Triage, clean up, and maintain OpenRelik GitHub issues and labels: verify issues
   against the codebase, standardize titles, assign type/area/effort/state labels,
   post actionable triage comments, flag resolved or stale issues, and keep the label
   taxonomy and UX color palette consistent. Use for "triage issues", "triage #123",
-  "clean up the issue list", "assess effort", "audit labels", or /triage
+  "clean up the issue list", "assess effort", "audit labels", or /relik-triage
   [issue|bugs|ideas|labels].
 ---
 
@@ -26,7 +26,7 @@ changes, and every GitHub edit waits for the user's explicit go-ahead.
   approval before modifying anything on GitHub.
 - **Never approve or merge**: never add the `accepted` label. Only a core developer
   approves ideas.
-- **Follow the humanize standard** (`.agents/skills/humanize/SKILL.md`): write plain,
+- **Follow the humanize standard** (`.agents/skills/relik-humanize/SKILL.md`): write plain,
   direct engineering prose with repo-relative file paths. No AI filler words, staged
   contrasts, bold-label spam, chat wrappers, or model/tool mentions.
 - **Preserve history when cleaning labels**: before deleting or consolidating any
@@ -34,7 +34,7 @@ changes, and every GitHub edit waits for the user's explicit go-ahead.
 
 ## Modes
 
-### 1. Triage issues (`/triage`, `/triage bugs`, `/triage ideas`, `/triage <number>`)
+### 1. Triage issues (`/relik-triage`, `/relik-triage bugs`, `/relik-triage ideas`, `/relik-triage <number>`)
 
 1. **Fetch current state**:
 
@@ -61,7 +61,7 @@ changes, and every GitHub edit waits for the user's explicit go-ahead.
    For bulk updates across many issues, run a temporary script rather than dozens of
    manual calls.
 
-### 2. Audit labels (`/triage labels`)
+### 2. Audit labels (`/relik-triage labels`)
 
 1. Run `gh label list --limit 100 --json name,color,description`.
 2. Compare against the **Label Taxonomy & Palette** below and report drift:
@@ -154,7 +154,7 @@ Leave effort unset when an issue has `needs-info` and cannot be scoped yet.
 | `accepted` | `#2da44e` | Idea approved by a core developer to build | Human gate — **never added by agents** |
 | `blocked` | `#b60205` | Blocked on a design decision, dependency, or upstream issue | Use for external/architectural blockers, not missing reporter details |
 | `needs-info` | `#d4a72c` | Needs clarification or reproduction steps before work can start | Prefer over `blocked` when waiting on reporter details or repro |
-| `reviewed` | `#1a7f37` | Passed clean-context review; critical findings addressed | Applied to PRs by the `review` skill |
+| `reviewed` | `#1a7f37` | Passed clean-context review; critical findings addressed | Applied to PRs by the `relik-review` skill |
 | `good first issue` | `#7057ff` | Good for newcomers | Kept available; only apply when explicitly requested |
 | `help wanted` | `#008672` | Extra attention is needed | Optional contributor signal |
 | `question` | `#bf3989` | Further information is requested | General support/questions |
