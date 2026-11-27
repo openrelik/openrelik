@@ -1,17 +1,17 @@
 ---
-name: implement
+name: relik-implement
 description: >
   Implement an OpenRelik change on code/<slug>: a feature task by task from its spec,
   ticking the tasks and keeping the spec in step with the code; or a bugfix or a
   refactor from its issue, with a regression test and a commit message that says the
   symptom, the cause, and the fix. Use for "implement the spec", "build this", "fix
-  issue 123", or /implement <slug or issue number>.
+  issue 123", or /relik-implement <slug or issue number>.
 ---
 
 # Implement
 
 "Code" in `dev/README.md`: the code, from the spec for a feature, or from the issue
-for a bugfix or a refactor, until it's ready for the review skill.
+for a bugfix or a refactor, until it's ready for the `relik-review` skill.
 
 ## Before
 
@@ -39,13 +39,13 @@ for a bugfix or a refactor, until it's ready for the review skill.
 4. **Task by task**, in the spec's order: implement it, with the tests the spec names
    for its requirements; run the checks of the components it touches; tick it in
    `spec.md` (`- [x] T1: ...`); and commit, saying what and why, with
-   `Refs #<issue>`. A task per commit, where it fits. Follow the `humanize` standard
-   (`.agents/skills/humanize/SKILL.md`): plain, direct commit messages without AI filler.
+   `Refs #<issue>`. A task per commit, where it fits. Follow the `relik-humanize` standard
+   (`.agents/skills/relik-humanize/SKILL.md`): plain, direct commit messages without AI filler.
 5. **When the spec is wrong**: if the code has to differ, change the spec in this PR,
    so main's spec matches main's code, and tell the user. Stop and ask the user
    first if it changes what users see: that goes back to the team on the PR. Stop
    too if it needs a decision that other work will depend on: its ADR comes first
-   (the `adr` skill).
+   (the `relik-adr` skill).
 6. **Try it** on the worktree's stack where the tests don't reach
    (`./devctl status -w <slug>` for its URLs).
 
@@ -57,13 +57,13 @@ for a bugfix or a refactor, until it's ready for the review skill.
    A refactor changes no behaviour: the tests pass before and after.
 6. **Commit**, for a bugfix, with a message that says the symptom, the cause, and the
    fix, and `Refs #<issue>`; it's the bug's record. State it plainly without AI fluff
-   (`.agents/skills/humanize/SKILL.md`).
+   (`.agents/skills/relik-humanize/SKILL.md`).
 7. **Bigger than a fix**: if it turns out to need a design or a spec, stop: it becomes
-   an idea (the `idea` skill).
+   an idea (the `relik-idea` skill).
 
 ## After
 
-When the tasks are ticked, or the fix is in, the change goes to the `review`
+When the tasks are ticked, or the fix is in, the change goes to the `relik-review`
 skill, ideally in a fresh session. For a feature, the review record is saved to
 `dev/artifacts/features/<slug>/review.md` on `code/<slug>`. The PR is opened after it, not before.
 

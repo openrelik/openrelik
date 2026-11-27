@@ -1,6 +1,6 @@
 ---
-name: spec
-description: Write the spec for an OpenRelik feature in dev/artifacts/features/<slug>/spec.md, in a spec PR of its own, from the idea, the research and the design. Use for "write the spec", "spec this idea", or /spec <slug or issue number>.
+name: relik-spec
+description: Write the spec for an OpenRelik feature in dev/artifacts/features/<slug>/spec.md, in a spec PR of its own, from the idea, the research and the design. Use for "write the spec", "spec this idea", or /relik-spec <slug or issue number>.
 ---
 
 # Spec
@@ -67,8 +67,8 @@ implement them, reviewed, approved and merged before the code is written.
    ```
 
    If the work started with this spec, replace the issue's body now (step 8 of "Start
-   it" in the `idea` skill); then add the PR number to the issue's "Spec" step.
+   it" in the `relik-idea` skill); then add the PR number to the issue's "Spec" step.
 
 Once the spec PR is merged into main, implementation can start on `code/<slug>` (the
-`implement` skill). The implementation skill requires the spec PR to be merged into
+`relik-implement` skill). The implementation skill requires the spec PR to be merged into
 `main` and refuses to implement if it is not.

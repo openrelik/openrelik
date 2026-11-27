@@ -1,11 +1,11 @@
 ---
-name: humanize
+name: relik-humanize
 description: >
   Rewrite text so it reads like a thoughtful software engineer rather than an AI.
   Eliminates AI writing tells: staged contrasts, one-line closers, forced triads,
   stock filler words, inflated claims, chat wrappers, excessive em-dashes, and bold
   label spam. Use for "humanize this", "edit this comment", "clean up this text",
-  or /humanize.
+  or /relik-humanize.
 ---
 
 # Humanize
@@ -103,14 +103,14 @@ default habits:
 ## Modes
 
 ### Standalone Mode
-When invoked with `/humanize <text or file>`:
+When invoked with `/relik-humanize <text or file>`:
 - Read the text or file.
 - Rewrite the prose according to the rules above.
 - If given a file path, update the file directly with the cleaned prose, leaving code blocks, frontmatter, and paths unchanged.
 - Report a brief, direct summary of what was cleaned.
 
 ### Embedded Mode
-When another skill (`review`, `implement`, `idea`) prepares content to be committed or posted to GitHub:
+When another skill (`relik-review`, `relik-implement`, `relik-idea`) prepares content to be committed or posted to GitHub:
 - **PR description (`pr.md`)**: Run through humanizer before saving. Ensure it is direct and uncluttered.
 - **Review comment (`review-comment.md`)**: Ensure findings are crisp, actionable, and free from AI fluff or wrap-up filler.
 - **Issue bodies**: Ensure the problem description is factual and direct.

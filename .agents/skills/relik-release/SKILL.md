@@ -1,12 +1,12 @@
 ---
-name: release
+name: relik-release
 description: >
   Coordinate OpenRelik releases: platform minor releases, component patch
   releases, post-merge tagging, and next-cycle development setup. Enforces
   pre-flight verification, changelog updates, draft GitHub release notes, and a
   mandatory human approval gate before pushing tags or publishing. Use for
   "release the platform", "cut a release", "release a patch", "prepare release",
-  or /release <platform|patch|tag|dev>.
+  or /relik-release <platform|patch|tag|dev>.
 ---
 
 # Release
@@ -41,7 +41,7 @@ approval gate before any external git push, tag creation, or release publication
 
 ## Subcommands
 
-### 1. `/release platform <version>`
+### 1. `/relik-release platform <version>`
 
 Orchestrates a platform minor release (`X.Y.0`, e.g. `0.19.0`). A platform release
 updates all components across the monorepo.
@@ -150,7 +150,7 @@ updates all components across the monorepo.
 
 ---
 
-### 2. `/release patch <component> <version>`
+### 2. `/relik-release patch <component> <version>`
 
 Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
 
@@ -227,7 +227,7 @@ Orchestrates a patch release (`X.Y.Z`, e.g. `0.18.1`).
 
 ---
 
-### 3. `/release tag [commit]`
+### 3. `/relik-release tag [commit]`
 
 Tags release commits merged via pull requests.
 1. Run `./devctl release tag [commit]` (defaults to `HEAD`).
@@ -241,7 +241,7 @@ Tags release commits merged via pull requests.
 
 ---
 
-### 4. `/release dev <version>`
+### 4. `/relik-release dev <version>`
 
 Advances `main` to `<version>.dev0` after cutting a platform release branch.
 1. On `main`, create a pull request branch:

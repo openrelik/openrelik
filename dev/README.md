@@ -24,8 +24,9 @@ shows both ways:
   `$issue` full URL, `$created`, `$by`, `$title`, ... placeholders and replace the
   hint text).
 - **With the skill**: the step's agent skill, in `.agents/skills/<name>/SKILL.md`, for
-  any agent that reads skills (`idea`, `research`, `design`, `adr`, `spec`,
-  `implement`, `review`, `triage`, `humanize`, `release`). Ask for it by name (`/spec bulk-tags`)
+  any agent that reads skills (`relik-idea`, `relik-research`, `relik-design`,
+  `relik-adr`, `relik-spec`, `relik-implement`, `relik-review`, `relik-triage`,
+  `relik-humanize`, `relik-release`). Ask for it by name (`/relik-spec bulk-tags`)
   or in your own words ("write the spec for #123"). It runs the same steps you would by
   hand. It stops at a gate that hasn't been passed, and it asks before it publishes
   anything, whether that's a push, a PR, an issue or a comment.
@@ -42,12 +43,12 @@ The whole process at a glance. The sections below have the details.
 ```text
   PRIVATE (your machine, gitignored)
   ┌──────────────────────────────────────────────────────────────────┐
-  │  .private/features/<slug>/idea.md     draft       [idea]         │
-  │  .private/features/<slug>/research.md research    [research]     │
-  │  .private/features/<slug>/spec.md     draft spec  [spec]         │
+  │  .private/features/<slug>/idea.md     draft       [relik-idea]   │
+  │  .private/features/<slug>/research.md research  [relik-research] │
+  │  .private/features/<slug>/spec.md     draft spec  [relik-spec]   │
   │  prototype/<slug> worktree            try it      (unpushed)     │
   └────────────────────────────────┬─────────────────────────────────┘
-                                   │ file it  [idea]
+                                   │ file it  [relik-idea]
                                    │ (idea.md updated with issue URL; stays local until first PR)
                                    ▼
   BACKLOG (GitHub)
@@ -71,7 +72,7 @@ The whole process at a glance. The sections below have the details.
 
    Clear scope                                 Big, user-facing, data model, API
    ───────────                                 ─────────────────────────────────
-                                               design/<slug>  [design] [adr]
+                                               design/<slug>  [relik-design] [relik-adr]
                                                idea, design.md, its ADRs
                                                ╔══════════════════════════════╗
                                                ║ GATE: a core developer       ║
@@ -79,7 +80,7 @@ The whole process at a glance. The sections below have the details.
                                                ╚══════════════╤═══════════════╝
                                                               │ merged
                                                               ▼
-   spec/<slug>  [spec]                         spec/<slug>  [spec]
+   spec/<slug>  [relik-spec]                         spec/<slug>  [relik-spec]
    idea, research, spec.md                     spec.md
    ╔══════════════════════════════╗            ╔══════════════════════════════╗
    ║ GATE: spec PR merged         ║            ║ GATE: spec PR merged         ║
@@ -87,14 +88,14 @@ The whole process at a glance. The sections below have the details.
                   └─────────────────────┬─────────────────────┘
                                         │ merged
                                         ▼
-                       code/<slug>  [implement]
+                       code/<slug>  [relik-implement]
                        task by task, ticking T1, T2, ... in spec.md;
                        the spec changes in the PR where the code differs;
                        a change users see goes back to the team first;
                        a lasting decision needs its ADR first
                                         │
                            ▼
-              [review]        private, in .private/features/<slug>/, in rounds
+              [relik-review]        private, in .private/features/<slug>/, in rounds
                               until no Must fix and no Should fix findings
                            │
                            ▼
@@ -112,15 +113,15 @@ The whole process at a glance. The sections below have the details.
 
   SIDE PATHS
 
-  Bugfix, refactor   issue → code/<slug> [implement]: a failing regression test
+  Bugfix, refactor   issue → code/<slug> [relik-implement]: a failing regression test
                      first, the smallest fix, a commit message with the symptom,
-                     the cause, and the fix → [review] → PR "Closes #issue"
+                     the cause, and the fix → [relik-review] → PR "Closes #issue"
                      → GATE: a human approves → merge. No spec and no artifact:
                      the record is the test and the commit. Needs a design, or
                      users would notice it? It's an idea.
 
   Standalone ADR     a plain issue (no idea label, no acceptance)
-                     → adr/<slug> [adr] → dev/artifacts/decisions/NNNN-<slug>.md
+                     → adr/<slug> [relik-adr] → dev/artifacts/decisions/NNNN-<slug>.md
                      ╔══════════════════════════════╗
                      ║ GATE: a core developer       ║
                      ║ approves                     ║
@@ -130,7 +131,7 @@ The whole process at a glance. The sections below have the details.
                      idea/<slug>) → the issue is closed as not planned
 
 
-  [name]  the agent skill for the step
+  [relik-*]  the agent skill for the step
   ╔═══╗   a human decision, which agents never make
 ```
 
@@ -271,7 +272,7 @@ gh issue create --label idea --assignee @me --title "Bulk tags" --body-file body
 #   update $issue in .private/features/bulk-tags/idea.md; keep locally until the first PR
 ```
 
-**With the skill** (`idea`): `/idea Bulk tags`, or "write down an idea: ...". It always
+**With the skill** (`relik-idea`): `/relik-idea Bulk tags`, or "write down an idea: ...". It always
 drafts the idea privately first in `.private/features/<slug>/idea.md` without asking, then writes
 the idea with you. Before filing, it reads the idea the way a teammate without context
 would and checks the backlog for duplicates. It files only after your go-ahead, and
@@ -287,7 +288,7 @@ do, and the reason.
 work has started, write the `## Outcome` section first ("Dropped: <why>", with a link
 to the discussion), and close the issue after its PR is merged.
 
-**With the skill** (`idea`): "drop the idea #123". It also asks what to do with the
+**With the skill** (`relik-idea`): "drop the idea #123". It also asks what to do with the
 research in `.private/features/<slug>/`, whether to post it on the issue, keep it, or delete
 it.
 
@@ -311,7 +312,7 @@ cp dev/templates/research.md .private/features/bulk-tags/
 #   found (files, links, versions), how sure you are, and the open questions
 ```
 
-**With the skill** (`research`): `/research bulk-tags`, or "research this idea". It
+**With the skill** (`relik-research`): `/relik-research bulk-tags`, or "research this idea". It
 asks what you most want to know, then works the way a developer who has done forensic
 casework would. It looks at how OpenRelik handles the problem today, down to files and
 functions, and at how other tools do it, from their docs and code. Then it goes
@@ -353,7 +354,7 @@ worktree. Feedback goes on the PR. When it has answered its question, `./devctl
 worktree remove -f -r prototype/bulk-tags` removes it and closes its PR too.
 
 Prototypes have no skill. Do it by hand as above, and ask an agent in plain words to
-write the throwaway code in the worktree. The `research` skill suggests a prototype
+write the throwaway code in the worktree. The `relik-research` skill suggests a prototype
 when it hits a question only trying can answer.
 
 ## Starting
@@ -380,8 +381,8 @@ mkdir -p .worktrees/spec-bulk-tags/dev/artifacts/features/bulk-tags
 gh issue edit 123 --body-file issue.md
 ```
 
-**With the skill** (`idea`): "start on #123". You'll rarely need it on its own, since
-the `design` and `spec` skills do this when their PR comes first. It
+**With the skill** (`relik-idea`): "start on #123". You'll rarely need it on its own, since
+the `relik-design` and `relik-spec` skills do this when their PR comes first. It
 checks that the idea is accepted and not someone else's, and screens the research for
 anything that shouldn't be public before moving it into the repository.
 
@@ -406,10 +407,10 @@ it, it goes in `dev/artifacts/designs/<slug>/` and the features link to it.
 ./devctl worktree remove design/bulk-tags          # after the PR is merged
 ```
 
-**With the skill** (`design`): `/design bulk-tags`, or `/design 123`. It tells you if
+**With the skill** (`relik-design`): `/relik-design bulk-tags`, or `/relik-design 123`. It tells you if
 the change doesn't need a design at all. Before writing, it reads the research, the
 prototype and the code of each component the change touches, and it hands each
-decision that outlasts the feature to the `adr` skill. Once you've read the design and
+decision that outlasts the feature to the `relik-adr` skill. Once you've read the design and
 given the go-ahead, it opens the PR and adds the number to the issue's checklist.
 
 Some decisions outlast the feature and constrain other work, like how the API is
@@ -446,7 +447,7 @@ gh pr create --head adr/api-versioning --title "ADR: API versioning" \
 
 If two open PRs take the same number, the one merged second renumbers.
 
-**With the skill** (`adr`): `/adr API versioning`, or "record this decision". If the
+**With the skill** (`relik-adr`): `/relik-adr API versioning`, or "record this decision". If the
 decision belongs in a design or a spec, it says so. For one on its own, it finds the
 decision's issue (or opens one, with your go-ahead) and picks the next free number.
 
@@ -470,7 +471,7 @@ gh pr create --title "Spec: Bulk tags" --body "Refs #123"
 ./devctl worktree remove spec/bulk-tags            # after the PR is merged
 ```
 
-**With the skill** (`spec`): `/spec bulk-tags`, or `/spec 123`. Before writing, it
+**With the skill** (`relik-spec`): `/relik-spec bulk-tags`, or `/relik-spec 123`. Before writing, it
 checks that the idea is accepted and not someone else's, and that the design and the
 ADRs the spec depends on are merged. It always drafts the spec in `.private/features/<slug>/spec.md`
 and pauses for human review before creating a branch. When creating the spec PR, it
@@ -486,7 +487,7 @@ are real, commits once you approve the local draft, and opens the PR after your 
 #   then review (see "Review"), and open the PR
 ```
 
-Implementation starts only after the spec PR is merged into `main`. The `implement`
+Implementation starts only after the spec PR is merged into `main`. The `relik-implement`
 skill checks that the spec PR is merged and refuses to implement if not. Implementing
 sometimes teaches you something the spec didn't know. When it does, change the spec in
 the code PR, so main's spec matches main's code. If the change is to what users see,
@@ -510,7 +511,7 @@ spec, it becomes an idea and goes through the steps like a feature.
 git commit    # the symptom, the cause, and the fix, and "Refs #123"
 ```
 
-**With the skill** (`implement`): `/implement bulk-tags` for a feature, or `/implement
+**With the skill** (`relik-implement`): `/relik-implement bulk-tags` for a feature, or `/relik-implement
 123` ("fix issue 123") for a bugfix or a refactor. For a feature, it checks that the
 spec PR is merged into `main` first and refuses to implement if it is not. It builds
 task by task, ticking and committing each one. It stops to ask if the spec turns out
@@ -530,7 +531,7 @@ for human review. It's private. Nothing gets posted, and nothing of it is commit
    completely clean context (or a fresh session), without the conversation history of the
    implementation. The agent that wrote the code would check its intentions instead of
    the diff. The subagent receives only the review rubric from
-   `.agents/skills/review/SKILL.md`, the spec or issue, and the diff.
+   `.agents/skills/relik-review/SKILL.md`, the spec or issue, and the diff.
 3. **Brief and pause**. Present a brief summary of the findings and verdict to the user,
    then pause and ask how to proceed. The agent does not start fixing or dismissing
    findings autonomously.
@@ -559,7 +560,7 @@ statuses, and the final verification) to keep the PR description clean.
 ```bash
 #   run the checks of each component the change touches
 git diff main > ../../.private/features/bulk-tags/diff.patch
-#   run the review following .agents/skills/review/SKILL.md against the spec or issue;
+#   run the review following .agents/skills/relik-review/SKILL.md against the spec or issue;
 #   give it to a fresh agent session, ideally another model, with dismissed findings
 #   record the round in .private/features/bulk-tags/review.md; fix or dismiss each finding
 #   again, until a round has no Must fix and no Should fix findings
@@ -576,7 +577,7 @@ gh pr create --title "Bulk tags" --body-file ../../.private/features/bulk-tags/p
 gh pr comment <number> --body-file ../../.private/features/bulk-tags/review-comment.md
 ```
 
-**With the skill** (`review`): `/review` in the change's worktree. The skill always
+**With the skill** (`relik-review`): `/relik-review` in the change's worktree. The skill always
 launches a subagent with a clean context to perform the review (or tells you to run in
 a fresh session if subagents are unsupported). It records every round, coordinates fixes
 with you, and ensures the change isn't called ready while a Must fix or Should fix
@@ -592,7 +593,7 @@ a bugfix, a refactor or a small tweak, that's the only gate. The approval is a t
 review on the PR or, if the team has agreed to it, the author's own ("Approved after
 review"). Branch rules can require a review only if the team doesn't allow that.
 
-Anyone (teammate or author) can run `/review <PR number>` at any time to have an agent
+Anyone (teammate or author) can run `/relik-review <PR number>` at any time to have an agent
 audit an open PR against its spec or issue. It posts the review report as a comment and
 adds the `reviewed` label if it reaches `Verdict: LGTM`.
 
@@ -608,8 +609,8 @@ The implementer merges once the PR is approved. Agents never approve or merge.
 | `artifacts/decisions/`        | architecture decision records, `0001-<slug>.md`, ...     |
 | `tools/devctl/`               | the `./devctl` command line (see its `README.md`)        |
 | `tools/reload/`               | the reloader, mounted into the development stack's containers |
-| `RELEASING.md`                | step-by-step guide for platform releases (automated by `/release platform`) |
-| `PATCHING.md`                 | step-by-step guide for patch releases (automated by `/release patch`)        |
+| `RELEASING.md`                | step-by-step guide for platform releases (automated by `/relik-release platform`) |
+| `PATCHING.md`                 | step-by-step guide for patch releases (automated by `/relik-release patch`)        |
 
 - Issues labeled `idea`: the backlog, one per idea, also labeled `accepted` once the
   team agrees to build it. Each is the idea itself until the work starts, then the
@@ -619,7 +620,7 @@ The implementer merges once the PR is approved. Agents never approve or merge.
   the work starts (`research.md`), draft specs (`spec.md`), review rounds (`review.md`),
   PR description draft (`pr.md`), and review comment draft (`review-comment.md`).
 - `.private/scratch/<slug>/`: local disposable working files in the main checkout for
-  non-feature changes (bugfixes, refactors, `/review <PR>` audits, diffs, release note
+  non-feature changes (bugfixes, refactors, `/relik-review <PR>` audits, diffs, release note
   drafts), safe to delete once merged.
 - Label `reviewed`: marks a PR that passed clean-context review with critical findings
   addressed.
@@ -664,7 +665,7 @@ Each branch is a worktree with its own stack, made from the main checkout with
 
 - Issues, PRs, reviews, comments and commits don't name the model, provider or tool
   that helped write them, and follow the humanize standard
-  (`.agents/skills/humanize/SKILL.md`): plain, direct engineering prose without AI tells
+  (`.agents/skills/relik-humanize/SKILL.md`): plain, direct engineering prose without AI tells
   (no stock filler, no staged contrasts, no forced triads, no bold-label spam on bullets,
   and no conversational chat wrappers).
 - Slug: lowercase `a-z`, `0-9` and `-`, at most 50 characters, from the title, chosen

@@ -53,8 +53,11 @@ API at http://localhost:8710; each worktree gets its own port slot (`3001`/`8711
 ## Development process
 
 See `dev/README.md`. Document templates live in `dev/templates/`,
-and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
-`spec`, `implement`, `review`, `triage`, `humanize`, `release`) in `.agents/skills/`.
+and skills for the steps agents help with (`relik-idea`, `relik-research`,
+`relik-design`, `relik-adr`, `relik-spec`, `relik-implement`, `relik-review`,
+`relik-triage`, `relik-humanize`, `relik-release`) in `.agents/skills/`. Use these
+`relik-*` skills for OpenRelik workflow steps unless the user explicitly invokes
+another skill.
 
 ### Rules
 
@@ -68,7 +71,7 @@ and skills for the steps agents help with (`idea`, `research`, `design`, `adr`,
 - Publishing to GitHub (issues, PRs, comments) needs the user's explicit go-ahead.
 - What you publish (issues, PRs, comments, commit messages) is model, provider and
   harness agnostic: no "Generated with" lines, co-author trailers, or tool names.
-  Follow the humanize standard (`.agents/skills/humanize/SKILL.md`): write plain, direct
+  Follow the `relik-humanize` standard (`.agents/skills/relik-humanize/SKILL.md`): write plain, direct
   engineering prose without AI tells (no stock filler like "crucial" or "robust", no
   staged contrasts, no forced triads, no bold-label spam on bullets, and no conversational
   chat wrappers).
